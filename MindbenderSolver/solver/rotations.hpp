@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdint>
+#include "MindbenderSolver/utils/processor.hpp"
 
 #include "board.hpp"
 

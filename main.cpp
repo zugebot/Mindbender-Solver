@@ -19,7 +19,7 @@ int main() {
         0, 1, 2, 3, 4, 5,
         0, 1, 2, 3, 4, 5,
     };
-    board.setBoard(values1);
+    board.setState(values1);
 
     Board solve;
     const uint8_t values2[36] = {
@@ -30,7 +30,7 @@ int main() {
             0, 1, 2, 3, 4, 5,
             0, 1, 2, 3, 4, 5,
     };
-    solve.setBoard(values2);
+    solve.setState(values2);
 
 
 
