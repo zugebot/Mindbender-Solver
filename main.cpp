@@ -11,7 +11,7 @@ int main() {
     std::cout << "Hello, World!" << std::endl;
 
     Board board;
-    uint8_t values1[36] = {
+    const uint8_t values1[36] = {
         0, 1, 2, 3, 4, 5,
         0, 1, 2, 3, 4, 5,
         0, 1, 2, 3, 4, 5,
@@ -22,7 +22,7 @@ int main() {
     board.setBoard(values1);
 
     Board solve;
-    uint8_t values2[36] = {
+    const uint8_t values2[36] = {
             0, 1, 2, 3, 4, 5,
             0, 1, 2, 3, 4, 5,
             0, 1, 2, 3, 4, 5,
@@ -36,7 +36,7 @@ int main() {
 
     auto *boards = new Board[12960000]; // 12960000
     std::cout << "Allocated the boards\n";
-    Timer timer;
+    const Timer timer;
     int count = 0;
     for (int a = 0; a < 60; a++) {
         for (int b = 0; b < 60; b++) {
@@ -52,6 +52,7 @@ int main() {
             }
         }
     }
+
     std::cout << timer.getSeconds() << "\n";
 
 

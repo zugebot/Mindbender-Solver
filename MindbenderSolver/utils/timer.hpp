@@ -12,5 +12,5 @@ class Timer {
     uint64_t time = 0;
 public:
     Timer();
-    float getSeconds() const;
+    [[nodiscard]] float getSeconds() const;
 };
