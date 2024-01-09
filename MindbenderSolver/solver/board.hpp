@@ -22,13 +22,8 @@ struct Board {
 
     void setState(const uint8_t values[36]);
 
-
-
     ND uint32_t getScore1() const;
     ND uint32_t getScore2() const;
-
-
-
 
     ND uint64_t hash() const;
     ND std::string toString() const;

@@ -89,6 +89,7 @@ inline void R_1_3(Board& board) {
     board.b1 &= R_14_MASK;
     board.b1 |= buffer << 18;
 }
+
 inline void R_1_4(Board& board) {
     uint64_t buffer = board.b1 >> 18 & 0x3FFFF;
     const uint32_t shift = buffer & 0xFFF;
@@ -106,7 +107,6 @@ inline void R_1_5(Board& board) {
     board.b1 &= R_14_MASK;
     board.b1 |= buffer << 18;
 }
-
 
 inline void R_2_1(Board& board) {
     uint64_t buffer = board.b1 & 0x3FFFF;
@@ -280,6 +280,7 @@ inline void R_5_4(Board& board) {
     board.b2 &= R_25_MASK;
     board.b2 |= buffer;
 }
+
 inline void R_5_5(Board& board) {
     uint64_t buffer = board.b2 & 0x3FFFF;
     const uint32_t shift = buffer & 0x7FFF;
@@ -288,8 +289,6 @@ inline void R_5_5(Board& board) {
     board.b2 &= R_25_MASK;
     board.b2 |= buffer;
 }
-
-
 
 
 static constexpr uint64_t C_MASK_0 = 0x0038000E00038000;
@@ -403,7 +402,6 @@ inline void C_2_5(Board& board) {
     board.b1 = board.b1 & ~C_MASK_2 | var1 << 18 | var2 >> 36;
     board.b2 = board.b2 & ~C_MASK_2 | var2 << 18 | var1 >> 36;
 }
-
 
 inline void C_3_1(Board& board) {
     const uint64_t var1 = board.b1 & C_MASK_3;

@@ -11,26 +11,21 @@ int main() {
     std::cout << "Hello, World!" << std::endl;
 
     Board board;
-    const uint8_t values1[36] = {
-        0, 1, 2, 3, 4, 5,
-        0, 1, 2, 3, 4, 5,
-        0, 1, 2, 3, 4, 5,
-        0, 1, 2, 3, 4, 5,
-        0, 1, 2, 3, 4, 5,
-        0, 1, 2, 3, 4, 5,
-    };
-    board.setState(values1);
+    {
+        const uint8_t values1[36] = {
+            0, 1, 2, 3, 4, 5,
+            0, 1, 2, 3, 4, 5,
+            0, 1, 2, 3, 4, 5,
+            0, 1, 2, 3, 4, 5,
+            0, 1, 2, 3, 4, 5,
+            0, 1, 2, 3, 4, 5,
+        };
+        board.setState(values1);
+    }
 
-    Board solve;
-    const uint8_t values2[36] = {
-            0, 1, 2, 3, 4, 5,
-            0, 1, 2, 3, 4, 5,
-            0, 1, 2, 3, 4, 5,
-            0, 1, 2, 3, 4, 5,
-            0, 1, 2, 3, 4, 5,
-            0, 1, 2, 3, 4, 5,
-    };
-    solve.setState(values2);
+    std::cout << board.toString() << "\n";
+    R_0_1(board);
+    std::cout << board.toString() << "\n";
 
 
 
@@ -52,7 +47,6 @@ int main() {
             }
         }
     }
-
     std::cout << timer.getSeconds() << "\n";
 
 
