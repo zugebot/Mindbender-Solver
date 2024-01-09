@@ -198,7 +198,6 @@ inline void R_3_5(Board& board) {
     board.b2 |= buffer << 36;
 }
 
-
 inline void R_4_1(Board& board) {
     uint64_t buffer = board.b2 >> 18 & 0x3FFFF;
     const uint32_t shift = buffer & 0x7;
@@ -243,7 +242,6 @@ inline void R_4_5(Board& board) {
     board.b2 &= R_14_MASK;
     board.b2 |= buffer << 18;
 }
-
 
 inline void R_5_1(Board& board) {
     uint64_t buffer = board.b2 & 0x3FFFF;
