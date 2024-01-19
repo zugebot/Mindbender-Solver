@@ -18,6 +18,7 @@ file(GLOB_RECURSE MINDBENDER_SOLVER_SOURCES
 )
 
 add_executable(MindbenderSolver
-        main.cpp
+        fib.cpp
         ${MINDBENDER_SOLVER_SOURCES}
+        fib.cpp
 )

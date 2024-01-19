@@ -16,26 +16,120 @@ void Board::setState(const uint8_t values[36]) {
 }
 
 
-uint64_t score1Helper(const uint64_t& sect) {
+/**
+ * returns the ..100.000.100.000... of board1 compared to board2
+ * ..001.. if cells are similar in value
+ * ..000.. if cells differ in value
+ * @param sect1 b1/b2 of 1st board
+ * @param sect2 b1/b2 of 2nd board
+ * @return
+ */
+inline uint64_t getSimilar(const uint64_t& sect1, const uint64_t& sect2) {
     static constexpr uint64_t M0 = 0x0009249249249249;
-    static constexpr uint64_t M1 = 0x0012492492492492;
-    static constexpr uint64_t M2 = 0x0024924924924924;
+    const uint64_t s = (sect1 ^ sect2);
+    return ~(s | s >> 1 | s >> 2) & M0;
+}
+
+
+uint64_t score1Helper(const uint64_t& sect) {
     static constexpr uint64_t M3 = 0x0000E070381C0E07;
     static constexpr uint64_t M4 = 0x000000007800000F;
     static constexpr uint64_t M5 = 0x0000000007FFFFFF;
 
-    const uint64_t p0 = sect & M0
-        | (sect & M1) >> 1 | (sect & M2) >> 2;
-    const uint64_t p1 = p0 + (p0 >> 3) + (p0 >> 6) & M3;
+    const uint64_t p1 = sect + (sect >> 3) + (sect >> 6) & M3;
     const uint64_t p2 = p1 + (p1 >> 9) + (p1 >> 18) & M4;
     return (p2 & M5) + (p2 >> 27);
 }
 
 
 uint64_t Board::getScore1(const Board &other) const {
-    return score1Helper(b1 ^ other.b1) +
-        score1Helper(b2 ^ other.b2);
+    return score1Helper(getSimilar(b1, other.b1))
+         + score1Helper(getSimilar(b2, other.b2));
 }
+
+
+uint64_t Board::getScore3(const Board& other) const {
+    uint64_t ROW = 0; auto *uncoveredRows = (uint8_t *)&ROW;
+    uint64_t COL = 0; auto *uncoveredCols = (uint8_t *)&COL;
+    int differingCells = 0;
+
+
+
+    /*
+
+    // Find all differing cells and update the counts in rows and cols
+    // for C++, I can instantly sum the rows, but IDK about the columns
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (this.myBoard[i][j] != theOther.myBoard[i][j]) {
+                uncoveredRows[i]++;
+                uncoveredCols[j]++;
+                differingCells++;
+            }
+        }
+    }
+
+
+    // While there are still uncovered differing cells
+    // worst case this should only occur 6 times?
+    int lanes = 0;
+    int maxCover = 0;
+    bool isRow = false;
+    int index = -1;
+    while (differingCells > 0) {
+        maxCover = 0;
+        isRow = false;
+        index = -1;
+        // Find the row or column that covers the most uncovered differing cells
+        // in C++, can probably reinterpret the bytes to see if either can be skipped,
+        // base which level of checking I am doing off of getScore1?
+        // can be recoded to find the index and value of the max in both?
+        for (int i = 0; i < BOARD_SIZE; i++) {
+            if (uncoveredRows[i] > maxCover) {
+                maxCover = uncoveredRows[i];
+                isRow = true;
+                index = i;
+            }
+            if (uncoveredCols[i] > maxCover) {
+                maxCover = uncoveredCols[i];
+                isRow = false;
+                index = i;
+            }
+        }
+
+        if (index == -1) {
+            break;
+        }
+
+        // Cover the chosen row or column and update the counts in
+        // uncoveredRows and uncoveredColumns
+        // I could cache the results of getScore1 for this lol
+        if (isRow) {
+            differingCells -= uncoveredRows[index];
+            uncoveredRows[index] = 0;
+            for (int j = 0; j < BOARD_SIZE; j++) {
+                if (this.myBoard[index][j] != theOther.myBoard[index][j] && uncoveredCols[j] > 0) {
+                    uncoveredCols[j]--;
+                }
+            }
+        } else {
+            differingCells -= uncoveredCols[index];
+            uncoveredCols[index] = 0;
+            for (int j = 0; j < BOARD_SIZE; j++) {
+                if (this.myBoard[j][index] != theOther.myBoard[j][index] && uncoveredRows[j] > 0) {
+                    uncoveredRows[j]--;
+                }
+            }
+        }
+
+        lanes++;
+    }
+    return lanes;
+    */
+    return 0;
+
+}
+
 
 
 uint64_t Board::hash() const {
@@ -53,7 +147,7 @@ std::string Board::toString() const {
     auto appendBoardToString = [&str](const uint64_t board) {
         for (int y = 0; y < 54; y += 18) {
             for (int x = 0; x < 18; x += 3) {
-                str.append(std::to_string(board >> 51 - x - y & 0b111));
+                str.append(std::to_string(board >> (51 - x - y) & 0b111));
                 str.append(" ");
             }
             str.append("\n");

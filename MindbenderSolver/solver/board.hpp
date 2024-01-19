@@ -7,6 +7,7 @@
 
 
 struct Board {
+    static constexpr uint32_t BOARD_SIZE = 6;
 
     /**
      * uses the lower 54 bits
@@ -23,6 +24,7 @@ struct Board {
     void setState(const uint8_t values[36]);
 
     ND uint64_t getScore1(const Board& other) const;
+    ND uint64_t getScore3(const Board& other) const;
 
     ND uint64_t hash() const;
     ND std::string toString() const;

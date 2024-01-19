@@ -13,12 +13,12 @@ int main() {
     Board board1;
     {
         const uint8_t values[36] = {
-            1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1,
+            1, 2, 3, 4, 5, 6,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
         };
         board1.setState(values);
     }
@@ -26,12 +26,12 @@ int main() {
     Board board2;
     {
         const uint8_t values[36] = {
-            1, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 1, 0,
-            0, 0, 0, 0, 1, 1,
-            0, 0, 2, 0, 0, 0,
-            0, 1, 0, 2, 0, 0,
-            0, 0, 1, 0, 0, 1,
+            7, 0, 0, 0, 6, 5,
+            0, 7, 0, 0, 0, 0,
+            0, 0, 7, 0, 0, 0,
+            0, 0, 0, 7, 0, 0,
+            0, 0, 0, 0, 7, 0,
+            0, 0, 0, 0, 0, 7,
         };
         board2.setState(values);
     }
@@ -39,6 +39,10 @@ int main() {
     const uint64_t score1 = board1.getScore1(board2);
 
     std::cout << "Score: " << score1 << std::endl;
+
+    std::cout << board1.toString() << std::endl;
+    R_0_1(board1);
+    std::cout << board1.toString() << std::endl;
 
 
 
