@@ -1,326 +1,180 @@
 #pragma once
 
-#include "MindbenderSolver/utils/processor.hpp"
 
+#include "MindbenderSolver/utils/processor.hpp"
 #include "board.hpp"
 
 
-constexpr uint64_t R_03_MASK = 0x0000000FFFFFFFFF;
-constexpr uint64_t R_14_MASK = 0x003FFFF00003FFFF;
-constexpr uint64_t R_25_MASK = 0x007FFFFFFFFC0000;
 
-/*
-// faster version, but need to find out why
-inline void R_0_1(Board& board) {
-    uint64_t buffer = board.b1 >> 36) & 0x3FFFF;
-    buffer = (buffer >> 3) | ((buffer & 0x7) << 15);
-    board.b1 = board.b1 & R_03_MASK) | (buffer << 36);
-}
- */
-
-
-/*
-0x0000007000000000
-0x000003F000000000
-0x00001FF000000000
-0x0000FFF000000000
-0x0007FFF000000000
- */
-
-static constexpr uint64_t MASK_B1 = 0x003FFF8000000000;
-static constexpr uint64_t MASK_S1 = 0x0000007000000000;
-static constexpr uint64_t MASK_B2 = 0x003FFC0000000000;
-static constexpr uint64_t MASK_S2 = 0x000003F000000000;
-static constexpr uint64_t MASK_B3 = 0x003FE00000000000;
-static constexpr uint64_t MASK_S3 = 0x00001FF000000000;
-static constexpr uint64_t MASK_B4 = 0x003F000000000000;
-static constexpr uint64_t MASK_S4 = 0x0000FFF000000000;
-static constexpr uint64_t MASK_B5 = 0x0038000000000000;
-static constexpr uint64_t MASK_S5 = 0x0007FFF000000000;
-
-template<uint64_t MASK_N, uint64_t MASK_B, uint64_t MASK_S, int shift>
-__forceinline void R_N_N(uint64_t &b) {
-    b = b & MASK_N | (b & MASK_B >> shift) | (b & MASK_S << (18 - shift));
-}
-
+constexpr uint64_t R_0_MASK = 0xFFFFFFFFF;
 inline void R_0_1(Board &board) {
-    // board.b1 = board.b1 & MASK_N | (board.b1 & MASK_B >> 3) | (board.b1 & MASK_S << (18 - shift));
-    R_N_N<R_03_MASK, MASK_B1, MASK_S1, 3>(board.b1);
+    static constexpr uint64_t MASK_B1 = 0x3FFF8000000000, MASK_S1 = 0x7000000000;
+    board.b1 = board.b1 & R_0_MASK | (board.b1 & MASK_B1) >> 3 | (board.b1 & MASK_S1) << 15;
 }
 inline void R_0_2(Board &board) {
-    R_N_N<R_03_MASK, MASK_B2, MASK_S2, 6>(board.b1);
+    static constexpr uint64_t MASK_B2 = 0x3FFC0000000000, MASK_S2 = 0x3F000000000;
+    board.b1 = board.b1 & R_0_MASK | (board.b1 & MASK_B2) >> 6 | (board.b1 & MASK_S2) << 12;
 }
 inline void R_0_3(Board &board) {
-    R_N_N<R_03_MASK, MASK_B3, MASK_S3, 9>(board.b1);
+    static constexpr uint64_t MASK_B3 = 0x3FE00000000000, MASK_S3 = 0x1FF000000000;
+    board.b1 = board.b1 & R_0_MASK | (board.b1 & MASK_B3) >> 9 | (board.b1 & MASK_S3) << 9;
 }
 inline void R_0_4(Board &board) {
-    R_N_N<R_03_MASK, MASK_B4, MASK_S4, 12>(board.b1);
+    static constexpr uint64_t MASK_B4 = 0x3F000000000000, MASK_S4 = 0xFFF000000000;
+    board.b1 = board.b1 & R_0_MASK | (board.b1 & MASK_B4) >> 12 | (board.b1 & MASK_S4) << 6;
 }
 inline void R_0_5(Board &board) {
-    R_N_N<R_03_MASK, MASK_B5, MASK_S5, 15>(board.b1);
+    static constexpr uint64_t MASK_B5 = 0x38000000000000, MASK_S5 = 0x7FFF000000000;
+    board.b1 = board.b1 & R_0_MASK | (board.b1 & MASK_B5) >> 15 | (board.b1 & MASK_S5) << 3;
 }
 
+
+
+constexpr uint64_t R_1_MASK = 0x3FFFF00003FFFF;
 inline void R_1_1(Board &board) {
-    uint64_t buffer = board.b1 >> 18 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x7;
-    buffer >>= 3;
-    buffer |= shift << 15;
-    board.b1 &= R_14_MASK;
-    board.b1 |= buffer << 18;
+    static constexpr uint64_t MASK_B1 = 0xFFFE00000, MASK_S1 = 0x1C0000;
+    board.b1 = board.b1 & R_1_MASK | (board.b1 & MASK_B1) >> 3 | (board.b1 & MASK_S1) << 15;
 }
-
 inline void R_1_2(Board &board) {
-    uint64_t buffer = board.b1 >> 18 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x3F;
-    buffer >>= 6;
-    buffer |= shift << 12;
-    board.b1 &= R_14_MASK;
-    board.b1 |= buffer << 18;
+    static constexpr uint64_t MASK_B2 = 0xFFF000000, MASK_S2 = 0xFC0000;
+    board.b1 = board.b1 & R_1_MASK | (board.b1 & MASK_B2) >> 6 | (board.b1 & MASK_S2) << 12;
 }
-
 inline void R_1_3(Board &board) {
-    uint64_t buffer = board.b1 >> 18 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x1FF;
-    buffer >>= 9;
-    buffer |= shift << 9;
-    board.b1 &= R_14_MASK;
-    board.b1 |= buffer << 18;
+    static constexpr uint64_t MASK_B3 = 0xFF8000000, MASK_S3 = 0x7FC0000;
+    board.b1 = board.b1 & R_1_MASK | (board.b1 & MASK_B3) >> 9 | (board.b1 & MASK_S3) << 9;
 }
-
 inline void R_1_4(Board &board) {
-    uint64_t buffer = board.b1 >> 18 & 0x3FFFF;
-    const uint32_t shift = buffer & 0xFFF;
-    buffer >>= 12;
-    buffer |= shift << 6;
-    board.b1 &= R_14_MASK;
-    board.b1 |= buffer << 18;
+    static constexpr uint64_t MASK_B4 = 0xFC0000000, MASK_S4 = 0x3FFC0000;
+    board.b1 = board.b1 & R_1_MASK | (board.b1 & MASK_B4) >> 12 | (board.b1 & MASK_S4) << 6;
 }
-
 inline void R_1_5(Board &board) {
-    uint64_t buffer = board.b1 >> 18 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x7FFF;
-    buffer >>= 15;
-    buffer |= shift << 3;
-    board.b1 &= R_14_MASK;
-    board.b1 |= buffer << 18;
+    static constexpr uint64_t MASK_B5 = 0xE00000000, MASK_S5 = 0x1FFFC0000;
+    board.b1 = board.b1 & R_1_MASK | (board.b1 & MASK_B5) >> 15 | (board.b1 & MASK_S5) << 3;
 }
 
+
+
+constexpr uint64_t R_2_MASK = 0x7FFFFFFFFC0000;
 inline void R_2_1(Board &board) {
-    uint64_t buffer = board.b1 >> 0 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x7;
-    buffer >>= 3;
-    buffer |= shift << 15;
-    board.b1 &= R_25_MASK;
-    board.b1 |= buffer << 0;
+    static constexpr uint64_t MASK_B1 = 0x3FFF8, MASK_S1 = 0x7;
+    board.b1 = board.b1 & R_2_MASK | (board.b1 & MASK_B1) >> 3 | (board.b1 & MASK_S1) << 15;
 }
-
 inline void R_2_2(Board &board) {
-    uint64_t buffer = board.b1 >> 0 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x3F;
-    buffer >>= 6;
-    buffer |= shift << 12;
-    board.b1 &= R_25_MASK;
-    board.b1 |= buffer << 0;
+    static constexpr uint64_t MASK_B2 = 0x3FFC0, MASK_S2 = 0x3F;
+    board.b1 = board.b1 & R_2_MASK | (board.b1 & MASK_B2) >> 6 | (board.b1 & MASK_S2) << 12;
 }
-
 inline void R_2_3(Board &board) {
-    uint64_t buffer = board.b1 >> 0 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x1FF;
-    buffer >>= 9;
-    buffer |= shift << 9;
-    board.b1 &= R_25_MASK;
-    board.b1 |= buffer << 0;
+    static constexpr uint64_t MASK_B3 = 0x3FE00, MASK_S3 = 0x1FF;
+    board.b1 = board.b1 & R_2_MASK | (board.b1 & MASK_B3) >> 9 | (board.b1 & MASK_S3) << 9;
 }
-
 inline void R_2_4(Board &board) {
-    uint64_t buffer = board.b1 >> 0 & 0x3FFFF;
-    const uint32_t shift = buffer & 0xFFF;
-    buffer >>= 12;
-    buffer |= shift << 6;
-    board.b1 &= R_25_MASK;
-    board.b1 |= buffer << 0;
+    static constexpr uint64_t MASK_B4 = 0x3F000, MASK_S4 = 0xFFF;
+    board.b1 = board.b1 & R_2_MASK | (board.b1 & MASK_B4) >> 12 | (board.b1 & MASK_S4) << 6;
 }
-
 inline void R_2_5(Board &board) {
-    uint64_t buffer = board.b1 >> 0 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x7FFF;
-    buffer >>= 15;
-    buffer |= shift << 3;
-    board.b1 &= R_25_MASK;
-    board.b1 |= buffer << 0;
+    static constexpr uint64_t MASK_B5 = 0x38000, MASK_S5 = 0x7FFF;
+    board.b1 = board.b1 & R_2_MASK | (board.b1 & MASK_B5) >> 15 | (board.b1 & MASK_S5) << 3;
 }
 
+
+
+constexpr uint64_t R_3_MASK = 0xFFFFFFFFF;
 inline void R_3_1(Board &board) {
-    uint64_t buffer = board.b2 >> 36 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x7;
-    buffer >>= 3;
-    buffer |= shift << 15;
-    board.b2 &= R_03_MASK;
-    board.b2 |= buffer << 36;
+    static constexpr uint64_t MASK_B1 = 0x3FFF8000000000, MASK_S1 = 0x7000000000;
+    board.b2 = board.b2 & R_0_MASK | (board.b2 & MASK_B1) >> 3 | (board.b2 & MASK_S1) << 15;
 }
-
 inline void R_3_2(Board &board) {
-    uint64_t buffer = board.b2 >> 36 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x3F;
-    buffer >>= 6;
-    buffer |= shift << 12;
-    board.b2 &= R_03_MASK;
-    board.b2 |= buffer << 36;
+    static constexpr uint64_t MASK_B2 = 0x3FFC0000000000, MASK_S2 = 0x3F000000000;
+    board.b2 = board.b2 & R_0_MASK | (board.b2 & MASK_B2) >> 6 | (board.b2 & MASK_S2) << 12;
 }
-
 inline void R_3_3(Board &board) {
-    uint64_t buffer = board.b2 >> 36 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x1FF;
-    buffer >>= 9;
-    buffer |= shift << 9;
-    board.b2 &= R_03_MASK;
-    board.b2 |= buffer << 36;
+    static constexpr uint64_t MASK_B3 = 0x3FE00000000000, MASK_S3 = 0x1FF000000000;
+    board.b2 = board.b2 & R_0_MASK | (board.b2 & MASK_B3) >> 9 | (board.b2 & MASK_S3) << 9;
 }
-
 inline void R_3_4(Board &board) {
-    uint64_t buffer = board.b2 >> 36 & 0x3FFFF;
-    const uint32_t shift = buffer & 0xFFF;
-    buffer >>= 12;
-    buffer |= shift << 6;
-    board.b2 &= R_03_MASK;
-    board.b2 |= buffer << 36;
+    static constexpr uint64_t MASK_B4 = 0x3F000000000000, MASK_S4 = 0xFFF000000000;
+    board.b2 = board.b2 & R_0_MASK | (board.b2 & MASK_B4) >> 12 | (board.b2 & MASK_S4) << 6;
 }
-
 inline void R_3_5(Board &board) {
-    uint64_t buffer = board.b2 >> 36 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x7FFF;
-    buffer >>= 15;
-    buffer |= shift << 3;
-    board.b2 &= R_03_MASK;
-    board.b2 |= buffer << 36;
+    static constexpr uint64_t MASK_B5 = 0x38000000000000, MASK_S5 = 0x7FFF000000000;
+    board.b2 = board.b2 & R_0_MASK | (board.b2 & MASK_B5) >> 15 | (board.b2 & MASK_S5) << 3;
 }
 
+
+
+constexpr uint64_t R_4_MASK = 0x3FFFF00003FFFF;
 inline void R_4_1(Board &board) {
-    uint64_t buffer = board.b2 >> 18 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x7;
-    buffer >>= 3;
-    buffer |= shift << 15;
-    board.b2 &= R_14_MASK;
-    board.b2 |= buffer << 18;
+    static constexpr uint64_t MASK_B1 = 0xFFFE00000, MASK_S1 = 0x1C0000;
+    board.b2 = board.b2 & R_1_MASK | (board.b2 & MASK_B1) >> 3 | (board.b2 & MASK_S1) << 15;
 }
-
 inline void R_4_2(Board &board) {
-    uint64_t buffer = board.b2 >> 18 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x3F;
-    buffer >>= 6;
-    buffer |= shift << 12;
-    board.b2 &= R_14_MASK;
-    board.b2 |= buffer << 18;
+    static constexpr uint64_t MASK_B2 = 0xFFF000000, MASK_S2 = 0xFC0000;
+    board.b2 = board.b2 & R_1_MASK | (board.b2 & MASK_B2) >> 6 | (board.b2 & MASK_S2) << 12;
 }
-
 inline void R_4_3(Board &board) {
-    uint64_t buffer = board.b2 >> 18 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x1FF;
-    buffer >>= 9;
-    buffer |= shift << 9;
-    board.b2 &= R_14_MASK;
-    board.b2 |= buffer << 18;
+    static constexpr uint64_t MASK_B3 = 0xFF8000000, MASK_S3 = 0x7FC0000;
+    board.b2 = board.b2 & R_1_MASK | (board.b2 & MASK_B3) >> 9 | (board.b2 & MASK_S3) << 9;
 }
-
 inline void R_4_4(Board &board) {
-    uint64_t buffer = board.b2 >> 18 & 0x3FFFF;
-    const uint32_t shift = buffer & 0xFFF;
-    buffer >>= 12;
-    buffer |= shift << 6;
-    board.b2 &= R_14_MASK;
-    board.b2 |= buffer << 18;
+    static constexpr uint64_t MASK_B4 = 0xFC0000000, MASK_S4 = 0x3FFC0000;
+    board.b2 = board.b2 & R_1_MASK | (board.b2 & MASK_B4) >> 12 | (board.b2 & MASK_S4) << 6;
 }
-
 inline void R_4_5(Board &board) {
-    uint64_t buffer = board.b2 >> 18 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x7FFF;
-    buffer >>= 15;
-    buffer |= shift << 3;
-    board.b2 &= R_14_MASK;
-    board.b2 |= buffer << 18;
+    static constexpr uint64_t MASK_B5 = 0xE00000000, MASK_S5 = 0x1FFFC0000;
+    board.b2 = board.b2 & R_1_MASK | (board.b2 & MASK_B5) >> 15 | (board.b2 & MASK_S5) << 3;
 }
 
+
+
+constexpr uint64_t R_5_MASK = 0x7FFFFFFFFC0000;
 inline void R_5_1(Board &board) {
-    uint64_t buffer = board.b2 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x7;
-    buffer >>= 3;
-    buffer |= shift << 15;
-    board.b2 &= R_25_MASK;
-    board.b2 |= buffer << 0;
+    static constexpr uint64_t MASK_B1 = 0x3FFF8, MASK_S1 = 0x7;
+    board.b2 = board.b2 & R_2_MASK | (board.b2 & MASK_B1) >> 3 | (board.b2 & MASK_S1) << 15;
 }
-
 inline void R_5_2(Board &board) {
-    uint64_t buffer = board.b2 >> 0 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x3F;
-    buffer >>= 6;
-    buffer |= shift << 12;
-    board.b2 &= R_25_MASK;
-    board.b2 |= buffer << 0;
+    static constexpr uint64_t MASK_B2 = 0x3FFC0, MASK_S2 = 0x3F;
+    board.b2 = board.b2 & R_2_MASK | (board.b2 & MASK_B2) >> 6 | (board.b2 & MASK_S2) << 12;
 }
-
 inline void R_5_3(Board &board) {
-    uint64_t buffer = board.b2 >> 0 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x1FF;
-    buffer >>= 9;
-    buffer |= shift << 9;
-    board.b2 &= R_25_MASK;
-    board.b2 |= buffer << 0;
+    static constexpr uint64_t MASK_B3 = 0x3FE00, MASK_S3 = 0x1FF;
+    board.b2 = board.b2 & R_2_MASK | (board.b2 & MASK_B3) >> 9 | (board.b2 & MASK_S3) << 9;
 }
-
 inline void R_5_4(Board &board) {
-    uint64_t buffer = board.b2 >> 0 & 0x3FFFF;
-    const uint32_t shift = buffer & 0xFFF;
-    buffer >>= 12;
-    buffer |= shift << 6;
-    board.b2 &= R_25_MASK;
-    board.b2 |= buffer << 0;
+    static constexpr uint64_t MASK_B4 = 0x3F000, MASK_S4 = 0xFFF;
+    board.b2 = board.b2 & R_2_MASK | (board.b2 & MASK_B4) >> 12 | (board.b2 & MASK_S4) << 6;
 }
-
 inline void R_5_5(Board &board) {
-    uint64_t buffer = board.b2 >> 0 & 0x3FFFF;
-    const uint32_t shift = buffer & 0x7FFF;
-    buffer >>= 15;
-    buffer |= shift << 3;
-    board.b2 &= R_25_MASK;
-    board.b2 |= buffer << 0;
+    static constexpr uint64_t MASK_B5 = 0x38000, MASK_S5 = 0x7FFF;
+    board.b2 = board.b2 & R_2_MASK | (board.b2 & MASK_B5) >> 15 | (board.b2 & MASK_S5) << 3;
 }
 
 
-static constexpr uint64_t C_MASK_0 = 0x0038000E00038000;
-static constexpr uint64_t C_MASK_1 = 0x00070001C0007000;
-static constexpr uint64_t C_MASK_2 = 0x0000E00038000E00;
-static constexpr uint64_t C_MASK_3 = 0x00001C00070001C0;
-static constexpr uint64_t C_MASK_4 = 0x0000038000E00038;
-static constexpr uint64_t C_MASK_5 = 0x00000070001C0007;
 
+static constexpr uint64_t C_MASK_0 = 0x38000E00038000;
 inline void C_0_1(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_0;
     const uint64_t var2 = board.b2 & C_MASK_0;
     board.b1 = board.b1 & C_MASK_0 | var1 >> 18 | var2 << 36;
     board.b2 = board.b2 & C_MASK_0 | var2 >> 18 | var1 << 36;
 }
-
 inline void C_0_2(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_0;
     const uint64_t var2 = board.b2 & C_MASK_0;
     board.b1 = board.b1 & ~C_MASK_0 | var1 >> 36 | var2 << 18;
     board.b2 = board.b2 & ~C_MASK_0 | var2 >> 36 | var1 << 18;
 }
-
 inline void C_0_3(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_0;
     const uint64_t var2 = board.b2 & C_MASK_0;
     board.b1 = board.b1 & ~C_MASK_0 | var2;
     board.b2 = board.b2 & ~C_MASK_0 | var1;
 }
-
 inline void C_0_4(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_0;
     const uint64_t var2 = board.b2 & C_MASK_0;
     board.b1 = board.b1 & ~C_MASK_0 | var1 << 36 | var2 >> 18;
     board.b2 = board.b2 & ~C_MASK_0 | var2 << 36 | var1 >> 18;
 }
-
 inline void C_0_5(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_0;
     const uint64_t var2 = board.b2 & C_MASK_0;
@@ -328,34 +182,32 @@ inline void C_0_5(Board &board) {
     board.b2 = board.b2 & ~C_MASK_0 | var2 << 18 | var1 >> 36;
 }
 
+
+static constexpr uint64_t C_MASK_1 = 0x70001C0007000;
 inline void C_1_1(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_1;
     const uint64_t var2 = board.b2 & C_MASK_1;
     board.b1 = board.b1 & ~C_MASK_1 | var1 >> 18 | var2 << 36;
     board.b2 = board.b2 & ~C_MASK_1 | var2 >> 18 | var1 << 36;
 }
-
 inline void C_1_2(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_1;
     const uint64_t var2 = board.b2 & C_MASK_1;
     board.b1 = board.b1 & ~C_MASK_1 | var1 >> 36 | var2 << 18;
     board.b2 = board.b2 & ~C_MASK_1 | var2 >> 36 | var1 << 18;
 }
-
 inline void C_1_3(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_1;
     const uint64_t var2 = board.b2 & C_MASK_1;
     board.b1 = board.b1 & ~C_MASK_1 | var2;
     board.b2 = board.b2 & ~C_MASK_1 | var1;
 }
-
 inline void C_1_4(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_1;
     const uint64_t var2 = board.b2 & C_MASK_1;
     board.b1 = board.b1 & ~C_MASK_1 | var1 << 36 | var2 >> 18;
     board.b2 = board.b2 & ~C_MASK_1 | var2 << 36 | var1 >> 18;
 }
-
 inline void C_1_5(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_1;
     const uint64_t var2 = board.b2 & C_MASK_1;
@@ -363,34 +215,33 @@ inline void C_1_5(Board &board) {
     board.b2 = board.b2 & ~C_MASK_1 | var2 << 18 | var1 >> 36;
 }
 
+
+
+static constexpr uint64_t C_MASK_2 = 0xE00038000E00;
 inline void C_2_1(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_2;
     const uint64_t var2 = board.b2 & C_MASK_2;
     board.b1 = board.b1 & ~C_MASK_2 | var1 >> 18 | var2 << 36;
     board.b2 = board.b2 & ~C_MASK_2 | var2 >> 18 | var1 << 36;
 }
-
 inline void C_2_2(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_2;
     const uint64_t var2 = board.b2 & C_MASK_2;
     board.b1 = board.b1 & ~C_MASK_2 | var1 >> 36 | var2 << 18;
     board.b2 = board.b2 & ~C_MASK_2 | var2 >> 36 | var1 << 18;
 }
-
 inline void C_2_3(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_2;
     const uint64_t var2 = board.b2 & C_MASK_2;
     board.b1 = board.b1 & ~C_MASK_2 | var2;
     board.b2 = board.b2 & ~C_MASK_2 | var1;
 }
-
 inline void C_2_4(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_2;
     const uint64_t var2 = board.b2 & C_MASK_2;
     board.b1 = board.b1 & ~C_MASK_2 | var1 << 36 | var2 >> 18;
     board.b2 = board.b2 & ~C_MASK_2 | var2 << 36 | var1 >> 18;
 }
-
 inline void C_2_5(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_2;
     const uint64_t var2 = board.b2 & C_MASK_2;
@@ -398,34 +249,33 @@ inline void C_2_5(Board &board) {
     board.b2 = board.b2 & ~C_MASK_2 | var2 << 18 | var1 >> 36;
 }
 
+
+
+static constexpr uint64_t C_MASK_3 = 0x1C00070001C0;
 inline void C_3_1(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_3;
     const uint64_t var2 = board.b2 & C_MASK_3;
     board.b1 = board.b1 & ~C_MASK_3 | (var1 >> 18 | var2 << 36);
     board.b2 = board.b2 & ~C_MASK_3 | (var2 >> 18 | var1 << 36);
 }
-
 inline void C_3_2(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_3;
     const uint64_t var2 = board.b2 & C_MASK_3;
     board.b1 = board.b1 & ~C_MASK_3 | var1 >> 36 | var2 << 18;
     board.b2 = board.b2 & ~C_MASK_3 | var2 >> 36 | var1 << 18;
 }
-
 inline void C_3_3(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_3;
     const uint64_t var2 = board.b2 & C_MASK_3;
     board.b1 = board.b1 & ~C_MASK_3 | var2;
     board.b2 = board.b2 & ~C_MASK_3 | var1;
 }
-
 inline void C_3_4(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_3;
     const uint64_t var2 = board.b2 & C_MASK_3;
     board.b1 = board.b1 & ~C_MASK_3 | var1 << 36 | var2 >> 18;
     board.b2 = board.b2 & ~C_MASK_3 | var2 << 36 | var1 >> 18;
 }
-
 inline void C_3_5(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_3;
     const uint64_t var2 = board.b2 & C_MASK_3;
@@ -433,34 +283,33 @@ inline void C_3_5(Board &board) {
     board.b2 = board.b2 & ~C_MASK_3 | var2 << 18 | var1 >> 36;
 }
 
+
+
+static constexpr uint64_t C_MASK_4 = 0x38000E00038;
 inline void C_4_1(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_4;
     const uint64_t var2 = board.b2 & C_MASK_4;
     board.b1 = board.b1 & ~C_MASK_4 | var1 >> 18 | var2 << 36;
     board.b2 = board.b2 & ~C_MASK_4 | var2 >> 18 | var1 << 36;
 }
-
 inline void C_4_2(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_4;
     const uint64_t var2 = board.b2 & C_MASK_4;
     board.b1 = board.b1 & ~C_MASK_4 | var1 >> 36 | var2 << 18;
     board.b2 = board.b2 & ~C_MASK_4 | var2 >> 36 | var1 << 18;
 }
-
 inline void C_4_3(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_4;
     const uint64_t var2 = board.b2 & C_MASK_4;
     board.b1 = board.b1 & ~C_MASK_4 | var2;
     board.b2 = board.b2 & ~C_MASK_4 | var1;
 }
-
 inline void C_4_4(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_4;
     const uint64_t var2 = board.b2 & C_MASK_4;
     board.b1 = board.b1 & ~C_MASK_4 | var1 << 36 | var2 >> 18;
     board.b2 = board.b2 & ~C_MASK_4 | var2 << 36 | var1 >> 18;
 }
-
 inline void C_4_5(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_4;
     const uint64_t var2 = board.b2 & C_MASK_4;
@@ -468,34 +317,33 @@ inline void C_4_5(Board &board) {
     board.b2 = board.b2 & ~C_MASK_4 | var2 << 18 | var1 >> 36;
 }
 
+
+
+static constexpr uint64_t C_MASK_5 = 0x70001C0007;
 inline void C_5_1(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_5;
     const uint64_t var2 = board.b2 & C_MASK_5;
     board.b1 = board.b1 & ~C_MASK_5 | var1 >> 18 | var2 << 36;
     board.b2 = board.b2 & ~C_MASK_5 | var2 >> 18 | var1 << 36;
 }
-
 inline void C_5_2(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_5;
     const uint64_t var2 = board.b2 & C_MASK_5;
     board.b1 = board.b1 & ~C_MASK_5 | var1 >> 36 | var2 << 18;
     board.b2 = board.b2 & ~C_MASK_5 | var2 >> 36 | var1 << 18;
 }
-
 inline void C_5_3(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_5;
     const uint64_t var2 = board.b2 & C_MASK_5;
     board.b1 = board.b1 & ~C_MASK_5 | var2;
     board.b2 = board.b2 & ~C_MASK_5 | var1;
 }
-
 inline void C_5_4(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_5;
     const uint64_t var2 = board.b2 & C_MASK_5;
     board.b1 = board.b1 & ~C_MASK_5 | var1 << 36 | var2 >> 18;
     board.b2 = board.b2 & ~C_MASK_5 | var2 << 36 | var1 >> 18;
 }
-
 inline void C_5_5(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_5;
     const uint64_t var2 = board.b2 & C_MASK_5;
@@ -503,67 +351,20 @@ inline void C_5_5(Board &board) {
     board.b2 = board.b2 & ~C_MASK_5 | var2 << 18 | var1 >> 36;
 }
 
-typedef void (*Action)(Board &);
 
+
+typedef void (*Action)(Board &);
 inline Action actions[60] = {
-        R_0_1,
-        R_0_2,
-        R_0_3,
-        R_0_4,
-        R_0_5,
-        R_1_1,
-        R_1_2,
-        R_1_3,
-        R_1_4,
-        R_1_5,
-        R_2_1,
-        R_2_2,
-        R_2_3,
-        R_2_4,
-        R_2_5,
-        R_3_1,
-        R_3_2,
-        R_3_3,
-        R_3_4,
-        R_3_5,
-        R_4_1,
-        R_4_2,
-        R_4_3,
-        R_4_4,
-        R_4_5,
-        R_5_1,
-        R_5_2,
-        R_5_3,
-        R_5_4,
-        R_5_5,
-        C_0_1,
-        C_0_2,
-        C_0_3,
-        C_0_4,
-        C_0_5,
-        C_1_1,
-        C_1_2,
-        C_1_3,
-        C_1_4,
-        C_1_5,
-        C_2_1,
-        C_2_2,
-        C_2_3,
-        C_2_4,
-        C_2_5,
-        C_3_1,
-        C_3_2,
-        C_3_3,
-        C_3_4,
-        C_3_5,
-        C_4_1,
-        C_4_2,
-        C_4_3,
-        C_4_4,
-        C_4_5,
-        C_5_1,
-        C_5_2,
-        C_5_3,
-        C_5_4,
-        C_5_5,
+    R_0_1, R_0_2, R_0_3, R_0_4, R_0_5,
+    R_1_1, R_1_2, R_1_3, R_1_4, R_1_5,
+    R_2_1, R_2_2, R_2_3, R_2_4, R_2_5,
+    R_3_1, R_3_2, R_3_3, R_3_4, R_3_5,
+    R_4_1, R_4_2, R_4_3, R_4_4, R_4_5,
+    R_5_1, R_5_2, R_5_3, R_5_4, R_5_5,
+    C_0_1, C_0_2, C_0_3, C_0_4, C_0_5,
+    C_1_1, C_1_2, C_1_3, C_1_4, C_1_5,
+    C_2_1, C_2_2, C_2_3, C_2_4, C_2_5,
+    C_3_1, C_3_2, C_3_3, C_3_4, C_3_5,
+    C_4_1, C_4_2, C_4_3, C_4_4, C_4_5,
+    C_5_1, C_5_2, C_5_3, C_5_4, C_5_5,
 };

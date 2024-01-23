@@ -79,7 +79,8 @@
                 differingCells -= theUncoveredRows[index];
                 theUncoveredRows[index] = 0;
                 for (int j = 0; j < BOARD_SIZE; j++) {
-                    if (this.myBoard[index][j] != theOther.myBoard[index][j] && theUncoveredColumns[j] > 0) {
+                    if (this.myBoard[index][j] != theOther.myBoard[index][j]
+                    && theUncoveredColumns[j] > 0) {
                         theUncoveredColumns[j]--;
                     }
                 }
@@ -87,7 +88,8 @@
                 differingCells -= theUncoveredColumns[index];
                 theUncoveredColumns[index] = 0;
                 for (int j = 0; j < BOARD_SIZE; j++) {
-                    if (this.myBoard[j][index] != theOther.myBoard[j][index] && theUncoveredRows[j] > 0) {
+                    if (this.myBoard[j][index] != theOther.myBoard[j][index]
+                    && theUncoveredRows[j] > 0) {
                         theUncoveredRows[j]--;
                     }
                 }

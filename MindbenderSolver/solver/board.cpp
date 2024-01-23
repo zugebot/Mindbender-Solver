@@ -1,7 +1,7 @@
 #include "board.hpp"
 
 #include <iostream>
-#include <emmintrin.h>
+#include <string>
 
 
 void Board::setState(const uint8_t values[36]) {
@@ -26,7 +26,7 @@ void Board::setState(const uint8_t values[36]) {
  */
 inline uint64_t getSimilar(const uint64_t& sect1, const uint64_t& sect2) {
     static constexpr uint64_t M0 = 0x0009249249249249;
-    const uint64_t s = (sect1 ^ sect2);
+    const uint64_t s = sect1 ^ sect2;
     return ~(s | s >> 1 | s >> 2) & M0;
 }
 
@@ -52,8 +52,6 @@ uint64_t Board::getScore3(const Board& other) const {
     uint64_t ROW = 0; auto *uncoveredRows = (uint8_t *)&ROW;
     uint64_t COL = 0; auto *uncoveredCols = (uint8_t *)&COL;
     int differingCells = 0;
-
-
 
     /*
 
@@ -147,7 +145,7 @@ std::string Board::toString() const {
     auto appendBoardToString = [&str](const uint64_t board) {
         for (int y = 0; y < 54; y += 18) {
             for (int x = 0; x < 18; x += 3) {
-                str.append(std::to_string(board >> (51 - x - y) & 0b111));
+                str.append(std::to_string(board >> 51 - x - y & 0b111));
                 str.append(" ");
             }
             str.append("\n");
