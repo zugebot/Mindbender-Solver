@@ -1,14 +1,5 @@
 #pragma once
 
-#include <cinttypes>
-#include <cstdint>
-#include <cstdlib>
-
-
-///=============================================================================
-///                      Compiler and Platform Features
-///=============================================================================
-
 #define ND [[nodiscard]]
 #define MU [[maybe_unused]]
 

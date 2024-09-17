@@ -1,12 +1,10 @@
 #pragma once
 
-
-#include "MindbenderSolver/utils/processor.hpp"
 #include "board.hpp"
 
 
 
-constexpr uint64_t R_0_MASK = 0xFFFFFFFFF;
+constexpr uint64_t R_0_MASK = 0x000FFFFFFFFF;
 inline void R_0_1(Board &board) {
     static constexpr uint64_t MASK_B1 = 0x3FFF8000000000, MASK_S1 = 0x7000000000;
     board.b1 = board.b1 & R_0_MASK | (board.b1 & MASK_B1) >> 3 | (board.b1 & MASK_S1) << 15;
@@ -77,8 +75,6 @@ inline void R_2_5(Board &board) {
 }
 
 
-
-constexpr uint64_t R_3_MASK = 0xFFFFFFFFF;
 inline void R_3_1(Board &board) {
     static constexpr uint64_t MASK_B1 = 0x3FFF8000000000, MASK_S1 = 0x7000000000;
     board.b2 = board.b2 & R_0_MASK | (board.b2 & MASK_B1) >> 3 | (board.b2 & MASK_S1) << 15;
@@ -102,7 +98,7 @@ inline void R_3_5(Board &board) {
 
 
 
-constexpr uint64_t R_4_MASK = 0x3FFFF00003FFFF;
+
 inline void R_4_1(Board &board) {
     static constexpr uint64_t MASK_B1 = 0xFFFE00000, MASK_S1 = 0x1C0000;
     board.b2 = board.b2 & R_1_MASK | (board.b2 & MASK_B1) >> 3 | (board.b2 & MASK_S1) << 15;
@@ -126,7 +122,7 @@ inline void R_4_5(Board &board) {
 
 
 
-constexpr uint64_t R_5_MASK = 0x7FFFFFFFFC0000;
+
 inline void R_5_1(Board &board) {
     static constexpr uint64_t MASK_B1 = 0x3FFF8, MASK_S1 = 0x7;
     board.b2 = board.b2 & R_2_MASK | (board.b2 & MASK_B1) >> 3 | (board.b2 & MASK_S1) << 15;
@@ -154,8 +150,8 @@ static constexpr uint64_t C_MASK_0 = 0x38000E00038000;
 inline void C_0_1(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_0;
     const uint64_t var2 = board.b2 & C_MASK_0;
-    board.b1 = board.b1 & C_MASK_0 | var1 >> 18 | var2 << 36;
-    board.b2 = board.b2 & C_MASK_0 | var2 >> 18 | var1 << 36;
+    board.b1 = board.b1 & ~C_MASK_0 | var1 >> 18 | var2 << 36;
+    board.b2 = board.b2 & ~C_MASK_0 | var2 >> 18 | var1 << 36;
 }
 inline void C_0_2(Board &board) {
     const uint64_t var1 = board.b1 & C_MASK_0;
@@ -351,8 +347,6 @@ inline void C_5_5(Board &board) {
     board.b2 = board.b2 & ~C_MASK_5 | var2 << 18 | var1 >> 36;
 }
 
-
-
 typedef void (*Action)(Board &);
 inline Action actions[60] = {
     R_0_1, R_0_2, R_0_3, R_0_4, R_0_5,
@@ -368,3 +362,5 @@ inline Action actions[60] = {
     C_4_1, C_4_2, C_4_3, C_4_4, C_4_5,
     C_5_1, C_5_2, C_5_3, C_5_4, C_5_5,
 };
+
+

@@ -2,7 +2,7 @@
 
 #include "Board/Board.h"
 #include "Board/BoardOperations.h"
-#include "Board/Levels.h"
+#include "MindbenderSolver/solver/levels.hpp"
 #include "support/colors.h"
 #include "support/time.h"
 
