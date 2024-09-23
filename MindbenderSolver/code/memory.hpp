@@ -18,6 +18,7 @@ public:
 
     MUND inline u8 getMoveCount() const { return moves & 0xF; }
     MUND u8 getMove(u8 index) const;
+    MUND u8 getLastMove() const;
 
     void setNext1Move(uint64_t moveValue);
     void setNext2Move(uint64_t moveValue);

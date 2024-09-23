@@ -57,6 +57,7 @@ public:
     MUND std::string toString() const;
     MUND std::string toString(const Board& other) const;
 
+
     bool operator==(const Board& other) const {
         static constexpr u64 MASK = 0x3FFFFFFFFFFFFF;
         return (b1) == (other.b1)

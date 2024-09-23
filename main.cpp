@@ -4,9 +4,8 @@
 #include "MindbenderSolver/code/perms.hpp"
 #include "MindbenderSolver/code/sorter.hpp"
 #include "MindbenderSolver/code/intersection.hpp"
-#include "MindbenderSolver/code/rotations.hpp"
 
-#include "MindbenderSolver/utils/colors.hpp"
+#include "MindbenderSolver/code/rotations.hpp"
 #include "MindbenderSolver/utils/timer.hpp"
 
 
@@ -25,7 +24,11 @@ void findSolutions(std::set<std::string>& resultSet, int index,
     std::string start_both = "[" + std::to_string(index) + "] ";
     std::string start_left = "[" + std::to_string(index) + "L] ";
     std::string start_right = "[" + std::to_string(index) + "R] ";
-    const uint32_t colorCount = board1.getColorCount();
+
+    uint32_t colorCount = board1.getColorCount();
+    if (board1.hasFat()) {
+        colorCount = 4;
+    }
 
     auto permFuncs = !board1.hasFat() ? makePermutationListFuncs : makeFatPermutationListFuncs;
 
@@ -39,6 +42,7 @@ void findSolutions(std::set<std::string>& resultSet, int index,
         std::cout << start_left << "Size: " << boards.size() << std::endl;
 
         const Timer timerSort1;
+        // std::sort(boards.begin(), boards.end(), [](const Board &a, const Board &b) { return a.hash < b.hash; });
         boardSorter.sortBoards(boards, tempDepth, colorCount);
         std::cout << start_left << "Sort Time: " << timerSort1.getSeconds() << "\n";
 
@@ -48,11 +52,12 @@ void findSolutions(std::set<std::string>& resultSet, int index,
     while (board2Table.size() <= depth2) {
         const Timer timer2;
         const int tempDepth = (int)board2Table.size();
-        std::vector<Board> boards = (makePermutationListFuncs[tempDepth])(board2, colorCount);
+        std::vector<Board> boards = (permFuncs[tempDepth])(board2, colorCount);
         std::cout << start_right << "Creation Time: " << timer2.getSeconds() << "\n";
         std::cout << start_right << "Size: " << boards.size() << std::endl;
 
         const Timer timerSort2;
+        // std::sort(boards.begin(), boards.end(), [](const Board &a, const Board &b) { return a.hash < b.hash; });
         boardSorter.sortBoards(boards, tempDepth, colorCount);
         std::cout << start_right << "Sort Time: " << timerSort2.getSeconds() << "\n";
 
@@ -61,6 +66,7 @@ void findSolutions(std::set<std::string>& resultSet, int index,
 
     std::vector<std::pair<Board*, Board*>> results;
     if (depth1 != 0 && depth2 != 0) {
+
         results = intersection_threaded(board1Table[depth1], board2Table[depth2]);
     } else {
         results = intersection(board1Table[depth1], board2Table[depth2]);
@@ -69,10 +75,21 @@ void findSolutions(std::set<std::string>& resultSet, int index,
 
     std::cout << start_both << "Solutions: " << results.size() << std::endl;
 
-    for (auto pair: results) {
-        std::string moveset = pair.first->mem.assembleMoveString(&pair.second->mem);
-        resultSet.insert(moveset);
+    if (board1.hasFat()) {
+        int xy1 = board1.getFatXY();
+        int xy2 = board2.getFatXY();
+        for (auto pair: results) {
+            std::string moveset = pair.first->mem.assembleFatMoveString(xy1, &pair.second->mem, xy2);
+            resultSet.insert(moveset);
+        }
+    } else {
+        for (auto pair: results) {
+            std::string moveset = pair.first->mem.assembleMoveString(&pair.second->mem);
+            resultSet.insert(moveset);
+        }
     }
+
+
 }
 
 
@@ -84,132 +101,12 @@ Fats: 4-2, 4-4, 5-1, 8-2, 8-4, 9-1
  */
 int main() {
 
-    /*
-    Board board1 = BoardLookup::getBoardPair("9-1")->getInitialState();
-    Board board0 = BoardLookup::getBoardPair("9-1")->getInitialState();
-    Board board2 = BoardLookup::getBoardPair("9-1")->getInitialState();
-
-    int _xy1 = board1.getFatXY();
-    int _x1 = board1.getFatX();
-    int _y1 = board1.getFatY();
-    auto actions1 = fatActions[_x1 * 5 + _y1];
-    auto func1 = actions1[15];
-    func1(board1);
-    int _x2 = board1.getFatX();
-    int _y2 = board1.getFatY();
-    auto actions2 = fatActions[_x2 * 5 + _y2];
-    auto func2 = actions2[36];
-    func2(board1);
-    int _x3 = board1.getFatX();
-    int _y3 = board1.getFatY();
-    auto actions3 = fatActions[_x3 * 5 + _y3];
-    auto func3 = actions3[22];
-    func3(board1);
-    int _x4 = board1.getFatX();
-    int _y4 = board1.getFatY();
-    auto actions4 = fatActions[_x4 * 5 + _y4];
-    auto func4 = actions4[47];
-    func4(board1);
-    board1.mem.setNext4Move(15 | 36 << 6 | 22 << 12 | 47 << 18);
-
-
-
-
-
-    int _xy5 = board2.getFatXY();
-    int _x5 = board2.getFatX();
-    int _y5 = board2.getFatY();
-    auto actions5 = fatActions[_x5 * 5 + _y5];
-    auto func5 = actions5[19];
-    func5(board2);
-    int _x6 = board2.getFatX();
-    int _y6 = board2.getFatY();
-    auto actions6 = fatActions[_x6 * 5 + _y6];
-    auto func6 = actions6[5];
-    func6(board2);
-    int _x7 = board2.getFatX();
-    int _y7 = board2.getFatY();
-    auto actions7 = fatActions[_x7 * 5 + _y7];
-    auto func7 = actions7[36];
-    func7(board2);
-    int _x8 = board2.getFatX();
-    int _y8 = board2.getFatY();
-    auto actions8 = fatActions[_x8 * 5 + _y8];
-    auto func8 = actions8[0];
-    func8(board2);
-    board2.mem.setNext4Move(19 | 5 << 6 | 36 << 12 | 0 << 18);
-
-
-    std::string b1moves = board1.mem.assembleFatMoveStringBackwards(_xy1);
-    std::string b2moves = board2.mem.assembleFatMoveStringForwards(_xy5);
-    // std::string moveStr = board2.mem.assembleFatMoveString(_xy5, &board1.mem, _xy1);
-
-    std::cout << board1.toString() << std::endl;
-
-    std::cout << b1moves << " " << b2moves << std::endl;
-
-
-    std::cout << board2.toString() << std::endl;
-
-    */
-
     std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    auto pair = BoardLookup::getBoardPair("9-1");
+    auto pair = BoardLookup::getBoardPair("6-5");
     Board board1 = pair->getInitialState();
     Board board2 = pair->getSolutionState();
 
-    int xy1 = board1.getFatXY();
-    int xy2 = board2.getFatXY();
 
-
-
-
-
-    std::vector<Board> boards1 = makeFatPermutationListFuncs[4](board1, 4);
-    std::vector<Board> boards2 = makeFatPermutationListFuncs[4](board2, 4);
-
-    std::cout << "did perms" << std::endl;
-
-    std::sort(boards1.begin(), boards1.end(), [](const Board &a, const Board &b) { return a.hash < b.hash; });
-    std::sort(boards2.begin(), boards2.end(), [](const Board &a, const Board &b) { return a.hash < b.hash; });
-
-    std::cout << "did sorting" << std::endl;
-
-    auto results = intersection(boards1, boards2);
-
-    std::cout << "did intersection" << std::endl;
-
-    std::cout << "solution count: " << results.size() << std::endl;
-
-    if (!results.empty()) {
-        std::cout << board1.toString() << std::endl;
-        std::cout << results[0].first->mem.assembleFatMoveStringForwards(xy1) << std::endl;
-        std::cout << results[0].first->toString() << std::endl;
-        // std::cout << results[0].second->mem.assembleFatMoveStringBackwards(results[0].second->getFatXY()) << std::endl;
-        std::cout << results[0].second->mem.assembleFatMoveStringBackwards(xy2) << std::endl;
-
-        std::cout << board2.toString() << std::endl;
-    }
-
-    // TODO: walk through the order of moves performed on board2 / results[0].second,
-    // TODO: figure out what xy to pass to aFMSB, whether to increment or decrement, and so on
-    // TODO: maybe use the forward dict for the backwards, but then just flip the number after getting the right func?
-
-    volatile int _ = 0;
-
-
-
-
-
-
-
-     /*
-
-
-    std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    auto pair = BoardLookup::getBoardPair("9-4");
-    Board board1 = pair->getInitialState();
-    Board board2 = pair->getSolutionState();
 
     static constexpr int START_DEPTH = 1;
 
@@ -227,7 +124,12 @@ int main() {
     std::vector<std::vector<Board>> board1Table;
     std::vector<std::vector<Board>> board2Table;
     BoardSorter boardSorter;
-    boardSorter.ensureAux(173325000);
+
+    if (board1.hasFat()) {
+        boardSorter.ensureAux(254803968);
+    } else {
+        boardSorter.ensureAux(173325000);
+    }
 
     const Timer totalTime;
     while (total_depth <= 10) {
@@ -269,5 +171,5 @@ int main() {
 
     return 0;
 
-    */
+
 }

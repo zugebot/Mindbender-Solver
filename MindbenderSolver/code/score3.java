@@ -74,7 +74,7 @@
 
             // Cover the chosen row or column and update the counts in
             // uncoveredRows and uncoveredColumns
-            // I could cache the results of getScore1 for this lol
+            // I could cache the results of getScore1 for this ptrType
             if (isRow) {
                 differingCells -= theUncoveredRows[index];
                 theUncoveredRows[index] = 0;

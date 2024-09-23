@@ -250,98 +250,72 @@ void Board::precomputeHash(c_u32 colorCount) {
 }
 
 
-std::string Board::toString() const {
-    std::string str;
-
-    auto appendBoardToString = [this, &str](c_u64 board, int row) {
-        bool isFat = hasFat();
-        u8 curFatX = getFatX();
-        u8 curFatY = getFatY();
-        bool inMiddle = false;
-
-        for (int y = 0; y < 54; y += 18) {
-            for (int x = 0; x < 18; x += 3) {
-                uint8_t value = board >> (51 - x - y) & 0b111;
-                if (isFat) {
-                    int curX = x / 3;
-                    int curY = row + y / 18;
-                    if (curFatX == curX || curFatX == curX - 1) {
-                        if (curFatY == curY || curFatY == curY - 1) {
-                            str.append(Colors::getBgColor(value));
-                            inMiddle = curFatX == curX;
-                        }
-                    }
-
-                }
 
 
-                str.append(Colors::getColor(value));
-                str.append(std::to_string(value));
-                if (inMiddle) {
-                    str.append(" ");
-                    str.append(Colors::bgReset);
-                } else {
-                    str.append(Colors::bgReset);
-                    str.append(" ");
+void appendBoardToString(std::string& str, const Board* board, int curY) {
+    bool isFat = board->hasFat();
+    u8 curFatX = board->getFatX();
+    u8 curFatY = board->getFatY();
+    bool inMiddle = false;
+
+    u64 board_b;
+    if (curY == 0 || curY == 1 || curY == 2) {
+        board_b = board->b1;
+    } else if (curY == 3 || curY == 4 || curY == 5) {
+        board_b = board->b2;
+    } else {
+        return;
+    }
+
+    for (int x = 0; x < 18; x += 3) {
+        uint8_t value = board_b >> (51 - x - (curY % 3) * 18) & 0b111;
+        if (isFat) {
+            int curX = x / 3;
+            if (curFatX == curX || curFatX == curX - 1) {
+                if (curFatY == curY || curFatY == curY - 1) {
+                    str.append(Colors::getBgColor(value));
+                    inMiddle = curFatX == curX;
                 }
             }
-            str.append("\n");
         }
-    };
 
-    appendBoardToString(b1, 0);
-    appendBoardToString(b2, 3);
-    str.append(Colors::Reset);
+        str.append(Colors::getColor(value));
+        str.append(std::to_string(value));
+        if (inMiddle) {
+            if (x != 15) {
+                str.append(" ");
+            }
+            str.append(Colors::bgReset);
+        } else {
+            str.append(Colors::bgReset);
+            if (x != 15) {
+                str.append(" ");
+            }
+        }
+    }
+}
+
+
+std::string Board::toString() const {
+    std::string str;
+    for (int i = 0; i < 6; i++) {
+        appendBoardToString(str, this, i);
+        str.append("\n");
+    }
     return str;
 }
 
 
 MUND std::string Board::toString(const Board& other) const {
-    std::string str = "\n";
-    str.reserve(600);
-
-    auto appendBoardToString = [&str](c_u64 board1, c_u64 board2) {
-
-        std::string separator1;
-        for (int i = 0; i < 3; i++) {
-            separator1.append(" ");
-        }
-        std::string separator2;
-        for (int i = 0; i < 4; i++) {
-            separator2.append(" ");
-        }
-
-        for (int y = 0; y < 54; y += 18) {
-            str.append(separator1);
-            for (int x = 0; x < 18; x += 3) {
-                uint8_t value = board1 >> (51 - x - y) & 0b111;
-                str.append(Colors::getColor(value));
-                str.append(std::to_string(value));
-                str.append(" ");
-            }
-            str.append(separator2);
-            for (int x = 0; x < 18; x += 3) {
-                uint8_t value = board2 >> (51 - x - y) & 0b111;
-                str.append(Colors::getColor(value));
-                str.append(std::to_string(value));
-                str.append(" ");
-            }
-            str.append("\n");
-        }
-    };
-
-    appendBoardToString(b1, other.b1);
-    appendBoardToString(b2, other.b2);
-    str.append(Colors::Reset);
-
+    std::string str;
+    for (int i = 0; i < 6; i++) {
+        appendBoardToString(str, this, i);
+        str.append("   ");
+        appendBoardToString(str, &other, i);
+        str.append("\n");
+    }
     return str;
 }
-
-
-
-
-
-
 
 
 u64 Board::getScore3(const Board& other) const {

@@ -59,6 +59,14 @@ u8 Memory::getMove(u8 index) const {
 }
 
 
+u8 Memory::getLastMove() const {
+    auto index = getMoveCount();
+    c_u8 shiftAmount = 4 + (index * 6);
+    return (moves >> shiftAmount) & 0x3F;
+
+}
+
+
 std::string Memory::assembleMoveString(Memory* other) const {
     std::string start = assembleMoveStringForwards();
     std::string end = other->assembleMoveStringBackwards();
