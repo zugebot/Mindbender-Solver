@@ -13,4 +13,6 @@ class Timer {
 public:
     Timer();
     [[nodiscard]] float getSeconds() const;
+
+    void reset();
 };

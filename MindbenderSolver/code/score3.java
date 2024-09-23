@@ -17,7 +17,7 @@
      * The time complexity of this method is O(n^2) and the space complexity is O(n),
      * where n is the side length of the board (6 in this case).
      * <br><br>
-     * This method is optimized for both speed and memory usage, and it should work well
+     * This method is optimized (ironic given the last line) for both speed and memory usage, and it should work well
      * even for larger boards.
      */
 
