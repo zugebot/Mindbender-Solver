@@ -121,6 +121,69 @@ bool Board::hasFat() const {
 }
 
 
+u8 Board::getColor(u8 x, u8 y) const {
+    int shift_amount = 51 - x * 3 - (y % 3) * 18;
+    if (y < 3) {
+        return (b1 >> shift_amount) & 0b111;
+    } else {
+        return (b2 >> shift_amount) & 0b111;
+    }
+}
+
+
+/**
+ * int x = (action1 % 30) / 5;
+ * int y = (action2 % 30) / 5;
+ * int m = 1 + action1 % 5;
+ * int n = 1 + action2 % 5;
+ */
+bool Board::doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const {
+    int y2 = (y1 - n + 6) % 6;
+    int x2 = (x1 - m + 6) % 6;
+
+    u8 x1_3 = x1 * 3;
+    int offset_shared = 51 - (y1 % 3) * 18;
+    int shift_amount1 = x1_3 + offset_shared;
+    int shift_amount3 = x2 * 3 + offset_shared;
+
+    u64 base = y1 < 3 ? b1 : b2;
+
+    u8 color1 = base >> shift_amount1;
+    u8 color3 = base >> shift_amount3;
+
+    if ((color1 ^ color3) & 0b111) {
+        return false;
+    }
+    int shift_amount2 = 51 - x1_3 - (y2 % 3) * 18;
+    u64 base2 = y2 < 3 ? b1 : b2;
+    u8 color2 = base2 >> shift_amount2;
+
+    return (color1 ^ color2) & 0b111;
+}
+
+
+
+u8 Board::doActISColMatchBatched(u8 x1, u8 y1, u8 m) const {
+    c_i32 x2 = (x1 - m + 6) % 6;
+    c_u64 base = y1 < 3 ? b1 : b2;
+    c_i32 offset_shared = 51 - (y1 % 3) * 18;
+    c_u8 color1 = base >> (x1 * 3 + offset_shared);
+    c_u8 color3 = base >> (x2 * 3 + offset_shared);
+
+    if ((color1 ^ color3) & 0b111) { return 0; }
+
+    u8 results = 0;
+    c_i32 offset_shared2 = 51 - x1 * 3;
+    for (i32 i = -5; i < 1; i++) {
+        c_i32 y2 = (y1 - i) % 6;
+        c_i32 y3 = ((y1 - i) % 3) * 18;
+        c_u64 base2 = y2 < 3 ? b1 : b2;
+        c_u8 color2 = base2 >> (offset_shared2 - y3);
+        results |= (((color1 ^ color2) & 0b111) != 0) << (i + 5);
+    }
+
+    return results;
+}
 
 
 u32 Board::getColorCount() const {
@@ -230,21 +293,24 @@ uint64_t getSegment4bits(const uint64_t segment) {
 
 void Board::precomputeHash(c_u32 colorCount) {
 
-    uint64_t above, below;
+    // uint64_t above, below;
     switch (colorCount) {
-        case (2):
-            above = getSegment2bits(b1);
-            below = getSegment2bits(b2);
+        case (2): {
+            uint64_t above = getSegment2bits(b1);
+            uint64_t below = getSegment2bits(b2);
             hash = above << 18 | below;
             break;
-        case (3):
-            above = getSegment3bits(b1);
-            below = getSegment3bits(b2);
+        }
+        case (3): {
+            uint64_t above = getSegment3bits(b1);
+            uint64_t below = getSegment3bits(b2);
             hash = above << 30 | below;
             break;
-        default:
+        }
+        default: {
             hash = prime_func1(b2, b1);
             break;
+        }
 
     }
 }
@@ -318,7 +384,7 @@ MUND std::string Board::toString(const Board& other) const {
 }
 
 
-u64 Board::getScore3(const Board& other) const {
+u64 Board::getScore2(const Board& other) const {
 
 
     u64 ROW = 0;

@@ -45,31 +45,34 @@ public:
     MUND u8 getFatXY() const;
     MUND bool hasFat() const;
 
+    MUND u8 getColor(u8 x, u8 y) const;
 
+    MUND bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
+    MUND u8 doActISColMatchBatched(u8 x1, u8 y1, u8 m) const;
 
     MUND u32 getColorCount() const;
 
     MU void precomputeHash(u32 colorCount);
 
     MUND u64 getScore1(const Board& other) const;
-    MUND u64 getScore3(const Board& other) const;
+    MUND u64 getScore2(const Board& other) const;
 
     MUND std::string toString() const;
     MUND std::string toString(const Board& other) const;
 
 
-    bool operator==(const Board& other) const {
+    __forceinline bool operator==(const Board& other) const {
         static constexpr u64 MASK = 0x3FFFFFFFFFFFFF;
         return (b1) == (other.b1)
                && (b2) == (other.b2);
     }
 
-    bool operator<(const Board& other) const {
+    __forceinline bool operator<(const Board& other) const {
         return this->hash < other.hash;
     }
 
 
-    bool operator>(const Board& other) const {
+    __forceinline bool operator>(const Board& other) const {
         return this->hash > other.hash;
     }
 };

@@ -7,10 +7,12 @@
 
 typedef std::vector<Board> (*MakePermFuncArray)(Board&, u32);
 extern MakePermFuncArray makePermutationListFuncs[];
+extern MakePermFuncArray make2PermutationListFuncs[];
 
 
 typedef std::vector<Board> (*MakePermFuncArray)(Board&, u32);
 extern MakePermFuncArray makeFatPermutationListFuncs[];
+
 
 
 static const std::unordered_map<int, std::vector<std::pair<int, int>>> permutationDepthMap = {

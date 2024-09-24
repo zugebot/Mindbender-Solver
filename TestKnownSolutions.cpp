@@ -127,18 +127,6 @@ int main() {
         std::cout << "[" << levelName << "]: ";
         std::cout << realSolutionCount << "/" << totalSolutionCount << "\n";
 
-
-
-
-
-
-
     }
-
-
-
-
-
-
     return 0;
 }

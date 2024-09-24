@@ -23,6 +23,7 @@ file(GLOB_RECURSE MINDBENDER_SOLVER_SOURCES
 add_executable(MindbenderSolver
         ${MINDBENDER_SOLVER_SOURCES}
         main.cpp
+        # testHeuristics.cpp
         # testSorting.cpp
         # TestKnownSolutions.cpp
         # UnitTesting.cpp

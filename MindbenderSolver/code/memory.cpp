@@ -148,6 +148,9 @@ x += amount;
 x %= 6;
  */
 
+static constexpr u32 LONGER_PERMUTATION_LENGTH = 4;
+
+
 std::string Memory::assembleFatMoveStringForwards(MU u8 fatPos) const {
     std::string moves_str;
     const int count = getMoveCount();
@@ -163,7 +166,7 @@ std::string Memory::assembleFatMoveStringForwards(MU u8 fatPos) const {
         char direction = segment.at(0);
         int axisNum = segment.at(2) - '0';
         int amount = segment.at(segment.size() - 1)  - '0';
-        bool movesFat = segment.size() == 6;
+        bool movesFat = segment.size() == LONGER_PERMUTATION_LENGTH;
 
 
         if (movesFat) {
@@ -207,7 +210,7 @@ std::string Memory::assembleFatMoveStringBackwards(MU u8 fatPos) const {
         int amount = segment.at(segment.size() - 1) - '0';
         char new_amount = static_cast<char>(6 - amount + '0');
         segment = segment.substr(0, segment.size() - 1) + new_amount;
-        bool movesFat = segment.size() == 6;
+        bool movesFat = segment.size() == LONGER_PERMUTATION_LENGTH;
 
         moves_vec.push_back(segment);
 
