@@ -69,6 +69,36 @@ std::vector<int> parseString(const std::string& input) {
 }
 
 
+std::vector<int> parseStringFat(const std::string& input) {
+    std::vector<int> result;
+    std::istringstream iss(input);
+    std::string segment;
+
+    // Iterate through the string, splitting by spaces
+    while (iss >> segment) {
+        if (segment.length() == 3) {
+            char type = segment[0];
+            int firstNum = segment[1] - '0';  // Convert char to int
+            int secondNum = segment[2] - '0'; // Convert char to int
+
+            int baseValue = (type == 'R') ? 0 : 30;  // R=0, C=30
+            int value = baseValue + (firstNum * 5) + (secondNum - 1);
+            result.push_back(value);
+        } else if (segment.length() == 4) {
+            char type = segment[0];
+            int firstNum = segment[1] - '0';  // Convert char to int
+            int secondNum = segment[3] - '0'; // Convert char to int
+            int baseValue = (type == 'R') ? 60 : 85;  // R=60, C=85
+            int value = baseValue + (firstNum * 5) + (secondNum - 1);
+            result.push_back(value);
+
+        }
+    }
+
+    return result;
+}
+
+
 std::string extractSegment(const std::string& input) {
     size_t pos = input.find('_');
     if (pos != std::string::npos) {
@@ -81,7 +111,9 @@ std::string extractSegment(const std::string& input) {
 
 int main() {
     // std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    std::string outDirectory = R"(D:\PycharmProjects\MindbenderSolveFilter\levels\)";
+    std::string folder = "all_levels";
+    std::string outDirectory = R"(D:\PycharmProjects\MindbenderSolveFilter\)" + folder + "\\";
+
 
 
 
@@ -103,29 +135,50 @@ int main() {
         Board startingBoard = pair->getInitialState();
         Board realSolutionBoard = pair->getSolutionState();
 
+        /*
         if (startingBoard.hasFat()) {
             std::cout << "[" << levelName << "] (has fat) skipping" << "...\n";
             continue;
         }
+         */
 
 
         auto solutions = readFileLines(outDirectory + file);
 
         size_t realSolutionCount = 0;
         size_t totalSolutionCount = solutions.size();
-        for (const auto& solution : solutions) {
-            std::vector<int> action_numbers = parseString(solution);
-            Board toCheckBoard = startingBoard;
-            for (const auto action_number : action_numbers) {
-                actions[action_number](toCheckBoard);
+        if (!startingBoard.hasFat()) {
+            for (const auto& solution : solutions) {
+                std::vector<int> action_numbers = parseString(solution);
+                Board toCheckBoard = startingBoard;
+                for (const auto action_number : action_numbers) {
+                    actions[action_number](toCheckBoard);
+                }
+                if (toCheckBoard == realSolutionBoard) {
+                    realSolutionCount += 1;
+                }
             }
-            if (toCheckBoard == realSolutionBoard) {
-                realSolutionCount += 1;
+
+            std::cout << "Norm [" << levelName << "]: ";
+            std::cout << realSolutionCount << "/" << totalSolutionCount << "\n";
+
+        } else {
+            for (const auto& solution : solutions) {
+                std::vector<int> action_numbers = parseStringFat(solution);
+                Board toCheckBoard = startingBoard;
+                for (const auto action_number : action_numbers) {
+                    allActionsList[action_number](toCheckBoard);
+                }
+
+                if (toCheckBoard == realSolutionBoard) {
+                    realSolutionCount += 1;
+                }
             }
+
+            std::cout << "Fat. [" << levelName << "]: ";
+            std::cout << realSolutionCount << "/" << totalSolutionCount << "\n";
         }
 
-        std::cout << "[" << levelName << "]: ";
-        std::cout << realSolutionCount << "/" << totalSolutionCount << "\n";
 
     }
     return 0;

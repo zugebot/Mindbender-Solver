@@ -1,9 +1,10 @@
 #pragma once
 
-#include <string>
 #include "MindbenderSolver/utils/processor.hpp"
 #include "memory.hpp"
 
+#include <string>
+#include <vector>
 
 
 
@@ -49,6 +50,7 @@ public:
 
     MUND bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
     MUND u8 doActISColMatchBatched(u8 x1, u8 y1, u8 m) const;
+    MUND double getDuplicateEstimateAtDepth(u32 depth) const;
 
     MUND u32 getColorCount() const;
 
@@ -59,6 +61,7 @@ public:
 
     MUND std::string toString() const;
     MUND std::string toString(const Board& other) const;
+    MUND std::string toString(const Board* other) const;
 
 
     __forceinline bool operator==(const Board& other) const {
@@ -76,3 +79,5 @@ public:
         return this->hash > other.hash;
     }
 };
+
+typedef std::vector<Board> vecBoard_t;

@@ -1,34 +1,53 @@
 #pragma once
 
 #include "board.hpp"
-#include <vector>
 
+#include <vector>
 #include <unordered_map>
 
-typedef std::vector<Board> (*MakePermFuncArray)(Board&, u32);
-extern MakePermFuncArray makePermutationListFuncs[];
-extern MakePermFuncArray make2PermutationListFuncs[];
 
-
-typedef std::vector<Board> (*MakePermFuncArray)(Board&, u32);
-extern MakePermFuncArray makeFatPermutationListFuncs[];
-
-
-
-static const std::unordered_map<int, std::vector<std::pair<int, int>>> permutationDepthMap = {
-        {1, {{1, 0}, {0, 1}}},
-        {2, {{1, 1}, {2, 0}, {0, 2}}},
-        {3, {{2, 1}, {1, 2}, {3, 0}, {0, 3}}},
-        {4, {{2, 2}, {3, 1}, {1, 3}, {4, 0}, {0, 4}}},
-        {5, {{3, 2}, {3, 2}, {4, 1}, {1, 4}, {5, 0}, {0, 5}}},
-        {6, {{3, 3}, {4, 2}, {2, 4}, {5, 1}, {1, 5}}},
-        {7, {{4, 3}, {3, 4}, {5, 2}, {2, 5}}},
-        {8, {{4, 4}, {5, 3}, {3, 5}}},
-        {9, {{5, 4},{4, 5}}},
-        {10, {{5, 5}}},
+static constexpr u64 BOARD_PRE_ALLOC_SIZES[6] = {
+        1,
+        60,
+        2550,
+        104000,
+        4245000,
+        173325000,
+        // 7076687500,
+        // 288933750000,
+        // 11796869531250,
+        // 481654101562500,
+        // 19665443613281250,
+        // 802919920312500000,
 };
 
 
+static constexpr u64 BOARD_FAT_PRE_ALLOC_SIZES[6] = {
+        1,
+        48,
+        2304,
+        110592,
+        5308416,
+        254803968,
+};
+
+
+class Permutations {
+    static constexpr u32 PTR_LIST_SIZE = 6;
+public:
+    typedef void (*toDepthFuncPtr_t)(vecBoard_t &, const Board &, u32);
+    typedef void (*toDepthPlusOneFuncPtr_t)(const vecBoard_t &, vecBoard_t &, u32);
+    typedef std::unordered_map<u32, std::vector<std::pair<u32, u32>>> depthMap_t;
+
+    static const depthMap_t depthMap;
+    static toDepthFuncPtr_t toDepthFuncPtrs[PTR_LIST_SIZE];
+    static toDepthFuncPtr_t toDepthFatFuncPtrs[PTR_LIST_SIZE];
+    static toDepthPlusOneFuncPtr_t toDepthPlusOneFuncPtr;
+
+    MU static void reserveForDepth(const Board& board_in, vecBoard_t& boards_out, u32 depth, bool isFat = false);
+    MU static void getDepthFunc(const Board &board_in, vecBoard_t &boards_out, u32 depth, bool shouldResize = true);
+    MU static void getDepthPlus1Func(const vecBoard_t& boards_in, vecBoard_t& boards_out, bool shouldResize = true);
+};
 
 
 

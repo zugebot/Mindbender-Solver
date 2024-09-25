@@ -1,0 +1,30 @@
+
+Total Size : 96,666,906
+unique b1's: 141,757
+unique b2's: 104,585
+
+so instead of
+
+96,666,906 * (
+    8: b1
+    8: b2
+    8: hash
+    8: mem
+)
+
+possibly do
+
+141,757 * (
+    8: b1
+)
+
+104,585 * (
+    8: b2
+)
+
+96,666,906 * (
+    4: b1-index
+    4: b2-index
+    8: hash
+    8: mem
+)

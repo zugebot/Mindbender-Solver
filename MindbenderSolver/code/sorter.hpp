@@ -8,20 +8,28 @@
 
 
 class BoardSorter {
-    std::vector<Board> aux;
+    std::vector<vecBoard_t> aux_buffer;
 
     enum DEPTH { D2 = 2, D3 = 3, D4 = 4, D5 = 5 };
     enum COLORS { C2 = 2, C3 = 3 };
 public:
-    MU void resize(const size_t size) {
-        aux.resize(size);
+
+    MU void resize(const u32 depth, const size_t size) {
+        if (aux_buffer.size() < depth) {
+            aux_buffer.resize(depth + 1);
+        }
+        aux_buffer[depth].resize(size);
     }
 
-    MU void ensureAux(const size_t size) {
-        if (aux.capacity() < size) {
-            aux.reserve(size);
+    MU void ensureAux(const u32 depth, const u64 size) {
+        if (aux_buffer.size() < depth + 1) {
+            aux_buffer.resize(depth + 1);
         }
-        resize(size);
+
+        if (aux_buffer[depth].capacity() < size) {
+            aux_buffer[depth].reserve(size);
+        }
+        resize(depth, size);
     }
 
     MU void sortBoards(std::vector<Board>& boards, c_u32 depth, c_u32 colorCount) {
@@ -37,18 +45,18 @@ public:
             case (DEPTH::D4): {
                 switch (colorCount) {
                     case (COLORS::C2): {
-                        ensureAux(boards.size());
-                        radix_sort<3, 12>(boards, aux);
+                        ensureAux(depth, boards.size());
+                        radix_sort<3, 12>(boards, aux_buffer[depth]);
                         break;
                     }
                     case (COLORS::C3): {
-                        ensureAux(boards.size());
-                        radix_sort<5, 12>(boards, aux);
+                        ensureAux(depth, boards.size());
+                        radix_sort<5, 12>(boards, aux_buffer[depth]);
                         break;
                     }
                     default: {
-                        ensureAux(boards.size());
-                        radix_sort<6, 11>(boards, aux);
+                        ensureAux(depth, boards.size());
+                        radix_sort<6, 11>(boards, aux_buffer[depth]);
                         break;
                     }
                 }
@@ -57,18 +65,18 @@ public:
             case (DEPTH::D5): {
                 switch (colorCount) {
                     case (COLORS::C2): {
-                        ensureAux(boards.size());
-                        radix_sort<3, 12>(boards, aux);
+                        ensureAux(depth, boards.size());
+                        radix_sort<3, 12>(boards, aux_buffer[depth]);
                         break;
                     }
                     case (COLORS::C3): {
-                        ensureAux(boards.size());
-                        radix_sort<6, 10>(boards, aux);
+                        ensureAux(depth, boards.size());
+                        radix_sort<6, 10>(boards, aux_buffer[depth]);
                         break;
                     }
                     default: {
-                        ensureAux(boards.size());
-                        radix_sort<6, 11>(boards, aux);
+                        ensureAux(depth, boards.size());
+                        radix_sort<6, 11>(boards, aux_buffer[depth]);
                         break;
                     }
                 }

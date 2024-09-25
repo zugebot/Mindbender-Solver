@@ -60,7 +60,7 @@ u8 Memory::getMove(u8 index) const {
 
 
 u8 Memory::getLastMove() const {
-    auto index = getMoveCount();
+    auto index = getMoveCount() - 1;
     c_u8 shiftAmount = 4 + (index * 6);
     return (moves >> shiftAmount) & 0x3F;
 
@@ -160,7 +160,7 @@ std::string Memory::assembleFatMoveStringForwards(MU u8 fatPos) const {
     for (int i = 0; i < count; i++) {
         MU u8 move = getMove(i);
         auto func = fatActions[x * 5 + y][move];
-        auto segment = RCNameForwardLookup[func];
+        auto segment = actionToNameLookup[func];
         moves_str += segment;
 
         char direction = segment.at(0);
@@ -203,7 +203,7 @@ std::string Memory::assembleFatMoveStringBackwards(MU u8 fatPos) const {
     for (int i = 0; i < count; i++) {
         MU u8 move = getMove(i);
         auto func = fatActions[x * 5 + y][move];
-        auto segment = RCNameForwardLookup[func];
+        auto segment = actionToNameLookup[func];
 
         char direction = segment.at(0);
         int axisNum = segment.at(2) - '0';

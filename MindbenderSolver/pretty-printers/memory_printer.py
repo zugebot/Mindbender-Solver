@@ -1,8 +1,9 @@
 import gdb
 import re
 
+
 class MemoryPrinter:
-    "Pretty-printer for the Memory class"
+    """Pretty-printer for the Memory class"""
 
     def __init__(self, val):
         self.val = val
@@ -23,14 +24,15 @@ class MemoryPrinter:
             sect = (move % 30) / 5
             amount = move % 5 + 1
             results.append("RC"[direction] + str(sect) + str(amount))
-        result = ", ".join(results)
+        result = ", ".join(results) + f" [{moves}]"
         return result
 
     def children(self):
         # Return the fields of the Memory class to allow them to be expanded
         yield "moves", self.val['moves']  # The 'moves' field will be collapsable
 
-    def display_hint(self):
+    @staticmethod
+    def display_hint():
         # This tells GDB how to display the root item. 'map' is used for expandable objects.
         return 'map'
 

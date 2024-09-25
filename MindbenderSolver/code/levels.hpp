@@ -42,6 +42,10 @@ public:
         return name;
     }
 
+    MUND std::string toString() const {
+        return board->toString(solve);
+    }
+
 };
 
 

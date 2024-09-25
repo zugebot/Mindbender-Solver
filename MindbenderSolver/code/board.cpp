@@ -186,6 +186,13 @@ u8 Board::doActISColMatchBatched(u8 x1, u8 y1, u8 m) const {
 }
 
 
+double Board::getDuplicateEstimateAtDepth(MU u32 depth) const {
+    return 1.0;
+}
+
+
+
+
 u32 Board::getColorCount() const {
     return ((b1 >> 54) & 0b111LL) + 1;
 }
@@ -378,6 +385,18 @@ MUND std::string Board::toString(const Board& other) const {
         appendBoardToString(str, this, i);
         str.append("   ");
         appendBoardToString(str, &other, i);
+        str.append("\n");
+    }
+    return str;
+}
+
+
+MUND std::string Board::toString(const Board* other) const {
+    std::string str;
+    for (int i = 0; i < 6; i++) {
+        appendBoardToString(str, this, i);
+        str.append("   ");
+        appendBoardToString(str, other, i);
         str.append("\n");
     }
     return str;

@@ -1,106 +1,4 @@
-#include "MindbenderSolver/code/board.hpp"
-#include "MindbenderSolver/code/levels.hpp"
-#include "MindbenderSolver/code/memory.hpp"
-#include "MindbenderSolver/code/perms.hpp"
-#include "MindbenderSolver/code/sorter.hpp"
-#include "MindbenderSolver/code/intersection.hpp"
-
-#include "MindbenderSolver/code/rotations.hpp"
-#include "MindbenderSolver/utils/timer.hpp"
-
-
-#include <fstream>
-#include <iostream>
-#include <set>
-#include <vector>
-
-
-
-template<bool FAST_PERM_FUNCS>
-void findSolutions(std::set<std::string>& resultSet, int index,
-                   BoardSorter& boardSorter,
-                   std::vector<std::vector<Board>>& board1Table,
-                   std::vector<std::vector<Board>>& board2Table,
-                   Board board1, Board board2, const int depth1, const int depth2) {
-    std::string start_both = "[" + std::to_string(index) + "] ";
-    std::string start_left = "[" + std::to_string(index) + "L] ";
-    std::string start_right = "[" + std::to_string(index) + "R] ";
-
-    uint32_t colorCount = board1.getColorCount();
-    if (board1.hasFat()) {
-        colorCount = 4;
-    }
-
-
-    auto permFuncs = !board1.hasFat() ? makePermutationListFuncs : makeFatPermutationListFuncs;
-    if constexpr (FAST_PERM_FUNCS) {
-        permFuncs = !board1.hasFat() ? make2PermutationListFuncs : makeFatPermutationListFuncs;
-    }
-
-
-    std::cout << "\n";
-    std::cout << start_both << "Solving for depths [" << depth1 << ", " << depth2 << "]\n";
-    while (board1Table.size() <= depth1) {
-        const Timer timer1;
-        const int tempDepth = (int)board1Table.size();
-        std::vector<Board> boards = (permFuncs[tempDepth])(board1, colorCount);
-        std::cout << start_left << "Creation Time: " << timer1.getSeconds() << "\n";
-        std::cout << start_left << "Size: " << boards.size() << "\n";
-
-        const Timer timerSort1;
-        // std::sort(boards.begin(), boards.end(), [](const Board &a, const Board &b) { return a.hash < b.hash; });
-        boardSorter.sortBoards(boards, tempDepth, colorCount);
-        std::cout << start_left << "Sort Time: " << timerSort1.getSeconds() << "\n";
-
-        board1Table.push_back(boards);
-    }
-
-    while (board2Table.size() <= depth2) {
-        const Timer timer2;
-        const int tempDepth = (int)board2Table.size();
-        std::vector<Board> boards = (permFuncs[tempDepth])(board2, colorCount);
-        std::cout << start_right << "Creation Time: " << timer2.getSeconds() << "\n";
-        std::cout << start_right << "Size: " << boards.size() << "\n";
-
-        const Timer timerSort2;
-        // std::sort(boards.begin(), boards.end(), [](const Board &a, const Board &b) { return a.hash < b.hash; });
-        boardSorter.sortBoards(boards, tempDepth, colorCount);
-        std::cout << start_right << "Sort Time: " << timerSort2.getSeconds() << "\n";
-
-        board2Table.push_back(boards);
-    }
-
-    std::vector<std::pair<Board*, Board*>> results;
-    if (depth1 != 0 && depth2 != 0) {
-
-        results = intersection_threaded(board1Table[depth1], board2Table[depth2]);
-    } else {
-        results = intersection(board1Table[depth1], board2Table[depth2]);
-    }
-
-    std::cout << start_both << "Solutions: " << results.size() << "\n";
-
-    if (board1.hasFat()) {
-        int xy1 = board1.getFatXY();
-        int xy2 = board2.getFatXY();
-        for (auto pair: results) {
-            std::string moveset = pair.first->mem.assembleFatMoveString(xy1, &pair.second->mem, xy2);
-            resultSet.insert(moveset);
-        }
-    } else {
-        for (auto pair: results) {
-            std::string moveset = pair.first->mem.assembleMoveString(&pair.second->mem);
-            resultSet.insert(moveset);
-        }
-    }
-
-    std::cout << std::endl;
-}
-
-
-
-
-
+#include "MindbenderSolver/include.hpp"
 
 
 
@@ -108,9 +6,15 @@ void findSolutions(std::set<std::string>& resultSet, int index,
 int main() {
 
     std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    auto pair = BoardLookup::getBoardPair("9-4");
-    Board board1 = pair->getInitialState();
-    Board board2 = pair->getSolutionState();
+    auto pair = BoardLookup::getBoardPair("6-5");
+
+    // initialize solver
+    BoardSolver solver(pair);
+    solver.setWriteDirectory(outDirectory);
+    solver.setDepthParams(5, 9, 10);
+    solver.preAllocateMemory();
+
+    std::cout << pair->toString() << std::endl;
 
     /*
     std::cout << board1.toString() << std::endl;
@@ -144,107 +48,83 @@ int main() {
 
     return 0;
     */
-
-
-
     /*
+    static constexpr int DEPTH_TEST = 5;
+
     Timer timer1;
-    auto boards1 = make2_permutation_list_depth_4(board1, 2);
+    auto boards1 = make2PermutationListFuncs[DEPTH_TEST](board1, 2);
     auto time1 = timer1.getSeconds();
 
 
     std::map<u64, Board> boardMap1;
+    std::map<u64, u64> board1_B1;
+    std::map<u64, u64> board1_B2;
     for (auto& board : boards1) {
-        boardMap1[board.hash] = board;
+        // boardMap1[board.hash] = board;
+        board1_B1[board.b1] = 1;
+        board1_B2[board.b2] = 1;
     }
 
 
     Timer timer2;
-    auto boards2 = makePermutationListFuncs[4](board1, 2);
+    auto boards2 = makePermutationListFuncs[DEPTH_TEST](board1, 2);
     auto time2 = timer2.getSeconds();
 
 
     std::map<u64, Board> boardMap2;
+    std::map<u64, u64> board2_B1;
+    std::map<u64, u64> board2_B2;
     for (auto& board : boards2) {
-        boardMap2[board.hash] = board;
+        // boardMap2[board.hash] = board;
+        board2_B1[board.b1] = 1;
+        board2_B2[board.b2] = 1;
     }
 
 
 
-    std::cout << "Size New: " << boards1.size() << std::endl;
-    std::cout << "Size Old: " << boards2.size() << std::endl;
-    std::cout << "Uniq New: " << boardMap1.size() << std::endl;
-    std::cout << "Uniq Old: " << boardMap2.size() << std::endl;
-    std::cout << "Time New: " << time1 << std::endl;
-    std::cout << "Time Old: " << time2 << std::endl;
+
+    std::cout << "Size New: " << boards1.size() << "\n";
+    std::cout << "Size Old: " << boards2.size() << "\n";
+    std::cout << "\n";
+    // std::cout << "Uniq New: " << boardMap1.size() << "\n";
+    // std::cout << "Uniq Old: " << boardMap2.size() << "\n";
+    // std::cout << "\n";
+    std::cout << "__b1 New: " << board1_B1.size() << "\n";
+    std::cout << "__b2 New: " << board1_B2.size() << "\n";
+    std::cout << "\n";
+    std::cout << "__b1 Old: " << board2_B1.size() << "\n";
+    std::cout << "__b2 Old: " << board2_B2.size() << "\n";
+    std::cout << "\n";
+    std::cout << "Time New: " << time1 << "\n";
+    std::cout << "Time Old: " << time2 << "\n";
+    std::cout << std::flush;
+
+
+
 
 
 
     return 0;
-
     */
+    /*
+    vecBoard_t boards1;
+    Permutations::getDepthFunc(board1, boards1, 4);
 
-    static constexpr int START_DEPTH = 1;
+    vecBoard_t boards2;
+    Permutations::allocateForDepth(boards2, 5);
 
+    Timer timer;
+    Permutations::getDepthPlus1Func(boards1, boards2, false);
+    auto end = timer.getSeconds();
 
+    std::cout << "Time: " << end << "\n";
+    std::cout << "siz4: " << boards1.size() << "\n";
+    std::cout << "siz5: " << boards2.size() << "\n";
 
+    return 0;
+     */
 
-
-    std::cout << board1.toString(board2) << std::endl;
-    std::cout << std::flush;
-
-
-    std::set<std::string> resultSet;
-    int total_depth = START_DEPTH;
-
-    std::vector<std::vector<Board>> board1Table;
-    std::vector<std::vector<Board>> board2Table;
-    BoardSorter boardSorter;
-
-    if (board1.hasFat()) {
-        boardSorter.ensureAux(254803968);
-    } else {
-        boardSorter.ensureAux(173325000);
-    }
-
-    const Timer totalTime;
-    while (total_depth <= 10) {
-        auto permutationsFromDepth = permutationDepthMap.at(total_depth);
-        int permCount = 0;
-        for (const auto& permPair : permutationsFromDepth) {
-            findSolutions<true>(resultSet, permCount, boardSorter, board1Table, board2Table,
-                          board1, board2, permPair.first, permPair.second);
-            permCount++;
-            if (permCount != permutationsFromDepth.size() - 1) {
-                if (!resultSet.empty()) {
-                    std::cout << "Unique Solutions so far: " << resultSet.size() << std::endl;
-                }
-            } else {
-                std::cout << "Total Unique Solutions: " << resultSet.size() << std::endl;
-            }
-        }
-        if (!resultSet.empty()) {
-            break;
-        }
-        total_depth++;
-    }
-
-    std::cout << "Total Time: " << totalTime.getSeconds() << std::endl;
-    if (!resultSet.empty()) {
-        std::string filename = pair->getName()
-                               + "_c" + std::to_string(total_depth)
-                               + "_" + std::to_string(resultSet.size())
-                               + ".txt";
-        std::cout << "Saving results to '" << filename << "'.\n";
-        std::ofstream outfile(outDirectory + "\\levels\\" + filename);
-        for (const auto& str: resultSet) {
-            outfile << str << std::endl;
-        }
-        outfile.close();
-    } else {
-        std::cout << "No solutions found...\n";
-    }
-
+    solver.findSolutions<true>();
     return 0;
 
 

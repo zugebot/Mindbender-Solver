@@ -36,8 +36,8 @@ PERM_MACRO(C_45_1); PERM_MACRO(C_45_2); PERM_MACRO(C_45_3); PERM_MACRO(C_45_4); 
 
 
 
-MU extern std::map<Action, std::string> RCNameForwardLookup;
-MU extern std::map<Action, std::string> RCNameBackwardLookup;
+MU extern std::map<Action, std::string> actionToNameLookup;
+MU extern std::map<std::string, Action> nameToActionLookup;
 
 MU extern Action actions[60];
 MU extern Action fatActions[25][48];
