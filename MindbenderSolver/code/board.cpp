@@ -162,7 +162,14 @@ bool Board::doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const {
 }
 
 
-
+/**
+ *
+ * @param x1 Sect: Column
+ * @param y1 Sect: Row
+ * @param m amount: Column
+ *          amount: Row (finds true for all of these)
+ * @return
+ */
 u8 Board::doActISColMatchBatched(u8 x1, u8 y1, u8 m) const {
     c_i32 x2 = (x1 - m + 6) % 6;
     c_u64 base = y1 < 3 ? b1 : b2;
@@ -227,6 +234,113 @@ u64 Board::getScore1(const Board &other) const {
     return score1Helper(getSimilar(b1, other.b1))
          + score1Helper(getSimilar(b2, other.b2));
 }
+
+
+u64 getRow(const Board* board, c_u64 y) {
+    c_u64 offset = (51 - y % 3) * 18;
+    if (y < 3) {
+        return (board->b1 >> offset) & 0b111;
+    }
+    return (board->b2 >> offset) & 0b111;
+
+}
+
+u64 getCol(const Board* board, c_u32 x) {
+    c_u64 mapBase = 0b111 << (5 - x) * 3;
+    c_u64 map = mapBase | (mapBase << 18) | (mapBase << 36);
+    c_u64 b1col = board->b1 & map;
+    c_u64 b2col = board->b2 & map;
+    static constexpr u64 map2 = 0x3FFFF;
+    c_u64 b1shifted = (b1col & map2) | ((b1col >> 18) & map2) | ((b1col >> 36) & map2);
+    c_u64 b2shifted = (b2col & map2) | ((b2col >> 18) & map2) | ((b2col >> 36) & map2);
+    c_u64 col = (b1shifted << 18) | b2shifted;
+    return col;
+
+}
+
+u64 constructMapCenter(c_u64 row, c_u32 x) {
+    c_u64 center = (row >> (5 - x) * 3) & 0b111;
+    c_u64 final =  center | (center << 3) | (center << 6) | (center << 9) | (center << 12);
+    return final;
+}
+
+
+u64 getScore1ShiftComp(c_u64 sect, c_u64 mapCent) {
+    static constexpr u64 p1Map = 0b000'001'000'001'000'001;
+    static constexpr u64 p2Map = 0b000000'000000'000011;
+    c_u64 sim = getSimilar(sect, mapCent);
+    c_u64 p1 = ((sim & (p1Map << 3)) >> 2) | (sim & p1Map);
+    c_u64 p2 = ((p1 & (p2Map << 12) >> 8)) | (p1 & (p2Map << 6) >> 4) | (p1 & p2Map);
+    return p2;
+}
+
+
+void shiftLeft(u64& sect, c_u32 index) {
+    static constexpr u64 map = 0x3FFFF;
+
+    c_u64 mapL = map >> (18 - 3 * index);
+    c_u64 mapR = map << (3 * index);
+
+    c_u64 val = (sect & mapL) | (sect & mapR) << 3;
+    sect = val;
+}
+
+
+void unshiftLeft(u64& sect, c_u32 var1, c_u32 var2, c_u32 var3) {
+
+}
+
+
+u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
+    u64 row = getRow(this, y);
+    u64 col = getCol(this, x);
+
+    c_u64 mapCent = constructMapCenter(row, x);
+
+    row = getScore1ShiftComp(row, mapCent);
+    col = getScore1ShiftComp(col, mapCent);
+
+    shiftLeft(row, x); // shift row (remove X)
+    shiftLeft(col, y); // shift col (remove X)
+
+    c_u64 colMult = col | col >> 5;
+    u64 n0 = (colMult & row >> 0) << 0;
+    u64 n1 = (colMult & row >> 1) << 1;
+    u64 n2 = (colMult & row >> 2) << 2;
+    u64 n3 = (colMult & row >> 3) << 3;
+    u64 n4 = (colMult & row >> 4) << 4;
+
+    // unshift n0-n4 from (row)
+    unshiftLeft(n0, x, 1, 6); // is this x or y?
+    unshiftLeft(n1, x, 1, 6); // is this x or y?
+    unshiftLeft(n2, x, 1, 6); // is this x or y?
+    unshiftLeft(n3, x, 1, 6); // is this x or y?
+    unshiftLeft(n4, x, 1, 6); // is this x or y?
+
+
+    constexpr u32 offset = 8;
+    u64 final = (n4 << offset * 4)
+              | (n3 << offset * 3)
+              | (n2 << offset * 2)
+              | (n1 << offset * 1)
+              | (n0 << offset * 0);
+
+    // unshift n0-n4 from (col)
+    unshiftLeft(final, x, 8, 6); // is this x or y?
+
+    return final;
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 

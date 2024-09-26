@@ -51,6 +51,7 @@ public:
     MUND bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
     MUND u8 doActISColMatchBatched(u8 x1, u8 y1, u8 m) const;
     MUND double getDuplicateEstimateAtDepth(u32 depth) const;
+    MUND u64 getRowColIntersections(u32 x, u32 y) const;
 
     MUND u32 getColorCount() const;
 

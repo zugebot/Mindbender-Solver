@@ -531,7 +531,7 @@ void make_permutation_list_depth_5(vecBoard_t& boards_out, const Board &board_in
 template<bool CHECK_INTERSECTION = true, bool CHECK_SIMILAR = true>
 void make_permutation_list_depth_plus_one(const vecBoard_t & boards_in, vecBoard_t & boards_out, c_u32 colorCount) {
     int count = 0;
-    u8 intersects;
+    u8 intersects ;
 
     for (int board_index = 0; board_index < boards_in.size(); board_index++) {
         u8 a = boards_in[board_index].mem.getLastMove();
@@ -553,7 +553,7 @@ void make_permutation_list_depth_plus_one(const vecBoard_t & boards_in, vecBoard
                 for (int b_amount = 0; b_amount < 5; b_amount++) {
                     INTERSECT_CONTINUE_IF_CACHE(do_RC_check, intersects, b_amount)
 
-                    int b_cur = b_base + b_amount;
+                    c_int b_cur = b_base + b_amount;
 
                     boards_out[count] = boards_in[board_index];
                     actions[b_cur](boards_out[count]);
