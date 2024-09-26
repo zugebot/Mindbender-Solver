@@ -11,7 +11,7 @@ from sim import *
 # introduction to computing systems: from bits & gates to C/C++ & beyond
 
 
-SCALE = 2 / 3
+SCALE = 1.2
 CELL_SIZE = int(SCALE * 60)
 CANVAS_SIZE = GRID_SIZE * CELL_SIZE
 GRID_OFFSET_X = 5
@@ -55,7 +55,6 @@ def draw_grid(canvas: tk.Canvas):
                                     _y + CELL_SIZE * (y + 1),
                                     fill="gray")
 
-
     for i in range(CELL_COUNT + 1):
         canvas.create_line(i * CELL_SIZE + inner_grid_start_x, inner_grid_start_y,
                            i * CELL_SIZE + inner_grid_start_x, inner_grid_end_y, fill='black', width=5)
@@ -85,44 +84,37 @@ class CircleArrow:
         self.circle_id = _circle_ids
         self.text_id = _text_ids
 
-        self.entering = False
-        self.leaving = False
+        # Assign a common tag to all related items
+        self.tag = f"circle_arrow_{id(self)}"
+        for item in self.arrow_id + self.circle_id + self.text_id:
+            self.canvas.addtag_withtag(self.tag, item)
+
+        self.bind_items()
 
     def on_enter(self, event):
-        if self.entering:
-            return
-        self.entering = True
-        for arrow in self.arrow_id:
-            self.canvas.itemconfig(arrow, fill=CircleArrow.line_hover)
-        for circle in self.circle_id:
-            self.canvas.itemconfig(circle, fill=CircleArrow.circle_hover)
-        for text in self.text_id:
-            self.canvas.itemconfig(text, fill=CircleArrow.text_hover)
-        self.entering = False
+        # Schedule the appearance change after 10 milliseconds
+        self.canvas.after(10, self.change_appearance, CircleArrow.line_hover, CircleArrow.circle_hover, CircleArrow.text_hover)
 
     def on_leave(self, event):
-        if self.leaving:
-            return
-        self.leaving = True
+        # Schedule the appearance reset after 10 milliseconds
+        self.canvas.after(10, self.change_appearance, CircleArrow.line_main, CircleArrow.circle_main, CircleArrow.text_main)
+
+    def change_appearance(self, line_color, circle_color, text_color):
+        # Change the appearance of the items
         for arrow in self.arrow_id:
-            self.canvas.itemconfig(arrow, fill=CircleArrow.line_main)
+            self.canvas.itemconfig(arrow, fill=line_color)
+            self.canvas.tag_raise(arrow)
         for circle in self.circle_id:
-            self.canvas.itemconfig(circle, fill=CircleArrow.circle_main)
+            self.canvas.itemconfig(circle, fill=circle_color)
+            self.canvas.tag_raise(circle)
         for text in self.text_id:
-            self.canvas.itemconfig(text, fill=CircleArrow.text_main)
-        self.leaving = False
+            self.canvas.itemconfig(text, fill=text_color)
+            self.canvas.tag_raise(text)
 
     def bind_items(self):
-        for arrow in self.arrow_id:
-            self.canvas.tag_bind(arrow, "<Enter>", self.on_enter)
-            self.canvas.tag_bind(arrow, "<Leave>", self.on_leave)
-        for circle in self.arrow_id:
-            self.canvas.tag_bind(circle, "<Enter>", self.on_enter)
-            self.canvas.tag_bind(circle, "<Leave>", self.on_leave)
-        for text in self.text_id:
-            self.canvas.tag_bind(text, "<Enter>", self.on_enter)
-            self.canvas.tag_bind(text, "<Leave>", self.on_leave)
-
+        # Bind events to the common tag
+        self.canvas.tag_bind(self.tag, "<Enter>", self.on_enter)
+        self.canvas.tag_bind(self.tag, "<Leave>", self.on_leave)
 
 
 def draw_moves(canvas: tk.Canvas, moves, show_index=True):
@@ -268,20 +260,23 @@ def draw_moves(canvas: tk.Canvas, moves, show_index=True):
                 return _text_x, _text_y
 
             text_x, text_y = get_text_location()
-            text_id = canvas.create_text(text_x, text_y, text=f"{i + 1}", fill=CircleArrow.text_main)
+            text_id = canvas.create_text(text_x, text_y, text=f"{i + 1}",
+                                         fill=CircleArrow.text_main, font=("Helvetica", math.ceil(SCALE * 12)))
 
+            circle_radius = math.floor(SCALE * 5)
             circle_id = canvas.create_oval(
-                shifted_sx - 5, shifted_sy - 5, shifted_sx + 5, shifted_sy + 5,
+                shifted_sx - circle_radius, shifted_sy - circle_radius,
+                shifted_sx + circle_radius, shifted_sy + circle_radius,
                 fill=CircleArrow.circle_main, outline="black"
             )
 
             arrow_id = canvas.create_line(
                 shifted_sx, shifted_sy, shifted_ex, shifted_ey,
-                fill=CircleArrow.line_main, width=2, arrow=tk.LAST
+                fill=CircleArrow.line_main, width=math.ceil(SCALE * 2), arrow=tk.LAST
             )
 
             circleArrow = CircleArrow(canvas, [arrow_id], [circle_id], [text_id])
-            circleArrow.bind_items()
+
 
 
 class CubeFrame(tk.Frame):
@@ -403,6 +398,15 @@ class UI:
         self.state2 = True
         self.state3 = False
         self.state4 = False
+
+        self.moves_frame = CubeFrame(self.root, 10, 0.5, 0, 0)
+        self.text_moves = tk.Text(self.moves_frame, height=1, bg=self.moves_frame.cget("bg"), bd=0, **font_2)
+        self.text_moves.insert("1.0", "Hello World!")
+        self.text_moves.config(state="disabled")
+        self.text_moves.bind("<FocusIn>", lambda event: self.text_moves.config(bg=self.moves_frame.cget("bg")))
+        self.text_moves.tag_configure("center", justify="center")
+        self.text_moves.tag_add("center", "1.0", "end")
+        self.text_moves.place(relx=0.5, rely=0.5, anchor="center")
 
         self.combo_frame = CubeFrame(self.root, 3, 0.5, 0, 0.5)
         self.file_combo_box = ttk.Combobox(self.combo_frame, values=[], **font_combo)
@@ -560,6 +564,12 @@ class UI:
             if move_data is None:
                 self.index_label.config(text="")
                 return
+
+            self.text_moves.config(state="normal")
+            self.text_moves.delete("1.0", tk.END)
+            self.text_moves.insert("1.0", " " + solve_string)
+            self.text_moves.tag_add("center", "1.0", "end")
+            self.text_moves.config(state="disabled")
 
             draw_grid(self.canvas)
             draw_moves(self.canvas, move_data)

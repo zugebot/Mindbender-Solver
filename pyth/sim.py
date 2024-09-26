@@ -6,6 +6,8 @@ GRID_SIZE = 6
 
 def calculate_distance(p1, p2):
     """Calculate Euclidean distance without wrap-around for positions possibly outside the grid."""
+    if p1 is None or p2 is None:
+        return 0
     dx = abs(p1[0] - p2[0])
     dy = abs(p1[1] - p2[1])
     return math.hypot(dx, dy)
@@ -19,7 +21,7 @@ def get_positions_on_axis(axis, index):
         return [[index, y] for y in range(GRID_SIZE)]
 
 
-def get_possible_directions_and_displacements(steps):
+def get_possible_dirs_and_displacements(steps):
     """Get possible directions and corresponding displacements."""
     steps = steps % GRID_SIZE
     if steps == 0:
@@ -27,58 +29,39 @@ def get_possible_directions_and_displacements(steps):
     else:
         return [
             ('+', steps),
-            ('-', (GRID_SIZE - steps) % GRID_SIZE)
+            ('-', -((GRID_SIZE - steps) % GRID_SIZE))
         ]
 
 
 def optimize_mouse_movement_pass1(solution_moves):
-    # Reverse the moves to iterate backwards
-    reversed_moves = list(reversed(solution_moves))
-    num_moves = len(reversed_moves)
 
     # Initialize variables
-    move_data_reversed = [None] * num_moves  # To store move data in reverse order
-    next_click_down_pos = None  # Release position of the next move
+    move_data = [None] * len(solution_moves)
+    next_click_down_pos = None
 
-    for i in range(num_moves):
-        move = reversed_moves[i]
-        move_type = move[0]  # 'R' or 'C'
-        index = int(move[1])
-        steps = int(move[-1])
+    for move_index in range(len(solution_moves) - 1, -1, -1):
+        current_move = solution_moves[move_index]
+        parsed_move = [current_move[0], int(current_move[1]), int(current_move[-1])]
 
-        positions_on_axis = get_positions_on_axis(move_type, index)
-
-        # Get possible directions and displacements
-        possible_moves = get_possible_directions_and_displacements(steps)
+        axis = parsed_move[0] != 'R'
 
         best_option = None
         min_total_distance = float('inf')
 
         # Iterate over all possible click-down positions
-        for click_down_pos in positions_on_axis:
+        for click_down_pos in get_positions_on_axis(parsed_move[0], parsed_move[1]):
             # Iterate over possible directions
-            for direction, displacement in possible_moves:
+            for direction, displacement in get_possible_dirs_and_displacements(parsed_move[2]):
                 # Calculate release position
                 release_pos = [click_down_pos[0], click_down_pos[1]]
-                release_pos[move_type != 'R'] += displacement * [-1, 1][direction == '+']
+                release_pos[axis] += displacement
 
-                if i != 0:
-                    release_pos[0] = release_pos[0] % GRID_SIZE
-                    release_pos[1] = release_pos[1] % GRID_SIZE
-
-                # For the first move (i == 0), allow release positions outside the grid
-                if next_click_down_pos is not None:
-                    # wrap the release position within the grid
+                if move_index != 0 or next_click_down_pos is not None:
                     release_pos[0] %= GRID_SIZE
                     release_pos[1] %= GRID_SIZE
 
                 # Calculate distances
-                distance_to_next = 0
-                if next_click_down_pos is not None:
-                    # Distance from release position to next click-down position
-                    distance_to_next = calculate_distance(release_pos, next_click_down_pos)
-
-                # Drag distance
+                distance_to_next = calculate_distance(release_pos, next_click_down_pos)
                 drag_distance = calculate_distance(click_down_pos, release_pos)
 
                 # Since we're working backwards,
@@ -89,7 +72,7 @@ def optimize_mouse_movement_pass1(solution_moves):
                 if total_distance < min_total_distance:
                     min_total_distance = total_distance
                     best_option = {
-                        'move': move,
+                        'move': current_move,
                         'click_down': click_down_pos,
                         'release': release_pos,
                         'direction': direction,
@@ -97,14 +80,49 @@ def optimize_mouse_movement_pass1(solution_moves):
                         'total_distance': total_distance
                     }
 
-        # Store the best option
-        move_data_reversed[i] = best_option
-        # Update next_click_down_pos for the next iteration
+        # update our moves with the best option
+        move_data[move_index] = best_option
         next_click_down_pos = best_option['click_down']
 
-    # Reverse move data to original order
-    move_data = list(reversed(move_data_reversed))
     return move_data
+
+
+"""
+going from beginning to end:
+
+
+R45 C11 C24 R35 R41 C41 C53 R14 R21
+
+find all moves that go in the same direction.
+1: R (keep looking for R's)
+2: C (done!)
+look through all combinations of [1] and find the one that minimizes the distance of ending on column [2]
+NEXT
+
+2: C (keep looking for C's)
+3: C (keep looking for C's)
+4: R (done!)
+look through all combinations of [2][3] and find the one that minimizes the distance of ending on row [4]
+NEXT
+
+4: R (keep looking for R's)
+5: R (keep looking for R's)
+6: C (done!)
+look through all combinations of [4][5] and find the one that minimizes the distance of ending on column [6]
+NEXT
+
+6: C (keep looking for C's)
+7: C (keep looking for C's)
+8: R (done!)
+look through all combinations of [6][7] and find the one that minimizes the distance of ending on column [8]
+NEXT
+
+8: R (keep looking for R's)
+it is the last move, so (done!)
+"""
+
+
+
 
 
 def optimize_mouse_movement_pass2(move_data):
@@ -192,21 +210,24 @@ def shift_last_moves(move_data):
             bounds[1] = click_down
 
     # figure out the displacement between the first last R/C and the move before it
-    displacement = move_data[-count]['click_down'][Rx_or_Cy] - move_data[-(count + 1)]['release'][Rx_or_Cy]
+    displacement = move_data[-count]['click_down'][Rx_or_Cy] - move_data[-count - 1]['release'][Rx_or_Cy]
     lower = bounds[0] - displacement
     upper = bounds[1] - displacement
     if displacement > 0:
         if lower < 0:
             displacement += lower
     else:
-        pass  # idk how to code this one yet
+        pass
+        # if upper > 6:
+        #     displacement -= upper
+        # pass  # idk how to code this one yet
 
     if displacement != 0:
         for i in range(count):
             move_data[-i - 1]['click_down'][Rx_or_Cy] -= displacement
             move_data[-i - 1]['release'][Rx_or_Cy] -= displacement
-        move_data[-(count + 1)]['displacement'] -= displacement
-        move_data[-(count + 1)]['total_distance'] -= displacement
+        move_data[-count - 1]['displacement'] -= displacement
+        move_data[-count - 1]['total_distance'] -= displacement
     pass
 
 
@@ -245,6 +266,6 @@ def find_shortest_mouse_path(move_string, state1=True, state2=True, state3=False
     if state1:
         optimize_mouse_movement_pass3(move_data)
 
-    shift_last_moves(move_data)
+    # shift_last_moves(move_data)
     to_drag, to_move = calculate_total_distance(move_data)
     return to_drag, to_move, move_data
