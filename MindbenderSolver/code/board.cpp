@@ -25,10 +25,10 @@ void Board::setState(c_u8 values[36]) {
         int val = values[i] & 0b111;
         colors[val] = 1;
     }
-    i8 colorCount = 0;
+    u64 colorCount = 0;
     for (i8& color : colors) {
         if (color != 8) {
-            color = colorCount;
+            color = (i8)colorCount;
             colorCount++;
         }
     }
@@ -46,9 +46,17 @@ void Board::setState(c_u8 values[36]) {
         b2 = b2 << 3 | (adjusted_values[i] & 0b111);
     }
 
-    static constexpr uint64_t EVERYTHING_BUT_COLOR = 0xFE3F'FFFF'FFFF'FFFF;
-    b1 = b1 & EVERYTHING_BUT_COLOR | (((uint64_t)colorCount - 1) << 54);
+
+    static constexpr u64 EVERYTHING_BUT_COLOR = 0xF0FF'FFFF'FFFF'FFFF;
+    b1 = (b1 & EVERYTHING_BUT_COLOR) | (colorCount << 56);
 }
+
+
+u32 Board::getColorCount() const {
+    u64 colorCount = ((b1 >> 56) & 0xF);
+    return colorCount;
+}
+
 
 
 /**
@@ -57,8 +65,8 @@ void Board::setState(c_u8 values[36]) {
  * @param y value 0-4
  */
 void Board::setFat(c_u8 x, c_u8 y) {
-    static constexpr u64 MASK = 0x003F'FFFF'FFFF'FFFF;
-    b1 = b1 & MASK | ((u64)x << 61) | (1LL << 57);
+    static constexpr u64 MASK = 0x0FFF'FFFF'FFFF'FFFF;
+    b1 = b1 & MASK | ((u64)x << 61) | (1LL << 60);
     b2 = b2 & MASK | ((u64)y << 61);
 }
 
@@ -116,7 +124,7 @@ u8 Board::getFatXY() const {
 
 
 bool Board::hasFat() const {
-    bool state = (b1 >> 57 & 1) != 0;
+    bool state = ((b1 >> 60) & 1) != 0;
     return state;
 }
 
@@ -195,13 +203,6 @@ u8 Board::doActISColMatchBatched(u8 x1, u8 y1, u8 m) const {
 
 double Board::getDuplicateEstimateAtDepth(MU u32 depth) const {
     return 1.0;
-}
-
-
-
-
-u32 Board::getColorCount() const {
-    return ((b1 >> 54) & 0b111LL) + 1;
 }
 
 
@@ -410,32 +411,35 @@ uint64_t getSegment4bits(const uint64_t segment) {
 
 
 
-
-
-void Board::precomputeHash(c_u32 colorCount) {
-
-    // uint64_t above, below;
-    switch (colorCount) {
-        case (2): {
-            uint64_t above = getSegment2bits(b1);
-            uint64_t below = getSegment2bits(b2);
-            hash = above << 18 | below;
-            break;
-        }
-        case (3): {
-            uint64_t above = getSegment3bits(b1);
-            uint64_t below = getSegment3bits(b2);
-            hash = above << 30 | below;
-            break;
-        }
-        default: {
-            hash = prime_func1(b2, b1);
-            break;
-        }
-
-    }
+void Board::precomputeHash2() {
+    u64 above = getSegment2bits(b1);
+    u64 below = getSegment2bits(b2);
+    hash = above << 18 | below;
 }
 
+
+void Board::precomputeHash3() {
+    u64 above = getSegment3bits(b1);
+    u64 below = getSegment3bits(b2);
+    hash = above << 30 | below;
+}
+
+void Board::precomputeHash4() {
+    hash = prime_func1(b2, b1);
+}
+
+Board::HasherPtr Board::getHashFunc() const {
+    c_u64 colorCount = getColorCount();
+    c_bool isFat = hasFat();
+
+    if (isFat || colorCount > 3) {
+        return &Board::precomputeHash4;
+    } else if  (colorCount == 1 || colorCount == 2) {
+        return &Board::precomputeHash2;
+    } else {
+        return &Board::precomputeHash3;
+    }
+}
 
 
 

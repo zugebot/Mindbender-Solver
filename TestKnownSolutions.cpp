@@ -111,8 +111,8 @@ std::string extractSegment(const std::string& input) {
 
 int main() {
     // std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    std::string folder = "all_levels";
-    std::string outDirectory = R"(D:\PycharmProjects\MindbenderSolveFilter\)" + folder + "\\";
+    std::string folder = "levels";
+    std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\)" + folder + "\\";
 
 
 

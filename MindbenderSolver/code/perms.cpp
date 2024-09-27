@@ -29,24 +29,27 @@ static constexpr u64 FAT_PERM_COUNT = 48;
 static constexpr bool CHECK_FAT_SIMILAR = true;
 
 
-void make_fat_permutation_list_depth_0(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_fat_permutation_list_depth_0(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr u32 DEPTH = 0;
     boards_out[0] = board_in;
-    boards_out[0].precomputeHash(colorCount);
+    (boards_out[0].*hasher)();
+
+    boards_out.resize(1);
 }
 
 
 template<bool CHECK_SIMILAR = CHECK_FAT_SIMILAR>
-void make_fat_permutation_list_depth_1(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_fat_permutation_list_depth_1(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr u32 DEPTH = 1;
     u32 count = 0;
 
+    u8 *funcIndexes = fatActionsIndexes[board_in.getFatXY()];
     for (u64 a = 0; a < FAT_PERM_COUNT; ++a) {
         boards_out[count] = board_in;
-        fatActions[boards_out[count].getFatXY()][a](boards_out[count]);
+        allActionsList[funcIndexes[a]](boards_out[count]);
         CONTINUE_IF_EQUIV(board_in, boards_out[count])
-
-        boards_out[count].precomputeHash(colorCount);
+        
+        (boards_out[count].*hasher)();
         (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(a);
         ++count;
     }
@@ -56,23 +59,26 @@ void make_fat_permutation_list_depth_1(vecBoard_t& boards_out, const Board &boar
 
 
 template<bool CHECK_SIMILAR = CHECK_FAT_SIMILAR>
-void make_fat_permutation_list_depth_2(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_fat_permutation_list_depth_2(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr u32 DEPTH = 2;
     Board board_a;
     u32 count = 0;
+    u8 *funcIndexes[2] = {};
 
+    funcIndexes[0] = fatActionsIndexes[board_in.getFatXY()];
     for (u64 a = 0; a < FAT_PERM_COUNT; ++a) {
         board_a = board_in;
-        fatActions[board_a.getFatXY()][a](board_a);
+        allActionsList[funcIndexes[0][a]](board_a);
         CONTINUE_IF_EQUIV(board_in, board_a)
 
+        funcIndexes[1] = fatActionsIndexes[board_a.getFatXY()];
         for (u64 b = 0; b < FAT_PERM_COUNT; ++b) {
             c_u64 move = a | b << 6;
             boards_out[count] = board_a;
-            fatActions[boards_out[count].getFatXY()][b](boards_out[count]);
+            allActionsList[funcIndexes[1][b]](boards_out[count]);
             CONTINUE_IF_EQUIV(board_a, boards_out[count])
 
-            boards_out[count].precomputeHash(colorCount);
+            (boards_out[count].*hasher)();
             (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
             ++count;
         }
@@ -83,31 +89,35 @@ void make_fat_permutation_list_depth_2(vecBoard_t& boards_out, const Board &boar
 
 
 template<bool CHECK_SIMILAR = CHECK_FAT_SIMILAR>
-void make_fat_permutation_list_depth_3(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_fat_permutation_list_depth_3(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr u32 DEPTH = 3;
     Board board_a, board_b;
     u64 move_b;
     u32 count = 0;
 
+    u8 *funcIndexes[3] = {};
+
+    funcIndexes[0] = fatActionsIndexes[board_in.getFatXY()];
     for (u64 a = 0; a < FAT_PERM_COUNT; ++a) {
         board_a = board_in;
-        fatActions[board_a.getFatXY()][a](board_a);
+        allActionsList[funcIndexes[0][a]](board_a);
         CONTINUE_IF_EQUIV(board_in, board_a)
 
+        funcIndexes[1] = fatActionsIndexes[board_a.getFatXY()];
         for (u64 b = 0; b < FAT_PERM_COUNT; ++b) {
             move_b = a | (b << 6);
             board_b = board_a;
-            fatActions[board_b.getFatXY()][b](board_b);
+            allActionsList[funcIndexes[1][b]](board_b);
             CONTINUE_IF_EQUIV(board_a, board_b)
 
-
+            funcIndexes[2] = fatActionsIndexes[board_b.getFatXY()];
             for (u64 c = 0; c < FAT_PERM_COUNT; ++c) {
                 c_u64 move = move_b | (c << 12);
                 boards_out[count] = board_b;
-                fatActions[boards_out[count].getFatXY()][c](boards_out[count]);
+                allActionsList[funcIndexes[2][c]](boards_out[count]);
                 CONTINUE_IF_EQUIV(board_b, boards_out[count])
 
-                boards_out[count].precomputeHash(colorCount);
+                (boards_out[count].*hasher)();
                 (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
                 ++count;
             }
@@ -119,36 +129,42 @@ void make_fat_permutation_list_depth_3(vecBoard_t& boards_out, const Board &boar
 
 
 template<bool CHECK_SIMILAR = CHECK_FAT_SIMILAR>
-void make_fat_permutation_list_depth_4(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_fat_permutation_list_depth_4(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr u32 DEPTH = 4;
     Board board_a, board_b, board_c;
     u64 move_b, move_c;
     u32 count = 0;
 
+    u8 *funcIndexes[4] = {};
+
+    funcIndexes[0] = fatActionsIndexes[board_in.getFatXY()];
     for (u64 a = 0; a < FAT_PERM_COUNT; ++a) {
         board_a = board_in;
-        fatActions[board_a.getFatXY()][a](board_a);
+        allActionsList[funcIndexes[0][a]](board_a);
         CONTINUE_IF_EQUIV(board_in, board_a)
 
+        funcIndexes[1] = fatActionsIndexes[board_a.getFatXY()];
         for (u64 b = 0; b < FAT_PERM_COUNT; ++b) {
             move_b = a | (b << 6);
             board_b = board_a;
-            fatActions[board_b.getFatXY()][b](board_b);
+            allActionsList[funcIndexes[1][b]](board_b);
             CONTINUE_IF_EQUIV(board_a, board_b)
 
+            funcIndexes[2] = fatActionsIndexes[board_b.getFatXY()];
             for (u64 c = 0; c < FAT_PERM_COUNT; ++c) {
                 move_c = move_b | (c << 12);
                 board_c = board_b;
-                fatActions[board_c.getFatXY()][c](board_c);
+                allActionsList[funcIndexes[2][c]](board_c);
                 CONTINUE_IF_EQUIV(board_b, board_c)
 
+                funcIndexes[3] = fatActionsIndexes[board_c.getFatXY()];
                 for (u64 d = 0; d < FAT_PERM_COUNT; ++d) {
                     c_u64 move_d = move_c | (d << 18);
                     boards_out[count] = board_c;
-                    fatActions[boards_out[count].getFatXY()][d](boards_out[count]);
+                    allActionsList[funcIndexes[3][d]](boards_out[count]);
                     CONTINUE_IF_EQUIV(board_c, boards_out[count])
 
-                    boards_out[count].precomputeHash(colorCount);
+                    (boards_out[count].*hasher)();
                     (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move_d);
                     ++count;
                 }
@@ -161,42 +177,49 @@ void make_fat_permutation_list_depth_4(vecBoard_t& boards_out, const Board &boar
 
 
 template<bool CHECK_SIMILAR = CHECK_FAT_SIMILAR>
-void make_fat_permutation_list_depth_5(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_fat_permutation_list_depth_5(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr u32 DEPTH = 5;
     Board board_a, board_b, board_c, board_d;
     u64 move_b, move_c, move_d;
     u32 count = 0;
 
+    u8 *funcIndexes[5] = {};
+
+    funcIndexes[0] = fatActionsIndexes[board_in.getFatXY()];
     for (u64 a = 0; a < FAT_PERM_COUNT; ++a) {
         board_a = board_in;
-        fatActions[board_a.getFatXY()][a](board_a);
+        allActionsList[funcIndexes[0][a]](board_a);
         CONTINUE_IF_EQUIV(board_in, board_a)
 
+        funcIndexes[1] = fatActionsIndexes[board_a.getFatXY()];
         for (u64 b = 0; b < FAT_PERM_COUNT; ++b) {
             move_b = a | (b << 6);
             board_b = board_a;
-            fatActions[board_b.getFatXY()][b](board_b);
+            allActionsList[funcIndexes[1][b]](board_b);
             CONTINUE_IF_EQUIV(board_a, board_b)
 
+            funcIndexes[2] = fatActionsIndexes[board_b.getFatXY()];
             for (u64 c = 0; c < FAT_PERM_COUNT; ++c) {
                 move_c = move_b | (c << 12);
                 board_c = board_b;
-                fatActions[board_c.getFatXY()][c](board_c);
+                allActionsList[funcIndexes[2][c]](board_c);
                 CONTINUE_IF_EQUIV(board_b, board_c)
 
+                funcIndexes[3] = fatActionsIndexes[board_c.getFatXY()];
                 for (u64 d = 0; d < FAT_PERM_COUNT; ++d) {
                     move_d = move_c | (d << 18);
                     board_d = board_c;
-                    fatActions[board_d.getFatXY()][d](board_d);
+                    allActionsList[funcIndexes[3][d]](board_d);
                     CONTINUE_IF_EQUIV(board_c, board_d)
 
+                    funcIndexes[4] = fatActionsIndexes[board_d.getFatXY()];
                     for (u64 e = 0; e < FAT_PERM_COUNT; ++e) {
                         c_u64 move_e = move_d | (e << 24);
                         boards_out[count] = board_d;
-                        fatActions[boards_out[count].getFatXY()][e](boards_out[count]);
+                        allActionsList[funcIndexes[4][e]](boards_out[count]);
                         CONTINUE_IF_EQUIV(board_d, boards_out[count])
 
-                        boards_out[count].precomputeHash(colorCount);
+                        (boards_out[count].*hasher)();
                         (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move_e);
                         ++count;
                     }
@@ -217,20 +240,21 @@ void make_fat_permutation_list_depth_5(vecBoard_t& boards_out, const Board &boar
 
 
 
-void make_permutation_list_depth_0(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
-    boards_out[0].precomputeHash(colorCount);
+void make_permutation_list_depth_0(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
+    boards_out[0] = board_in;
+    (boards_out[0].*hasher)();
 }
 
 
-void make_permutation_list_depth_1(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_permutation_list_depth_1(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr i32 DEPTH = 1;
     i32 count = 0;
 
     for (i32 a = 0; a < 60; ++a) {
         Board *currentBoard = &boards_out[count];
         *currentBoard = board_in;
-        actions[a](*currentBoard);
-        currentBoard->precomputeHash(colorCount);
+        allActionsList[a](*currentBoard);
+        (currentBoard->*hasher)();
         u64 move = a;
         (currentBoard->mem.*setNextMoveFuncs[DEPTH])(move);
         count++;
@@ -239,7 +263,7 @@ void make_permutation_list_depth_1(vecBoard_t& boards_out, const Board &board_in
 
 
 template<bool CHECK_INTERSECTION = true, bool CHECK_SIMILAR = true>
-void make_permutation_list_depth_2(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_permutation_list_depth_2(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr i32 DEPTH = 2;
     Board board_a;
     u8 intersects = 0;
@@ -257,18 +281,18 @@ void make_permutation_list_depth_2(vecBoard_t& boards_out, const Board &board_in
 
                     for (i32 a_cur = a_base; a_cur < a_base + 5; ++a_cur) {
                         board_a = board_in;
-                        actions[a_cur](board_a);
+                        allActionsList[a_cur](board_a);
                         CONTINUE_IF_EQUIV(board_in, board_a)
 
                         INTERSECT_MAKE_CACHE(do_RC_check, intersects, board_in, a_sect, b_sect, a_cur - a_base + 1)
                         for (i32 b_cur = b_base; b_cur < b_base + 5; ++b_cur) {
                             INTERSECT_CONTINUE_IF_CACHE(do_RC_check, intersects, b_cur - b_base)
                             boards_out[count] = board_a;
-                            actions[b_cur](boards_out[count]);
+                            allActionsList[b_cur](boards_out[count]);
                             CONTINUE_IF_EQUIV(board_a, boards_out[count])
 
                             u64 move = a_cur | (b_cur << 6);
-                            boards_out[count].precomputeHash(colorCount);
+                            (boards_out[count].*hasher)();
                             (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
                             ++count;
                         }
@@ -283,7 +307,7 @@ void make_permutation_list_depth_2(vecBoard_t& boards_out, const Board &board_in
 
 
 template<bool CHECK_INTERSECTION = true, bool CHECK_SIMILAR = true>
-void make_permutation_list_depth_3(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_permutation_list_depth_3(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr i32 DEPTH = 3;
     Board board_a, board_b;
     bool do_RC_check[2] = {false};
@@ -308,25 +332,25 @@ void make_permutation_list_depth_3(vecBoard_t& boards_out, const Board &board_in
 
                             for (i32 a_cur = a_base; a_cur < a_base + 5; ++a_cur) {
                                 board_a = board_in;
-                                actions[a_cur](board_a);
+                                allActionsList[a_cur](board_a);
                                 CONTINUE_IF_EQUIV(board_in, board_a)
 
                                 INTERSECT_MAKE_CACHE(do_RC_check[0], intersects[0], board_in, a_sect, b_sect, a_cur - a_base + 1)
                                 for (i32 b_cur = b_base; b_cur < b_base + 5; ++b_cur) {
                                     INTERSECT_CONTINUE_IF_CACHE(do_RC_check[0], intersects[0], b_cur - b_base)
                                     board_b = board_a;
-                                    actions[b_cur](board_b);
+                                    allActionsList[b_cur](board_b);
                                     CONTINUE_IF_EQUIV(board_a, board_b)
 
                                     INTERSECT_MAKE_CACHE(do_RC_check[1], intersects[1], board_in, b_sect, c_sect, b_cur - b_base + 1)
                                     for (i32 c_cur = c_base; c_cur < c_base + 5; ++c_cur) {
                                         INTERSECT_CONTINUE_IF_CACHE(do_RC_check[1], intersects[1], c_cur - c_base)
                                         boards_out[count] = board_b;
-                                        actions[c_cur](boards_out[count]);
+                                        allActionsList[c_cur](boards_out[count]);
                                         CONTINUE_IF_EQUIV(board_b, boards_out[count])
 
                                         u64 move = a_cur | (b_cur << 6) | (c_cur << 12);
-                                        boards_out[count].precomputeHash(colorCount);
+                                        (boards_out[count].*hasher)();
                                         (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
                                         ++count;
 
@@ -345,7 +369,7 @@ void make_permutation_list_depth_3(vecBoard_t& boards_out, const Board &board_in
 
 
 template<bool CHECK_INTERSECTION = true, bool CHECK_SIMILAR = true>
-void make_permutation_list_depth_4(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_permutation_list_depth_4(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr u32 DEPTH = 4;
     Board board_a, board_b, board_c;
     bool do_RC_check[3] = {false};
@@ -377,7 +401,7 @@ void make_permutation_list_depth_4(vecBoard_t& boards_out, const Board &board_in
 
                                     for (i32 a_cur = a_base; a_cur < a_base + 5; ++a_cur) {
                                         board_a = board_in;
-                                        actions[a_cur](board_a);
+                                        allActionsList[a_cur](board_a);
                                         CONTINUE_IF_EQUIV(board_in, board_a)
 
                                         INTERSECT_MAKE_CACHE(do_RC_check[0], intersects[0], board_in, a_sect, b_sect, a_cur - a_base + 1)
@@ -385,14 +409,14 @@ void make_permutation_list_depth_4(vecBoard_t& boards_out, const Board &board_in
                                             INTERSECT_CONTINUE_IF_CACHE(do_RC_check[0], intersects[0], b_cur - b_base)
 
                                             board_b = board_a;
-                                            actions[b_cur](board_b);
+                                            allActionsList[b_cur](board_b);
                                             CONTINUE_IF_EQUIV(board_a, board_b)
 
                                             INTERSECT_MAKE_CACHE(do_RC_check[1], intersects[1], board_in, b_sect, c_sect, b_cur - b_base + 1)
                                             for (i32 c_cur = c_base; c_cur < c_base + 5; ++c_cur) {
                                                 INTERSECT_CONTINUE_IF_CACHE(do_RC_check[1], intersects[1], c_cur - c_base)
                                                 board_c = board_b;
-                                                actions[c_cur](board_c);
+                                                allActionsList[c_cur](board_c);
                                                 CONTINUE_IF_EQUIV(board_b, board_c)
 
                                                 INTERSECT_MAKE_CACHE(do_RC_check[2], intersects[2], board_in, c_sect, d_sect, c_cur - c_base + 1)
@@ -401,11 +425,11 @@ void make_permutation_list_depth_4(vecBoard_t& boards_out, const Board &board_in
                                                     INTERSECT_CONTINUE_IF_CACHE(do_RC_check[2], intersects[2], d_cur - d_base)
 
                                                     boards_out[count] = board_c;
-                                                    actions[d_cur](boards_out[count]);
+                                                    allActionsList[d_cur](boards_out[count]);
                                                     CONTINUE_IF_EQUIV(board_c, boards_out[count])
 
                                                     u64 move = a_cur | (b_cur << 6) | (c_cur << 12) | (d_cur << 18);
-                                                    boards_out[count].precomputeHash(colorCount);
+                                                    (boards_out[count].*hasher)();
                                                     (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
                                                     count++;
 
@@ -427,7 +451,7 @@ void make_permutation_list_depth_4(vecBoard_t& boards_out, const Board &board_in
 
 
 template<bool CHECK_INTERSECTION = true, bool CHECK_SIMILAR = true>
-void make_permutation_list_depth_5(vecBoard_t& boards_out, const Board &board_in, c_u32 colorCount) {
+void make_permutation_list_depth_5(vecBoard_t& boards_out, const Board &board_in, const Board::HasherPtr hasher) {
     static constexpr u32 DEPTH = 5;
     Board board_a, board_b, board_c, board_d;
     bool do_RC_check[4] = {false};
@@ -465,40 +489,40 @@ void make_permutation_list_depth_5(vecBoard_t& boards_out, const Board &board_in
 
                                             for (curr[0] = base[0]; curr[0] < base[0] + 5; ++curr[0]) {
                                                 board_a = board_in;
-                                                actions[curr[0]](board_a);
+                                                allActionsList[curr[0]](board_a);
                                                 CONTINUE_IF_EQUIV(board_in, board_a)
 
                                                 INTERSECT_MAKE_CACHE(do_RC_check[0], intersects[0], board_in, sect[0], sect[1], curr[0] - base[0] + 1)
                                                 for (curr[1] = base[1]; curr[1] < base[1] + 5; ++curr[1]) {
                                                     INTERSECT_CONTINUE_IF_CACHE(do_RC_check[0], intersects[0], curr[1] - base[1])
                                                     board_b = board_a;
-                                                    actions[curr[1]](board_b);
+                                                    allActionsList[curr[1]](board_b);
                                                     CONTINUE_IF_EQUIV(board_a, board_b)
 
                                                     INTERSECT_MAKE_CACHE(do_RC_check[1], intersects[1], board_in, sect[1], sect[2], curr[1] - base[1] + 1)
                                                     for (curr[2] = base[2]; curr[2] < base[2] + 5; ++curr[2]) {
                                                         INTERSECT_CONTINUE_IF_CACHE(do_RC_check[1], intersects[1], curr[2] - base[2])
                                                         board_c = board_b;
-                                                        actions[curr[2]](board_c);
+                                                        allActionsList[curr[2]](board_c);
                                                         CONTINUE_IF_EQUIV(board_b, board_c)
 
                                                         INTERSECT_MAKE_CACHE(do_RC_check[2], intersects[2], board_in, sect[2], sect[3], curr[2] - base[2] + 1)
                                                         for (curr[3] = base[3]; curr[3] < base[3] + 5; ++curr[3]) {
                                                             INTERSECT_CONTINUE_IF_CACHE(do_RC_check[2], intersects[2], curr[3] - base[3])
                                                             board_d = board_c;
-                                                            actions[curr[3]](board_d);
+                                                            allActionsList[curr[3]](board_d);
                                                             CONTINUE_IF_EQUIV(board_c, board_d)
 
                                                             INTERSECT_MAKE_CACHE(do_RC_check[3], intersects[3], board_in, sect[3], sect[4], curr[3] - base[3] + 1)
                                                             for (curr[4] = base[4]; curr[4] < base[4] + 5; ++curr[4]) {
                                                                 INTERSECT_CONTINUE_IF_CACHE(do_RC_check[3], intersects[3], curr[4] - base[4])
                                                                 boards_out[count] = board_d;
-                                                                actions[curr[4]](boards_out[count]);
+                                                                allActionsList[curr[4]](boards_out[count]);
                                                                 CONTINUE_IF_EQUIV(board_d, boards_out[count])
 
                                                                 u64 move = curr[0] | (curr[1] << 6) | (curr[2] << 12)
                                                                            | (curr[3] << 18) | (curr[4] << 24);
-                                                                boards_out[count].precomputeHash(colorCount);
+                                                                (boards_out[count].*hasher)();
                                                                 (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
                                                                 count++;
 
@@ -529,7 +553,7 @@ void make_permutation_list_depth_5(vecBoard_t& boards_out, const Board &board_in
 
 
 template<bool CHECK_INTERSECTION = true, bool CHECK_SIMILAR = true>
-void make_permutation_list_depth_plus_one(const vecBoard_t & boards_in, vecBoard_t & boards_out, c_u32 colorCount) {
+void make_permutation_list_depth_plus_one(const vecBoard_t & boards_in, vecBoard_t & boards_out, const Board::HasherPtr hasher) {
     int count = 0;
     u8 intersects ;
 
@@ -547,8 +571,7 @@ void make_permutation_list_depth_plus_one(const vecBoard_t & boards_in, vecBoard
             for (int b_sect = b_start; b_sect < 6; b_sect++) {
                 int b_base = b_dir * 30 + b_sect * 5;
 
-                INTERSECT_MAKE_CACHE(do_RC_check, intersects, boards_in[board_index],
-                                     a_sect, b_sect, a_amount)
+                INTERSECT_MAKE_CACHE(do_RC_check, intersects, boards_in[board_index], a_sect, b_sect, a_amount)
 
                 for (int b_amount = 0; b_amount < 5; b_amount++) {
                     INTERSECT_CONTINUE_IF_CACHE(do_RC_check, intersects, b_amount)
@@ -556,10 +579,10 @@ void make_permutation_list_depth_plus_one(const vecBoard_t & boards_in, vecBoard
                     c_int b_cur = b_base + b_amount;
 
                     boards_out[count] = boards_in[board_index];
-                    actions[b_cur](boards_out[count]);
+                    allActionsList[b_cur](boards_out[count]);
                     CONTINUE_IF_EQUIV(boards_out[count], boards_in[board_index])
 
-                    boards_out[count].precomputeHash(colorCount);
+                    (boards_out[count].*hasher)();
                     boards_out[count].mem.setNext1Move(b_cur);
                     count++;
                 }
@@ -635,30 +658,35 @@ void Permutations::getDepthFunc(const Board &board_in, vecBoard_t &boards_out, u
 
     const bool isFat = board_in.hasFat();
 
-    u8 colorCount = board_in.getColorCount();
+    const Board::HasherPtr hasher = board_in.getHashFunc();
+    
+    
+    
 
     if (shouldResize) {
         reserveForDepth(board_in, boards_out, depth, isFat);
     }
     boards_out.resize(boards_out.capacity());
+    
+    
 
 
     if (!isFat) {
-        toDepthFuncPtrs[depth](boards_out, board_in, colorCount);
+        toDepthFuncPtrs[depth](boards_out, board_in, hasher);
     } else {
-        toDepthFatFuncPtrs[depth](boards_out, board_in, colorCount);
+        toDepthFatFuncPtrs[depth](boards_out, board_in, hasher);
     }
 
 }
 
 
 void Permutations::getDepthPlus1Func(const vecBoard_t& boards_in, vecBoard_t& boards_out, bool shouldResize) {
-    u8 colorCount = boards_in[0].getColorCount();
-
     if (shouldResize) {
         boards_out.resize(boards_in.size() * 60);
     }
     boards_out.resize(boards_out.capacity());
 
-    toDepthPlusOneFuncPtr(boards_in, boards_out, colorCount);
+    const Board::HasherPtr hasher = boards_in[0].getHashFunc();
+
+    toDepthPlusOneFuncPtr(boards_in, boards_out, hasher);
 }

@@ -2,7 +2,6 @@
 
 #include "MindbenderSolver/utils/processor.hpp"
 
-#include <cstdint>
 #include <string>
 
 

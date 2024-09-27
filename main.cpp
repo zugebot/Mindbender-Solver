@@ -11,7 +11,7 @@ int main() {
     // initialize solver
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(5, 9, 10);
+    solver.setDepthParams(5, 10, 10);
     solver.preAllocateMemory();
 
     std::cout << pair->toString() << std::endl;

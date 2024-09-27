@@ -3,9 +3,7 @@
 #include "MindbenderSolver/utils/processor.hpp"
 #include "board.hpp"
 
-#include <cstdint>
 #include <unordered_map>
-#include <utility>
 
 /*
 RED     0

@@ -190,8 +190,8 @@ public:
 
 
             // if depth == 9, pre-calculate (4, 4) ex.
-            IF_DEBUG(std::cout << "\nSolving for (depth - 1): " << currentDepth - 1 << "\n\n";)
             if (currentDepth > 1 && currentDepth % 2 == 1) {
+                IF_DEBUG(std::cout << "\nSolving for (depth - 1): " << currentDepth - 1 << "\n\n";)
                 auto oneBefore = Permutations::depthMap.at(currentDepth - 1);
                 findSolutionsAtDepth<allowGetDepthPlus1, debug>(permCount, oneBefore[0].first, oneBefore[0].second, false);
             }

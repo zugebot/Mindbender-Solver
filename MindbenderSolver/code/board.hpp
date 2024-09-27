@@ -10,12 +10,13 @@
 
 class Board {
 public:
+    typedef void (Board::*HasherPtr)();
 
     /**
      *  3 bits: fat x position
-     *  3 bits: unused
      *  1 bit : 1 if has a fat, otherwise 0
-     *  3 bits: (# of colors - 1)
+     *  4 bits: (# of colors - 1)
+     *  2 bits: unused
      * 54 bits: holds upper 3x6 cell grid
      */
     u64 b1 = 0;
@@ -55,7 +56,11 @@ public:
 
     MUND u32 getColorCount() const;
 
-    MU void precomputeHash(u32 colorCount);
+
+    MU void precomputeHash2();
+    MU void precomputeHash3();
+    MU void precomputeHash4();
+    MUND HasherPtr getHashFunc() const;
 
     MUND u64 getScore1(const Board& other) const;
     MUND u64 getScore2(const Board& other) const;

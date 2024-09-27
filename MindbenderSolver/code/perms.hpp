@@ -35,8 +35,8 @@ static constexpr u64 BOARD_FAT_PRE_ALLOC_SIZES[6] = {
 class Permutations {
     static constexpr u32 PTR_LIST_SIZE = 6;
 public:
-    typedef void (*toDepthFuncPtr_t)(vecBoard_t &, const Board &, u32);
-    typedef void (*toDepthPlusOneFuncPtr_t)(const vecBoard_t &, vecBoard_t &, u32);
+    typedef void (*toDepthFuncPtr_t)(vecBoard_t &, const Board &, Board::HasherPtr);
+    typedef void (*toDepthPlusOneFuncPtr_t)(const vecBoard_t &, vecBoard_t &, Board::HasherPtr);
     typedef std::unordered_map<u32, std::vector<std::pair<u32, u32>>> depthMap_t;
 
     static const depthMap_t depthMap;

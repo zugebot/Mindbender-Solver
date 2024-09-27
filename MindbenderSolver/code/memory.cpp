@@ -1,4 +1,5 @@
 #include "memory.hpp"
+
 #include <vector>
 
 #include "rotations.hpp"
@@ -159,7 +160,8 @@ std::string Memory::assembleFatMoveStringForwards(MU u8 fatPos) const {
 
     for (int i = 0; i < count; i++) {
         MU u8 move = getMove(i);
-        auto func = fatActions[x * 5 + y][move];
+        // auto func = fatActions[x * 5 + y][move];
+        auto func = allActionsList[fatActionsIndexes[x * 5 + y][move]];
         auto segment = actionToNameLookup[func];
         moves_str += segment;
 
@@ -202,7 +204,8 @@ std::string Memory::assembleFatMoveStringBackwards(MU u8 fatPos) const {
 
     for (int i = 0; i < count; i++) {
         MU u8 move = getMove(i);
-        auto func = fatActions[x * 5 + y][move];
+        auto func = allActionsList[fatActionsIndexes[x * 5 + y][move]];
+        // auto func = fatActions[x * 5 + y][move];
         auto segment = actionToNameLookup[func];
 
         char direction = segment.at(0);

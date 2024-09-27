@@ -5,7 +5,6 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-#include <array>
 
 #include "timer.hpp"
 
@@ -66,15 +65,13 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
         last_time = total_time.getSeconds();
     }
 
-    // Allocate per-thread counts and offsets
     vec2_count_t thread_counts(num_threads, vec1_count_t(num_buckets, 0));
     vec2_count_t thread_offsets(num_threads, vec1_count_t(num_buckets));
 
-    // Allocate global counts and offsets
+    // These are global
     vec1_count_t count(num_buckets, 0);
     vec1_count_t bucket_offsets(num_buckets, 0);
 
-    // Create thread pool
     std::vector<std::thread> thread_pool(num_threads);
 
     if constexpr (DEBUG) {
@@ -134,7 +131,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
             last_time = total_time.getSeconds();
         }
 
-        // Compute Thread Offsets Without Modifying bucket_offsets
+        // Compute Thread Offsets
         for (count_t b = 0; b < num_buckets; ++b) {
             count_t offset = bucket_offsets[b];
             for (count_t t = 0; t < num_threads; ++t) {
@@ -167,7 +164,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
             last_time = total_time.getSeconds();
         }
 
-        // Swap data and aux
+        // Swap Data and Aux
         data_out.swap(aux_buffer);
     }
 }
