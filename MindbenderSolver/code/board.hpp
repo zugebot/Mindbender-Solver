@@ -51,7 +51,14 @@ public:
 
     MUND bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
     MUND u8 doActISColMatchBatched(u8 x1, u8 y1, u8 m) const;
-    MUND double getDuplicateEstimateAtDepth(u32 depth) const;
+    MUND static double getDuplicateEstimateAtDepth(u32 depth) ;
+
+
+    // MUND static u32 getRow(const Board *board, u64 y); // WORKS (18-bits)
+    // MUND static u32 getCol(const Board *board, u32 x); // WORKS (18-bits)
+    // MUND static u32 constructMapCenter(u32 row, u32 x); // WORKS (18-bits)
+    // MUND static u32 getScore1ShiftComp(u32 sect, u32 mapCent); // WORKS (6-bits)
+    // static void shiftLeft(u32 &sect, u32 index); // WORKS (in-place on 6-bits)
     MUND u64 getRowColIntersections(u32 x, u32 y) const;
 
     MUND u32 getColorCount() const;
@@ -63,15 +70,16 @@ public:
     MUND HasherPtr getHashFunc() const;
 
     MUND u64 getScore1(const Board& other) const;
-    MUND u64 getScore2(const Board& other) const;
+    MUND static u64 getScore2(const Board& other) ;
 
+    MU static void appendBoardToString(std::string& str, const Board* board, c_i32 curY);
     MUND std::string toString() const;
     MUND std::string toString(const Board& other) const;
     MUND std::string toString(const Board* other) const;
 
 
     __forceinline bool operator==(const Board& other) const {
-        static constexpr u64 MASK = 0x3FFFFFFFFFFFFF;
+        MU static constexpr u64 MASK = 0x3FFFFFFFFFFFFF;
         return (b1) == (other.b1)
                && (b2) == (other.b2);
     }

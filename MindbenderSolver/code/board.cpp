@@ -2,10 +2,8 @@
 
 #include <string>
 #include <iostream>
-#include <vector>
 
 #include "MindbenderSolver/utils/colors.hpp"
-
 
 
 Board::Board(const u8 values[36]) {
@@ -13,7 +11,7 @@ Board::Board(const u8 values[36]) {
 }
 
 
-Board::Board(const u8 values[36], u8 x, u8 y) {
+Board::Board(const u8 values[36], c_u8 x, c_u8 y) {
     setState(values);
     setFat(x, y);
 }
@@ -22,13 +20,13 @@ Board::Board(const u8 values[36], u8 x, u8 y) {
 void Board::setState(c_u8 values[36]) {
     i8 colors[8] = {8, 8, 8, 8, 8, 8, 8, 8};
     for (int i = 0; i < 36; i++) {
-        int val = values[i] & 0b111;
+        c_int val = values[i] & 0b111;
         colors[val] = 1;
     }
     u64 colorCount = 0;
     for (i8& color : colors) {
         if (color != 8) {
-            color = (i8)colorCount;
+            color = static_cast<i8>(colorCount);
             colorCount++;
         }
     }
@@ -53,7 +51,7 @@ void Board::setState(c_u8 values[36]) {
 
 
 u32 Board::getColorCount() const {
-    u64 colorCount = ((b1 >> 56) & 0xF);
+    c_u64 colorCount = ((b1 >> 56) & 0xF);
     return colorCount;
 }
 
@@ -66,20 +64,20 @@ u32 Board::getColorCount() const {
  */
 void Board::setFat(c_u8 x, c_u8 y) {
     static constexpr u64 MASK = 0x0FFF'FFFF'FFFF'FFFF;
-    b1 = b1 & MASK | ((u64)x << 61) | (1LL << 60);
-    b2 = b2 & MASK | ((u64)y << 61);
+    b1 = b1 & MASK | (static_cast<u64>(x) << 61) | (1LL << 60);
+    b2 = b2 & MASK | (static_cast<u64>(y) << 61);
 }
 
 
 MU void Board::setFatX(c_u8 x) {
     static constexpr u64 MASK = 0x1FFF'FFFF'FFFF'FFFF;
-    b1 = b1 & MASK | (u64)x << 61;
+    b1 = b1 & MASK | static_cast<u64>(x) << 61;
 }
 
 
 MU void Board::setFatY(c_u8 y) {
     static constexpr u64 MASK = 0x1FFF'FFFF'FFFF'FFFF;
-    b2 = b2 & MASK | (u64)y << 61;
+    b2 = b2 & MASK | static_cast<u64>(y) << 61;
 }
 
 
@@ -88,8 +86,6 @@ MU void Board::addFatX(c_u8 x) {
     uint64_t cur_x = (b1 & MASK) >> 61;
     cur_x += x;
     cur_x -= 6 * (cur_x > 5);
-    // uint8_t mask = (~((cur_x - 6) >> 7)) & 1;
-    // uint8_t output = cur_x - (mask << 2) - (mask << 1);
     b1 = (b1 & ~MASK) | (cur_x << 61);
 }
 
@@ -99,8 +95,6 @@ MU void Board::addFatY(c_u8 y) {
     uint64_t cur_y = (b2 & MASK) >> 61;
     cur_y += y;
     cur_y -= 6 * (cur_y > 5);
-    // uint8_t mask = (~((cur_y - 6) >> 7)) & 1;
-    // uint8_t output = cur_y - (mask << 2) - (mask << 1);
     b2 = (b2 & ~MASK) | (cur_y << 61);
 }
 
@@ -124,18 +118,17 @@ u8 Board::getFatXY() const {
 
 
 bool Board::hasFat() const {
-    bool state = ((b1 >> 60) & 1) != 0;
+    c_bool state = ((b1 >> 60) & 1) != 0;
     return state;
 }
 
 
-u8 Board::getColor(u8 x, u8 y) const {
-    int shift_amount = 51 - x * 3 - (y % 3) * 18;
+u8 Board::getColor(c_u8 x, c_u8 y) const {
+    c_i32 shift_amount = 51 - x * 3 - (y % 3) * 18;
     if (y < 3) {
         return (b1 >> shift_amount) & 0b111;
-    } else {
-        return (b2 >> shift_amount) & 0b111;
     }
+    return (b2 >> shift_amount) & 0b111;
 }
 
 
@@ -145,26 +138,26 @@ u8 Board::getColor(u8 x, u8 y) const {
  * int m = 1 + action1 % 5;
  * int n = 1 + action2 % 5;
  */
-bool Board::doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const {
-    int y2 = (y1 - n + 6) % 6;
-    int x2 = (x1 - m + 6) % 6;
+bool Board::doActISColMatch(c_u8 x1, c_u8 y1, c_u8 m, c_u8 n) const {
+    c_int y2 = (y1 - n + 6) % 6;
+    c_int x2 = (x1 - m + 6) % 6;
 
-    u8 x1_3 = x1 * 3;
-    int offset_shared = 51 - (y1 % 3) * 18;
-    int shift_amount1 = x1_3 + offset_shared;
-    int shift_amount3 = x2 * 3 + offset_shared;
+    c_u8 x1_3 = x1 * 3;
+    c_int offset_shared = 51 - (y1 % 3) * 18;
+    c_int shift_amount1 = x1_3 + offset_shared;
+    c_int shift_amount3 = x2 * 3 + offset_shared;
 
-    u64 base = y1 < 3 ? b1 : b2;
+    c_u64 base = y1 < 3 ? b1 : b2;
 
-    u8 color1 = base >> shift_amount1;
-    u8 color3 = base >> shift_amount3;
+    c_u8 color1 = base >> shift_amount1;
+    c_u8 color3 = base >> shift_amount3;
 
     if ((color1 ^ color3) & 0b111) {
         return false;
     }
-    int shift_amount2 = 51 - x1_3 - (y2 % 3) * 18;
-    u64 base2 = y2 < 3 ? b1 : b2;
-    u8 color2 = base2 >> shift_amount2;
+    c_int shift_amount2 = 51 - x1_3 - (y2 % 3) * 18;
+    c_u64 base2 = y2 < 3 ? b1 : b2;
+    c_u8 color2 = base2 >> shift_amount2;
 
     return (color1 ^ color2) & 0b111;
 }
@@ -178,7 +171,7 @@ bool Board::doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const {
  *          amount: Row (finds true for all of these)
  * @return
  */
-u8 Board::doActISColMatchBatched(u8 x1, u8 y1, u8 m) const {
+u8 Board::doActISColMatchBatched(c_u8 x1, c_u8 y1, c_u8 m) const {
     c_i32 x2 = (x1 - m + 6) % 6;
     c_u64 base = y1 < 3 ? b1 : b2;
     c_i32 offset_shared = 51 - (y1 % 3) * 18;
@@ -201,7 +194,7 @@ u8 Board::doActISColMatchBatched(u8 x1, u8 y1, u8 m) const {
 }
 
 
-double Board::getDuplicateEstimateAtDepth(MU u32 depth) const {
+double Board::getDuplicateEstimateAtDepth(MU u32 depth) {
     return 1.0;
 }
 
@@ -214,10 +207,9 @@ double Board::getDuplicateEstimateAtDepth(MU u32 depth) const {
  * @param sect2 b1/b2 of 2nd board
  * @return
  */
-inline u64 getSimilar(c_u64& sect1, c_u64& sect2) {
-    static constexpr u64 M0 = 0x0009'2492'4924'9249;
+inline u64 getSimilar54(c_u64& sect1, c_u64& sect2) {
     c_u64 s = sect1 ^ sect2;
-    return ~(s | s >> 1 | s >> 2) & M0;
+    return ~(s | s >> 1 | s >> 2) & 0x9'2492'4924'9249;
 }
 
 
@@ -232,103 +224,135 @@ u64 score1Helper(c_u64& sect) {
 }
 
 u64 Board::getScore1(const Board &other) const {
-    return score1Helper(getSimilar(b1, other.b1))
-         + score1Helper(getSimilar(b2, other.b2));
+    return score1Helper(getSimilar54(b1, other.b1))
+         + score1Helper(getSimilar54(b2, other.b2));
 }
 
+/**
+ * WORKS (18 bits)
+ */
+u32 getRow(const Board *board, c_u64 y) {
 
-u64 getRow(const Board* board, c_u64 y) {
-    c_u64 offset = (51 - y % 3) * 18;
-    if (y < 3) {
-        return (board->b1 >> offset) & 0b111;
-    }
-    return (board->b2 >> offset) & 0b111;
+    return *(&board->b1 + (y >= 3)) >> (2 - y % 3) * 18 & 0x3FFFF;
 
 }
 
-u64 getCol(const Board* board, c_u32 x) {
-    c_u64 mapBase = 0b111 << (5 - x) * 3;
-    c_u64 map = mapBase | (mapBase << 18) | (mapBase << 36);
-    c_u64 b1col = board->b1 & map;
-    c_u64 b2col = board->b2 & map;
-    static constexpr u64 map2 = 0x3FFFF;
-    c_u64 b1shifted = (b1col & map2) | ((b1col >> 18) & map2) | ((b1col >> 36) & map2);
-    c_u64 b2shifted = (b2col & map2) | ((b2col >> 18) & map2) | ((b2col >> 36) & map2);
-    c_u64 col = (b1shifted << 18) | b2shifted;
+/**
+ * does 5 - x
+ * WORKS (18 bits)
+ */
+u32 getCol(const Board *board, c_u32 x) {
+    c_u64 col_map = 0x70'001C'0007 << (5 - x) * 3;
+    c_u32 xMult = 3 * x;
+    c_u64 b1col = board->b1 & col_map;
+    c_u64 b2col = board->b2 & col_map;
+    c_u64 col = b1col >> (45 - xMult - 9)
+              | b1col >> (30 - xMult - 9)
+              | b1col >> (15 - xMult - 9)
+              | b2col >> (45 - xMult)
+              | b2col >> (30 - xMult)
+              | b2col >> (15 - xMult)
+    ;
     return col;
 
 }
 
-u64 constructMapCenter(c_u64 row, c_u32 x) {
-    c_u64 center = (row >> (5 - x) * 3) & 0b111;
-    c_u64 final =  center | (center << 3) | (center << 6) | (center << 9) | (center << 12);
-    return final;
+/**
+ * does 5 - x
+ * WORKS (18 bits)
+ */
+u32 constructMapCenter(const u32 row, c_u32 x) {
+    c_u64 cntr_p1 = row >> (5 - x) * 3 & 0b111;
+    c_u64 cntr_p2 = cntr_p1 | cntr_p1 << 3 | cntr_p1 << 6;
+    return cntr_p2 | cntr_p2 << 9;
 }
 
 
-u64 getScore1ShiftComp(c_u64 sect, c_u64 mapCent) {
-    static constexpr u64 p1Map = 0b000'001'000'001'000'001;
-    static constexpr u64 p2Map = 0b000000'000000'000011;
-    c_u64 sim = getSimilar(sect, mapCent);
-    c_u64 p1 = ((sim & (p1Map << 3)) >> 2) | (sim & p1Map);
-    c_u64 p2 = ((p1 & (p2Map << 12) >> 8)) | (p1 & (p2Map << 6) >> 4) | (p1 & p2Map);
+inline u32 getSimilar18(c_u32& sect1, c_u32& sect2) {
+    c_u32 s = sect1 ^ sect2;
+    return ~(s | s >> 1 | s >> 2) & 0x9249;
+}
+
+
+/**
+ * WORKS (6 bits)
+ * If an issue occurs, check this function first
+ * it may stem from not using a mask on p1->p2 inputs
+ *
+ * @param sect either the row or column (18-bit value)
+ * @param mapCent the map center row (18-bit value)
+ * @return
+ */
+u32 getScore1ShiftComp(c_u32 sect, c_u32 mapCent) {
+    c_u32 sim = getSimilar18(sect, mapCent);
+    c_u32 p1 = (sim & 0x1041 << 3) >> 2 | sim & 0x1041;
+    c_u32 p2 = (p1 >> 8 | p1 >> 4 | p1) & 0x3F;
     return p2;
 }
 
 
-void shiftLeft(u64& sect, c_u32 index) {
-    static constexpr u64 map = 0x3FFFF;
 
-    c_u64 mapL = map >> (18 - 3 * index);
-    c_u64 mapR = map << (3 * index);
-
-    c_u64 val = (sect & mapL) | (sect & mapR) << 3;
-    sect = val;
+/**
+ * does 6 - index, 1 + index
+ */
+void shiftLeft3(u32 &sect, c_u32 index) {
+    sect = (sect & 0x3FFFF << 3 * (6 - index)) >> 3 | sect & 0x3FFFF >> 3 * (1 + index);
 }
 
 
-void unshiftLeft(u64& sect, c_u32 var1, c_u32 var2, c_u32 var3) {
-
-}
-
-
+/**
+ *
+ */
 u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
-    u64 row = getRow(this, y);
-    u64 col = getCol(this, x);
-
-    c_u64 mapCent = constructMapCenter(row, x);
-
-    row = getScore1ShiftComp(row, mapCent);
-    col = getScore1ShiftComp(col, mapCent);
-
-    shiftLeft(row, x); // shift row (remove X)
-    shiftLeft(col, y); // shift col (remove X)
-
-    c_u64 colMult = col | col >> 5;
-    u64 n0 = (colMult & row >> 0) << 0;
-    u64 n1 = (colMult & row >> 1) << 1;
-    u64 n2 = (colMult & row >> 2) << 2;
-    u64 n3 = (colMult & row >> 3) << 3;
-    u64 n4 = (colMult & row >> 4) << 4;
-
-    // unshift n0-n4 from (row)
-    unshiftLeft(n0, x, 1, 6); // is this x or y?
-    unshiftLeft(n1, x, 1, 6); // is this x or y?
-    unshiftLeft(n2, x, 1, 6); // is this x or y?
-    unshiftLeft(n3, x, 1, 6); // is this x or y?
-    unshiftLeft(n4, x, 1, 6); // is this x or y?
+    c_u32 row = *(&b1 + (y >= 3)) >> (2 - y % 3) * 18 & 0x3FFFF;
+    c_u64 cntr_p1_r = row >> (5 - x) * 3 & 0b111;
+    c_u64 cntr_p2_r = cntr_p1_r | cntr_p1_r << 3 | cntr_p1_r << 6;
+    c_u32 s_ps = row ^ (cntr_p2_r | cntr_p2_r << 9);          // v getScore1ShiftComp(row, mapCent);
+    c_u32 sim_r = ~(s_ps | s_ps >> 1 | s_ps >> 2) & 0x9249;   // ^ getSimilar18
+    c_u32 p1_r = (sim_r & 0x1041 << 3) >> 2 | sim_r & 0x1041; // |
+    c_u32 row_t1 = (p1_r >> 8 | p1_r >> 4 | p1_r) & 0x3F;              // ^
+    c_u32 row_t2 = (row_t1 & 0x3F << 6 - x) >> 1 | row_t1 & 0x3F >> 1 + x; // shiftLeft1
+    c_u32 row_x5 = row_t2 | row_t2 << 5 | row_t2 << 10 | row_t2 << 15 | row_t2 << 20;
 
 
-    constexpr u32 offset = 8;
-    u64 final = (n4 << offset * 4)
-              | (n3 << offset * 3)
-              | (n2 << offset * 2)
-              | (n1 << offset * 1)
-              | (n0 << offset * 0);
 
-    // unshift n0-n4 from (col)
-    unshiftLeft(final, x, 8, 6); // is this x or y?
+    // u32 col = getCol(this, x);
+    c_u64 col_map = 0x70'001C'0007 << (5 - x) * 3;
+    c_u64 b1col = b1 & col_map;
+    c_u64 b2col = b2 & col_map;
+    // these offsets will change
+    c_u32 xMult = 3 * x;
+    u64 col = b1col >> (45 - xMult - 9)
+            | b1col >> (30 - xMult - 9)
+            | b1col >> (15 - xMult - 9)
+            | b2col >> (45 - xMult)
+            | b2col >> (30 - xMult)
+            | b2col >> (15 - xMult);
 
+    // c_u32 col_center = constructMapCenter(col, y);
+    c_u64 cntr_p1_c = row >> (5 - x) * 3 & 0b111;
+    c_u64 cntr_p2_c = cntr_p1_c | cntr_p1_c << 3 | cntr_p1_c << 6; // dif
+    c_u32 cntr_col = cntr_p2_c | cntr_p2_c << 9; // dif
+
+    // shiftLeft3
+    col = (col & 0x3FFFF << 3 * (6 - y)) >> 3 | col & 0x3FFFF >> 3 * (1 + y); // dif
+
+
+    c_u32 sim_c = getSimilar18(col, cntr_col); // dif
+    c_u32 p1_c = (sim_c & 0x1041 << 3) >> 2 | sim_c & 0x1041; // dif
+    col = (p1_c >> 8 | p1_c >> 4 | p1_c) & 0x3F; // dif
+    // these offsets will change
+    c_u32 col_sg = (col & 0b00001) << 0
+                 | (col & 0b00010) << 4
+                 | (col & 0b00100) << 8
+                 | (col & 0b01000) << 12
+                 | (col & 0b10000) << 16;
+    u32 col_x5 = col_sg << 0 | col_sg << 1 | col_sg << 2;
+    col_x5 = col_x5 | col_x5 << 3;
+
+
+
+    c_u64 final = col_x5 & row_x5;
     return final;
 }
 
@@ -345,7 +369,7 @@ u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
 
 
 
-uint64_t prime_func1(uint64_t b1, uint64_t b2) {
+uint64_t prime_func1(c_u64 b1, c_u64 b2) {
     static constexpr u64 MASK = 0x003F'FFFF'FFFF'FFFF;
     static constexpr u64 prime = 31;
     uint64_t hash = 17;
@@ -412,15 +436,15 @@ uint64_t getSegment4bits(const uint64_t segment) {
 
 
 void Board::precomputeHash2() {
-    u64 above = getSegment2bits(b1);
-    u64 below = getSegment2bits(b2);
+    c_u64 above = getSegment2bits(b1);
+    c_u64 below = getSegment2bits(b2);
     hash = above << 18 | below;
 }
 
 
 void Board::precomputeHash3() {
-    u64 above = getSegment3bits(b1);
-    u64 below = getSegment3bits(b2);
+    c_u64 above = getSegment3bits(b1);
+    c_u64 below = getSegment3bits(b2);
     hash = above << 30 | below;
 }
 
@@ -430,23 +454,21 @@ void Board::precomputeHash4() {
 
 Board::HasherPtr Board::getHashFunc() const {
     c_u64 colorCount = getColorCount();
-    c_bool isFat = hasFat();
-
-    if (isFat || colorCount > 3) {
+    if (hasFat() || colorCount > 3) {
         return &Board::precomputeHash4;
-    } else if  (colorCount == 1 || colorCount == 2) {
-        return &Board::precomputeHash2;
-    } else {
-        return &Board::precomputeHash3;
     }
+    if (colorCount == 1 || colorCount == 2) {
+        return &Board::precomputeHash2;
+    }
+    return &Board::precomputeHash3;
 }
 
 
 
-void appendBoardToString(std::string& str, const Board* board, int curY) {
-    bool isFat = board->hasFat();
-    u8 curFatX = board->getFatX();
-    u8 curFatY = board->getFatY();
+void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY) {
+    c_bool isFat = board->hasFat();
+    c_u8 curFatX = board->getFatX();
+    c_u8 curFatY = board->getFatY();
     bool inMiddle = false;
 
     u64 board_b;
@@ -459,9 +481,9 @@ void appendBoardToString(std::string& str, const Board* board, int curY) {
     }
 
     for (int x = 0; x < 18; x += 3) {
-        uint8_t value = board_b >> (51 - x - (curY % 3) * 18) & 0b111;
+        c_u8 value = board_b >> (51 - x - (curY % 3) * 18) & 0b111;
         if (isFat) {
-            int curX = x / 3;
+            c_u32 curX = x / 3;
             if (curFatX == curX || curFatX == curX - 1) {
                 if (curFatY == curY || curFatY == curY - 1) {
                     str.append(Colors::getBgColor(value));
@@ -521,15 +543,13 @@ MUND std::string Board::toString(const Board* other) const {
 }
 
 
-u64 Board::getScore2(const Board& other) const {
-
-
+u64 Board::getScore2(MU const Board& other) {
+    /*
     u64 ROW = 0;
     auto *uncoveredRows = reinterpret_cast<u8 *>(&ROW);
     u64 COL = 0;
     auto *uncoveredCols = reinterpret_cast<u8 *>(&COL);
 
-    /*
 
     // Find all differing cells and update the counts in rows and cols
     // for C++, I can instantly sum the rows, but IDK about the columns
