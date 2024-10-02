@@ -31,26 +31,29 @@ int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     const auto pair = BoardLookup::getBoardPair("6-5");
     // const Board board = pair->getInitialState();
+
+    std::cout << "Score: " << pair->getInitialState().getScore1(pair->getSolutionState()) << std::endl;
+
     Board board;
     c_u8 state[36] = {
         1, 0, 0, 0, 0, 0,
-        1, 1, 1, 1, 1, 1,
+        0, 0, 0, 0, 0, 1,
+        0, 0, 0, 0, 0, 2,
+        0, 0, 0, 0, 0, 3,
         0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 4,
     };
     board.setState(state);
     std::cout << board.toString() << std::endl;
 
-    MU c_u64 inters_a = board.getRowColIntersections(0, 1);
+    MU c_u64 inters_a = board.getRowColIntersections(5, 0);
 
     volatile int end = 0;
 
+    return 0;
 
 
 
-    /*
     // initialize solver
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
@@ -63,6 +66,6 @@ int main() {
 
     solver.findSolutions<true>();
     return 0;
-    */
+
 
 }

@@ -1,7 +1,6 @@
 #include "board.hpp"
 
 #include <string>
-#include <iostream>
 
 #include "MindbenderSolver/utils/colors.hpp"
 
@@ -199,6 +198,19 @@ double Board::getDuplicateEstimateAtDepth(MU u32 depth) {
 }
 
 
+
+
+u64 score1Helper(c_u64& sect) {
+    static constexpr u64 M3 = 0x0000'E070'381C'0E07;
+    static constexpr u64 M4 = 0x0000'0000'7800'000F;
+    static constexpr u64 M5 = 0x0000'0000'07FF'FFFF;
+
+    c_u64 p1 = sect + (sect >> 3) + (sect >> 6) & M3;
+    c_u64 p2 = p1 + (p1 >> 9) + (p1 >> 18) & M4;
+    return (p2 & M5) + (p2 >> 27);
+}
+
+
 /**
  * returns the ..100.000.100.000... of board1 compared to board2
  * ..001.. if cells are similar in value
@@ -213,147 +225,40 @@ inline u64 getSimilar54(c_u64& sect1, c_u64& sect2) {
 }
 
 
-u64 score1Helper(c_u64& sect) {
-    static constexpr u64 M3 = 0x0000'E070'381C'0E07;
-    static constexpr u64 M4 = 0x0000'0000'7800'000F;
-    static constexpr u64 M5 = 0x0000'0000'07FF'FFFF;
-
-    c_u64 p1 = sect + (sect >> 3) + (sect >> 6) & M3;
-    c_u64 p2 = p1 + (p1 >> 9) + (p1 >> 18) & M4;
-    return (p2 & M5) + (p2 >> 27);
-}
-
 u64 Board::getScore1(const Board &other) const {
-    return score1Helper(getSimilar54(b1, other.b1))
-         + score1Helper(getSimilar54(b2, other.b2));
-}
-
-/**
- * WORKS (18 bits)
- */
-u32 getRow(const Board *board, c_u64 y) {
-
-    return *(&board->b1 + (y >= 3)) >> (2 - y % 3) * 18 & 0x3FFFF;
-
-}
-
-/**
- * does 5 - x
- * WORKS (18 bits)
- */
-u32 getCol(const Board *board, c_u32 x) {
-    c_u64 col_map = 0x70'001C'0007 << (5 - x) * 3;
-    c_u32 xMult = 3 * x;
-    c_u64 b1col = board->b1 & col_map;
-    c_u64 b2col = board->b2 & col_map;
-    c_u64 col = b1col >> (45 - xMult - 9)
-              | b1col >> (30 - xMult - 9)
-              | b1col >> (15 - xMult - 9)
-              | b2col >> (45 - xMult)
-              | b2col >> (30 - xMult)
-              | b2col >> (15 - xMult)
-    ;
-    return col;
-
-}
-
-/**
- * does 5 - x
- * WORKS (18 bits)
- */
-u32 constructMapCenter(const u32 row, c_u32 x) {
-    c_u64 cntr_p1 = row >> (5 - x) * 3 & 0b111;
-    c_u64 cntr_p2 = cntr_p1 | cntr_p1 << 3 | cntr_p1 << 6;
-    return cntr_p2 | cntr_p2 << 9;
+    return __builtin_popcountll(getSimilar54(b1, other.b1))
+         + __builtin_popcountll(getSimilar54(b2, other.b2));
 }
 
 
-inline u32 getSimilar18(c_u32& sect1, c_u32& sect2) {
-    c_u32 s = sect1 ^ sect2;
-    return ~(s | s >> 1 | s >> 2) & 0x9249;
-}
-
-
-/**
- * WORKS (6 bits)
- * If an issue occurs, check this function first
- * it may stem from not using a mask on p1->p2 inputs
- *
- * @param sect either the row or column (18-bit value)
- * @param mapCent the map center row (18-bit value)
- * @return
- */
-u32 getScore1ShiftComp(c_u32 sect, c_u32 mapCent) {
-    c_u32 sim = getSimilar18(sect, mapCent);
-    c_u32 p1 = (sim & 0x1041 << 3) >> 2 | sim & 0x1041;
-    c_u32 p2 = (p1 >> 8 | p1 >> 4 | p1) & 0x3F;
-    return p2;
-}
-
-
-
-/**
- * does 6 - index, 1 + index
- */
-void shiftLeft3(u32 &sect, c_u32 index) {
-    sect = (sect & 0x3FFFF << 3 * (6 - index)) >> 3 | sect & 0x3FFFF >> 3 * (1 + index);
-}
-
-
-/**
- *
- */
 u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
-    c_u32 row = *(&b1 + (y >= 3)) >> (2 - y % 3) * 18 & 0x3FFFF;
-    c_u64 cntr_p1_r = row >> (5 - x) * 3 & 0b111;
-    c_u64 cntr_p2_r = cntr_p1_r | cntr_p1_r << 3 | cntr_p1_r << 6;
-    c_u32 s_ps = row ^ (cntr_p2_r | cntr_p2_r << 9);          // v getScore1ShiftComp(row, mapCent);
-    c_u32 sim_r = ~(s_ps | s_ps >> 1 | s_ps >> 2) & 0x9249;   // ^ getSimilar18
-    c_u32 p1_r = (sim_r & 0x1041 << 3) >> 2 | sim_r & 0x1041; // |
-    c_u32 row_t1 = (p1_r >> 8 | p1_r >> 4 | p1_r) & 0x3F;              // ^
-    c_u32 row_t2 = (row_t1 & 0x3F << 6 - x) >> 1 | row_t1 & 0x3F >> 1 + x; // shiftLeft1
-    c_u32 row_x5 = row_t2 | row_t2 << 5 | row_t2 << 10 | row_t2 << 15 | row_t2 << 20;
+    static constexpr u64 C_MAIN_MASK = 0x70'001C'0007;
+    static constexpr u32 C_CNTR_MASKS[8] = {
+            0x00000000, 0x02108421, 0x04210842, 0x06318C63,
+            0x08421084, 0x0A5294A5, 0x0C6318C6, 0x0E739CE7};
+    c_u32 left = 15 - x * 3;
+    c_u32 row = *(&b1 + (y >= 3)) >> (2 - y - 3 * (y >= 3)) * 18 & 0x3FFFF;
+    c_u32 cntr_p1_r = row >> left & 0b111;
 
+    // find col_x5
+    c_u64 col_mask = C_MAIN_MASK << left;
+    c_u64 b1_c = (b1 & col_mask) >> left;
+    c_u64 b2_c = (b2 & col_mask) >> left;
+    c_u32 shifted_5 = (b2_c | b2_c >> 13 | b2_c >> 26) & 0x1CE7 |
+                      (b1_c << 15 | b1_c << 2 | b1_c >> 11) & 0xE738000;
+    c_u32 s = shifted_5 ^ C_CNTR_MASKS[cntr_p1_r];
+    c_u32 sim = ((~(s | s >> 1 | s >> 2)) & C_CNTR_MASKS[1]) * 31;
+    c_u32 col_x5 = (sim & (0x3FFFFFFFU << (5 * (6 - y)))) >> 5
+                   | sim & (0x1FFFFFFU >> 5 * y);
 
+    // find row_x5
+    c_u32 s_ps = row ^ (cntr_p1_r * 0x9249U);
+    c_u32 sim_r = ~(s_ps | s_ps >> 1 | s_ps >> 2) & 0x9249U;
+    c_u32 p1_r = (sim_r & 0x8208U) >> 2 | sim_r & 0x1041U;
+    c_u32 row_t1 = (p1_r >> 8 | p1_r >> 4 | p1_r) & 0x3FU;
+    c_u32 row_x5 = ((row_t1 & (0xFC0U >> x)) >> 1 | row_t1 & (0x1FU >> x)) * 0x108421U;
 
-    // u32 col = getCol(this, x);
-    c_u64 col_map = 0x70'001C'0007 << (5 - x) * 3;
-    c_u64 b1col = b1 & col_map;
-    c_u64 b2col = b2 & col_map;
-    // these offsets will change
-    c_u32 xMult = 3 * x;
-    u64 col = b1col >> (45 - xMult - 9)
-            | b1col >> (30 - xMult - 9)
-            | b1col >> (15 - xMult - 9)
-            | b2col >> (45 - xMult)
-            | b2col >> (30 - xMult)
-            | b2col >> (15 - xMult);
-
-    // c_u32 col_center = constructMapCenter(col, y);
-    c_u64 cntr_p1_c = row >> (5 - x) * 3 & 0b111;
-    c_u64 cntr_p2_c = cntr_p1_c | cntr_p1_c << 3 | cntr_p1_c << 6; // dif
-    c_u32 cntr_col = cntr_p2_c | cntr_p2_c << 9; // dif
-
-    // shiftLeft3
-    col = (col & 0x3FFFF << 3 * (6 - y)) >> 3 | col & 0x3FFFF >> 3 * (1 + y); // dif
-
-
-    c_u32 sim_c = getSimilar18(col, cntr_col); // dif
-    c_u32 p1_c = (sim_c & 0x1041 << 3) >> 2 | sim_c & 0x1041; // dif
-    col = (p1_c >> 8 | p1_c >> 4 | p1_c) & 0x3F; // dif
-    // these offsets will change
-    c_u32 col_sg = (col & 0b00001) << 0
-                 | (col & 0b00010) << 4
-                 | (col & 0b00100) << 8
-                 | (col & 0b01000) << 12
-                 | (col & 0b10000) << 16;
-    u32 col_x5 = col_sg << 0 | col_sg << 1 | col_sg << 2;
-    col_x5 = col_x5 | col_x5 << 3;
-
-
-
-    c_u64 final = col_x5 & row_x5;
-    return final;
+    return col_x5 & row_x5;
 }
 
 
