@@ -4,8 +4,8 @@ project(MindbenderSolver)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 23)
 
-# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fopenmp")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fopenmp")
 
 
 add_definitions(-USE_MOVES)

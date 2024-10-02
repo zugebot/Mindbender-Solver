@@ -49,9 +49,9 @@ int main() {
     MU c_u64 inters_a = board.getRowColIntersections(5, 0);
 
     volatile int v1 = 10;
-    volatile int v2 = 0'10;
+    volatile int v2 = 0'010;
 
-    
+
     volatile int end = 0;
 
 
@@ -68,7 +68,7 @@ int main() {
 
 
 
-    solver.findSolutions<true>();
+    solver.findSolutions<true, false>();
     return 0;
 
 

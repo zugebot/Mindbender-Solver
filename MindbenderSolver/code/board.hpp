@@ -64,7 +64,6 @@ public:
     MUND HasherPtr getHashFunc() const;
 
     MUND u64 getScore1(const Board& other) const;
-    MUND static u64 getScore2(const Board& other) ;
 
     MU static void appendBoardToString(std::string& str, const Board* board, c_i32 curY);
     MUND std::string toString() const;

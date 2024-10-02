@@ -1,0 +1,101 @@
+
+
+
+
+MU u64 score1Helper(c_u64& sect) {
+    static constexpr u64 M3 = 0x0000E070381C0E07;
+    static constexpr u64 M4 = 0x000000007800000F;
+    static constexpr u64 M5 = 0x0000000007FFFFFF;
+
+    c_u64 p1 = sect + (sect >> 3) + (sect >> 6) & M3;
+    c_u64 p2 = p1 + (p1 >> 9) + (p1 >> 18) & M4;
+    return (p2 & M5) + (p2 >> 27);
+}
+
+
+
+
+
+
+
+
+u64 Board::getScore2(MU const Board& other) {
+    /*
+    u64 ROW = 0;
+    auto *uncoveredRows = reinterpret_cast<u8 *>(&ROW);
+    u64 COL = 0;
+    auto *uncoveredCols = reinterpret_cast<u8 *>(&COL);
+
+
+    // Find all differing cells and update the counts in rows and cols
+    // for C++, I can instantly sum the rows, but IDK about the columns
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (this.myBoard[i][j] != theOther.myBoard[i][j]) {
+                uncoveredRows[i]++;
+                uncoveredCols[j]++;
+                differingCells++;
+            }
+        }
+    }
+
+
+    // While there are still uncovered differing cells
+    // worst case this should only occur 6 times?
+    int lanes = 0;
+    int maxCover = 0;
+    bool isRow = false;
+    int index = -1;
+    while (differingCells > 0) {
+        maxCover = 0;
+        isRow = false;
+        index = -1;
+        // Find the row or column that covers the most uncovered differing cells
+        // in C++, can probably reinterpret the bytes to see if either can be skipped,
+        // base which level of checking I am doing off of getScore1?
+        // can be recoded to find the index and value of the max in both?
+        for (int i = 0; i < BOARD_SIZE; i++) {
+            if (uncoveredRows[i] > maxCover) {
+                maxCover = uncoveredRows[i];
+                isRow = true;
+                index = i;
+            }
+            if (uncoveredCols[i] > maxCover) {
+                maxCover = uncoveredCols[i];
+                isRow = false;
+                index = i;
+            }
+        }
+
+        if (index == -1) {
+            break;
+        }
+
+        // Cover the chosen row or column and update the counts in
+        // uncoveredRows and uncoveredColumns
+        // I could cache the results of getScore1 for this lol
+        if (isRow) {
+            differingCells -= uncoveredRows[index];
+            uncoveredRows[index] = 0;
+            for (int j = 0; j < BOARD_SIZE; j++) {
+                if (this.myBoard[index][j] != theOther.myBoard[index][j] && uncoveredCols[j] > 0) {
+                    uncoveredCols[j]--;
+                }
+            }
+        } else {
+            differingCells -= uncoveredCols[index];
+            uncoveredCols[index] = 0;
+            for (int j = 0; j < BOARD_SIZE; j++) {
+                if (this.myBoard[j][index] != theOther.myBoard[j][index] && uncoveredRows[j] > 0) {
+                    uncoveredRows[j]--;
+                }
+            }
+        }
+
+        lanes++;
+    }
+    return lanes;
+    */
+    return 0;
+
+}

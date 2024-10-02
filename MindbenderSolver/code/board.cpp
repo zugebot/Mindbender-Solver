@@ -19,7 +19,7 @@ Board::Board(const u8 values[36], c_u8 x, c_u8 y) {
 void Board::setState(c_u8 values[36]) {
     i8 colors[8] = {8, 8, 8, 8, 8, 8, 8, 8};
     for (int i = 0; i < 36; i++) {
-        c_int val = values[i] & 07;
+        c_int val = values[i] & 0'7;
         colors[val] = 1;
     }
     u64 colorCount = 0;
@@ -36,11 +36,11 @@ void Board::setState(c_u8 values[36]) {
 
     b1 = 0;
     for (int i = 0; i < 18; i++) {
-        b1 = b1 << 3 | adjusted_values[i] & 07;
+        b1 = b1 << 3 | adjusted_values[i] & 0'7;
     }
     b2 = 0;
     for (int i = 18; i < 36; i++) {
-        b2 = b2 << 3 | adjusted_values[i] & 07;
+        b2 = b2 << 3 | adjusted_values[i] & 0'7;
     }
 
 
@@ -62,26 +62,26 @@ u32 Board::getColorCount() const {
  * @param y value 0-4
  */
 void Board::setFat(c_u8 x, c_u8 y) {
-    static constexpr u64 MASK = 0x0FFF'FFFF'FFFF'FFFF;
-    b1 = b1 & MASK | (static_cast<u64>(x) << 61) | (1LL << 60);
-    b2 = b2 & MASK | (static_cast<u64>(y) << 61);
+    static constexpr u64 MASK = 0x0FFFFFFFFFFFFFFF;
+    b1 = b1 & MASK | static_cast<u64>(x) << 61 | 1LL << 60;
+    b2 = b2 & MASK | static_cast<u64>(y) << 61;
 }
 
 
 MU void Board::setFatX(c_u8 x) {
-    static constexpr u64 MASK = 0x1FFF'FFFF'FFFF'FFFF;
+    static constexpr u64 MASK = 0x1FFFFFFFFFFFFFFF;
     b1 = b1 & MASK | static_cast<u64>(x) << 61;
 }
 
 
 MU void Board::setFatY(c_u8 y) {
-    static constexpr u64 MASK = 0x1FFF'FFFF'FFFF'FFFF;
+    static constexpr u64 MASK = 0x1FFFFFFFFFFFFFFF;
     b2 = b2 & MASK | static_cast<u64>(y) << 61;
 }
 
 
 MU void Board::addFatX(c_u8 x) {
-    static constexpr u64 MASK = ~0x1FFF'FFFF'FFFF'FFFF;
+    static constexpr u64 MASK = ~0x1FFFFFFFFFFFFFFF;
     u64 cur_x = (b1 & MASK) >> 61;
     cur_x += x;
     cur_x -= 6 * (cur_x > 5);
@@ -90,7 +90,7 @@ MU void Board::addFatX(c_u8 x) {
 
 
 MU void Board::addFatY(c_u8 y) {
-    static constexpr u64 MASK = ~0x1FFF'FFFF'FFFF'FFFF;
+    static constexpr u64 MASK = ~0x1FFFFFFFFFFFFFFF;
     u64 cur_y = (b2 & MASK) >> 61;
     cur_y += y;
     cur_y -= 6 * (cur_y > 5);
@@ -99,13 +99,13 @@ MU void Board::addFatY(c_u8 y) {
 
 
 u8 Board::getFatX() const {
-    static constexpr u64 MASK = ~0x1FFF'FFFF'FFFF'FFFF;
+    static constexpr u64 MASK = ~0x1FFFFFFFFFFFFFFF;
     return (b1 & MASK) >> 61;
 }
 
 
 u8 Board::getFatY() const {
-    static constexpr u64 MASK = ~0x1FFF'FFFF'FFFF'FFFF;
+    static constexpr u64 MASK = ~0x1FFFFFFFFFFFFFFF;
     return (b2 & MASK) >> 61;
 }
 
@@ -151,14 +151,14 @@ bool Board::doActISColMatch(c_u8 x1, c_u8 y1, c_u8 m, c_u8 n) const {
     c_u8 color1 = base >> shift_amount1;
     c_u8 color3 = base >> shift_amount3;
 
-    if ((color1 ^ color3) & 07) {
+    if ((color1 ^ color3) & 0'7) {
         return false;
     }
     c_int shift_amount2 = 51 - x1_3 - y2 % 3 * 18;
     c_u64 base2 = y2 < 3 ? b1 : b2;
     c_u8 color2 = base2 >> shift_amount2;
 
-    return (color1 ^ color2) & 07;
+    return (color1 ^ color2) & 0'7;
 }
 
 
@@ -177,7 +177,7 @@ u8 Board::doActISColMatchBatched(c_u8 x1, c_u8 y1, c_u8 m) const {
     c_u8 color1 = base >> (x1 * 3 + offset_shared);
     c_u8 color3 = base >> (x2 * 3 + offset_shared);
 
-    if ((color1 ^ color3) & 07) { return 0; }
+    if ((color1 ^ color3) & 0'7) { return 0; }
 
     u8 results = 0;
     c_i32 offset_shared2 = 51 - x1 * 3;
@@ -198,19 +198,6 @@ double Board::getDuplicateEstimateAtDepth(MU u32 depth) {
 }
 
 
-
-
-MU u64 score1Helper(c_u64& sect) {
-    static constexpr u64 M3 = 0x0000'E070'381C'0E07;
-    static constexpr u64 M4 = 0x0000'0000'7800'000F;
-    static constexpr u64 M5 = 0x0000'0000'07FF'FFFF;
-
-    c_u64 p1 = sect + (sect >> 3) + (sect >> 6) & M3;
-    c_u64 p2 = p1 + (p1 >> 9) + (p1 >> 18) & M4;
-    return (p2 & M5) + (p2 >> 27);
-}
-
-
 /**
  * returns the ..100.000.100.000... of board1 compared to board2
  * ..001.. if cells are similar in value
@@ -221,7 +208,7 @@ MU u64 score1Helper(c_u64& sect) {
  */
 inline u64 getSimilar54(c_u64& sect1, c_u64& sect2) {
     c_u64 s = sect1 ^ sect2;
-    return ~(s | s >> 1 | s >> 2) & 0x9'2492'4924'9249;
+    return ~(s | s >> 1 | s >> 2) & 0'111111'111111'111111;
 }
 
 
@@ -232,12 +219,12 @@ u64 Board::getScore1(const Board &other) const {
 
 
 u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
-    static constexpr u64 C_MAIN_MASK = 0x70'001C'0007;
+    static constexpr u64 C_MAIN_MASK = 0'000007'000007'000007;
     static constexpr u32 C_CNTR_MASKS[8] = {
             0x00000000, 0x02108421, 0x04210842, 0x06318C63,
             0x08421084, 0x0A5294A5, 0x0C6318C6, 0x0E739CE7};
     c_u32 left = 15 - x * 3;
-    c_u32 row = *(&b1 + (y >= 3)) >> (2 - y - 3 * (y >= 3)) * 18 & 0x3FFFF;
+    c_u32 row = *(&b1 + (y >= 3)) >> (2 - y - 3 * (y >= 3)) * 18 & 0'777777;
     c_u32 cntr_p1_r = row >> left & 07;
 
     // find col_x5
@@ -252,18 +239,18 @@ u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
                    | sim & (0x1FFFFFF >> 5 * y);
 
     // find row_x5
-    c_u32 s_ps = row ^ (cntr_p1_r * 0x9249U);
-    c_u32 sim_r = ~(s_ps | s_ps >> 1 | s_ps >> 2) & 0x9249;
-    c_u32 p1_r = (sim_r & 0x8208) >> 2 | sim_r & 0x1041;
-    c_u32 row_t1 = (p1_r >> 8 | p1_r >> 4 | p1_r) & 0x3F;
-    c_u32 row_x5 = ((row_t1 & (0xFC0 >> x)) >> 1 | row_t1 & (0x1FU >> x)) * 0x108421;
+    c_u32 s_ps = row ^ (cntr_p1_r * 0'111111);
+    c_u32 sim_r = ~(s_ps | s_ps >> 1 | s_ps >> 2) & 0'111111;
+    c_u32 p1_r = (sim_r & 0'101010) >> 2 | sim_r & 0'10101;
+    c_u32 row_t1 = (p1_r >> 8 | p1_r >> 4 | p1_r) & 0'77;
+    c_u32 row_x5 = ((row_t1 & (0'7700 >> x)) >> 1 | row_t1 & (0'37 >> x)) * 0x108421;
 
     return col_x5 & row_x5;
 }
 
 
 u64 prime_func1(c_u64 b1, c_u64 b2) {
-    static constexpr u64 MASK = 0x003F'FFFF'FFFF'FFFF;
+    static constexpr u64 MASK = 0'777777'777777'777777;
     static constexpr u64 prime = 31;
     u64 hash = 17;
     hash = hash * prime + (b1 & MASK ^ (b1 & MASK) >> 32);
@@ -273,28 +260,28 @@ u64 prime_func1(c_u64 b1, c_u64 b2) {
 
 
 u64 getSegment2bits(c_u64 segment) {
-    static constexpr u64 MASK_A1 = 0b001000'001000'001000'001000'001000'001000'001000'001000'001000;
+    static constexpr u64 MASK_A1 = 0'101010'101010'101010;
     static constexpr u64 MASK_B1 = MASK_A1 >> 3;
-    static constexpr u64 MASK_A2 = 0b000011'000000'000000'000011'000000'000000'000011'000000'000000;
+    static constexpr u64 MASK_A2 = 0'030000'030000'030000;
     static constexpr u64 MASK_B2 = MASK_A2 >> 6;
     static constexpr u64 MASK_C2 = MASK_A2 >> 12;
-    static constexpr u64 MASK_A3 = 0b000000'000000'111111'000000'000000'000000'000000'000000'000000;
+    static constexpr u64 MASK_A3 = 0'000077'000000'000000;
     static constexpr u64 MASK_B3 = MASK_A3 >> 18;
     static constexpr u64 MASK_C3 = MASK_A3 >> 36;
-    c_u64 o1 = (segment & MASK_A1) >> 2 | (segment & MASK_B1);
-    c_u64 o2 = (o1 & MASK_A2) >> 8 | (o1 & MASK_B2) >> 4 | (o1 & MASK_C2);
-    c_u64 o3 = (o2 & MASK_A3) >> 24 | (o2 & MASK_B3) >> 12 | (o2 & MASK_C3);
+    c_u64 o1 = (segment & MASK_A1) >> 2 | segment & MASK_B1;
+    c_u64 o2 = (o1 & MASK_A2) >> 8 | (o1 & MASK_B2) >> 4 | o1 & MASK_C2;
+    c_u64 o3 = (o2 & MASK_A3) >> 24 | (o2 & MASK_B3) >> 12 | o2 & MASK_C3;
     return o3;
 }
 
 
 u64 getSegment3bits(c_u64 segment) {
-    static constexpr u64 MASK_AS = 0b011000000'011000000'011000000'011000000'011000000'011000000;
+    static constexpr u64 MASK_AS = 0'300300'300300'300300;
     static constexpr u64 MASK_BS = MASK_AS >> 3;
     static constexpr u64 MASK_CS = MASK_AS >> 6;
-    static constexpr u64 MASK_A1 = 0b000011111'000000000'000011111'000000000'000011111'000000000;
+    static constexpr u64 MASK_A1 = 0'037000'037000'037000;
     static constexpr u64 MASK_B1 = MASK_A1 >> 9;
-    static constexpr u64 MASK_A2 = 0b000000001'111111111'000000000'000000000'000000000'000000000;
+    static constexpr u64 MASK_A2 = 0'001777'000000'000000;
     static constexpr u64 MASK_B2 = MASK_A2 >> 18;
     static constexpr u64 MASK_C2 = MASK_A2 >> 36;
 
@@ -308,12 +295,12 @@ u64 getSegment3bits(c_u64 segment) {
 
 
 u64 getSegment4bits(c_u64 segment) {
-    static constexpr u64 MASK_A1 = 0b011000'011000'011000'011000'011000'011000'011000'011000'011000;
+    static constexpr u64 MASK_A1 = 0'303030'303030'303030;
     static constexpr u64 MASK_B1 = MASK_A1 >> 3;
-    static constexpr u64 MASK_A2 = 0b001111'000000'000000'001111'000000'000000'001111'000000'000000;
+    static constexpr u64 MASK_A2 = 0'170000'170000'170000;
     static constexpr u64 MASK_B2 = MASK_A2 >> 6;
     static constexpr u64 MASK_C2 = MASK_A2 >> 12;
-    static constexpr u64 MASK_A3 = 0b000000'111111'111111'000000'000000'000000'000000'000000'000000;
+    static constexpr u64 MASK_A3 = 0'007777'000000'000000;
     static constexpr u64 MASK_B3 = MASK_A3 >> 18;
     static constexpr u64 MASK_C3 = MASK_A3 >> 36;
 
@@ -372,7 +359,7 @@ void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY
     }
 
     for (int x = 0; x < 18; x += 3) {
-        c_u8 value = board_b >> (51 - x - (curY % 3) * 18) & 07;
+        c_u8 value = board_b >> (51 - x - (curY % 3) * 18) & 0'7;
         if (isFat) {
             c_u32 curX = x / 3;
             if (curFatX == curX || curFatX == curX - 1) {
@@ -434,83 +421,3 @@ MUND std::string Board::toString(const Board* other) const {
 }
 
 
-u64 Board::getScore2(MU const Board& other) {
-    /*
-    u64 ROW = 0;
-    auto *uncoveredRows = reinterpret_cast<u8 *>(&ROW);
-    u64 COL = 0;
-    auto *uncoveredCols = reinterpret_cast<u8 *>(&COL);
-
-
-    // Find all differing cells and update the counts in rows and cols
-    // for C++, I can instantly sum the rows, but IDK about the columns
-    for (int i = 0; i < BOARD_SIZE; i++) {
-        for (int j = 0; j < BOARD_SIZE; j++) {
-            if (this.myBoard[i][j] != theOther.myBoard[i][j]) {
-                uncoveredRows[i]++;
-                uncoveredCols[j]++;
-                differingCells++;
-            }
-        }
-    }
-
-
-    // While there are still uncovered differing cells
-    // worst case this should only occur 6 times?
-    int lanes = 0;
-    int maxCover = 0;
-    bool isRow = false;
-    int index = -1;
-    while (differingCells > 0) {
-        maxCover = 0;
-        isRow = false;
-        index = -1;
-        // Find the row or column that covers the most uncovered differing cells
-        // in C++, can probably reinterpret the bytes to see if either can be skipped,
-        // base which level of checking I am doing off of getScore1?
-        // can be recoded to find the index and value of the max in both?
-        for (int i = 0; i < BOARD_SIZE; i++) {
-            if (uncoveredRows[i] > maxCover) {
-                maxCover = uncoveredRows[i];
-                isRow = true;
-                index = i;
-            }
-            if (uncoveredCols[i] > maxCover) {
-                maxCover = uncoveredCols[i];
-                isRow = false;
-                index = i;
-            }
-        }
-
-        if (index == -1) {
-            break;
-        }
-
-        // Cover the chosen row or column and update the counts in
-        // uncoveredRows and uncoveredColumns
-        // I could cache the results of getScore1 for this lol
-        if (isRow) {
-            differingCells -= uncoveredRows[index];
-            uncoveredRows[index] = 0;
-            for (int j = 0; j < BOARD_SIZE; j++) {
-                if (this.myBoard[index][j] != theOther.myBoard[index][j] && uncoveredCols[j] > 0) {
-                    uncoveredCols[j]--;
-                }
-            }
-        } else {
-            differingCells -= uncoveredCols[index];
-            uncoveredCols[index] = 0;
-            for (int j = 0; j < BOARD_SIZE; j++) {
-                if (this.myBoard[j][index] != theOther.myBoard[j][index] && uncoveredRows[j] > 0) {
-                    uncoveredRows[j]--;
-                }
-            }
-        }
-
-        lanes++;
-    }
-    return lanes;
-    */
-    return 0;
-
-}

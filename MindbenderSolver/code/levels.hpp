@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MindbenderSolver/utils/processor.hpp"
+
 #include "board.hpp"
 
 #include <unordered_map>
@@ -28,22 +29,10 @@ public:
     BoardPair(Board const* board, Board const* solve, std::string name) :
         board(board), solve(solve), name(std::move(name)) {}
 
-    MUND Board getInitialState() const {
-        return *board;
-    }
-
-    MUND Board getSolutionState() const {
-        return *solve;
-    }
-
-    MUND std::string getName() const {
-        return name;
-    }
-
-    MUND std::string toString() const {
-        return board->toString(solve);
-    }
-
+    MUND Board getInitialState() const { return *board; }
+    MUND Board getSolutionState() const { return *solve; }
+    MUND std::string getName() const { return name; }
+    MUND std::string toString() const { return board->toString(solve); }
 };
 
 
@@ -153,11 +142,10 @@ public:
 
 
 class BoardLookup {
-private:
     static const std::unordered_map<std::string, const BoardPair*> boardPairDict;
 public:
     MUND static BoardPair const* getBoardPair(const std::string& name) {
-        auto pair = boardPairDict.find(name);
+        c_auto pair = boardPairDict.find(name);
         if (pair == boardPairDict.end()) {
             return nullptr;
         }

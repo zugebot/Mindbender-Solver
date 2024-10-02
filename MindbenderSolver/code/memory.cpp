@@ -9,7 +9,7 @@
 void Memory::setNext1Move(c_u64 moveValue) {
     c_u32 moveCount = moves & 0xF;
     c_u8 shiftAmount = 4 + moveCount * 6;
-    moves = (moves & ~(0x3FLL << shiftAmount | 0xFULL))
+    moves = (moves & ~(0'77ULL << shiftAmount | 0xFULL))
             | (moveValue << shiftAmount)
             | ((moveCount + 1) & 0xF);
 }
@@ -19,7 +19,7 @@ void Memory::setNext1Move(c_u64 moveValue) {
 void Memory::setNext2Move(c_u64 moveValue) {
     c_u32 moveCount = moves & 0xF;
     c_u8 shiftAmount = 4 + moveCount * 6;
-    moves = (moves & ~(0xFFFULL << shiftAmount | 0xFULL))
+    moves = (moves & ~(0'7777ULL << shiftAmount | 0xFULL))
             | (moveValue << shiftAmount)
             | ((moveCount + 2) & 0xF);
 }
@@ -29,7 +29,7 @@ void Memory::setNext2Move(c_u64 moveValue) {
 void Memory::setNext3Move(c_u64 moveValue) {
     c_u32 moveCount = moves & 0xF;
     c_u8 shiftAmount = 4 + moveCount * 6;
-    moves = (moves & ~(0x3FFFFULL << shiftAmount | 0xFULL))
+    moves = (moves & ~(0'777777ULL << shiftAmount | 0xFULL))
             | (moveValue << shiftAmount)
             | ((moveCount + 3) & 0xF);
 }
@@ -39,7 +39,7 @@ void Memory::setNext3Move(c_u64 moveValue) {
 void Memory::setNext4Move(c_u64 moveValue) {
     c_u32 moveCount = moves & 0xF;
     c_u8 shiftAmount = 4 + moveCount * 6;
-    moves = (moves & ~(0xFFFFFFULL << shiftAmount | 0xFULL))
+    moves = (moves & ~(0'77777777ULL << shiftAmount | 0xFULL))
             | (moveValue << shiftAmount)
             | ((moveCount + 4) & 0xF);
 }
@@ -48,9 +48,9 @@ void Memory::setNext4Move(c_u64 moveValue) {
 void Memory::setNext5Move(c_u64 moveValue) {
     c_u32 moveCount = moves & 0xF;
     c_u8 shiftAmount = 4 + moveCount * 6;
-    moves = (moves & ~(0x3FFFFFFFULL << shiftAmount | 0xFULL))
-            | (moveValue << shiftAmount)
-            | ((moveCount + 5) & 0xF);
+    moves = moves & ~(0'7777777777ULL << shiftAmount | 0xFULL)
+            | moveValue << shiftAmount
+            | (moveCount + 5) & 0xF;
 }
 
 
@@ -135,22 +135,6 @@ std::string Memory::assembleFatMoveString(c_u8 fatPos, const Memory* other, c_u8
 }
 
 
-/*
- int x = board1.getFatX();
-   int y = board1.getFatY();
-   int move = 21;
-
-fatActions[x * 5 + y][move](board1);
-board1.mem.setNext1Move(move);
-
-auto func = fatActions[x * 5 + y][move];
-auto permStr1 = RCNameForwardLookup[func];
-
-int amount = permStr1.at(2)  - '0';
-x += amount;
-x %= 6;
- */
-
 static constexpr u32 LONGER_PERMUTATION_LENGTH = 4;
 
 
@@ -163,8 +147,8 @@ std::string Memory::assembleFatMoveStringForwards(c_u8 fatPos) const {
     for (int i = 0; i < count; i++) {
         c_u8 move = getMove(i);
         // auto func = fatActions[x * 5 + y][move];
-        auto func = allActionsList[fatActionsIndexes[x * 5 + y][move]];
-        auto segment = actionToNameLookup[func];
+        c_auto func = allActionsList[fatActionsIndexes[x * 5 + y][move]];
+        auto segment = getNameFromAction(func);
         moves_str += segment;
 
         const char direction = segment.at(0);
@@ -205,9 +189,9 @@ std::string Memory::assembleFatMoveStringBackwards(c_u8 fatPos) const {
 
     for (int i = 0; i < count; i++) {
         c_u8 move = getMove(i);
-        auto func = allActionsList[fatActionsIndexes[x * 5 + y][move]];
+        c_auto func = allActionsList[fatActionsIndexes[x * 5 + y][move]];
         // auto func = fatActions[x * 5 + y][move];
-        auto segment = actionToNameLookup[func];
+        auto segment = getNameFromAction(func);
 
         const char direction = segment.at(0);
         c_int axisNum = segment.at(2) - '0';
