@@ -5,6 +5,7 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <array>
 
 #include "timer.hpp"
 
@@ -36,7 +37,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
 
     static constexpr int num_buckets = 1 << NUM_BITS_PER_PASS;
 
-    Timer total_time;
+    const Timer total_time;
     float last_time = 0;
 
 
@@ -50,7 +51,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
     if (num_threads == 0) num_threads = 8;
 
 
-    count_t chunk_size = (data_out.size() + num_threads - 1) / num_threads;
+    const count_t chunk_size = (data_out.size() + num_threads - 1) / num_threads;
 
     // Precompute masks and shifts
     std::array<uint64_t, NUM_PASSES> masks{};
@@ -90,13 +91,13 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
         // Counting Phase
         for (count_t t = 0; t < num_threads; ++t) {
             count_t start = t * chunk_size;
-            count_t end = std::min(start + chunk_size, (count_t) data_out.size());
+            count_t end = std::min(start + chunk_size, static_cast<count_t>(data_out.size()));
             thread_pool[t] = std::thread([&, t, start, end]() {
                 auto& local_count = thread_counts[t];
-                std::fill(local_count.begin(), local_count.end(), 0);
+                std::ranges::fill(local_count, 0);
                 for (count_t i = start; i < end; ++i) {
-                    uint64_t bucket = (data_out[i].hash >> shift) & mask;
-                    local_count[bucket]++;
+                    c_u64 bucket = (data_out[i].hash >> shift) & mask;
+                    ++local_count[bucket];
                 }
             });
         }
@@ -108,7 +109,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
         }
 
         // Accumulate Counts
-        std::fill(count.begin(), count.end(), 0);
+        std::ranges::fill(count, 0);
         for (count_t b = 0; b < num_buckets; ++b) {
             for (count_t t = 0; t < num_threads; ++t) {
                 count[b] += thread_counts[t][b];
@@ -148,11 +149,11 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
         // Distribution Phase
         for (count_t t = 0; t < num_threads; ++t) {
             count_t start = t * chunk_size;
-            count_t end = std::min(start + chunk_size, (count_t) data_out.size());
+            count_t end = std::min(start + chunk_size, static_cast<count_t>(data_out.size()));
             thread_pool[t] = std::thread([&, t, start, end]() {
                 auto& local_offset = thread_offsets[t];
                 for (count_t i = start; i < end; ++i) {
-                    uint64_t bucket = (data_out[i].hash >> shift) & mask;
+                    c_u64 bucket = (data_out[i].hash >> shift) & mask;
                     aux_buffer[local_offset[bucket]++] = data_out[i];
                 }
             });

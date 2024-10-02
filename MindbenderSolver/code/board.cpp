@@ -19,7 +19,7 @@ Board::Board(const u8 values[36], c_u8 x, c_u8 y) {
 void Board::setState(c_u8 values[36]) {
     i8 colors[8] = {8, 8, 8, 8, 8, 8, 8, 8};
     for (int i = 0; i < 36; i++) {
-        c_int val = values[i] & 0b111;
+        c_int val = values[i] & 07;
         colors[val] = 1;
     }
     u64 colorCount = 0;
@@ -29,28 +29,28 @@ void Board::setState(c_u8 values[36]) {
             colorCount++;
         }
     }
-    u8 adjusted_values[36] = {0};
+    u8 adjusted_values[36] = {};
     for (int i = 0; i < 36; i++) {
         adjusted_values[i] = colors[values[i]];
     }
 
     b1 = 0;
     for (int i = 0; i < 18; i++) {
-        b1 = b1 << 3 | (adjusted_values[i] & 0b111);
+        b1 = b1 << 3 | adjusted_values[i] & 07;
     }
     b2 = 0;
     for (int i = 18; i < 36; i++) {
-        b2 = b2 << 3 | (adjusted_values[i] & 0b111);
+        b2 = b2 << 3 | adjusted_values[i] & 07;
     }
 
 
     static constexpr u64 EVERYTHING_BUT_COLOR = 0xF0FF'FFFF'FFFF'FFFF;
-    b1 = (b1 & EVERYTHING_BUT_COLOR) | (colorCount << 56);
+    b1 = b1 & EVERYTHING_BUT_COLOR | colorCount << 56;
 }
 
 
 u32 Board::getColorCount() const {
-    c_u64 colorCount = ((b1 >> 56) & 0xF);
+    c_u64 colorCount = b1 >> 56 & 0xF;
     return colorCount;
 }
 
@@ -82,19 +82,19 @@ MU void Board::setFatY(c_u8 y) {
 
 MU void Board::addFatX(c_u8 x) {
     static constexpr u64 MASK = ~0x1FFF'FFFF'FFFF'FFFF;
-    uint64_t cur_x = (b1 & MASK) >> 61;
+    u64 cur_x = (b1 & MASK) >> 61;
     cur_x += x;
     cur_x -= 6 * (cur_x > 5);
-    b1 = (b1 & ~MASK) | (cur_x << 61);
+    b1 = b1 & ~MASK | cur_x << 61;
 }
 
 
 MU void Board::addFatY(c_u8 y) {
     static constexpr u64 MASK = ~0x1FFF'FFFF'FFFF'FFFF;
-    uint64_t cur_y = (b2 & MASK) >> 61;
+    u64 cur_y = (b2 & MASK) >> 61;
     cur_y += y;
     cur_y -= 6 * (cur_y > 5);
-    b2 = (b2 & ~MASK) | (cur_y << 61);
+    b2 = b2 & ~MASK | cur_y << 61;
 }
 
 
@@ -117,17 +117,17 @@ u8 Board::getFatXY() const {
 
 
 bool Board::hasFat() const {
-    c_bool state = ((b1 >> 60) & 1) != 0;
+    c_bool state = (b1 >> 60 & 1) != 0;
     return state;
 }
 
 
 u8 Board::getColor(c_u8 x, c_u8 y) const {
-    c_i32 shift_amount = 51 - x * 3 - (y % 3) * 18;
+    c_i32 shift_amount = 51 - x * 3 - y % 3 * 18;
     if (y < 3) {
-        return (b1 >> shift_amount) & 0b111;
+        return b1 >> shift_amount & 0'7;
     }
-    return (b2 >> shift_amount) & 0b111;
+    return b2 >> shift_amount & 0'7;
 }
 
 
@@ -151,14 +151,14 @@ bool Board::doActISColMatch(c_u8 x1, c_u8 y1, c_u8 m, c_u8 n) const {
     c_u8 color1 = base >> shift_amount1;
     c_u8 color3 = base >> shift_amount3;
 
-    if ((color1 ^ color3) & 0b111) {
+    if ((color1 ^ color3) & 07) {
         return false;
     }
-    c_int shift_amount2 = 51 - x1_3 - (y2 % 3) * 18;
+    c_int shift_amount2 = 51 - x1_3 - y2 % 3 * 18;
     c_u64 base2 = y2 < 3 ? b1 : b2;
     c_u8 color2 = base2 >> shift_amount2;
 
-    return (color1 ^ color2) & 0b111;
+    return (color1 ^ color2) & 07;
 }
 
 
@@ -173,11 +173,11 @@ bool Board::doActISColMatch(c_u8 x1, c_u8 y1, c_u8 m, c_u8 n) const {
 u8 Board::doActISColMatchBatched(c_u8 x1, c_u8 y1, c_u8 m) const {
     c_i32 x2 = (x1 - m + 6) % 6;
     c_u64 base = y1 < 3 ? b1 : b2;
-    c_i32 offset_shared = 51 - (y1 % 3) * 18;
+    c_i32 offset_shared = 51 - y1 % 3 * 18;
     c_u8 color1 = base >> (x1 * 3 + offset_shared);
     c_u8 color3 = base >> (x2 * 3 + offset_shared);
 
-    if ((color1 ^ color3) & 0b111) { return 0; }
+    if ((color1 ^ color3) & 07) { return 0; }
 
     u8 results = 0;
     c_i32 offset_shared2 = 51 - x1 * 3;
@@ -186,7 +186,7 @@ u8 Board::doActISColMatchBatched(c_u8 x1, c_u8 y1, c_u8 m) const {
         c_i32 y3 = ((y1 - i) % 3) * 18;
         c_u64 base2 = y2 < 3 ? b1 : b2;
         c_u8 color2 = base2 >> (offset_shared2 - y3);
-        results |= (((color1 ^ color2) & 0b111) != 0) << (i + 5);
+        results |= (((color1 ^ color2) & 07) != 0) << (i + 5);
     }
 
     return results;
@@ -200,7 +200,7 @@ double Board::getDuplicateEstimateAtDepth(MU u32 depth) {
 
 
 
-u64 score1Helper(c_u64& sect) {
+MU u64 score1Helper(c_u64& sect) {
     static constexpr u64 M3 = 0x0000'E070'381C'0E07;
     static constexpr u64 M4 = 0x0000'0000'7800'000F;
     static constexpr u64 M5 = 0x0000'0000'07FF'FFFF;
@@ -238,7 +238,7 @@ u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
             0x08421084, 0x0A5294A5, 0x0C6318C6, 0x0E739CE7};
     c_u32 left = 15 - x * 3;
     c_u32 row = *(&b1 + (y >= 3)) >> (2 - y - 3 * (y >= 3)) * 18 & 0x3FFFF;
-    c_u32 cntr_p1_r = row >> left & 0b111;
+    c_u32 cntr_p1_r = row >> left & 07;
 
     // find col_x5
     c_u64 col_mask = C_MAIN_MASK << left;
@@ -248,96 +248,80 @@ u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
                       (b1_c << 15 | b1_c << 2 | b1_c >> 11) & 0xE738000;
     c_u32 s = shifted_5 ^ C_CNTR_MASKS[cntr_p1_r];
     c_u32 sim = ((~(s | s >> 1 | s >> 2)) & C_CNTR_MASKS[1]) * 31;
-    c_u32 col_x5 = (sim & (0x3FFFFFFFU << (5 * (6 - y)))) >> 5
-                   | sim & (0x1FFFFFFU >> 5 * y);
+    c_u32 col_x5 = (sim & (0x3FFFFFFF << (5 * (6 - y)))) >> 5
+                   | sim & (0x1FFFFFF >> 5 * y);
 
     // find row_x5
     c_u32 s_ps = row ^ (cntr_p1_r * 0x9249U);
-    c_u32 sim_r = ~(s_ps | s_ps >> 1 | s_ps >> 2) & 0x9249U;
-    c_u32 p1_r = (sim_r & 0x8208U) >> 2 | sim_r & 0x1041U;
-    c_u32 row_t1 = (p1_r >> 8 | p1_r >> 4 | p1_r) & 0x3FU;
-    c_u32 row_x5 = ((row_t1 & (0xFC0U >> x)) >> 1 | row_t1 & (0x1FU >> x)) * 0x108421U;
+    c_u32 sim_r = ~(s_ps | s_ps >> 1 | s_ps >> 2) & 0x9249;
+    c_u32 p1_r = (sim_r & 0x8208) >> 2 | sim_r & 0x1041;
+    c_u32 row_t1 = (p1_r >> 8 | p1_r >> 4 | p1_r) & 0x3F;
+    c_u32 row_x5 = ((row_t1 & (0xFC0 >> x)) >> 1 | row_t1 & (0x1FU >> x)) * 0x108421;
 
     return col_x5 & row_x5;
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-uint64_t prime_func1(c_u64 b1, c_u64 b2) {
+u64 prime_func1(c_u64 b1, c_u64 b2) {
     static constexpr u64 MASK = 0x003F'FFFF'FFFF'FFFF;
     static constexpr u64 prime = 31;
-    uint64_t hash = 17;
-    hash = hash * prime + ((b1 & MASK) ^ (b1 & MASK) >> 32);
-    hash = hash * prime + ((b2 & MASK) ^ (b2 & MASK) >> 32);
+    u64 hash = 17;
+    hash = hash * prime + (b1 & MASK ^ (b1 & MASK) >> 32);
+    hash = hash * prime + (b2 & MASK ^ (b2 & MASK) >> 32);
     return hash;
 }
 
 
-uint64_t getSegment2bits(const uint64_t segment) {
-    static constexpr uint64_t MASK_A1 = 0b001000'001000'001000'001000'001000'001000'001000'001000'001000;
-    static constexpr uint64_t MASK_B1 = MASK_A1 >> 3;
-    static constexpr uint64_t MASK_A2 = 0b000011'000000'000000'000011'000000'000000'000011'000000'000000;
-    static constexpr uint64_t MASK_B2 = MASK_A2 >> 6;
-    static constexpr uint64_t MASK_C2 = MASK_A2 >> 12;
-    static constexpr uint64_t MASK_A3 = 0b000000'000000'111111'000000'000000'000000'000000'000000'000000;
-    static constexpr uint64_t MASK_B3 = MASK_A3 >> 18;
-    static constexpr uint64_t MASK_C3 = MASK_A3 >> 36;
-    const uint64_t o1 = (segment & MASK_A1) >> 2 | (segment & MASK_B1);
-    const uint64_t o2 = (o1 & MASK_A2) >> 8 | (o1 & MASK_B2) >> 4 | (o1 & MASK_C2);
-    const uint64_t o3 = (o2 & MASK_A3) >> 24 | (o2 & MASK_B3) >> 12 | (o2 & MASK_C3);
+u64 getSegment2bits(c_u64 segment) {
+    static constexpr u64 MASK_A1 = 0b001000'001000'001000'001000'001000'001000'001000'001000'001000;
+    static constexpr u64 MASK_B1 = MASK_A1 >> 3;
+    static constexpr u64 MASK_A2 = 0b000011'000000'000000'000011'000000'000000'000011'000000'000000;
+    static constexpr u64 MASK_B2 = MASK_A2 >> 6;
+    static constexpr u64 MASK_C2 = MASK_A2 >> 12;
+    static constexpr u64 MASK_A3 = 0b000000'000000'111111'000000'000000'000000'000000'000000'000000;
+    static constexpr u64 MASK_B3 = MASK_A3 >> 18;
+    static constexpr u64 MASK_C3 = MASK_A3 >> 36;
+    c_u64 o1 = (segment & MASK_A1) >> 2 | (segment & MASK_B1);
+    c_u64 o2 = (o1 & MASK_A2) >> 8 | (o1 & MASK_B2) >> 4 | (o1 & MASK_C2);
+    c_u64 o3 = (o2 & MASK_A3) >> 24 | (o2 & MASK_B3) >> 12 | (o2 & MASK_C3);
     return o3;
 }
 
 
-uint64_t getSegment3bits(const uint64_t segment) {
-    static constexpr uint64_t MASK_AS = 0b011000000'011000000'011000000'011000000'011000000'011000000;
-    static constexpr uint64_t MASK_BS = MASK_AS >> 3;
-    static constexpr uint64_t MASK_CS = MASK_AS >> 6;
-    static constexpr uint64_t MASK_A1 = 0b000011111'000000000'000011111'000000000'000011111'000000000;
-    static constexpr uint64_t MASK_B1 = MASK_A1 >> 9;
-    static constexpr uint64_t MASK_A2 = 0b000000001'111111111'000000000'000000000'000000000'000000000;
-    static constexpr uint64_t MASK_B2 = MASK_A2 >> 18;
-    static constexpr uint64_t MASK_C2 = MASK_A2 >> 36;
+u64 getSegment3bits(c_u64 segment) {
+    static constexpr u64 MASK_AS = 0b011000000'011000000'011000000'011000000'011000000'011000000;
+    static constexpr u64 MASK_BS = MASK_AS >> 3;
+    static constexpr u64 MASK_CS = MASK_AS >> 6;
+    static constexpr u64 MASK_A1 = 0b000011111'000000000'000011111'000000000'000011111'000000000;
+    static constexpr u64 MASK_B1 = MASK_A1 >> 9;
+    static constexpr u64 MASK_A2 = 0b000000001'111111111'000000000'000000000'000000000'000000000;
+    static constexpr u64 MASK_B2 = MASK_A2 >> 18;
+    static constexpr u64 MASK_C2 = MASK_A2 >> 36;
 
-    const uint64_t o1 = ((segment & MASK_AS) >> 6) * 9 | ((segment & MASK_BS) >> 3) * 3 | ((segment & MASK_CS));
-
-    const uint64_t o2 = ((o1 & MASK_A1) >> 4) | (o1 & MASK_B1);
-
-    const uint64_t o3 = ((o2 & MASK_A2) >> 16) | ((o2 & MASK_B2) >> 8) | (o2 & MASK_C2);
+    c_u64 o1 = ((segment & MASK_AS) >> 6) * 9 | ((segment & MASK_BS) >> 3) * 3 | segment & MASK_CS;
+    c_u64 o2 = (o1 & MASK_A1) >> 4 | o1 & MASK_B1;
+    c_u64 o3 = (o2 & MASK_A2) >> 16 | (o2 & MASK_B2) >> 8 | o2 & MASK_C2;
     return o3;
 }
 
 
 
 
-uint64_t getSegment4bits(const uint64_t segment) {
-    static constexpr uint64_t MASK_A1 = 0b011000'011000'011000'011000'011000'011000'011000'011000'011000;
-    static constexpr uint64_t MASK_B1 = MASK_A1 >> 3;
-    static constexpr uint64_t MASK_A2 = 0b001111'000000'000000'001111'000000'000000'001111'000000'000000;
-    static constexpr uint64_t MASK_B2 = MASK_A2 >> 6;
-    static constexpr uint64_t MASK_C2 = MASK_A2 >> 12;
-    static constexpr uint64_t MASK_A3 = 0b000000'111111'111111'000000'000000'000000'000000'000000'000000;
-    static constexpr uint64_t MASK_B3 = MASK_A3 >> 18;
-    static constexpr uint64_t MASK_C3 = MASK_A3 >> 36;
+u64 getSegment4bits(c_u64 segment) {
+    static constexpr u64 MASK_A1 = 0b011000'011000'011000'011000'011000'011000'011000'011000'011000;
+    static constexpr u64 MASK_B1 = MASK_A1 >> 3;
+    static constexpr u64 MASK_A2 = 0b001111'000000'000000'001111'000000'000000'001111'000000'000000;
+    static constexpr u64 MASK_B2 = MASK_A2 >> 6;
+    static constexpr u64 MASK_C2 = MASK_A2 >> 12;
+    static constexpr u64 MASK_A3 = 0b000000'111111'111111'000000'000000'000000'000000'000000'000000;
+    static constexpr u64 MASK_B3 = MASK_A3 >> 18;
+    static constexpr u64 MASK_C3 = MASK_A3 >> 36;
 
-    const uint64_t o1 = (segment & MASK_A1) >> 1 | (segment & MASK_B1);
-    const uint64_t o2 = (o1 & MASK_A2) >> 4 | (o1 & MASK_B2) >> 2 | (o1 & MASK_C2);
-    const uint64_t o3 = (o2 & MASK_A3) >> 12 | (o2 & MASK_B3) >> 6 | (o2 & MASK_C3);
+    c_u64 o1 = (segment & MASK_A1) >> 1 | segment & MASK_B1;
+    c_u64 o2 = (o1 & MASK_A2) >> 4 | (o1 & MASK_B2) >> 2 | o1 & MASK_C2;
+    c_u64 o3 = (o2 & MASK_A3) >> 12 | (o2 & MASK_B3) >> 6 | o2 & MASK_C3;
     return o3;
 }
-
-
 
 
 void Board::precomputeHash2() {
@@ -353,9 +337,11 @@ void Board::precomputeHash3() {
     hash = above << 30 | below;
 }
 
+
 void Board::precomputeHash4() {
     hash = prime_func1(b2, b1);
 }
+
 
 Board::HasherPtr Board::getHashFunc() const {
     c_u64 colorCount = getColorCount();
@@ -386,7 +372,7 @@ void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY
     }
 
     for (int x = 0; x < 18; x += 3) {
-        c_u8 value = board_b >> (51 - x - (curY % 3) * 18) & 0b111;
+        c_u8 value = board_b >> (51 - x - (curY % 3) * 18) & 07;
         if (isFat) {
             c_u32 curX = x / 3;
             if (curFatX == curX || curFatX == curX - 1) {

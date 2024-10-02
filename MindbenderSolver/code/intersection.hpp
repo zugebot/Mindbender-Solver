@@ -4,38 +4,34 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <iostream>
 #include <thread>
 #include <vector>
 
 
-void process_chunk(
-        const std::vector<Board>& boards1,
-        const std::vector<Board>& boards2,
-        size_t start1,
-        size_t end1,
-        std::vector<std::pair<Board*, Board*>>& results
-) {
-    auto it1 = boards1.begin() + (int64_t)start1;
-    auto it1_end = boards1.begin() + (int64_t)end1;
+inline void process_chunk(
+        const std::vector<Board> &boards1,
+        const std::vector<Board> &boards2,
+        const size_t start1,
+        const size_t end1,
+        std::vector<std::pair<Board *, Board *>> &results) {
+    auto it1 = boards1.begin() + static_cast<i64>(start1);
+    c_auto it1_end = boards1.begin() + static_cast<i64>(end1);
 
     // Get min and max hash values in this chunk
-    uint64_t min_hash = it1->hash;
-    uint64_t max_hash = (it1_end - 1)->hash;
+    c_u64 min_hash = it1->hash;
+    c_u64 max_hash = (it1_end - 1)->hash;
 
     // Find corresponding range in boards2
-    auto boards2_start = std::lower_bound(
+    c_auto boards2_start = std::lower_bound(
             boards2.begin(), boards2.end(), min_hash,
-            [](const Board& board, uint64_t hash) { return board.hash < hash; }
-    );
+            [](const Board &board, c_u64 hash) { return board.hash < hash; });
 
-    auto boards2_end = std::upper_bound(
+    c_auto boards2_end = std::upper_bound(
             boards2.begin(), boards2.end(), max_hash,
-            [](uint64_t hash, const Board& board) { return hash < board.hash; }
-    );
+            [](c_u64 hash, const Board &board) { return hash < board.hash; });
 
     auto it2 = boards2_start;
-    auto it2_end = boards2_end;
+    c_auto it2_end = boards2_end;
 
     while (it1 != it1_end && it2 != it2_end) {
         if (it1->hash == it2->hash) {
@@ -54,7 +50,7 @@ void process_chunk(
             // Make pairs for all combinations of matching hashes
             for (auto it1_match = it1; it1_match != it1_range_end; ++it1_match) {
                 for (auto it2_match = it2; it2_match != it2_range_end; ++it2_match) {
-                    results.emplace_back(&const_cast<Board&>(*it1_match), &const_cast<Board&>(*it2_match));
+                    results.emplace_back(&const_cast<Board &>(*it1_match), &const_cast<Board &>(*it2_match));
                 }
             }
 
@@ -69,14 +65,14 @@ void process_chunk(
 }
 
 
-std::vector<std::pair<Board*, Board*>> intersection_threaded(
+inline std::vector<std::pair<Board*, Board*>> intersection_threaded(
         const std::vector<Board>& boards1,
         const std::vector<Board>& boards2,
         size_t num_threads = std::thread::hardware_concurrency()) {
     if (num_threads == 0) num_threads = 1;
 
-    size_t total_size = boards1.size();
-    size_t chunk_size = (total_size + num_threads - 1) / num_threads; // Round up
+    const size_t total_size = boards1.size();
+    const size_t chunk_size = (total_size + num_threads - 1) / num_threads; // Round up
 
     std::vector<std::thread> threads;
     std::vector<std::vector<std::pair<Board*, Board*>>> partial_results(num_threads);
@@ -87,7 +83,7 @@ std::vector<std::pair<Board*, Board*>> intersection_threaded(
 
         // Adjust start1
         if (start1 != 0) {
-            uint64_t current_hash = boards1[start1].hash;
+            c_u64 current_hash = boards1[start1].hash;
             while (start1 > 0 && boards1[start1 - 1].hash == current_hash) {
                 --start1;
             }
@@ -95,7 +91,7 @@ std::vector<std::pair<Board*, Board*>> intersection_threaded(
 
         // Adjust end1
         if (end1 < total_size) {
-            uint64_t current_hash = boards1[end1 - 1].hash;
+            c_u64 current_hash = boards1[end1 - 1].hash;
             while (end1 < total_size && boards1[end1].hash == current_hash) {
                 ++end1;
             }
@@ -132,7 +128,7 @@ std::vector<std::pair<Board*, Board*>> intersection_threaded(
 }
 
 
-std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>& boards1, std::vector<Board>& boards2) {
+inline std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>& boards1, std::vector<Board>& boards2) {
     std::vector<std::pair<Board *, Board *>> results;
     auto it1 = boards1.begin();
     auto it2 = boards2.begin();

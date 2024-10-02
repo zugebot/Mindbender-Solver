@@ -1,10 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
-#include <cstdint>
-#include <iomanip>
-#include <iostream>
 #include <thread>
 #include <vector>
 
@@ -12,7 +8,7 @@
 template <int NUM_THREADS, typename T>
 void parallel_sort(std::vector<T>& data) {
     size_t size = data.size();
-    size_t chunk_size = size / NUM_THREADS;
+    const size_t chunk_size = size / NUM_THREADS;
 
     std::vector<std::thread> threads;
     std::vector<std::vector<T>> sorted_chunks(NUM_THREADS);

@@ -32,10 +32,10 @@ public:
     Memory mem;
 
     explicit Board() = default;
-    explicit Board(const u8 values[36]);
-    explicit Board(const u8 values[36], u8 x, u8 y);
+    explicit Board(c_u8 values[36]);
+    explicit Board(c_u8 values[36], u8 x, u8 y);
 
-    MU void setState(const u8 values[36]);
+    MU void setState(c_u8 values[36]);
 
     MU void setFat(u8 x, u8 y);
     MU void setFatX(u8 x);
@@ -49,16 +49,10 @@ public:
 
     MUND u8 getColor(u8 x, u8 y) const;
 
+    // new generation of high IQ functions
     MUND bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
     MUND u8 doActISColMatchBatched(u8 x1, u8 y1, u8 m) const;
     MUND static double getDuplicateEstimateAtDepth(u32 depth) ;
-
-
-    // MUND static u32 getRow(const Board *board, u64 y); // WORKS (18-bits)
-    // MUND static u32 getCol(const Board *board, u32 x); // WORKS (18-bits)
-    // MUND static u32 constructMapCenter(u32 row, u32 x); // WORKS (18-bits)
-    // MUND static u32 getScore1ShiftComp(u32 sect, u32 mapCent); // WORKS (6-bits)
-    // static void shiftLeft(u32 &sect, u32 index); // WORKS (in-place on 6-bits)
     MUND u64 getRowColIntersections(u32 x, u32 y) const;
 
     MUND u32 getColorCount() const;
@@ -79,9 +73,8 @@ public:
 
 
     __forceinline bool operator==(const Board& other) const {
-        MU static constexpr u64 MASK = 0x3FFFFFFFFFFFFF;
-        return (b1) == (other.b1)
-               && (b2) == (other.b2);
+        MU static constexpr u64 MASK = 0'777'777'777'777'777'777;
+        return b1 == other.b1 && b2 == other.b2;
     }
 
     __forceinline bool operator<(const Board& other) const {
@@ -95,3 +88,4 @@ public:
 };
 
 typedef std::vector<Board> vecBoard_t;
+typedef const Board c_Board;

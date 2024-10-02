@@ -152,7 +152,7 @@ int main() {
                 std::vector<int> action_numbers = parseString(solution);
                 Board toCheckBoard = startingBoard;
                 for (const auto action_number : action_numbers) {
-                    actions[action_number](toCheckBoard);
+                    allActionsList[action_number](toCheckBoard);
                 }
                 if (toCheckBoard == realSolutionBoard) {
                     realSolutionCount += 1;

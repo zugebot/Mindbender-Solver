@@ -34,16 +34,9 @@ PERM_MACRO(C_34_1); PERM_MACRO(C_34_2); PERM_MACRO(C_34_3); PERM_MACRO(C_34_4); 
 PERM_MACRO(C_45_1); PERM_MACRO(C_45_2); PERM_MACRO(C_45_3); PERM_MACRO(C_45_4); PERM_MACRO(C_45_5);
 
 
-
-
 MU extern std::map<Action, std::string> actionToNameLookup;
 MU extern std::map<std::string, Action> nameToActionLookup;
 
 
 MU extern Action allActionsList[110];
 MU extern u8 fatActionsIndexes[25][48];
-
-
-
-
-

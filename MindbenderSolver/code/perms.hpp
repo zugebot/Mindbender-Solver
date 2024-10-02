@@ -32,6 +32,44 @@ static constexpr u64 BOARD_FAT_PRE_ALLOC_SIZES[6] = {
 };
 
 
+static constexpr u64 FAT_PERM_COUNT = 48;
+static constexpr bool FAT_CHECK_SIMILAR = true;
+
+#define FAT_PERM_FUNC_DECLARE(name) \
+template<bool CHECK_SIMILAR = FAT_CHECK_SIMILAR> \
+void name(vecBoard_t& boards_out, const Board &board_in, Board::HasherPtr hasher);
+FAT_PERM_FUNC_DECLARE(make_fat_permutation_list_depth_0)
+FAT_PERM_FUNC_DECLARE(make_fat_permutation_list_depth_1)
+FAT_PERM_FUNC_DECLARE(make_fat_permutation_list_depth_2)
+FAT_PERM_FUNC_DECLARE(make_fat_permutation_list_depth_3)
+FAT_PERM_FUNC_DECLARE(make_fat_permutation_list_depth_4)
+FAT_PERM_FUNC_DECLARE(make_fat_permutation_list_depth_5)
+
+
+static constexpr bool NORM_CHECK_INTERSECTION = true;
+static constexpr bool NORM_CHECK_SIMILAR = true;
+
+#define NORM_PERM_FUNC_DECLARE(name) \
+template<bool CHECK_INTERSECTION = NORM_CHECK_INTERSECTION, bool CHECK_SIMILAR = NORM_CHECK_SIMILAR> \
+void name(vecBoard_t& boards_out, const Board &board_in, Board::HasherPtr hasher);
+NORM_PERM_FUNC_DECLARE(make_permutation_list_depth_0)
+NORM_PERM_FUNC_DECLARE(make_permutation_list_depth_1)
+NORM_PERM_FUNC_DECLARE(make_permutation_list_depth_2)
+NORM_PERM_FUNC_DECLARE(make_permutation_list_depth_3)
+NORM_PERM_FUNC_DECLARE(make_permutation_list_depth_4)
+NORM_PERM_FUNC_DECLARE(make_permutation_list_depth_5)
+
+
+template<bool CHECK_INTERSECTION = true, bool CHECK_SIMILAR = true>
+void make_permutation_list_depth_plus_one(const vecBoard_t &boards_in,
+    vecBoard_t &boards_out, Board::HasherPtr hasher);
+
+
+
+
+
+
+
 class Permutations {
     static constexpr u32 PTR_LIST_SIZE = 6;
 public:
@@ -44,7 +82,7 @@ public:
     static toDepthFuncPtr_t toDepthFatFuncPtrs[PTR_LIST_SIZE];
     static toDepthPlusOneFuncPtr_t toDepthPlusOneFuncPtr;
 
-    MU static void reserveForDepth(const Board& board_in, vecBoard_t& boards_out, u32 depth, bool isFat = false);
+    MU static void reserveForDepth(const Board &board_in, vecBoard_t& boards_out, u32 depth, bool isFat = false);
     MU static void getDepthFunc(const Board &board_in, vecBoard_t &boards_out, u32 depth, bool shouldResize = true);
     MU static void getDepthPlus1Func(const vecBoard_t& boards_in, vecBoard_t& boards_out, bool shouldResize = true);
 };

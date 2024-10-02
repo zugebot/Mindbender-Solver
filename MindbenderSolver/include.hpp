@@ -1,3 +1,5 @@
+#pragma once
+
 #include "MindbenderSolver/code/board.hpp"
 #include "MindbenderSolver/code/intersection.hpp"
 #include "MindbenderSolver/code/levels.hpp"

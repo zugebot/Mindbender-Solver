@@ -1,14 +1,16 @@
+#pragma once
 
+#include <fstream>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 #include "levels.hpp"
 #include "perms.hpp"
 #include "sorter.hpp"
 #include "intersection.hpp"
 
-#include <fstream>
-#include <unordered_set>
-#include <string>
-#include <vector>
+
 
 
 class BoardSolver {
@@ -39,7 +41,7 @@ public:
     }
 
 
-    void setDepthParams(u32 depthSideMaxIn, u32 depthGuessMaxIn, u32 depthTotalMaxIn) {
+    void setDepthParams(c_u32 depthSideMaxIn, c_u32 depthGuessMaxIn, c_u32 depthTotalMaxIn) {
         depthSideMax = depthSideMaxIn;
         depthTotalMax = depthTotalMaxIn;
         depthGuessMax = depthGuessMaxIn;
@@ -55,7 +57,7 @@ public:
 
 
     void preAllocateMemory() {
-        u32 highestDepth = std::max(1, std::min(5, (int)(depthTotalMax + 1) / 2));
+        c_u32 highestDepth = std::max(1, std::min(5, static_cast<int>(depthTotalMax + 1) / 2));
         Permutations::reserveForDepth(board1, board1Table[highestDepth], highestDepth, hasFat);
         Permutations::reserveForDepth(board1, board1Table[highestDepth], highestDepth, hasFat);
 
@@ -91,10 +93,10 @@ public:
 
 
     template<bool allowGetDepthPlus1 = true, bool debug=true>
-    void findSolutionsAtDepth(u32 index, c_u32 depth1, c_u32 depth2, bool searchResults = true) {
-        std::string start_both = "[" + std::to_string(index) + "] ";
-        std::string start_left = "[" + std::to_string(index) + "L] ";
-        std::string start_right = "[" + std::to_string(index) + "R] ";
+    void findSolutionsAtDepth(c_u32 index, c_u32 depth1, c_u32 depth2, c_bool searchResults = true) {
+        const std::string start_both = "[" + std::to_string(index) + "] ";
+        const std::string start_left = "[" + std::to_string(index) + "L] ";
+        const std::string start_right = "[" + std::to_string(index) + "R] ";
 
         uint32_t colorCount = board1.getColorCount();
         if (hasFat) {
@@ -102,7 +104,7 @@ public:
         }
 
         if (board1Table[depth1].empty()) {
-            bool should_alloc = board1Table[depth1].capacity() == 0;
+            c_bool should_alloc = board1Table[depth1].capacity() == 0;
             const Timer timer;
 
             if (allowGetDepthPlus1 && depth1 > 0 && !board1Table[depth1 - 1].empty() && !hasFat) {
@@ -123,7 +125,7 @@ public:
 
 
         if (board2Table[depth2].empty()) {
-            bool should_alloc = board2Table[depth2].capacity() == 0;
+            c_bool should_alloc = board2Table[depth2].capacity() == 0;
             const Timer timer;
 
             if (allowGetDepthPlus1 && depth2 > 0 && !board2Table[depth2 - 1].empty() && !hasFat) {
@@ -161,15 +163,15 @@ public:
             })
 
             if (hasFat) {
-                int xy1 = board1.getFatXY();
-                int xy2 = board2.getFatXY();
-                for (auto result_pair: results) {
-                    std::string moveset = result_pair.first->mem.assembleFatMoveString(xy1, &result_pair.second->mem, xy2);
+                c_int xy1 = board1.getFatXY();
+                c_int xy2 = board2.getFatXY();
+                for (const auto &[fst, snd]: results) {
+                    std::string moveset = fst->mem.assembleFatMoveString(xy1, &snd->mem, xy2);
                     resultSet.insert(moveset);
                 }
             } else {
-                for (auto result_pair: results) {
-                    std::string moveset = result_pair.first->mem.assembleMoveString(&result_pair.second->mem);
+                for (const auto [fst, snd]: results) {
+                    std::string moveset = fst->mem.assembleMoveString(&snd->mem);
                     resultSet.insert(moveset);
                 }
             }
@@ -198,11 +200,11 @@ public:
 
 
 
-            for (const auto& permPair : permutationsFromDepth) {
-                if (permPair.first > depthSideMax) { continue; }
-                if (permPair.second > depthSideMax) { continue; }
+            for (const auto &[fst, snd] : permutationsFromDepth) {
+                if (fst > depthSideMax) { continue; }
+                if (snd > depthSideMax) { continue; }
 
-                findSolutionsAtDepth<allowGetDepthPlus1, debug>(permCount, permPair.first, permPair.second);
+                findSolutionsAtDepth<allowGetDepthPlus1, debug>(permCount, fst, snd);
                 permCount++;
                 if (permCount != permutationsFromDepth.size() - 1) {
                     if (!resultSet.empty()) {
@@ -221,7 +223,7 @@ public:
 
 
         if (!resultSet.empty()) {
-            std::string filename = pair->getName()
+            const std::string filename = pair->getName()
                                    + "_c" + std::to_string(currentDepth)
                                    + "_" + std::to_string(resultSet.size())
                                    + ".txt";

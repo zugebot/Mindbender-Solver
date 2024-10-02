@@ -44,14 +44,14 @@ public:
     static const std::vector<std::string> colors;
     static const std::vector<std::string> bgColors;
 
-    static std::string getColor(int index) {
+    static std::string getColor(const int index) {
         if (index < 8) {
             return colors[index];
         }
         return colors[8];
     }
 
-    static std::string getBgColor(int index) {
+    static std::string getBgColor(const int index) {
         if (index < 8) {
             return bgColors[index];
         }

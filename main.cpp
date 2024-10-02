@@ -29,7 +29,7 @@ u32 getIndex(u32 x, u32 y) {
 
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    const auto pair = BoardLookup::getBoardPair("6-5");
+    const auto pair = BoardLookup::getBoardPair("4-4");
     // const Board board = pair->getInitialState();
 
     std::cout << "Score: " << pair->getInitialState().getScore1(pair->getSolutionState()) << std::endl;
@@ -48,16 +48,20 @@ int main() {
 
     MU c_u64 inters_a = board.getRowColIntersections(5, 0);
 
+    volatile int v1 = 10;
+    volatile int v2 = 0'10;
+
+    
     volatile int end = 0;
 
-    return 0;
+
 
 
 
     // initialize solver
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(5, 10, 10);
+    solver.setDepthParams(4, 7, 7);
     solver.preAllocateMemory();
 
     std::cout << pair->toString() << std::endl;
