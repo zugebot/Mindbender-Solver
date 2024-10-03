@@ -32,7 +32,7 @@ int main() {
     const auto pair = BoardLookup::getBoardPair("4-4");
     // const Board board = pair->getInitialState();
 
-    std::cout << "Score: " << pair->getInitialState().getScore1(pair->getSolutionState()) << std::endl;
+    // std::cout << "Score: " << pair->getInitialState().getScore1(pair->getSolutionState()) << std::endl;
 
     Board board;
     c_u8 state[36] = {
@@ -44,19 +44,41 @@ int main() {
         0, 0, 0, 0, 0, 4,
     };
     board.setState(state);
-    std::cout << board.toString() << std::endl;
+    // std::cout << board.toString() << std::endl;
 
     MU c_u64 inters_a = board.getRowColIntersections(5, 0);
 
+    /*
     volatile int v1 = 10;
     volatile int v2 = 0'010;
 
 
     volatile int end = 0;
 
+    Board bbb;
+    bbb.setFat(0, 0);
+
+    for (int x = 0; x <= 4; x++) {
+        for (int amnt = 1; amnt <= 5; amnt++) {
+            if (x + amnt == 5) {
+                std::cout<<"#########\n";
+                continue;
+            }
+            bbb.setFatX(x);
+            bbb.addFatX(amnt);
+            c_int moved = bbb.getFatX();
+
+            c_int mod = (x + amnt) % 6;
+
+            std::cout<<"("<<x<<", "<<amnt<<"): "<<mod<<", got "<<moved<<"\n";
+        }
+        std::cout<<"\n";
+    }
+    std::cout<<std::flush;
 
 
-
+    return 0;
+*/
 
     // initialize solver
     BoardSolver solver(pair);
@@ -69,6 +91,10 @@ int main() {
 
 
     solver.findSolutions<true, false>();
+
+    // int ret;
+    // std::cin >> ret;
+
     return 0;
 
 

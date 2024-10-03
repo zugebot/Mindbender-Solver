@@ -52,7 +52,7 @@ public:
     // new generation of high IQ functions
     MUND bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
     MUND u8 doActISColMatchBatched(u8 x1, u8 y1, u8 m) const;
-    MUND static double getDuplicateEstimateAtDepth(u32 depth) ;
+    MUND static double getDuplicateEstimateAtDepth(u32 depth);
     MUND u64 getRowColIntersections(u32 x, u32 y) const;
 
     MUND u32 getColorCount() const;

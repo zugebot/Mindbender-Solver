@@ -233,71 +233,366 @@ PERM_MACRO(C_5_5) {
 
 
 
-PERM_MACRO(R_01_1) { R_0_1(board); R_1_1(board); board.addFatX(1); }
-PERM_MACRO(R_01_2) { R_0_2(board); R_1_2(board); board.addFatX(2); }
-PERM_MACRO(R_01_3) { R_0_3(board); R_1_3(board); board.addFatX(3); }
-PERM_MACRO(R_01_4) { R_0_4(board); R_1_4(board); board.addFatX(4); }
-PERM_MACRO(R_01_5) { R_0_5(board); R_1_5(board); board.addFatX(5); }
-PERM_MACRO(R_12_1) { R_1_1(board); R_2_1(board); board.addFatX(1); }
-PERM_MACRO(R_12_2) { R_1_2(board); R_2_2(board); board.addFatX(2); }
-PERM_MACRO(R_12_3) { R_1_3(board); R_2_3(board); board.addFatX(3); }
-PERM_MACRO(R_12_4) { R_1_4(board); R_2_4(board); board.addFatX(4); }
-PERM_MACRO(R_12_5) { R_1_5(board); R_2_5(board); board.addFatX(5); }
-PERM_MACRO(R_23_1) { R_2_1(board); R_3_1(board); board.addFatX(1); }
-PERM_MACRO(R_23_2) { R_2_2(board); R_3_2(board); board.addFatX(2); }
-PERM_MACRO(R_23_3) { R_2_3(board); R_3_3(board); board.addFatX(3); }
-PERM_MACRO(R_23_4) { R_2_4(board); R_3_4(board); board.addFatX(4); }
-PERM_MACRO(R_23_5) { R_2_5(board); R_3_5(board); board.addFatX(5); }
-PERM_MACRO(R_34_1) { R_3_1(board); R_4_1(board); board.addFatX(1); }
-PERM_MACRO(R_34_2) { R_3_2(board); R_4_2(board); board.addFatX(2); }
-PERM_MACRO(R_34_3) { R_3_3(board); R_4_3(board); board.addFatX(3); }
-PERM_MACRO(R_34_4) { R_3_4(board); R_4_4(board); board.addFatX(4); }
-PERM_MACRO(R_34_5) { R_3_5(board); R_4_5(board); board.addFatX(5); }
-PERM_MACRO(R_45_1) { R_4_1(board); R_5_1(board); board.addFatX(1); }
-PERM_MACRO(R_45_2) { R_4_2(board); R_5_2(board); board.addFatX(2); }
-PERM_MACRO(R_45_3) { R_4_3(board); R_5_3(board); board.addFatX(3); }
-PERM_MACRO(R_45_4) { R_4_4(board); R_5_4(board); board.addFatX(4); }
-PERM_MACRO(R_45_5) { R_4_5(board); R_5_5(board); board.addFatX(5); }
-PERM_MACRO(C_01_1) { C_0_1(board); C_1_1(board); board.addFatY(1); }
-PERM_MACRO(C_01_2) { C_0_2(board); C_1_2(board); board.addFatY(2); }
-PERM_MACRO(C_01_3) { C_0_3(board); C_1_3(board); board.addFatY(3); }
-PERM_MACRO(C_01_4) { C_0_4(board); C_1_4(board); board.addFatY(4); }
-PERM_MACRO(C_01_5) { C_0_5(board); C_1_5(board); board.addFatY(5); }
-PERM_MACRO(C_12_1) { C_1_1(board); C_2_1(board); board.addFatY(1); }
-PERM_MACRO(C_12_2) { C_1_2(board); C_2_2(board); board.addFatY(2); }
-PERM_MACRO(C_12_3) { C_1_3(board); C_2_3(board); board.addFatY(3); }
-PERM_MACRO(C_12_4) { C_1_4(board); C_2_4(board); board.addFatY(4); }
-PERM_MACRO(C_12_5) { C_1_5(board); C_2_5(board); board.addFatY(5); }
-PERM_MACRO(C_23_1) { C_2_1(board); C_3_1(board); board.addFatY(1); }
-PERM_MACRO(C_23_2) { C_2_2(board); C_3_2(board); board.addFatY(2); }
-PERM_MACRO(C_23_3) { C_2_3(board); C_3_3(board); board.addFatY(3); }
-PERM_MACRO(C_23_4) { C_2_4(board); C_3_4(board); board.addFatY(4); }
-PERM_MACRO(C_23_5) { C_2_5(board); C_3_5(board); board.addFatY(5); }
-PERM_MACRO(C_34_1) { C_3_1(board); C_4_1(board); board.addFatY(1); }
-PERM_MACRO(C_34_2) { C_3_2(board); C_4_2(board); board.addFatY(2); }
-PERM_MACRO(C_34_3) { C_3_3(board); C_4_3(board); board.addFatY(3); }
-PERM_MACRO(C_34_4) { C_3_4(board); C_4_4(board); board.addFatY(4); }
-PERM_MACRO(C_34_5) { C_3_5(board); C_4_5(board); board.addFatY(5); }
-PERM_MACRO(C_45_1) { C_4_1(board); C_5_1(board); board.addFatY(1); }
-PERM_MACRO(C_45_2) { C_4_2(board); C_5_2(board); board.addFatY(2); }
-PERM_MACRO(C_45_3) { C_4_3(board); C_5_3(board); board.addFatY(3); }
-PERM_MACRO(C_45_4) { C_4_4(board); C_5_4(board); board.addFatY(4); }
-PERM_MACRO(C_45_5) { C_4_5(board); C_5_5(board); board.addFatY(5); }
+static constexpr u64 MASK_R01_NT = 0'1777'000000'000000'777777;
+static constexpr u64 MASK_R01_B1 = 0'0000'777770'777770'000000, MASK_R01_S1 = 0'0000'000007'000007'000000;
+static constexpr u64 MASK_R01_B2 = 0'0000'777700'777700'000000, MASK_R01_S2 = 0'0000'000077'000077'000000;
+static constexpr u64 MASK_R01_B3 = 0'0000'777000'777000'000000, MASK_R01_S3 = 0'0000'000777'000777'000000;
+static constexpr u64 MASK_R01_B4 = 0'0000'770000'770000'000000, MASK_R01_S4 = 0'0000'007777'007777'000000;
+static constexpr u64 MASK_R01_B5 = 0'0000'700000'700000'000000, MASK_R01_S5 = 0'0000'077777'077777'000000;
+
+
+static constexpr u64 MASK_R12_NT = 0'1777'777777'000000'000000;
+static constexpr u64 MASK_R12_B1 = 0'0000'000000'777770'777770, MASK_R12_S1 = 0'0000'000000'000007'000007;
+static constexpr u64 MASK_R12_B2 = 0'0000'000000'777700'777700, MASK_R12_S2 = 0'0000'000000'000077'000077;
+static constexpr u64 MASK_R12_B3 = 0'0000'000000'777000'777000, MASK_R12_S3 = 0'0000'000000'000777'000777;
+static constexpr u64 MASK_R12_B4 = 0'0000'000000'770000'770000, MASK_R12_S4 = 0'0000'000000'007777'007777;
+static constexpr u64 MASK_R12_B5 = 0'0000'000000'700000'700000, MASK_R12_S5 = 0'0000'000000'077777'077777;
+
+
+
+PERM_MACRO(R_01_1) {
+    board.b1 = board.b1 & MASK_R01_NT | (board.b1 & MASK_R01_B1) >>  3 | (board.b1 & MASK_R01_S1) << 15;
+    board.addFatX(1);
+}
+PERM_MACRO(R_01_2) {
+    board.b1 = board.b1 & MASK_R01_NT | (board.b1 & MASK_R01_B2) >>  6 | (board.b1 & MASK_R01_S2) << 12;
+    board.addFatX(2);
+}
+
+PERM_MACRO(R_01_3) {
+    board.b1 = board.b1 & MASK_R01_NT | (board.b1 & MASK_R01_B3) >>  9 | (board.b1 & MASK_R01_S3) <<  9;
+    board.addFatX(3);
+}
+
+PERM_MACRO(R_01_4) {
+    board.b1 = board.b1 & MASK_R01_NT | (board.b1 & MASK_R01_B4) >> 12 | (board.b1 & MASK_R01_S4) <<  6;
+    board.addFatX(4);
+}
+
+PERM_MACRO(R_01_5) {
+    board.b1 = board.b1 & MASK_R01_NT | (board.b1 & MASK_R01_B5) >> 15 | (board.b1 & MASK_R01_S5) <<  3;
+    board.addFatX(5);
+}
+
+PERM_MACRO(R_12_1) {
+    board.b1 = board.b1 & MASK_R12_NT | (board.b1 & MASK_R12_B1) >>  3 | (board.b1 & MASK_R12_S1) << 15;
+    board.addFatX(1);
+}
+
+PERM_MACRO(R_12_2) {
+    board.b1 = board.b1 & MASK_R12_NT | (board.b1 & MASK_R12_B2) >>  6 | (board.b1 & MASK_R12_S2) << 12;
+    board.addFatX(2);
+}
+
+PERM_MACRO(R_12_3) {
+    board.b1 = board.b1 & MASK_R12_NT | (board.b1 & MASK_R12_B3) >>  9 | (board.b1 & MASK_R12_S3) <<  9;
+    board.addFatX(3);
+}
+
+PERM_MACRO(R_12_4) {
+    board.b1 = board.b1 & MASK_R12_NT | (board.b1 & MASK_R12_B4) >> 12 | (board.b1 & MASK_R12_S4) <<  6;
+    board.addFatX(4);
+}
+
+PERM_MACRO(R_12_5) {
+    board.b1 = board.b1 & MASK_R12_NT | (board.b1 & MASK_R12_B5) >> 15 | (board.b1 & MASK_R12_S5) <<  3;
+    board.addFatX(5);
+}
+
+PERM_MACRO(R_23_1) {
+    R_2_1(board);
+    R_3_1(board);
+    board.addFatX(1);
+}
+
+PERM_MACRO(R_23_2) {
+    R_2_2(board);
+    R_3_2(board);
+    board.addFatX(2);
+}
+
+PERM_MACRO(R_23_3) {
+    R_2_3(board);
+    R_3_3(board);
+    board.addFatX(3);
+}
+
+PERM_MACRO(R_23_4) {
+    R_2_4(board);
+    R_3_4(board);
+    board.addFatX(4);
+}
+
+PERM_MACRO(R_23_5) {
+    R_2_5(board);
+    R_3_5(board);
+    board.addFatX(5);
+}
+
+
+
+PERM_MACRO(R_34_1) {
+    board.b2 = board.b2 & MASK_R01_NT | (board.b2 & MASK_R01_B1) >>  3 | (board.b2 & MASK_R01_S1) << 15;
+    board.addFatX(1);
+}
+
+PERM_MACRO(R_34_2) {
+    board.b2 = board.b2 & MASK_R01_NT | (board.b2 & MASK_R01_B2) >>  6 | (board.b2 & MASK_R01_S2) << 12;
+    board.addFatX(2);
+}
+
+PERM_MACRO(R_34_3) {
+    board.b2 = board.b2 & MASK_R01_NT | (board.b2 & MASK_R01_B3) >>  9 | (board.b2 & MASK_R01_S3) <<  9;
+    board.addFatX(3);
+}
+
+PERM_MACRO(R_34_4) {
+    board.b2 = board.b2 & MASK_R01_NT | (board.b2 & MASK_R01_B4) >> 12 | (board.b2 & MASK_R01_S4) <<  6;
+    board.addFatX(4);
+}
+
+PERM_MACRO(R_34_5) {
+    board.b2 = board.b2 & MASK_R01_NT | (board.b2 & MASK_R01_B5) >> 15 | (board.b2 & MASK_R01_S5) <<  3;
+    board.addFatX(5);
+}
+
+PERM_MACRO(R_45_1) {
+    board.b2 = board.b2 & MASK_R12_NT | (board.b2 & MASK_R12_B1) >>  3 | (board.b2 & MASK_R12_S1) << 15;
+    board.addFatX(1);
+}
+
+PERM_MACRO(R_45_2) {
+    board.b2 = board.b2 & MASK_R12_NT | (board.b2 & MASK_R12_B2) >>  6 | (board.b2 & MASK_R12_S2) << 12;
+    board.addFatX(2);
+}
+
+PERM_MACRO(R_45_3) {
+    board.b2 = board.b2 & MASK_R12_NT | (board.b2 & MASK_R12_B3) >>  9 | (board.b2 & MASK_R12_S3) <<  9;
+    board.addFatX(3);
+}
+
+PERM_MACRO(R_45_4) {
+    board.b2 = board.b2 & MASK_R12_NT | (board.b2 & MASK_R12_B4) >> 12 | (board.b2 & MASK_R12_S4) <<  6;
+    board.addFatX(4);
+}
+
+PERM_MACRO(R_45_5) {
+    board.b2 = board.b2 & MASK_R12_NT | (board.b2 & MASK_R12_B5) >> 15 | (board.b2 & MASK_R12_S5) <<  3;
+    board.addFatX(5);
+}
+
+
+
+
+
+static constexpr u64 C_MASK_01 = 0'770000'770000'770000;
+static constexpr u64 C_MASK_12 = 0'077000'077000'077000;
+static constexpr u64 C_MASK_23 = 0'007700'007700'007700;
+static constexpr u64 C_MASK_34 = 0'000770'000770'000770;
+static constexpr u64 C_MASK_45 = 0'000077'000077'000077;
+
+
+
+
+
+PERM_MACRO(C_01_1) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_01) & C_MASK_01;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_01) & C_MASK_01;
+    board.addFatY(1);
+}
+
+PERM_MACRO(C_01_2) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_01) & C_MASK_01;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_01) & C_MASK_01;
+    board.addFatY(2);
+}
+
+PERM_MACRO(C_01_3) {
+    c_u64 var1 = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_01;
+    board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_01;
+    board.addFatY(3);
+}
+
+PERM_MACRO(C_01_4) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_01) & C_MASK_01;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_01) & C_MASK_01;
+    board.addFatY(4);
+}
+
+PERM_MACRO(C_01_5) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_01) & C_MASK_01;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_01) & C_MASK_01;
+    board.addFatY(5);
+}
+
+
+
+PERM_MACRO(C_12_1) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_12) & C_MASK_12;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_12) & C_MASK_12;
+    board.addFatY(1);
+}
+
+PERM_MACRO(C_12_2) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_12) & C_MASK_12;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_12) & C_MASK_12;
+    board.addFatY(2);
+}
+
+PERM_MACRO(C_12_3) {
+    c_u64 var1 = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_12;
+    board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_12;
+    board.addFatY(3);
+}
+
+PERM_MACRO(C_12_4) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_12) & C_MASK_12;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_12) & C_MASK_12;
+    board.addFatY(4);
+}
+
+PERM_MACRO(C_12_5) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_12) & C_MASK_12;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_12) & C_MASK_12;
+    board.addFatY(5);
+}
+
+
+
+PERM_MACRO(C_23_1) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_23) & C_MASK_23;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_23) & C_MASK_23;
+    board.addFatY(1);
+}
+
+PERM_MACRO(C_23_2) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_23) & C_MASK_23;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_23) & C_MASK_23;
+    board.addFatY(2);
+}
+
+PERM_MACRO(C_23_3) {
+    c_u64 var1 = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_23;
+    board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_23;
+    board.addFatY(3);
+}
+
+PERM_MACRO(C_23_4) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_23) & C_MASK_23;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_23) & C_MASK_23;
+    board.addFatY(4);
+}
+
+PERM_MACRO(C_23_5) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_23) & C_MASK_23;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_23) & C_MASK_23;
+    board.addFatY(5);
+}
+
+
+
+PERM_MACRO(C_34_1) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_34) & C_MASK_34;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_34) & C_MASK_34;
+    board.addFatY(1);
+}
+
+PERM_MACRO(C_34_2) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_34) & C_MASK_34;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_34) & C_MASK_34;
+    board.addFatY(2);
+}
+
+PERM_MACRO(C_34_3) {
+    c_u64 var1 = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_34;
+    board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_34;
+    board.addFatY(3);
+}
+
+PERM_MACRO(C_34_4) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_34) & C_MASK_34;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_34) & C_MASK_34;
+    board.addFatY(4);
+}
+
+PERM_MACRO(C_34_5) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_34) & C_MASK_34;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_34) & C_MASK_34;
+    board.addFatY(5);
+}
+
+
+
+PERM_MACRO(C_45_1) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_45) & C_MASK_45;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_45) & C_MASK_45;
+    board.addFatY(1);
+}
+
+PERM_MACRO(C_45_2) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_45) & C_MASK_45;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_45) & C_MASK_45;
+    board.addFatY(2);
+}
+
+PERM_MACRO(C_45_3) {
+    c_u64 var1 = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_45;
+    board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_45;
+    board.addFatY(3);
+}
+
+PERM_MACRO(C_45_4) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_45) & C_MASK_45;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_45) & C_MASK_45;
+    board.addFatY(4);
+}
+
+PERM_MACRO(C_45_5) {
+    c_u64 b1_temp = board.b1;
+    board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_45) & C_MASK_45;
+    board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_45) & C_MASK_45;
+    board.addFatY(5);
+}
+
 
 
 Action allActionsList[110] = {
-        R_0_1, R_0_2, R_0_3, R_0_4, R_0_5,
-        R_1_1, R_1_2, R_1_3, R_1_4, R_1_5,
-        R_2_1, R_2_2, R_2_3, R_2_4, R_2_5,
-        R_3_1, R_3_2, R_3_3, R_3_4, R_3_5,
-        R_4_1, R_4_2, R_4_3, R_4_4, R_4_5,
-        R_5_1, R_5_2, R_5_3, R_5_4, R_5_5,
-        C_0_1, C_0_2, C_0_3, C_0_4, C_0_5,
-        C_1_1, C_1_2, C_1_3, C_1_4, C_1_5,
-        C_2_1, C_2_2, C_2_3, C_2_4, C_2_5,
-        C_3_1, C_3_2, C_3_3, C_3_4, C_3_5,
-        C_4_1, C_4_2, C_4_3, C_4_4, C_4_5,
-        C_5_1, C_5_2, C_5_3, C_5_4, C_5_5,
+        R_0_1,  R_0_2,  R_0_3,  R_0_4,  R_0_5,
+        R_1_1,  R_1_2,  R_1_3,  R_1_4,  R_1_5,
+        R_2_1,  R_2_2,  R_2_3,  R_2_4,  R_2_5,
+        R_3_1,  R_3_2,  R_3_3,  R_3_4,  R_3_5,
+        R_4_1,  R_4_2,  R_4_3,  R_4_4,  R_4_5,
+        R_5_1,  R_5_2,  R_5_3,  R_5_4,  R_5_5,
+        C_0_1,  C_0_2,  C_0_3,  C_0_4,  C_0_5,
+        C_1_1,  C_1_2,  C_1_3,  C_1_4,  C_1_5,
+        C_2_1,  C_2_2,  C_2_3,  C_2_4,  C_2_5,
+        C_3_1,  C_3_2,  C_3_3,  C_3_4,  C_3_5,
+        C_4_1,  C_4_2,  C_4_3,  C_4_4,  C_4_5,
+        C_5_1,  C_5_2,  C_5_3,  C_5_4,  C_5_5,
         R_01_1, R_01_2, R_01_3, R_01_4, R_01_5,
         R_12_1, R_12_2, R_12_3, R_12_4, R_12_5,
         R_23_1, R_23_2, R_23_3, R_23_4, R_23_5,

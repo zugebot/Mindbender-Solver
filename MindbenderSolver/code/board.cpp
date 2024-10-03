@@ -55,6 +55,7 @@ u32 Board::getColorCount() const {
 }
 
 
+static constexpr u64 MASK_FAT_POS = 0x0FFF'FFFF'FFFF'FFFF;
 
 /**
  *
@@ -62,51 +63,43 @@ u32 Board::getColorCount() const {
  * @param y value 0-4
  */
 void Board::setFat(c_u8 x, c_u8 y) {
-    static constexpr u64 MASK = 0x0FFFFFFFFFFFFFFF;
-    b1 = b1 & MASK | static_cast<u64>(x) << 61 | 1LL << 60;
-    b2 = b2 & MASK | static_cast<u64>(y) << 61;
+    b1 = b1 & MASK_FAT_POS | static_cast<u64>(x) << 61 | 1LL << 60;
+    b2 = b2 & MASK_FAT_POS | static_cast<u64>(y) << 61;
 }
 
 
 MU void Board::setFatX(c_u8 x) {
-    static constexpr u64 MASK = 0x1FFFFFFFFFFFFFFF;
-    b1 = b1 & MASK | static_cast<u64>(x) << 61;
+    b1 = b1 & MASK_FAT_POS | static_cast<u64>(x) << 61;
 }
 
 
 MU void Board::setFatY(c_u8 y) {
-    static constexpr u64 MASK = 0x1FFFFFFFFFFFFFFF;
-    b2 = b2 & MASK | static_cast<u64>(y) << 61;
+    b2 = b2 & MASK_FAT_POS | static_cast<u64>(y) << 61;
 }
 
-
+// 336 -> 349
 MU void Board::addFatX(c_u8 x) {
-    static constexpr u64 MASK = ~0x1FFFFFFFFFFFFFFF;
-    u64 cur_x = (b1 & MASK) >> 61;
-    cur_x += x;
+    u64 cur_x = getFatX() + x;
     cur_x -= 6 * (cur_x > 5);
-    b1 = b1 & ~MASK | cur_x << 61;
+    b1 = b1 & MASK_FAT_POS | cur_x << 61;
 }
 
 
+// 351 -> 365
 MU void Board::addFatY(c_u8 y) {
-    static constexpr u64 MASK = ~0x1FFFFFFFFFFFFFFF;
-    u64 cur_y = (b2 & MASK) >> 61;
-    cur_y += y;
+    u64 cur_y = getFatY() + y;
     cur_y -= 6 * (cur_y > 5);
-    b2 = b2 & ~MASK | cur_y << 61;
+    b2 = b2 & MASK_FAT_POS | cur_y << 61;
 }
 
 
 u8 Board::getFatX() const {
-    static constexpr u64 MASK = ~0x1FFFFFFFFFFFFFFF;
-    return (b1 & MASK) >> 61;
+    return (b1 & ~MASK_FAT_POS) >> 61;
 }
 
 
 u8 Board::getFatY() const {
-    static constexpr u64 MASK = ~0x1FFFFFFFFFFFFFFF;
-    return (b2 & MASK) >> 61;
+    return (b2 & ~MASK_FAT_POS) >> 61;
 }
 
 
@@ -225,7 +218,7 @@ u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
             0x08421084, 0x0A5294A5, 0x0C6318C6, 0x0E739CE7};
     c_u32 left = 15 - x * 3;
     c_u32 row = *(&b1 + (y >= 3)) >> (2 - y - 3 * (y >= 3)) * 18 & 0'777777;
-    c_u32 cntr_p1_r = row >> left & 07;
+    c_u32 cntr_p1_r = row >> left & 0'7;
 
     // find col_x5
     c_u64 col_mask = C_MAIN_MASK << left;
