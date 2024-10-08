@@ -1,101 +1,162 @@
 #include "MindbenderSolver/include.hpp"
 
 
-/*
-MUND static u64 getRow(const Board* board, c_u64 y);
-MUND static u64 getCol(const Board* board, c_u32 x);
-MUND static u64 constructMapCenter(c_u64 row, c_u32 x);
-MUND static u64 getScore1ShiftComp(c_u64 sect, c_u64 mapCent);
-static void shiftLeft(u64& sect, c_u32 index);
-MUND u64 getRowColIntersections(u32 x, u32 y) const;
- */
+#include <iostream>
+#include <set>
+#include <unordered_set>
+#include <vector>
+
+#include "include/ghc/fs_std.hpp"
 
 
-/*
-Metrics I need to time:
-- whether a lookup table for {y: 0 <= y <= 5} is faster for:
-    - if y % 3
-    - if y * 3
-    - any other expressions of y
-*/
-
-
-u32 getIndex(u32 x, u32 y) {
-    x -= 1;
-    y -= 1;
-    return 5 * ((x - y) % 5) + x;
+namespace std {
+    template <>
+    struct hash<Board> {
+        std::size_t operator()(const Board& b) const {
+            return b.hash;
+        }
+    };
 }
 
 
+
+
+
 int main() {
+
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     const auto pair = BoardLookup::getBoardPair("4-4");
-    // const Board board = pair->getInitialState();
 
-    // std::cout << "Score: " << pair->getInitialState().getScore1(pair->getSolutionState()) << std::endl;
-
-    Board board;
-    c_u8 state[36] = {
-        1, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 1,
-        0, 0, 0, 0, 0, 2,
-        0, 0, 0, 0, 0, 3,
-        0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 4,
-    };
-    board.setState(state);
-    // std::cout << board.toString() << std::endl;
-
-    MU c_u64 inters_a = board.getRowColIntersections(5, 0);
-
-    /*
-    volatile int v1 = 10;
-    volatile int v2 = 0'010;
-
-
-    volatile int end = 0;
-
-    Board bbb;
-    bbb.setFat(0, 0);
-
-    for (int x = 0; x <= 4; x++) {
-        for (int amnt = 1; amnt <= 5; amnt++) {
-            if (x + amnt == 5) {
-                std::cout<<"#########\n";
-                continue;
-            }
-            bbb.setFatX(x);
-            bbb.addFatX(amnt);
-            c_int moved = bbb.getFatX();
-
-            c_int mod = (x + amnt) % 6;
-
-            std::cout<<"("<<x<<", "<<amnt<<"): "<<mod<<", got "<<moved<<"\n";
-        }
-        std::cout<<"\n";
-    }
-    std::cout<<std::flush;
-
-
-    return 0;
-*/
-
-    // initialize solver
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
     solver.setDepthParams(4, 7, 7);
-    solver.preAllocateMemory();
+    solver.preAllocateMemory(4);
 
     std::cout << pair->toString() << std::endl;
-
-
-
     solver.findSolutions<true, false>();
-
-    // int ret;
-    // std::cin >> ret;
-
     return 0;
 
 
+
+
+
+    /*
+    BoardSolver solver(pair);
+    solver.setWriteDirectory(outDirectory);
+    solver.setDepthParams(6, 10, 11);
+    solver.preAllocateMemory(6);
+
+    std::cout << pair->toString() << std::endl;
+    solver.findSolutions<true>();
+    return 0;
+    */
+
+
+    /*
+    std::cout << board1.toString() << std::endl;
+
+    bool intersection[5];
+
+    intersection[0] = doActISColMatch(board1, 4, 3, 1, 1);
+    intersection[1] = doActISColMatch(board1, 4, 3, 1, 2);
+    intersection[2] = doActISColMatch(board1, 4, 3, 1, 3);
+    intersection[3] = doActISColMatch(board1, 4, 3, 1, 4);
+    intersection[4] = doActISColMatch(board1, 4, 3, 1, 5);
+
+    for (int i = 0; i < 5; i++) {
+        std::string valStr = intersection[i] ? "true" : "false";
+        std::cout << "3 Colors at [" << i << "]: " << valStr << "\n";
+    }
+
+    std::cout << "\n";
+
+    auto intersection2 = doActISColMatchBatched(board1, 4, 3, 1);
+
+    for (int i = 0; i < 5; i++) {
+        u8 mask = 1 << i;
+        bool val = intersection2 & mask;
+        std::string valStr = val ? "true" : "false";
+        std::cout << "3 Colors at [" << i << "]: " << valStr << std::endl;
+    }
+
+
+
+
+    return 0;
+    */
+    /*
+    static constexpr int DEPTH_TEST = 5;
+
+    Timer timer1;
+    auto boards1 = make2PermutationListFuncs[DEPTH_TEST](board1, 2);
+    auto time1 = timer1.getSeconds();
+
+
+    std::map<u64, Board> boardMap1;
+    std::map<u64, u64> board1_B1;
+    std::map<u64, u64> board1_B2;
+    for (auto& board : boards1) {
+        // boardMap1[board.hash] = board;
+        board1_B1[board.b1] = 1;
+        board1_B2[board.b2] = 1;
+    }
+
+
+    Timer timer2;
+    auto boards2 = makePermutationListFuncs[DEPTH_TEST](board1, 2);
+    auto time2 = timer2.getSeconds();
+
+
+    std::map<u64, Board> boardMap2;
+    std::map<u64, u64> board2_B1;
+    std::map<u64, u64> board2_B2;
+    for (auto& board : boards2) {
+        // boardMap2[board.hash] = board;
+        board2_B1[board.b1] = 1;
+        board2_B2[board.b2] = 1;
+    }
+
+
+
+
+    std::cout << "Size New: " << boards1.size() << "\n";
+    std::cout << "Size Old: " << boards2.size() << "\n";
+    std::cout << "\n";
+    // std::cout << "Uniq New: " << boardMap1.size() << "\n";
+    // std::cout << "Uniq Old: " << boardMap2.size() << "\n";
+    // std::cout << "\n";
+    std::cout << "__b1 New: " << board1_B1.size() << "\n";
+    std::cout << "__b2 New: " << board1_B2.size() << "\n";
+    std::cout << "\n";
+    std::cout << "__b1 Old: " << board2_B1.size() << "\n";
+    std::cout << "__b2 Old: " << board2_B2.size() << "\n";
+    std::cout << "\n";
+    std::cout << "Time New: " << time1 << "\n";
+    std::cout << "Time Old: " << time2 << "\n";
+    std::cout << std::flush;
+
+
+
+
+
+
+    return 0;
+    */
+    /*
+    vecBoard_t boards1;
+    Permutations::getDepthFunc(board1, boards1, 4);
+
+    vecBoard_t boards2;
+    Permutations::allocateForDepth(boards2, 5);
+
+    Timer timer;
+    Permutations::getDepthPlus1Func(boards1, boards2, false);
+    auto end = timer.getSeconds();
+
+    std::cout << "Time: " << end << "\n";
+    std::cout << "siz4: " << boards1.size() << "\n";
+    std::cout << "siz5: " << boards2.size() << "\n";
+
+    return 0;
+     */
 }

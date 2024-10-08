@@ -1,6 +1,8 @@
 #include "perms.hpp"
 #include "rotations.hpp"
 
+#include <fstream>
+#include <iostream>
 
 #define CONTINUE_IF_EQUIV(board1, board2) \
     if constexpr (CHECK_SIMILAR) { \
@@ -567,32 +569,8 @@ void make_permutation_list_depth_plus_one(const vecBoard_t &boards_in, vecBoard_
             }
         }
     }
-
     boards_out.resize(count);
 }
-Permutations::toDepthFuncPtr_t Permutations::toDepthFatFuncPtrs[] = {
-        &make_fat_permutation_list_depth_0,
-        &make_fat_permutation_list_depth_1,
-        &make_fat_permutation_list_depth_2,
-        &make_fat_permutation_list_depth_3,
-        &make_fat_permutation_list_depth_4,
-        &make_fat_permutation_list_depth_5
-};
-
-
-Permutations::toDepthFuncPtr_t Permutations::toDepthFuncPtrs[] = {
-        &make_permutation_list_depth_0,
-        &make_permutation_list_depth_1,
-        &make_permutation_list_depth_2,
-        &make_permutation_list_depth_3,
-        &make_permutation_list_depth_4,
-        &make_permutation_list_depth_5};
-
-
-Permutations::toDepthPlusOneFuncPtr_t Permutations::toDepthPlusOneFuncPtr
-        = make_permutation_list_depth_plus_one;
-
-
 
 
 
@@ -607,9 +585,8 @@ const Permutations::depthMap_t Permutations::depthMap = {
         {8, {{4, 4}, {5, 3}, {3, 5}}},
         {9, {{4, 5},{5, 4}}},
         {10, {{5, 5}}},
+        {11, {{6, 5}}},
 };
-
-
 MU void Permutations::reserveForDepth(MU const Board& board_in, vecBoard_t& boards_out, c_u32 depth, c_bool isFat) {
     c_double fraction = Board::getDuplicateEstimateAtDepth(depth);
     u64 allocSize = isFat ? BOARD_FAT_PRE_ALLOC_SIZES[depth] : BOARD_PRE_ALLOC_SIZES[depth];
@@ -619,35 +596,44 @@ MU void Permutations::reserveForDepth(MU const Board& board_in, vecBoard_t& boar
 }
 
 
+
+
+Permutations::toDepthFuncPtr_t Permutations::toDepthFatFuncPtrs[] = {
+        &make_fat_permutation_list_depth_0,
+        &make_fat_permutation_list_depth_1,
+        &make_fat_permutation_list_depth_2,
+        &make_fat_permutation_list_depth_3,
+        &make_fat_permutation_list_depth_4,
+        &make_fat_permutation_list_depth_5};
+Permutations::toDepthFuncPtr_t Permutations::toDepthFuncPtrs[] = {
+        &make_permutation_list_depth_0,
+        &make_permutation_list_depth_1,
+        &make_permutation_list_depth_2,
+        &make_permutation_list_depth_3,
+        &make_permutation_list_depth_4,
+        &make_permutation_list_depth_5};
 void Permutations::getDepthFunc(const Board &board_in, vecBoard_t &boards_out, c_u32 depth, c_bool shouldResize) {
     if (depth >= PTR_LIST_SIZE) {
         return;
     }
-
     const bool isFat = board_in.hasFat();
-
     const Board::HasherPtr hasher = board_in.getHashFunc();
-
-
-
-
     if (shouldResize) {
         reserveForDepth(board_in, boards_out, depth, isFat);
     }
     boards_out.resize(boards_out.capacity());
-
-
-
-
     if (!isFat) {
         toDepthFuncPtrs[depth](boards_out, board_in, hasher);
     } else {
         toDepthFatFuncPtrs[depth](boards_out, board_in, hasher);
     }
-
 }
 
 
+
+
+Permutations::toDepthPlusOneFuncPtr_t Permutations::toDepthPlusOneFuncPtr
+        = make_permutation_list_depth_plus_one;
 void Permutations::getDepthPlus1Func(const vecBoard_t& boards_in, vecBoard_t& boards_out, c_bool shouldResize) {
     if (shouldResize) {
         boards_out.resize(boards_in.size() * 60);
@@ -658,3 +644,91 @@ void Permutations::getDepthPlus1Func(const vecBoard_t& boards_in, vecBoard_t& bo
 
     toDepthPlusOneFuncPtr(boards_in, boards_out, hasher);
 }
+
+
+
+
+
+
+
+
+
+template<bool CHECK_INTERSECTION, bool CHECK_SIMILAR, u32 BUFFER_SIZE>
+void make_permutation_list_depth_plus_one_buffered(
+        const std::string& root_path,
+        const vecBoard_t &boards_in, vecBoard_t& board_buffer, Board::HasherPtr hasher) {
+
+    int vector_index = 0;
+    int buffer_index = 0;
+
+
+    for (const auto & board_index : boards_in) {
+        c_u8 a = board_index.mem.getLastMove();
+        c_u8 a_dir = a / 30;
+        c_u8 a_sect = a % 30 / 5;
+        c_u8 a_amount = a % 5 + 1;
+
+
+        for (int b_dir = 0; b_dir < 2; b_dir++) {
+            c_bool do_RC_check = a_dir != b_dir && a_dir != 0;
+
+            c_int b_start = (b_dir == a_dir) ? a_sect + 1 : 0;
+            for (int b_sect = b_start; b_sect < 6; b_sect++) {
+                c_int b_base = b_dir * 30 + b_sect * 5;
+
+                u8 intersects = 0;
+                INTERSECT_MAKE_CACHE(do_RC_check, intersects, board_index, a_sect, b_sect, a_amount)
+
+                for (int b_amount = 0; b_amount < 5; b_amount++) {
+                    INTERSECT_CONTINUE_IF_CACHE(do_RC_check, intersects, b_amount)
+
+                    c_int b_cur = b_base + b_amount;
+
+                    board_buffer[vector_index] = board_index;
+                    allActionsList[b_cur](board_buffer[vector_index]);
+                    CONTINUE_IF_EQUIV(board_buffer[vector_index], board_index)
+
+                    (board_buffer[vector_index].*hasher)();
+                    board_buffer[vector_index].mem.setNext1Move(b_cur);
+                    vector_index++;
+
+                    if EXPECT_FALSE(vector_index > BUFFER_SIZE) {
+                        std::string filename = root_path + std::to_string(buffer_index) + ".bin";
+                        std::cout << "writing to file '" + filename + "'.\n";
+                        std::ofstream outfile(filename, std::ios::binary);
+                        outfile.write(reinterpret_cast<const char*>(board_buffer.data()), (i64)(board_buffer.size() * sizeof(Board)));
+                        outfile.close();
+                        buffer_index++;
+
+                        vector_index = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    if EXPECT_FALSE(vector_index != 0) {
+        std::string filename = root_path + std::to_string(buffer_index) + ".bin";
+        std::cout << "writing to file '" + filename + "'.\n";
+        std::ofstream outfile(filename, std::ios::binary);
+        outfile.write(reinterpret_cast<const char*>(board_buffer.data()), (i64)(vector_index * sizeof(Board)));
+        outfile.close();
+    }
+
+
+}
+Permutations::toDepthPlusOneFuncBufferedPtr_t Permutations::toDepthPlusOneBufferedFuncPtr
+        = make_permutation_list_depth_plus_one_buffered;
+
+void Permutations::getDepthPlus1BufferedFunc(
+        const std::string& root_path,
+        const vecBoard_t& boards_in, vecBoard_t& boards_out, int depth) {
+
+    boards_out.resize(boards_out.capacity());
+
+    const Board::HasherPtr hasher = boards_in[0].getHashFunc();
+
+    std::string path = root_path + std::to_string(depth + 1) + "_";
+    toDepthPlusOneBufferedFuncPtr(path, boards_in, boards_out, hasher);
+}
+

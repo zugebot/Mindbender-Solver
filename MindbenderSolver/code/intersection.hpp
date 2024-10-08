@@ -145,8 +145,6 @@ inline std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>&
                 ++it2_end;
             }
             // make pairs for all combinations of matching hashes
-
-
             for (auto it1_match = it1; it1_match != it1_end; ++it1_match) {
                 for (auto it2_match = it2; it2_match != it2_end; ++it2_match) {
                     results.emplace_back(&*it1_match, &*it2_match);

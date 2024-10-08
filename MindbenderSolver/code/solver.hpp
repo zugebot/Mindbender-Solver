@@ -56,8 +56,8 @@ public:
     }
 
 
-    void preAllocateMemory() {
-        c_u32 highestDepth = std::max(1, std::min(5, static_cast<int>(depthTotalMax + 1) / 2));
+    void preAllocateMemory(int maxDepth = 5) {
+        c_u32 highestDepth = std::max(1, std::min(maxDepth, static_cast<int>(depthTotalMax + 1) / 2));
         Permutations::reserveForDepth(board1, board1Table[highestDepth], highestDepth, hasFat);
         Permutations::reserveForDepth(board1, board1Table[highestDepth], highestDepth, hasFat);
 

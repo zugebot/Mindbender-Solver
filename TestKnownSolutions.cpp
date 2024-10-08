@@ -132,8 +132,8 @@ int main() {
             continue;
         }
 
-        Board startingBoard = pair->getInitialState();
-        Board realSolutionBoard = pair->getSolutionState();
+        Board realSolutionBoard = pair->getInitialState();
+        Board startingBoard = pair->getSolutionState();
 
         /*
         if (startingBoard.hasFat()) {

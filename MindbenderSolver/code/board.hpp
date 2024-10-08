@@ -17,13 +17,13 @@ public:
      *  1 bit : 1 if has a fat, otherwise 0
      *  4 bits: (# of colors - 1)
      *  2 bits: unused
-     * 54 bits: holds upper 3x6 cell grid
+     * 54 bits: holds upper 3x6 cell grid (3 bits each)
      */
     u64 b1 = 0;
     /**
      *  3 bits: fat y position
      *  7 bits: unused
-     * 54 bits: holds lower 3x6 cell grid
+     * 54 bits: holds lower 3x6 cell grid (3 bits each)
      */
     u64 b2 = 0;
 
@@ -72,7 +72,6 @@ public:
 
 
     __forceinline bool operator==(const Board& other) const {
-        MU static constexpr u64 MASK = 0'777'777'777'777'777'777;
         return b1 == other.b1 && b2 == other.b2;
     }
 
