@@ -50,8 +50,6 @@ int main() {
     solver.findSolutions<true>();
     return 0;
     */
-
-
     /*
     std::cout << board1.toString() << std::endl;
 

@@ -41,8 +41,8 @@ public:
     static constexpr std::string bgBlack    = "\033[40m";
     static constexpr std::string bgReset    = "\033[0m";
 
-    static const std::vector<std::string> colors;
-    static const std::vector<std::string> bgColors;
+    static const std::string colors[10];
+    static const std::string bgColors[10];
 
     static std::string getColor(const int index) {
         if (index < 8) {

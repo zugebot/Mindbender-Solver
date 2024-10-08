@@ -22,12 +22,13 @@
 #define MU [[maybe_unused]]
 #define MUND [[maybe_unused]] [[nodiscard]]
 
+#define c_char const char
 #define c_int const int
 #define c_bool const bool
 #define c_auto const auto
 #define c_float const float
 #define c_double const double
-#define c_string_ref const std::string&
+#define c_string const std::string
 
 #define i8 int8_t
 #define i16 int16_t

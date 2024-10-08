@@ -5,168 +5,118 @@
 #include "rotations.hpp"
 
 
-/// uint64_t moveValue = a;
-void Memory::setNext1Move(c_u64 moveValue) {
-    c_u32 moveCount = moves & 0xF;
-    c_u8 shiftAmount = 4 + moveCount * 6;
-    moves = (moves & ~(0'77ULL << shiftAmount | 0xFULL))
-            | (moveValue << shiftAmount)
-            | ((moveCount + 1) & 0xF);
-}
-
-
-/// uint64_t moveValue = a | b << 6;
-void Memory::setNext2Move(c_u64 moveValue) {
-    c_u32 moveCount = moves & 0xF;
-    c_u8 shiftAmount = 4 + moveCount * 6;
-    moves = (moves & ~(0'7777ULL << shiftAmount | 0xFULL))
-            | (moveValue << shiftAmount)
-            | ((moveCount + 2) & 0xF);
-}
-
-
-/// uint64_t moveValue = a | b << 6 | c << 12;
-void Memory::setNext3Move(c_u64 moveValue) {
-    c_u32 moveCount = moves & 0xF;
-    c_u8 shiftAmount = 4 + moveCount * 6;
-    moves = (moves & ~(0'777777ULL << shiftAmount | 0xFULL))
-            | (moveValue << shiftAmount)
-            | ((moveCount + 3) & 0xF);
-}
-
-
-/// uint64_t moveValue = a | b << 6 | c << 12 | d << 18;
-void Memory::setNext4Move(c_u64 moveValue) {
-    c_u32 moveCount = moves & 0xF;
-    c_u8 shiftAmount = 4 + moveCount * 6;
-    moves = (moves & ~(0'77777777ULL << shiftAmount | 0xFULL))
-            | (moveValue << shiftAmount)
-            | ((moveCount + 4) & 0xF);
-}
-
-
-void Memory::setNext5Move(c_u64 moveValue) {
-    c_u32 moveCount = moves & 0xF;
-    c_u8 shiftAmount = 4 + moveCount * 6;
-    moves = moves & ~(0'7777777777ULL << shiftAmount | 0xFULL)
-            | moveValue << shiftAmount
-            | (moveCount + 5) & 0xF;
+MUND u8 Memory::getMoveCount() const {
+    return moves & MOVE_DATA_MASK;
 }
 
 
 u8 Memory::getMove(c_u8 index) const {
-    c_u8 shiftAmount = 4 + (index * 6);
-    return (moves >> shiftAmount) & 0x3F;
+    return moves >> getShift(index) & MOVE_TYPE_MASK;
 }
 
 
 u8 Memory::getLastMove() const {
-    c_u8 index = getMoveCount() - 1;
-    c_u8 shiftAmount = 4 + (index * 6);
-    return (moves >> shiftAmount) & 0x3F;
-
+    return moves >> getShift(getMoveCount() - 1) & MOVE_TYPE_MASK;
 }
 
 
-std::string Memory::assembleMoveString(const Memory* other) const {
-    std::string start = assembleMoveStringForwards();
-    std::string end = other->assembleMoveStringBackwards();
-    if (start.empty()) {
-        return end;
-    }
-    if (end.empty()) {
-        return start;
-    }
-    return start + " " + end;
-
-}
+// ############################################################
+// #            To String -Similar- Functions                 #
+// ############################################################
 
 
-std::string Memory::assembleMoveStringForwards() const {
-    std::string moves_str;
-    const int count = getMoveCount();
-    for (int i = 0; i < count; i++) {
-        c_u8 move = getMove(i);
-        c_u8 rowCol = (move % 30) / 5;
-        c_u8 amount = 1 + move % 5;
-        const char letter = static_cast<char>('C' + (15 * (move < 30)));
-        moves_str += letter + std::to_string(rowCol)
-                 + std::to_string(amount);
-        if (i != count - 1) {
-            moves_str += " ";
-        }
-    }
-    return moves_str;
-}
-
-
-std::string Memory::assembleMoveStringBackwards() const {
-    std::string moves_str;
-    const int count = getMoveCount();
-    for (int i = count - 1; i >= 0; i--) {
-        c_u8 move = getMove(i);
-        c_u8 rowCol = (move % 30) / 5;
-        c_u8 amount = 6 - (1 + move % 5);
-        const char letter = static_cast<char>('C' + (15 * (move < 30)));
-        moves_str += letter + std::to_string(rowCol)
-                 + std::to_string(amount);
-        if (i != 0) {
-            moves_str += " ";
-        }
-    }
-    return moves_str;
-}
-
-
-std::string Memory::assembleFatMoveString(c_u8 fatPos, const Memory* other, c_u8 fatPosOther) const {
-    std::string start = assembleFatMoveStringForwards(fatPos);
-    if (other == nullptr) {
-        return start;
-    }
-    std::string end = other->assembleFatMoveStringBackwards(fatPosOther);
-    if (start.empty()) {
-        return end;
-    }
-    if (end.empty()) {
-        return start;
-    }
-    return start + " " + end;
-
-}
-
-
+static constexpr u32 NORMAL_PERMUTATION_LENGTH = 3;
 static constexpr u32 LONGER_PERMUTATION_LENGTH = 4;
 
 
-std::string Memory::assembleFatMoveStringForwards(c_u8 fatPos) const {
+std::string removeTrailingSpace(std::string& str) {
+    if (!str.empty() && str.back() == ' ') {
+        str.pop_back();
+    }
+    return str;
+}
+
+
+std::string Memory::asmString(const Memory* other) const {
+    std::string start = asmStringForwards();
+    std::string end = other->asmStringBackwards();
+    return start.empty() ? end : end.empty() ? start : start + " " + end;
+
+}
+
+
+std::string Memory::formatMoveString(c_u8 move, c_bool isBackwards) {
+    c_u8 rowCol = move % 30 / 5;
+    c_u8 amount = isBackwards ? 6 - (1 + move % 5) : 1 + move % 5;
+    c_char letter = static_cast<char>('C' + 15 * (move < 30));
+    return letter + std::to_string(rowCol) + std::to_string(amount);
+}
+
+
+std::string Memory::asmStringForwards() const {
+    c_u32 count = getMoveCount();
+
     std::string moves_str;
-    const int count = getMoveCount();
+    moves_str.reserve(NORMAL_PERMUTATION_LENGTH * count);
+
+    for (u32 i = 0; i < count; i++) {
+        c_u8 move = getMove(i);
+        moves_str += formatMoveString(move, false) + " ";
+    }
+    removeTrailingSpace(moves_str);
+
+    return moves_str;
+}
+
+
+std::string Memory::asmStringBackwards() const {
+    c_u32 count = getMoveCount();
+
+    std::string moves_str;
+    moves_str.reserve(NORMAL_PERMUTATION_LENGTH * count);
+
+    for (u32 i = count; i != 0; i--) {
+        c_u8 move = getMove(i - 1);
+        moves_str += formatMoveString(move, true) + " ";
+    }
+
+    removeTrailingSpace(moves_str);
+    return moves_str;
+}
+
+
+
+std::string Memory::asmFatString(c_u8 fatPos, const Memory* other, c_u8 fatPosOther) const {
+    std::string start = asmFatStringForwards(fatPos);
+    if (other == nullptr) { return start; }
+    std::string end = other->asmFatStringBackwards(fatPosOther);
+    if (start.empty()) { return end; }
+    if (end.empty()) { return start; }
+    return start + " " + end;
+}
+
+
+std::string Memory::asmFatStringForwards(c_u8 fatPos) const {
+    std::string moves_str;
+    c_u32 count = getMoveCount();
     int x = fatPos / 5;
     int y = fatPos % 5;
 
-    for (int i = 0; i < count; i++) {
+    for (u32 i = 0; i < count; i++) {
         c_u8 move = getMove(i);
-        // auto func = fatActions[x * 5 + y][move];
+
         c_auto func = allActionsList[fatActionsIndexes[x * 5 + y][move]];
-        auto segment = getNameFromAction(func);
+        std::string segment = getNameFromAction(func);
         moves_str += segment;
 
-        const char direction = segment.at(0);
-        c_int axisNum = segment.at(2) - '0';
-        c_int amount = segment.at(segment.size() - 1)  - '0';
 
-        // if movesFat;
         if (segment.size() == LONGER_PERMUTATION_LENGTH) {
-            if (direction == 'R') {
-                if (axisNum == y) {
-                    x += amount;
-                    x %= 6;
-                }
+            c_int axisNum = segment.at(2) - '0';
+            c_int amount = segment.back() - '0';
+            if (segment.at(0) == 'R') {
+                if (axisNum == y) { x = (x + amount) % 6; }
             } else {
-                if (axisNum == x) {
-                    y += amount;
-                    y %= 6;
-                }
+                if (axisNum == x) { y = (y + amount) % 6; }
             }
         }
 
@@ -181,38 +131,34 @@ std::string Memory::assembleFatMoveStringForwards(c_u8 fatPos) const {
 }
 
 
-std::string Memory::assembleFatMoveStringBackwards(c_u8 fatPos) const {
+std::string Memory::asmFatStringBackwards(c_u8 fatPos) const {
+    c_u32 count = getMoveCount();
+
     std::vector<std::string> moves_vec;
-    const int count = getMoveCount();
+    moves_vec.resize(count);
+
     int x = fatPos / 5;
     int y = fatPos % 5;
 
-    for (int i = 0; i < count; i++) {
+    for (u32 i = 0; i < count; i++) {
         c_u8 move = getMove(i);
         c_auto func = allActionsList[fatActionsIndexes[x * 5 + y][move]];
-        // auto func = fatActions[x * 5 + y][move];
-        auto segment = getNameFromAction(func);
 
-        const char direction = segment.at(0);
-        c_int axisNum = segment.at(2) - '0';
-        c_int amount = segment.at(segment.size() - 1) - '0';
-        const char new_amount = static_cast<char>(6 - amount + '0');
+        std::string segment = getNameFromAction(func);
+
+
+        c_char new_amount = static_cast<char>('f' - segment.back());
         segment = segment.substr(0, segment.size() - 1) + new_amount;
-        c_bool movesFat = segment.size() == LONGER_PERMUTATION_LENGTH;
 
-        moves_vec.push_back(segment);
+        moves_vec[i] = segment;
 
-        if (movesFat) {
-            if (direction == 'R') {
-                if (axisNum == y) {
-                    x += amount;
-                    x %= 6;
-                }
+        if (segment.size() == LONGER_PERMUTATION_LENGTH) {
+            c_int axisNum = segment.at(2) - '0';
+            c_int amount = segment.back() - '0';
+            if (segment.at(0) == 'R') {
+                if (axisNum == y) { x = (x + amount) % 6; }
             } else {
-                if (axisNum == x) {
-                    y += amount;
-                    y %= 6;
-                }
+                if (axisNum == x) { y = (y + amount) % 6; }
             }
         }
     }
@@ -229,9 +175,10 @@ std::string Memory::assembleFatMoveStringBackwards(c_u8 fatPos) const {
     return moves_str;
 }
 
-
 std::string Memory::toString() const {
     std::string str = "Move[";
+
+
     c_int moveCount = getMoveCount();
     for (int i = 0; i < moveCount; i++) {
         str.append(std::to_string(getMove(i)));
@@ -242,13 +189,3 @@ std::string Memory::toString() const {
     str.append("]");
     return str;
 }
-
-
-SetNextMoveFunc setNextMoveFuncs[] = {
-        nullptr,
-        &Memory::setNext1Move,
-        &Memory::setNext2Move,
-        &Memory::setNext3Move,
-        &Memory::setNext4Move,
-        &Memory::setNext5Move
-};

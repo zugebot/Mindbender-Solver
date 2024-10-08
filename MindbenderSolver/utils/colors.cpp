@@ -1,6 +1,6 @@
 #include "colors.hpp"
 
-const std::vector<std::string> Colors::colors = {
+const std::string Colors::colors[10] = {
         Red,
         Green,
         Blue,
@@ -14,7 +14,7 @@ const std::vector<std::string> Colors::colors = {
 };
 
 
-const std::vector<std::string> Colors::bgColors = {
+const std::string Colors::bgColors[10] = {
         bgRed,
         bgGreen,
         bgBlue,

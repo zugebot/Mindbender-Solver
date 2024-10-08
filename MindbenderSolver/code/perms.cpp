@@ -46,7 +46,8 @@ void make_fat_permutation_list_depth_1(vecBoard_t& boards_out, const Board &boar
         CONTINUE_IF_EQUIV(board_in, boards_out[count])
 
         (boards_out[count].*hasher)();
-        (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(a);
+        boards_out[count].mem.setNextNMove<DEPTH>(a);
+        // (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(a);
         ++count;
     }
 
@@ -74,7 +75,8 @@ void make_fat_permutation_list_depth_2(vecBoard_t& boards_out, const Board &boar
             CONTINUE_IF_EQUIV(board_a, boards_out[count])
 
             (boards_out[count].*hasher)();
-            (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
+            boards_out[count].mem.setNextNMove<DEPTH>(move);
+            // (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
             ++count;
         }
     }
@@ -111,7 +113,8 @@ void make_fat_permutation_list_depth_3(vecBoard_t& boards_out, const Board &boar
                 CONTINUE_IF_EQUIV(board_b, boards_out[count])
 
                 (boards_out[count].*hasher)();
-                (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
+                boards_out[count].mem.setNextNMove<DEPTH>(move);
+                // (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
                 ++count;
             }
         }
@@ -156,7 +159,8 @@ void make_fat_permutation_list_depth_4(vecBoard_t& boards_out, const Board &boar
                     CONTINUE_IF_EQUIV(board_c, boards_out[count])
 
                     (boards_out[count].*hasher)();
-                    (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move_d);
+                    boards_out[count].mem.setNextNMove<DEPTH>(move_d);
+                    // (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move_d);
                     ++count;
                 }
             }
@@ -209,7 +213,8 @@ void make_fat_permutation_list_depth_5(vecBoard_t& boards_out, const Board &boar
                         CONTINUE_IF_EQUIV(board_d, boards_out[count])
 
                         (boards_out[count].*hasher)();
-                        (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move_e);
+                        boards_out[count].mem.setNextNMove<DEPTH>(move_e);
+                        // (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move_e);
                         ++count;
                     }
                 }
@@ -246,7 +251,8 @@ void make_permutation_list_depth_1(vecBoard_t& boards_out, const Board &board_in
         allActionsList[a](*currentBoard);
         (currentBoard->*hasher)();
         c_u64 move = a;
-        (currentBoard->mem.*setNextMoveFuncs[DEPTH])(move);
+        boards_out[count].mem.setNextNMove<DEPTH>(move);
+        // (currentBoard->mem.*setNextMoveFuncs[DEPTH])(move);
         count++;
     }
 }
@@ -282,7 +288,8 @@ void make_permutation_list_depth_2(vecBoard_t& boards_out, const Board &board_in
 
                             c_u64 move = a_cur | b_cur << 6;
                             (boards_out[count].*hasher)();
-                            (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
+                            boards_out[count].mem.setNextNMove<DEPTH>(move);
+                            // (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
                             ++count;
                         }
                     }
@@ -339,7 +346,8 @@ void make_permutation_list_depth_3(vecBoard_t& boards_out, const Board &board_in
 
                                         c_u64 move = a_cur | b_cur << 6 | c_cur << 12;
                                         (boards_out[count].*hasher)();
-                                        (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
+                                        boards_out[count].mem.setNextNMove<DEPTH>(move);
+                                        // (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
                                         ++count;
 
                                     }
@@ -417,7 +425,8 @@ void make_permutation_list_depth_4(vecBoard_t& boards_out, const Board &board_in
 
                                                     c_u64 move = a_cur | b_cur << 6 | c_cur << 12 | d_cur << 18;
                                                     (boards_out[count].*hasher)();
-                                                    (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
+                                                    boards_out[count].mem.setNextNMove<DEPTH>(move);
+                                                    // (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
                                                     count++;
 
                                                 }
@@ -509,7 +518,8 @@ void make_permutation_list_depth_5(vecBoard_t& boards_out, const Board &board_in
                                                                 c_u64 move = curr[0] | curr[1] << 6 | curr[2] << 12
                                                                            | curr[3] << 18 | curr[4] << 24;
                                                                 (boards_out[count].*hasher)();
-                                                                (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
+                                                                boards_out[count].mem.setNextNMove<DEPTH>(move);
+                                                                // (boards_out[count].mem.*setNextMoveFuncs[DEPTH])(move);
                                                                 count++;
 
                                                             }
@@ -563,7 +573,8 @@ void make_permutation_list_depth_plus_one(const vecBoard_t &boards_in, vecBoard_
                     CONTINUE_IF_EQUIV(boards_out[count], board_index)
 
                     (boards_out[count].*hasher)();
-                    boards_out[count].mem.setNext1Move(b_cur);
+                    boards_out[count].mem.setNextNMove<1>(b_cur);
+                    // boards_out[count].mem.setNext1Move(b_cur);
                     count++;
                 }
             }
@@ -689,7 +700,7 @@ void make_permutation_list_depth_plus_one_buffered(
                     CONTINUE_IF_EQUIV(board_buffer[vector_index], board_index)
 
                     (board_buffer[vector_index].*hasher)();
-                    board_buffer[vector_index].mem.setNext1Move(b_cur);
+                    board_buffer[vector_index].mem.setNextNMove<1>(b_cur);
                     vector_index++;
 
                     if EXPECT_FALSE(vector_index > BUFFER_SIZE) {

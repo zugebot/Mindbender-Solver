@@ -166,12 +166,12 @@ public:
                 c_int xy1 = board1.getFatXY();
                 c_int xy2 = board2.getFatXY();
                 for (const auto &[fst, snd]: results) {
-                    std::string moveset = fst->mem.assembleFatMoveString(xy1, &snd->mem, xy2);
+                    std::string moveset = fst->mem.asmFatString(xy1, &snd->mem, xy2);
                     resultSet.insert(moveset);
                 }
             } else {
                 for (const auto [fst, snd]: results) {
-                    std::string moveset = fst->mem.assembleMoveString(&snd->mem);
+                    std::string moveset = fst->mem.asmString(&snd->mem);
                     resultSet.insert(moveset);
                 }
             }

@@ -4,6 +4,7 @@
 
 #include "board.hpp"
 
+#include <cstring>
 #include <unordered_map>
 
 /*
@@ -22,12 +23,15 @@ CYAN    7
 class BoardPair {
     Board const* board{};
     Board const* solve{};
-    std::string name;
+    char name[5] = {};
 
 public:
     BoardPair() = default;
-    BoardPair(Board const* board, Board const* solve, std::string name) :
-        board(board), solve(solve), name(std::move(name)) {}
+    BoardPair(Board const* board, Board const* solve, const char nameIn[5]) :
+        board(board), solve(solve) {
+        strncpy(name, nameIn, 4);
+        name[4] = '\0';
+    }
 
     MUND Board getInitialState() const { return *board; }
     MUND Board getSolutionState() const { return *solve; }
