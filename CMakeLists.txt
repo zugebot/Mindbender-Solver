@@ -26,5 +26,5 @@ add_executable(MindbenderSolver
         # UnitTesting.cpp
 )
 
-# find_package(TBB REQUIRED)
-# target_link_libraries(MindbenderSolver TBB::tbb)
+find_package(TBB REQUIRED)
+target_link_libraries(MindbenderSolver TBB::tbb)

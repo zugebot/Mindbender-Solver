@@ -1,19 +1,16 @@
 #include "MindbenderSolver/include.hpp"
 
-
 #include <iostream>
 #include <set>
-#include <unordered_set>
 #include <vector>
 
-#include "include/ghc/fs_std.hpp"
 
 
 namespace std {
     template <>
     struct hash<Board> {
         std::size_t operator()(const Board& b) const {
-            return b.hash;
+            return b.getHash();
         }
     };
 }
@@ -26,13 +23,16 @@ int main() {
 
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     const auto pair = BoardLookup::getBoardPair("4-4");
+    std::cout << pair->toString() << std::endl;
 
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
     solver.setDepthParams(4, 7, 7);
-    solver.preAllocateMemory(4);
 
-    std::cout << pair->toString() << std::endl;
+    Timer allocateTimer;
+    solver.preAllocateMemory(4);
+    std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
+
     solver.findSolutions<true, false>();
     return 0;
 

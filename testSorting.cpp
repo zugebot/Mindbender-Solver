@@ -22,12 +22,12 @@ int main() {
     std::vector<Board> data(size);
     std::vector<Board> aux(size);
     BoardSorter sorter;
-    sorter.resize(data.size());
+    sorter.resize(5, data.size());
 
     std::random_device rd;
     std::mt19937_64 gen(rd());
     std::uniform_int_distribution<uint64_t> dist(0, 0x0FFF'FFFF'FFFF'FFFF);
-    for (auto& obj : data) { obj.hash = dist(gen); }
+    for (auto& obj : data) { obj.hashMem.hash = dist(gen); }
     std::cout << "Starting sort now!" << std::endl;
     const Timer timer;
 

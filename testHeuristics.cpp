@@ -113,17 +113,17 @@ std::pair<Board, int> solvePuzzle(const Board& startBoard, const Board& goalBoar
         }
 
         // Add current board state to closed set
-        closedSet.insert(currentNode.board.hash);
+        closedSet.insert(currentNode.board.getHash());
 
         // Generate possible moves
         for (int i = 0; i < 60; i++) {
             Board nextBoard = currentNode.board;
-            actions[i](nextBoard); // Apply action to the board
-            nextBoard.precomputeHash(2);
-            nextBoard.mem.setNext1Move(i);
+            allActionsList[i](nextBoard); // Apply action to the board
+            nextBoard.precomputeHash2();
+            nextBoard.hashMem.mem.setNextNMove<1>(i);
 
             // Check if the next state has already been visited
-            if (closedSet.find(nextBoard.hash) != closedSet.end()) {
+            if (closedSet.find(nextBoard.hashMem.mem) != closedSet.end()) {
                 continue; // Skip already visited states
             }
 
@@ -139,7 +139,7 @@ std::pair<Board, int> solvePuzzle(const Board& startBoard, const Board& goalBoar
             nextNode.hCost = hCost;
             nextNode.fCost = fCost;
             nextNode.actionsTaken = currentNode.actionsTaken;
-            nextNode.actionsTaken.push_back(actions[i]); // Record the action taken
+            nextNode.actionsTaken.push_back(allActionsList[i]); // Record the action taken
 
             // Add to open set
             openSet.push(nextNode);
@@ -178,7 +178,7 @@ int main() {
 
     std::cout << "Cost: " << cost << std::endl;
     std::cout << "Time: " << timer.getSeconds() << std::endl;
-    std::cout << board.mem.assembleMoveStringForwards() << std::endl;
+    std::cout << board.hashMem.mem.asmStringForwards() << std::endl;
     std::cout << board1.toString(board) << std::endl;
 
 

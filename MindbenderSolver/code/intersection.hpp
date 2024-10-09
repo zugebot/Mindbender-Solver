@@ -18,32 +18,32 @@ inline void process_chunk(
     c_auto it1_end = boards1.begin() + static_cast<i64>(end1);
 
     // Get min and max hash values in this chunk
-    c_u64 min_hash = it1->hash;
-    c_u64 max_hash = (it1_end - 1)->hash;
+    c_u64 min_hash = it1->getHash();
+    c_u64 max_hash = (it1_end - 1)->getHash();
 
     // Find corresponding range in boards2
     c_auto boards2_start = std::lower_bound(
             boards2.begin(), boards2.end(), min_hash,
-            [](const Board &board, c_u64 hash) { return board.hash < hash; });
+            [](const Board &board, c_u64 hash) { return board.getHash() < hash; });
 
     c_auto boards2_end = std::upper_bound(
             boards2.begin(), boards2.end(), max_hash,
-            [](c_u64 hash, const Board &board) { return hash < board.hash; });
+            [](c_u64 hash, const Board &board) { return hash < board.getHash(); });
 
     auto it2 = boards2_start;
     c_auto it2_end = boards2_end;
 
     while (it1 != it1_end && it2 != it2_end) {
-        if (it1->hash == it2->hash) {
+        if (it1->getHash() == it2->getHash()) {
             // Find ranges of matching hashes in boards1
             auto it1_range_end = it1;
-            while (it1_range_end != it1_end && it1_range_end->hash == it1->hash) {
+            while (it1_range_end != it1_end && it1_range_end->getHash() == it1->getHash()) {
                 ++it1_range_end;
             }
 
             // Find ranges of matching hashes in boards2
             auto it2_range_end = it2;
-            while (it2_range_end != it2_end && it2_range_end->hash == it2->hash) {
+            while (it2_range_end != it2_end && it2_range_end->getHash() == it2->getHash()) {
                 ++it2_range_end;
             }
 
@@ -56,7 +56,7 @@ inline void process_chunk(
 
             it1 = it1_range_end;
             it2 = it2_range_end;
-        } else if (it1->hash < it2->hash) {
+        } else if (it1->getHash() < it2->getHash()) {
             ++it1;
         } else {
             ++it2;
@@ -83,16 +83,16 @@ inline std::vector<std::pair<Board*, Board*>> intersection_threaded(
 
         // Adjust start1
         if (start1 != 0) {
-            c_u64 current_hash = boards1[start1].hash;
-            while (start1 > 0 && boards1[start1 - 1].hash == current_hash) {
+            c_u64 current_hash = boards1[start1].getHash();
+            while (start1 > 0 && boards1[start1 - 1].getHash() == current_hash) {
                 --start1;
             }
         }
 
         // Adjust end1
         if (end1 < total_size) {
-            c_u64 current_hash = boards1[end1 - 1].hash;
-            while (end1 < total_size && boards1[end1].hash == current_hash) {
+            c_u64 current_hash = boards1[end1 - 1].getHash();
+            while (end1 < total_size && boards1[end1].getHash() == current_hash) {
                 ++end1;
             }
         }
@@ -133,15 +133,15 @@ inline std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>&
     auto it1 = boards1.begin();
     auto it2 = boards2.begin();
     while (it1 != boards1.end() && it2 != boards2.end()) {
-        if (it1->hash == it2->hash) {
+        if (it1->getHash() == it2->getHash()) {
             auto it1_end = it1;
             auto it2_end = it2;
             // find range of matching hashes in boards1
-            while (it1_end != boards1.end() && it1_end->hash == it1->hash) {
+            while (it1_end != boards1.end() && it1_end->getHash() == it1->getHash()) {
                 ++it1_end;
             }
             // find range of matching hashes in boards2
-            while (it2_end != boards2.end() && it2_end->hash == it2->hash) {
+            while (it2_end != boards2.end() && it2_end->getHash() == it2->getHash()) {
                 ++it2_end;
             }
             // make pairs for all combinations of matching hashes
@@ -155,7 +155,7 @@ inline std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>&
 
             it1 = it1_end;
             it2 = it2_end;
-        } else if (it1->hash < it2->hash) {
+        } else if (it1->getHash() < it2->getHash()) {
             ++it1;
         } else {
             ++it2;

@@ -7,6 +7,31 @@
 #include <vector>
 
 
+/**
+ * Todo:
+ * make it so that
+ * 1-bit. - isSolved
+ * 1-bit. - has Fat
+ * 3-bits - fat X
+ * 3-bits - fat Y
+ * 3/4bit - color count
+ * this would leave mem to having a max of 8 moves.
+ */
+class HashMem {
+    u64 hash = 0;
+    Memory mem;
+public:
+
+    explicit HashMem() = default;
+
+    MUND Memory& getMemory() { return mem; }
+    MUND const Memory& getMemory() const { return mem; }
+
+    MUND u64 getHash() const { return hash; }
+    MU void setHash(u64 value) { hash = value; }
+};
+
+
 
 class Board {
 public:
@@ -27,9 +52,10 @@ public:
      */
     u64 b2 = 0;
 
-    u64 hash = 0;
 
-    Memory mem;
+
+    HashMem hashMem;
+
 
     explicit Board() = default;
     explicit Board(c_u8 values[36]);
@@ -37,17 +63,27 @@ public:
 
     MU void setState(c_u8 values[36]);
 
-    MU void setFat(u8 x, u8 y);
-    MU void setFatX(u8 x);
-    MU void setFatY(u8 y);
-    MU void addFatX(u8 x);
-    MU void addFatY(u8 y);
-    MUND u8 getFatX() const;
-    MUND u8 getFatY() const;
+    MU void setFatXY(u8 x, u8 y);
     MUND u8 getFatXY() const;
-    MUND bool hasFat() const;
+
+    MU void setFatBool(bool flag);
+    MUND bool getFatBool() const;
+
+    MU void setFatX(u8 x);
+    MU void addFatX(u8 x);
+    MUND u8 getFatX() const;
+
+    MU void setFatY(u8 y);
+    MU void addFatY(u8 y);
+    MUND u8 getFatY() const;
+
 
     MUND u8 getColor(u8 x, u8 y) const;
+
+
+    MUND u64 getHash() const { return hashMem.getHash(); }
+    MUND Memory& getMemory() { return hashMem.getMemory(); }
+    MUND const Memory& getMemory() const { return hashMem.getMemory(); }
 
     // new generation of high IQ functions
     MUND bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
@@ -72,17 +108,13 @@ public:
 
 
     __forceinline bool operator==(const Board& other) const {
-        return b1 == other.b1 && b2 == other.b2;
-    }
+        return b1 == other.b1 && b2 == other.b2; }
 
     __forceinline bool operator<(const Board& other) const {
-        return this->hash < other.hash;
-    }
-
+        return this->getHash() < other.getHash(); }
 
     __forceinline bool operator>(const Board& other) const {
-        return this->hash > other.hash;
-    }
+        return this->getHash() > other.getHash(); }
 };
 
 typedef std::vector<Board> vecBoard_t;

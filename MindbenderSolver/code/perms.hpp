@@ -36,9 +36,13 @@ static constexpr u64 BOARD_FAT_PRE_ALLOC_SIZES[7] = {
 static constexpr u64 FAT_PERM_COUNT = 48;
 static constexpr bool FAT_CHECK_SIMILAR = true;
 
+
+typedef Board PERMOBJ_t;
+typedef std::vector<PERMOBJ_t> vec_PERMOBJ_t;
+
 #define FAT_PERM_FUNC_DECLARE(name) \
 template<bool CHECK_SIMILAR=FAT_CHECK_SIMILAR> \
-void name(vecBoard_t& boards_out, const Board &board_in, Board::HasherPtr hasher);
+void name(vec_PERMOBJ_t & boards_out, const PERMOBJ_t &board_in, PERMOBJ_t::HasherPtr hasher);
 FAT_PERM_FUNC_DECLARE(make_fat_permutation_list_depth_0)
 FAT_PERM_FUNC_DECLARE(make_fat_permutation_list_depth_1)
 FAT_PERM_FUNC_DECLARE(make_fat_permutation_list_depth_2)
@@ -52,7 +56,7 @@ static constexpr bool NORM_CHECK_SIMILAR = true;
 
 #define NORM_PERM_FUNC_DECLARE(name) \
 template<bool CHECK_INTERSECTION=NORM_CHECK_INTERSECTION, bool CHECK_SIMILAR=NORM_CHECK_SIMILAR> \
-void name(vecBoard_t& boards_out, const Board &board_in, Board::HasherPtr hasher);
+void name(vec_PERMOBJ_t& boards_out, const PERMOBJ_t &board_in, PERMOBJ_t::HasherPtr hasher);
 NORM_PERM_FUNC_DECLARE(make_permutation_list_depth_0)
 NORM_PERM_FUNC_DECLARE(make_permutation_list_depth_1)
 NORM_PERM_FUNC_DECLARE(make_permutation_list_depth_2)
@@ -62,24 +66,20 @@ NORM_PERM_FUNC_DECLARE(make_permutation_list_depth_5)
 
 
 template<bool CHECK_INTERSECTION=true, bool CHECK_SIMILAR=true>
-void make_permutation_list_depth_plus_one(const vecBoard_t &boards_in,
-    vecBoard_t &boards_out, Board::HasherPtr hasher);
+void make_permutation_list_depth_plus_one(const vec_PERMOBJ_t &boards_in,
+    vec_PERMOBJ_t &boards_out, PERMOBJ_t::HasherPtr hasher);
 
 template<bool CHECK_INTERSECTION=true, bool CHECK_SIMILAR=true, u32 BUFFER_SIZE=33'554'432>
 void make_permutation_list_depth_plus_one_buffered(const std::string& root_path,
-    const vecBoard_t &boards_in, vecBoard_t &boards_out, Board::HasherPtr hasher);
-
-
-
-
+    const vec_PERMOBJ_t &boards_in, vec_PERMOBJ_t &boards_out, PERMOBJ_t::HasherPtr hasher);
 
 
 class Permutations {
     static constexpr u32 PTR_LIST_SIZE = 6;
 public:
-    typedef void (*toDepthFuncPtr_t)(vecBoard_t &, const Board &, Board::HasherPtr);
-    typedef void (*toDepthPlusOneFuncPtr_t)(const vecBoard_t &, vecBoard_t &, Board::HasherPtr);
-    typedef void (*toDepthPlusOneFuncBufferedPtr_t)(const std::string&, const vecBoard_t &, vecBoard_t &, Board::HasherPtr);
+    typedef void (*toDepthFuncPtr_t)(vec_PERMOBJ_t &, const PERMOBJ_t &, PERMOBJ_t::HasherPtr);
+    typedef void (*toDepthPlusOneFuncPtr_t)(const vec_PERMOBJ_t &, vec_PERMOBJ_t &, PERMOBJ_t::HasherPtr);
+    typedef void (*toDepthPlusOneFuncBufferedPtr_t)(const std::string&, const vec_PERMOBJ_t &, vec_PERMOBJ_t &, PERMOBJ_t::HasherPtr);
     typedef std::unordered_map<u32, std::vector<std::pair<u32, u32>>> depthMap_t;
 
     static const depthMap_t depthMap;
@@ -88,10 +88,10 @@ public:
     static toDepthPlusOneFuncPtr_t toDepthPlusOneFuncPtr;
     static toDepthPlusOneFuncBufferedPtr_t toDepthPlusOneBufferedFuncPtr;
 
-    MU static void reserveForDepth(const Board &board_in, vecBoard_t& boards_out, u32 depth, bool isFat = false);
-    MU static void getDepthFunc(const Board &board_in, vecBoard_t &boards_out, u32 depth, bool shouldResize = true);
-    MU static void getDepthPlus1Func(const vecBoard_t& boards_in, vecBoard_t& boards_out, bool shouldResize = true);
-    MU static void getDepthPlus1BufferedFunc(const std::string& root_path, const vecBoard_t& boards_in, vecBoard_t& boards_out, int depth);
+    MU static void reserveForDepth(const PERMOBJ_t &board_in, vec_PERMOBJ_t& boards_out, u32 depth, bool isFat = false);
+    MU static void getDepthFunc(const PERMOBJ_t &board_in, vec_PERMOBJ_t &boards_out, u32 depth, bool shouldResize = true);
+    MU static void getDepthPlus1Func(const vec_PERMOBJ_t& boards_in, vec_PERMOBJ_t& boards_out, bool shouldResize = true);
+    MU static void getDepthPlus1BufferedFunc(const std::string& root_path, const vec_PERMOBJ_t& boards_in, vec_PERMOBJ_t& boards_out, int depth);
 };
 
 

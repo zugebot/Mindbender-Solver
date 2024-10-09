@@ -12,7 +12,7 @@ Board::Board(const u8 values[36]) {
 
 Board::Board(const u8 values[36], c_u8 x, c_u8 y) {
     setState(values);
-    setFat(x, y);
+    setFatXY(x, y);
 }
 
 
@@ -55,6 +55,17 @@ u32 Board::getColorCount() const {
 }
 
 
+
+
+
+
+
+template<typename T>
+u64 cast_u64(T var) {
+    return static_cast<u64>(var);
+}
+
+
 static constexpr u64 MASK_FAT_POS = 0x0FFF'FFFF'FFFF'FFFF;
 
 /**
@@ -62,22 +73,29 @@ static constexpr u64 MASK_FAT_POS = 0x0FFF'FFFF'FFFF'FFFF;
  * @param x value 0-4
  * @param y value 0-4
  */
-void Board::setFat(c_u8 x, c_u8 y) {
-    b1 = b1 & MASK_FAT_POS | static_cast<u64>(x) << 61 | 1LL << 60;
-    b2 = b2 & MASK_FAT_POS | static_cast<u64>(y) << 61;
+void Board::setFatXY(c_u8 x, c_u8 y) {
+    b1 = b1 & MASK_FAT_POS | cast_u64(x) << 61;
+    b2 = b2 & MASK_FAT_POS | cast_u64(y) << 61;
+    setFatBool(true);
 }
 
 
+MU void Board::setFatBool(bool flag) {
+    static constexpr u64 MASK_FAT_FLAG = 0xEFFF'FFFF'FFFF'FFFF;
+    b1 = b1 & MASK_FAT_FLAG | cast_u64(flag) << 60;
+
+}
+
 MU void Board::setFatX(c_u8 x) {
-    b1 = b1 & MASK_FAT_POS | static_cast<u64>(x) << 61;
+    b1 = b1 & MASK_FAT_POS | cast_u64(x) << 61;
 }
 
 
 MU void Board::setFatY(c_u8 y) {
-    b2 = b2 & MASK_FAT_POS | static_cast<u64>(y) << 61;
+    b2 = b2 & MASK_FAT_POS | cast_u64(y) << 61;
 }
 
-// 336 -> 349
+
 MU void Board::addFatX(c_u8 x) {
     u64 cur_x = getFatX() + x;
     cur_x -= 6 * (cur_x > 5);
@@ -85,7 +103,6 @@ MU void Board::addFatX(c_u8 x) {
 }
 
 
-// 351 -> 365
 MU void Board::addFatY(c_u8 y) {
     u64 cur_y = getFatY() + y;
     cur_y -= 6 * (cur_y > 5);
@@ -109,10 +126,22 @@ u8 Board::getFatXY() const {
 }
 
 
-bool Board::hasFat() const {
+bool Board::getFatBool() const {
     c_bool state = (b1 >> 60 & 1) != 0;
     return state;
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 u8 Board::getColor(c_u8 x, c_u8 y) const {
@@ -307,25 +336,25 @@ u64 getSegment4bits(c_u64 segment) {
 void Board::precomputeHash2() {
     c_u64 above = getSegment2bits(b1);
     c_u64 below = getSegment2bits(b2);
-    hash = above << 18 | below;
+    hashMem.setHash(above << 18 | below);
 }
 
 
 void Board::precomputeHash3() {
     c_u64 above = getSegment3bits(b1);
     c_u64 below = getSegment3bits(b2);
-    hash = above << 30 | below;
+    hashMem.setHash(above << 30 | below);
 }
 
 
 void Board::precomputeHash4() {
-    hash = prime_func1(b2, b1);
+    hashMem.setHash(prime_func1(b2, b1));
 }
 
 
 Board::HasherPtr Board::getHashFunc() const {
     c_u64 colorCount = getColorCount();
-    if (hasFat() || colorCount > 3) {
+    if (getFatBool() || colorCount > 3) {
         return &Board::precomputeHash4;
     }
     if (colorCount == 1 || colorCount == 2) {
@@ -337,7 +366,7 @@ Board::HasherPtr Board::getHashFunc() const {
 
 
 void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY) {
-    c_bool isFat = board->hasFat();
+    c_bool isFat = board->getFatBool();
     c_u8 curFatX = board->getFatX();
     c_u8 curFatY = board->getFatY();
     bool inMiddle = false;
@@ -366,15 +395,11 @@ void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY
         str.append(Colors::getColor(value));
         str.append(std::to_string(value));
         if (inMiddle) {
-            if (x != 15) {
-                str.append(" ");
-            }
+            if (x != 15) { str.append(" "); }
             str.append(Colors::bgReset);
         } else {
             str.append(Colors::bgReset);
-            if (x != 15) {
-                str.append(" ");
-            }
+            if (x != 15) { str.append(" "); }
         }
     }
 }

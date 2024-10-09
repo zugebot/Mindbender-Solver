@@ -13,7 +13,7 @@ namespace std {
     template <>
     struct hash<Board> {
         std::size_t operator()(const Board& b) const {
-            return b.hash;
+            return b.getHash();
         }
     };
 }
@@ -109,7 +109,7 @@ int main() {
         auto results = intersection(boards6, boards5);
 
         for (const auto [fst, snd]: results) {
-            std::string moveset = fst->mem.assembleMoveString(&snd->mem);
+            std::string moveset = fst->hashMem.mem.asmString(&snd->hashMem.mem);
             resultSet.insert(moveset);
         }
         std::cout << " | Results: " << results.size() << "\n";

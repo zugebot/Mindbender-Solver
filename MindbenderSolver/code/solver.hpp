@@ -36,7 +36,7 @@ public:
         pair = pairIn;
         board1 = pair->getInitialState();
         board2 = pair->getSolutionState();
-        hasFat = board1.hasFat();
+        hasFat = board1.getFatBool();
 
     }
 
@@ -166,12 +166,12 @@ public:
                 c_int xy1 = board1.getFatXY();
                 c_int xy2 = board2.getFatXY();
                 for (const auto &[fst, snd]: results) {
-                    std::string moveset = fst->mem.asmFatString(xy1, &snd->mem, xy2);
+                    std::string moveset = fst->getMemory().asmFatString(xy1, &snd->getMemory(), xy2);
                     resultSet.insert(moveset);
                 }
             } else {
                 for (const auto [fst, snd]: results) {
-                    std::string moveset = fst->mem.asmString(&snd->mem);
+                    std::string moveset = fst->getMemory().asmString(&snd->getMemory());
                     resultSet.insert(moveset);
                 }
             }

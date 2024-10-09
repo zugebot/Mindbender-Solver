@@ -15,15 +15,15 @@ std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>& boards
     auto it1 = boards1.begin();
     auto it2 = boards2.begin();
     while (it1 != boards1.end() && it2 != boards2.end()) {
-        if (it1->hash == it2->hash) {
+        if (it1->getHash() == it2->getHash()) {
             auto it1_end = it1;
             auto it2_end = it2;
             // find range of matching hashes in boards1
-            while (it1_end != boards1.end() && it1_end->hash == it1->hash) {
+            while (it1_end != boards1.end() && it1_end->getHash() == it1->getHash()) {
                 ++it1_end;
             }
             // find range of matching hashes in boards2
-            while (it2_end != boards2.end() && it2_end->hash == it2->hash) {
+            while (it2_end != boards2.end() && it2_end->getHash() == it2->getHash()) {
                 ++it2_end;
             }
             // make pairs for all combinations of matching hashes
@@ -34,7 +34,7 @@ std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>& boards
             }
             it1 = it1_end;
             it2 = it2_end;
-        } else if (it1->hash < it2->hash) {
+        } else if (it1->getHash() < it2->getHash()) {
             ++it1;
         } else {
             ++it2;
@@ -44,7 +44,7 @@ std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>& boards
 }
 
 
-auto BOARD_SORTER = [](const Board &a, const Board &b) { return a.hash < b.hash; };
+auto BOARD_SORTER = [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); };
 
 
 
@@ -135,8 +135,8 @@ std::vector<Board> boards2 = makeFatPermutationListFuncs[4](board2, 4);
 
 std::cout << "did perms" << std::endl;
 
-std::sort(boards1.begin(), boards1.end(), [](const Board &a, const Board &b) { return a.hash < b.hash; });
-std::sort(boards2.begin(), boards2.end(), [](const Board &a, const Board &b) { return a.hash < b.hash; });
+std::sort(boards1.begin(), boards1.end(), [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); });
+std::sort(boards2.begin(), boards2.end(), [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); });
 
 std::cout << "did sorting" << std::endl;
 
@@ -178,11 +178,10 @@ volatile int _ = 0;
     check = level.getInitialState();
     solve = level.getSolutionState();
 
-    board.precomputeHash();
-    check.precomputeHash();
+    (board.*board.getHashFunc())();
 
-    uint64_t hash1 = board.hash;
-    uint64_t hash2 = check.hash;
+    uint64_t hash1 = board.getHash();
+    uint64_t hash2 = check.getHash();
     board.b1 |= VAL;
     board.b2 |= VAL;
     check.b1 |= VAL;
@@ -191,7 +190,7 @@ volatile int _ = 0;
     board.precomputeHash();
     check.precomputeHash();
 
-    if (hash1 != hash2 || hash2 != board.hash || board.hash != check.hash) {
+    if (hash1 != hash2 || hash2 != board.getHash() || board.getHash() != check.getHash()) {
         std::cout << "hashes aren't lining up for the same board state...\n";
         return -1;
     }
@@ -205,7 +204,7 @@ volatile int _ = 0;
             }
         }
         board.precomputeHash();
-        uint64_t hash_to_check = board.hash;
+        uint64_t hash_to_check = board.getHash();
         if (hash_to_check != hash1) {
             std::cout << "hashes aren't lining up for the same board state...\n";
             return -1;
@@ -265,10 +264,10 @@ volatile int _ = 0;
 
     // C24 C32 R24
     Board board_right = level.getSolutionState();
-    actions[11](board_right); // R_2_2(board_right);
-    actions[41](board_right); // C_2_2(board_right);
-    actions[48](board_right); // C_3_4(board_right);
-    (board_right.mem.*setNextMoveFuncs[2])(11 | 41 << 6 | 48 << 12);
+    allActionsList[11](board_right); // R_2_2(board_right);
+    allActionsList[41](board_right); // C_2_2(board_right);
+    allActionsList[48](board_right); // C_3_4(board_right);
+    (board_right.hashMem.mem.setNextMoveFuncs[2])(11 | 41 << 6 | 48 << 12);
 
     board_right.precomputeHash();
 
@@ -289,10 +288,10 @@ volatile int _ = 0;
         return -1;
     }
 
-    if (board_left.hash != board_right.hash) {
+    if (board_left.getHash() != board_right.getHash()) {
         std::cout << "even if the boards are the same, the hashes do not match\n";
-        std::cout << "left:  " << board_left.hash << std::endl;
-        std::cout << "right: " << board_right.hash << std::endl;
+        std::cout << "left:  " << board_left.getHash() << std::endl;
+        std::cout << "right: " << board_right.getHash() << std::endl;
     }
 
 
@@ -306,7 +305,7 @@ volatile int _ = 0;
     std::vector<Board> boards_depth_4 = makePermutationListFuncs[4](board);
     bool found1 = false;
     for (const auto& iterBoard : boards_depth_4) {
-        if (iterBoard.hash == board_left.hash) {
+        if (iterBoard.getHash() == board_left.getHash()) {
             found1 = true;
         }
     }
@@ -327,11 +326,11 @@ volatile int _ = 0;
     std::vector<Board> solves_depth_4 = makePermutationListFuncs[4](solve);
     bool found2 = false;
     for (const auto& iterBoard : solves_depth_3) {
-        std::string str = iterBoard.mem.toString();
+        std::string str = iterBoard.hashMem.mem.toString();
         if (str == "Move[11, 41, 48]") {
             volatile int x = 0;
         }
-        if (iterBoard.hash == board_right.hash) {
+        if (iterBoard.getHash() == board_right.getHash()) {
             found2 = true;
         }
     }

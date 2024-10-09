@@ -96,7 +96,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
                 auto& local_count = thread_counts[t];
                 std::ranges::fill(local_count, 0);
                 for (count_t i = start; i < end; ++i) {
-                    c_u64 bucket = (data_out[i].hash >> shift) & mask;
+                    c_u64 bucket = (data_out[i].getHash() >> shift) & mask;
                     ++local_count[bucket];
                 }
             });
@@ -153,7 +153,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
             thread_pool[t] = std::thread([&, t, start, end]() {
                 auto& local_offset = thread_offsets[t];
                 for (count_t i = start; i < end; ++i) {
-                    c_u64 bucket = (data_out[i].hash >> shift) & mask;
+                    c_u64 bucket = (data_out[i].getHash() >> shift) & mask;
                     aux_buffer[local_offset[bucket]++] = data_out[i];
                 }
             });
