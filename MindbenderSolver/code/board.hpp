@@ -101,10 +101,10 @@ public:
 
     MUND u64 getScore1(const Board& other) const;
 
-    MU static void appendBoardToString(std::string& str, const Board* board, c_i32 curY);
-    MUND std::string toString() const;
-    MUND std::string toString(const Board& other) const;
-    MUND std::string toString(const Board* other) const;
+    MU static void appendBoardToString(std::string& str, const Board* board, c_i32 curY, bool printASCII = true);
+    MUND std::string toString(bool printASCII = true) const;
+    MUND std::string toString(const Board& other, bool printASCII = true) const;
+    MUND std::string toString(const Board* other, bool printASCII = true) const;
 
 
     __forceinline bool operator==(const Board& other) const {

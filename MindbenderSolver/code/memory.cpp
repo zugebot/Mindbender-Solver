@@ -6,17 +6,17 @@
 
 
 MUND u8 Memory::getMoveCount() const {
-    return moves & MOVE_DATA_MASK;
+    return moves & MEMORY_MOVE_DATA_MASK;
 }
 
 
 u8 Memory::getMove(c_u8 index) const {
-    return moves >> getShift(index) & MOVE_TYPE_MASK;
+    return moves >> getShift(index) & MEMORY_MOVE_TYPE_MASK;
 }
 
 
 u8 Memory::getLastMove() const {
-    return moves >> getShift(getMoveCount() - 1) & MOVE_TYPE_MASK;
+    return moves >> getShift(getMoveCount() - 1) & MEMORY_MOVE_TYPE_MASK;
 }
 
 

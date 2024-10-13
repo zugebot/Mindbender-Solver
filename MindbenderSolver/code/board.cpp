@@ -365,7 +365,7 @@ Board::HasherPtr Board::getHashFunc() const {
 
 
 
-void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY) {
+void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY, bool printASCII) {
     c_bool isFat = board->getFatBool();
     c_u8 curFatX = board->getFatX();
     c_u8 curFatY = board->getFatY();
@@ -386,53 +386,56 @@ void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY
             c_u32 curX = x / 3;
             if (curFatX == curX || curFatX == curX - 1) {
                 if (curFatY == curY || curFatY == curY - 1) {
-                    str.append(Colors::getBgColor(value));
+                    if (printASCII)
+                        str.append(Colors::getBgColor(value));
                     inMiddle = curFatX == curX;
                 }
             }
         }
-
-        str.append(Colors::getColor(value));
+        if (printASCII)
+            str.append(Colors::getColor(value));
         str.append(std::to_string(value));
         if (inMiddle) {
             if (x != 15) { str.append(" "); }
-            str.append(Colors::bgReset);
+            if (printASCII)
+                str.append(Colors::bgReset);
         } else {
-            str.append(Colors::bgReset);
+            if (printASCII)
+                str.append(Colors::bgReset);
             if (x != 15) { str.append(" "); }
         }
     }
 }
 
 
-std::string Board::toString() const {
+std::string Board::toString(bool printASCII) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
-        appendBoardToString(str, this, i);
+        appendBoardToString(str, this, i, printASCII);
         str.append("\n");
     }
     return str;
 }
 
 
-MUND std::string Board::toString(const Board& other) const {
+MUND std::string Board::toString(const Board& other, bool printASCII) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
-        appendBoardToString(str, this, i);
+        appendBoardToString(str, this, i, printASCII);
         str.append("   ");
-        appendBoardToString(str, &other, i);
+        appendBoardToString(str, &other, i, printASCII);
         str.append("\n");
     }
     return str;
 }
 
 
-MUND std::string Board::toString(const Board* other) const {
+MUND std::string Board::toString(const Board* other, bool printASCII) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
-        appendBoardToString(str, this, i);
+        appendBoardToString(str, this, i, printASCII);
         str.append("   ");
-        appendBoardToString(str, other, i);
+        appendBoardToString(str, other, i, printASCII);
         str.append("\n");
     }
     return str;

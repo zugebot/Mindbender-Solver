@@ -10,7 +10,8 @@ include_directories(${CMAKE_SOURCE_DIR}/)
 
 file(GLOB_RECURSE MINDBENDER_SOLVER_SOURCES
         "${CMAKE_SOURCE_DIR}/MindbenderSolver/*.cpp"
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/*.hpp")
+        "${CMAKE_SOURCE_DIR}/MindbenderSolver/*.hpp"
+        "${CMAKE_SOURCE_DIR}/MindbenderSolver/*.tpp")
 file(GLOB_RECURSE INCLUDE_SOURCES
         "${CMAKE_SOURCE_DIR}/include/*.cpp"
         "${CMAKE_SOURCE_DIR}/include/*.hpp")
@@ -20,6 +21,7 @@ add_executable(MindbenderSolver
         ${MINDBENDER_SOLVER_SOURCES}
         ${INCLUDE_SOURCES}
         main.cpp
+        MindbenderSolver/code/reference.hpp
         # testHeuristics.cpp
         # testSorting.cpp
         # TestKnownSolutions.cpp

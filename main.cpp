@@ -17,27 +17,50 @@ namespace std {
 
 
 
-
+// TODO: make get_fat_perm_list needs to be rewritten to use an index
+// TODO: make it choose all rows below last_row if its from the right
 
 int main() {
-
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    const auto pair = BoardLookup::getBoardPair("4-4");
+    const auto pair = BoardLookup::getBoardPair("5-3");
     std::cout << pair->toString() << std::endl;
+
+    /*
+    c_Board board = pair->getInitialState();
+    c_auto hasher = board.getHashFunc();
+
+    static constexpr u64 depth = 2;
+    c_u64 sizeOut = 170000000; // 2948970, 170000000
+
+    std::vector<Board> boards_new;
+    boards_new.reserve(sizeOut);
+    std::vector<Board> boards_old(sizeOut);
+
+
+    Timer timer_new;
+    // make_fat_perm_list<depth>(board, boards_new, hasher);
+    make_fat_perm_list<depth>(board, boards_new, hasher);
+    std::cout << "New: " << timer_new.getSeconds() << " size: " << boards_new.size() << std::endl;
+
+
+    Timer timer_old;
+    Perms::getDepthFunc(board, boards_old, depth, true);
+    std::cout << "Old: " << timer_old.getSeconds() << " size: " << boards_old.size() << std::endl;
+
+
+    MU volatile int x = 0;
+    */
 
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
     solver.setDepthParams(4, 7, 7);
 
-    Timer allocateTimer;
     solver.preAllocateMemory(4);
+    Timer allocateTimer;
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
-    solver.findSolutions<true, false>();
+    solver.findSolutions<false, true>();
     return 0;
-
-
-
 
 
     /*

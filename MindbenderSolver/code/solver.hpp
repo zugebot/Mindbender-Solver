@@ -58,32 +58,32 @@ public:
 
     void preAllocateMemory(int maxDepth = 5) {
         c_u32 highestDepth = std::max(1, std::min(maxDepth, static_cast<int>(depthTotalMax + 1) / 2));
-        Permutations::reserveForDepth(board1, board1Table[highestDepth], highestDepth, hasFat);
-        Permutations::reserveForDepth(board1, board1Table[highestDepth], highestDepth, hasFat);
+        Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth, hasFat);
+        Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth, hasFat);
 
         if (highestDepth != 1) {
-            Permutations::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1, hasFat);
-            Permutations::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1, hasFat);
+            Perms::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1, hasFat);
+            Perms::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1, hasFat);
         }
 
-        Permutations::reserveForDepth(board2, board2Table[highestDepth], highestDepth, hasFat);
-        Permutations::reserveForDepth(board2, board2Table[highestDepth], highestDepth, hasFat);
+        Perms::reserveForDepth(board2, board2Table[highestDepth], highestDepth, hasFat);
+        Perms::reserveForDepth(board2, board2Table[highestDepth], highestDepth, hasFat);
 
         if (highestDepth != 1) {
-            Permutations::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1, hasFat);
-            Permutations::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1, hasFat);
+            Perms::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1, hasFat);
+            Perms::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1, hasFat);
         }
 
         if (!hasFat) {
-            boardSorter.ensureAux(highestDepth, BOARD_PRE_ALLOC_SIZES[highestDepth]);
+            boardSorter.ensureAux(highestDepth, BOARD_PRE_MAX_MALLOC_SIZES[highestDepth]);
             if (highestDepth != 1) {
-                boardSorter.ensureAux(highestDepth - 1, BOARD_PRE_ALLOC_SIZES[highestDepth - 1]);
+                boardSorter.ensureAux(highestDepth - 1, BOARD_PRE_MAX_MALLOC_SIZES[highestDepth - 1]);
             }
 
         } else {
-            boardSorter.ensureAux(highestDepth, BOARD_FAT_PRE_ALLOC_SIZES[highestDepth]);
+            boardSorter.ensureAux(highestDepth, BOARD_FAT_MAX_MALLOC_SIZES[highestDepth]);
             if (highestDepth != 1) {
-                boardSorter.ensureAux(highestDepth - 1, BOARD_FAT_PRE_ALLOC_SIZES[highestDepth - 1]);
+                boardSorter.ensureAux(highestDepth - 1, BOARD_FAT_MAX_MALLOC_SIZES[highestDepth - 1]);
             }
         }
     }
@@ -109,10 +109,10 @@ public:
 
             if (allowGetDepthPlus1 && depth1 > 0 && !board1Table[depth1 - 1].empty() && !hasFat) {
                 IF_DEBUG(std::cout << start_left << "doing getDepthPlus1Func for " << depth1;)
-                Permutations::getDepthPlus1Func(board1Table[depth1 - 1], board1Table[depth1], should_alloc);
+                Perms::getDepthPlus1Func(board1Table[depth1 - 1], board1Table[depth1], should_alloc);
             } else {
                 IF_DEBUG(std::cout << start_left << "doing getDepthFunc for " << depth1;)
-                Permutations::getDepthFunc(board1, board1Table[depth1], depth1, should_alloc);
+                Perms::getDepthFunc(board1, board1Table[depth1], depth1, should_alloc);
             }
 
             IF_DEBUG(std::cout << "\n" << start_left << "Creation Time: " << timer.getSeconds();)
@@ -130,10 +130,10 @@ public:
 
             if (allowGetDepthPlus1 && depth2 > 0 && !board2Table[depth2 - 1].empty() && !hasFat) {
                 IF_DEBUG(std::cout  << "\n" << start_right << "doing getDepthPlus1Func for " << depth2;)
-                Permutations::getDepthPlus1Func(board2Table[depth2 - 1], board2Table[depth2], should_alloc);
+                Perms::getDepthPlus1Func(board2Table[depth2 - 1], board2Table[depth2], should_alloc);
             } else {
                 IF_DEBUG(std::cout << "\n" << start_right << "doing getDepthFunc for " << depth2;)
-                Permutations::getDepthFunc(board2, board2Table[depth2], depth2, should_alloc);
+                Perms::getDepthFunc(board2, board2Table[depth2], depth2, should_alloc);
             }
 
             IF_DEBUG(std::cout << "\n" << start_right << "Creation Time: " << timer.getSeconds();)
@@ -187,14 +187,14 @@ public:
         u32 currentDepth = depthGuessMax;
         const Timer totalTime;
         while (currentDepth <= depthTotalMax) {
-            auto permutationsFromDepth = Permutations::depthMap.at(currentDepth);
+            auto permutationsFromDepth = Perms::depthMap.at(currentDepth);
             int permCount = 0;
 
 
             // if depth == 9, pre-calculate (4, 4) ex.
             if (currentDepth > 1 && currentDepth % 2 == 1) {
                 IF_DEBUG(std::cout << "\nSolving for (depth - 1): " << currentDepth - 1 << "\n\n";)
-                auto oneBefore = Permutations::depthMap.at(currentDepth - 1);
+                auto oneBefore = Perms::depthMap.at(currentDepth - 1);
                 findSolutionsAtDepth<allowGetDepthPlus1, debug>(permCount, oneBefore[0].first, oneBefore[0].second, false);
             }
 
