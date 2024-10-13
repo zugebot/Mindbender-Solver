@@ -24,19 +24,24 @@ class BoardPair {
     Board const* board{};
     Board const* solve{};
     char name[5] = {};
+    MU std::array<i8, 8> trueColors{};
 
 public:
     BoardPair() = default;
-    BoardPair(Board const* board, Board const* solve, const char nameIn[5]) :
+    BoardPair(c_Board* board, c_Board* solve, c_char nameIn[5], c_u8 colors[36]) :
         board(board), solve(solve) {
         strncpy(name, nameIn, 4);
         name[4] = '\0';
+
+        Board temp;
+        trueColors = temp.setStateAndRetColors(colors);
     }
 
     MUND Board getInitialState() const { return *board; }
     MUND Board getSolutionState() const { return *solve; }
     MUND std::string getName() const { return name; }
-    MUND std::string toString() const { return board->toString(solve); }
+    MUND i8 getTrueColor(u32 color) const { return trueColors[color]; }
+    MUND std::string toString() const { return board->toString(solve, trueColors); }
 };
 
 

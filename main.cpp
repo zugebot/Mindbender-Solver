@@ -22,7 +22,7 @@ int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     const auto pair = BoardLookup::getBoardPair("5-3");
     std::cout << pair->toString() << std::endl;
-
+    return 0;
     /*
     c_Board board = pair->getInitialState();
     c_auto hasher = board.getHashFunc();

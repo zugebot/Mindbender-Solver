@@ -17,7 +17,7 @@ Board::Board(const u8 values[36], c_u8 x, c_u8 y) {
 
 
 void Board::setState(c_u8 values[36]) {
-    i8 colors[8] = {8, 8, 8, 8, 8, 8, 8, 8};
+    std::array<i8, 8> colors = {8, 8, 8, 8, 8, 8, 8, 8};
     for (int i = 0; i < 36; i++) {
         c_int val = values[i] & 0'7;
         colors[val] = 1;
@@ -47,6 +47,49 @@ void Board::setState(c_u8 values[36]) {
     static constexpr u64 EVERYTHING_BUT_COLOR = 0xF0FF'FFFF'FFFF'FFFF;
     b1 = b1 & EVERYTHING_BUT_COLOR | colorCount << 56;
 }
+
+
+MU std::array<i8, 8> Board::setStateAndRetColors(c_u8 values[36]) {
+    std::array<i8, 8> colors = {8, 8, 8, 8, 8, 8, 8, 8};
+    std::array<i8, 8> trueColors = {8, 8, 8, 8, 8, 8, 8, 8};
+
+    for (int i = 0; i < 36; i++) {
+        c_int val = values[i] & 0'7;
+        colors[val] = 1;
+    }
+    u64 colorCount = 0;
+    i8 index = 0;
+    for (i8& color : colors) {
+        if (color != 8) {
+            trueColors[colorCount] = index;
+            color = static_cast<i8>(colorCount);
+            colorCount++;
+        }
+        index++;
+    }
+    u8 adjusted_values[36] = {};
+    for (int i = 0; i < 36; i++) {
+        adjusted_values[i] = colors[values[i]];
+    }
+
+    b1 = 0;
+    for (int i = 0; i < 18; i++) {
+        b1 = b1 << 3 | adjusted_values[i] & 0'7;
+    }
+    b2 = 0;
+    for (int i = 18; i < 36; i++) {
+        b2 = b2 << 3 | adjusted_values[i] & 0'7;
+    }
+
+
+    static constexpr u64 EVERYTHING_BUT_COLOR = 0xF0FF'FFFF'FFFF'FFFF;
+    b1 = b1 & EVERYTHING_BUT_COLOR | colorCount << 56;
+
+    return trueColors;
+}
+
+
+
 
 
 u32 Board::getColorCount() const {
@@ -365,7 +408,8 @@ Board::HasherPtr Board::getHashFunc() const {
 
 
 
-void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY, bool printASCII) {
+void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY,
+                                std::array<i8, 8> trueColors, bool printASCII) {
     c_bool isFat = board->getFatBool();
     c_u8 curFatX = board->getFatX();
     c_u8 curFatY = board->getFatY();
@@ -381,7 +425,7 @@ void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY
     }
 
     for (int x = 0; x < 18; x += 3) {
-        c_u8 value = board_b >> (51 - x - (curY % 3) * 18) & 0'7;
+        c_u8 value = trueColors[board_b >> (51 - x - (curY % 3) * 18) & 0'7];
         if (isFat) {
             c_u32 curX = x / 3;
             if (curFatX == curX || curFatX == curX - 1) {
@@ -408,34 +452,34 @@ void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY
 }
 
 
-std::string Board::toString(bool printASCII) const {
+std::string Board::toString(std::array<i8, 8> trueColors, bool printASCII) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
-        appendBoardToString(str, this, i, printASCII);
+        appendBoardToString(str, this, i, trueColors, printASCII);
         str.append("\n");
     }
     return str;
 }
 
 
-MUND std::string Board::toString(const Board& other, bool printASCII) const {
+MUND std::string Board::toString(const Board& other, std::array<i8, 8> trueColors, bool printASCII) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
-        appendBoardToString(str, this, i, printASCII);
+        appendBoardToString(str, this, i, trueColors, printASCII);
         str.append("   ");
-        appendBoardToString(str, &other, i, printASCII);
+        appendBoardToString(str, &other, i, trueColors, printASCII);
         str.append("\n");
     }
     return str;
 }
 
 
-MUND std::string Board::toString(const Board* other, bool printASCII) const {
+MUND std::string Board::toString(const Board* other, std::array<i8, 8> trueColors, bool printASCII) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
-        appendBoardToString(str, this, i, printASCII);
+        appendBoardToString(str, this, i, trueColors, printASCII);
         str.append("   ");
-        appendBoardToString(str, other, i, printASCII);
+        appendBoardToString(str, other, i, trueColors, printASCII);
         str.append("\n");
     }
     return str;
