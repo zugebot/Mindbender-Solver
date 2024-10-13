@@ -65,7 +65,7 @@ void make_perm_list_inner(c_PERMOBJ_t &board_in,
 }
 
 
-template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
+template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM, bool CHANGE_SECT_START>
 void make_perm_list_outer(c_PERMOBJ_t &board_in,
                           vec_PERMOBJ_t &boards_out,
                           Ref<MAX_DEPTH> &ref,
@@ -79,7 +79,7 @@ void make_perm_list_outer(c_PERMOBJ_t &board_in,
             ref.dir_seq[CUR_DEPTH] = dir;
 
             i32 sect_start;
-            if constexpr (CUR_DEPTH != 0) {
+            if constexpr (CHANGE_SECT_START && CUR_DEPTH != 0) {
                 sect_start = (ref.dir_seq[CUR_DEPTH] == ref.dir_seq[CUR_DEPTH - 1])
                                      ? ref.sect_seq[CUR_DEPTH - 1] + 1 : 0;
             } else {
@@ -97,7 +97,7 @@ void make_perm_list_outer(c_PERMOBJ_t &board_in,
                 }
 
                 // Recursive call to the next depth
-                make_perm_list_outer<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS, CHECK_SIM>(
+                make_perm_list_outer<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS, CHECK_SIM, CHANGE_SECT_START>(
                         board_in, boards_out, ref, count);
             }
         }
@@ -105,7 +105,7 @@ void make_perm_list_outer(c_PERMOBJ_t &board_in,
 }
 
 
-template<int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
+template<int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM, bool CHANGE_SECT_START>
 void make_perm_list(c_PERMOBJ_t &board_in,
                     vec_PERMOBJ_t &boards_out,
                     c_PERMOBJ_t::HasherPtr hasher) {
@@ -113,7 +113,7 @@ void make_perm_list(c_PERMOBJ_t &board_in,
     ref.hasher = hasher;
     int count = 0;
 
-    make_perm_list_outer<0, MAX_DEPTH, CHECK_CROSS, CHECK_SIM>(
+    make_perm_list_outer<0, MAX_DEPTH, CHECK_CROSS, CHECK_SIM, CHANGE_SECT_START>(
             board_in, boards_out, ref, count);
     boards_out.resize(count);
 }

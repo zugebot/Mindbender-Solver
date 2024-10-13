@@ -5,12 +5,11 @@
 #include <unordered_set>
 #include <vector>
 
+#include "MindbenderSolver/utils/format_bytes.hpp"
+#include "intersection.hpp"
 #include "levels.hpp"
 #include "perms.hpp"
 #include "sorter.hpp"
-#include "intersection.hpp"
-
-
 
 
 class BoardSolver {
@@ -87,6 +86,17 @@ public:
             }
         }
     }
+
+
+    std::string getMemorySize() {
+        u64 allocMemory = 0;
+        for (const auto& boardTable : board1Table)
+            allocMemory += boardTable.size() * sizeof(boardTable[0]);
+        for (const auto& boardTable : board2Table)
+            allocMemory += boardTable.size() * sizeof(boardTable[0]);
+        return bytesFormatted<1000>(allocMemory);
+    }
+
 
 
 #define IF_DEBUG(stuff) if constexpr (debug) { stuff }
@@ -220,6 +230,9 @@ public:
             currentDepth++;
         }
         std::cout << "Total Time: " << totalTime.getSeconds() << std::endl;
+
+        std::string allocMemory = getMemorySize();
+        std::cout << "Alloc Memory: " << allocMemory << std::endl;
 
 
         if (!resultSet.empty()) {

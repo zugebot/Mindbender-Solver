@@ -22,6 +22,7 @@ add_executable(MindbenderSolver
         ${INCLUDE_SOURCES}
         main.cpp
         MindbenderSolver/code/reference.hpp
+        MindbenderSolver/utils/format_bytes.hpp
         # testHeuristics.cpp
         # testSorting.cpp
         # TestKnownSolutions.cpp

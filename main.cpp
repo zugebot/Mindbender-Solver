@@ -16,12 +16,11 @@ namespace std {
 }
 
 
-
 // TODO: make it choose all rows below last_row if its from the right
 
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    const auto pair = BoardLookup::getBoardPair("4-4");
+    const auto pair = BoardLookup::getBoardPair("5-3");
     std::cout << pair->toString() << std::endl;
 
     /*
@@ -58,7 +57,10 @@ int main() {
     Timer allocateTimer;
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
-    solver.findSolutions<false, true>();
+
+
+    solver.findSolutions<false, false>();
+
     return 0;
 
 

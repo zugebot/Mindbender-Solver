@@ -10,31 +10,12 @@
 #include <unordered_map>
 
 
-static constexpr u64 BOARD_PRE_MAX_MALLOC_SIZES[7] = {
-        1,
-        60,
-        2550,
-        104000,
-        4245000,
-        173325000,
-        7076687500,
-        // 288933750000,
-        // 11796869531250,
-        // 481654101562500,
-        // 19665443613281250,
-        // 802919920312500000,
-};
+static constexpr u64 BOARD_PRE_MAX_MALLOC_SIZES[8] = {
+        1, 60, 2550, 104000, 4245000, 173325000, 7076687500, 288933750000,};
 
 
-static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[7] = {
-        1,
-        48,
-        2304,
-        110592,
-        5308416,
-        254803968,
-        12230590464,
-};
+static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
+        1, 48, 2304, 110592, 5308416, 254803968, 12230590464, 587068342272};
 
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
@@ -46,7 +27,7 @@ static void make_perm_list_outer(c_PERMOBJ_t &board_in,
     vec_PERMOBJ_t &boards_out, Ref<MAX_DEPTH> &ref, int& count);
 
 /// Entry point function
-template<int MAX_DEPTH, bool CHECK_CROSS = true, bool CHECK_SIM = true>
+template<int MAX_DEPTH, bool CHECK_CROSS = true, bool CHECK_SIM = true, bool CHANGE_SECT_START = true>
 void make_perm_list(c_PERMOBJ_t &board_in,
     vec_PERMOBJ_t &boards_out, c_PERMOBJ_t::HasherPtr hasher);
 
