@@ -6,25 +6,6 @@
 #include <iostream>
 
 
-#define CONTINUE_IF_EQUIV(board1, board2)                                   \
-    if constexpr (CHECK_SIM) {                                              \
-        if (board1.b1 == board2.b1 && board1.b2 == board2.b2) { continue; } \
-    }
-
-
-#define INTERSECT_MAKE_CACHE(board, do_RC_check, intersects, sect1, sect2, amount1) \
-    if constexpr (CHECK_CROSS) {                                                    \
-        if (do_RC_check) {                                                          \
-            intersects = board.doActISColMatchBatched(sect1, sect2, amount1);       \
-        }                                                                           \
-    }
-
-#define INTERSECT_CONTINUE_IF_CACHE(rc_check, intersects, offset)   \
-    if constexpr (CHECK_CROSS) {                                    \
-        if (rc_check && intersects & (1 << (offset))) { continue; } \
-    }
-
-
 template<bool CHECK_CROSS, bool CHECK_SIM>
 void make_permutation_list_depth_plus_one(c_vec_PERMOBJ_t &boards_in, vec_PERMOBJ_t &boards_out, const PERMOBJ_t::HasherPtr hasher) {
     int count = 0;
@@ -44,16 +25,22 @@ void make_permutation_list_depth_plus_one(c_vec_PERMOBJ_t &boards_in, vec_PERMOB
             for (int b_sect = b_start; b_sect < 6; b_sect++) {
                 c_int b_base = b_dir * 30 + b_sect * 5;
 
-                INTERSECT_MAKE_CACHE(board_index, do_RC_check, intersects, a_sect, b_sect, a_amount)
+                if constexpr (CHECK_CROSS) {
+                    if (do_RC_check) { intersects = board_index.doActISColMatchBatched(a_sect, b_sect, a_amount); }
+                }
 
                 for (int b_amount = 0; b_amount < 5; b_amount++) {
-                    INTERSECT_CONTINUE_IF_CACHE(do_RC_check, intersects, b_amount)
+                    if constexpr (CHECK_CROSS) {
+                        if (do_RC_check && intersects & (1 << (b_amount))) { continue; }
+                    }
 
                     c_int b_cur = b_base + b_amount;
 
                     boards_out[count] = board_index;
                     allActionsList[b_cur](boards_out[count]);
-                    CONTINUE_IF_EQUIV(boards_out[count], board_index)
+                    if constexpr (CHECK_SIM) {
+                        if (boards_out[count].b1 == board_index.b1 && boards_out[count].b2 == board_index.b2) { continue; }
+                    }
 
                     (boards_out[count].*hasher)();
                     boards_out[count].getMemory().setNextNMove<1>(b_cur);
@@ -160,16 +147,22 @@ void make_permutation_list_depth_plus_one_buffered(
                 c_int b_base = b_dir * 30 + b_sect * 5;
 
                 u8 intersects = 0;
-                INTERSECT_MAKE_CACHE(board_index, do_RC_check, intersects, a_sect, b_sect, a_amount)
+                if constexpr (CHECK_CROSS) {
+                    if (do_RC_check) { intersects = board_index.doActISColMatchBatched(a_sect, b_sect, a_amount); }
+                }
 
                 for (int b_amount = 0; b_amount < 5; b_amount++) {
-                    INTERSECT_CONTINUE_IF_CACHE(do_RC_check, intersects, b_amount)
+                    if constexpr (CHECK_CROSS) {
+                        if (do_RC_check && intersects & (1 << (b_amount))) { continue; }
+                    }
 
                     c_int b_cur = b_base + b_amount;
 
                     board_buffer[vector_index] = board_index;
                     allActionsList[b_cur](board_buffer[vector_index]);
-                    CONTINUE_IF_EQUIV(board_buffer[vector_index], board_index)
+                    if constexpr (CHECK_SIM) {
+                        if (board_buffer[vector_index].b1 == board_index.b1 && board_buffer[vector_index].b2 == board_index.b2) { continue; }
+                    }
 
                     (board_buffer[vector_index].*hasher)();
                     board_buffer[vector_index].getMemory().setNextNMove<1>(b_cur);

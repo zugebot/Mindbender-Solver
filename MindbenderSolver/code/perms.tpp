@@ -124,7 +124,8 @@ void make_fat_perm_list_recursive_helper(
         c_PERMOBJ_t &board,
         vec_PERMOBJ_t &boards_out,
         c_PERMOBJ_t::HasherPtr hasher,
-        u64 move) {
+        u64 move,
+        u32& count) {
     static constexpr u64 FAT_PERM_COUNT = 48;
 
     // Get the function indexes for the current board state
@@ -143,13 +144,14 @@ void make_fat_perm_list_recursive_helper(
 
         if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
             // Base case: process and store the final board
-            (board_next.*hasher)();
-            board_next.getMemory().setNextNMove<MAX_DEPTH>(move_next);
-            boards_out.push_back(board_next);
+            boards_out[count] = board_next;
+            (boards_out[count].*hasher)();
+            boards_out[count].getMemory().setNextNMove<MAX_DEPTH>(move_next);
+            count++;
         } else {
             // Recursive call to the next depth
             make_fat_perm_list_recursive_helper<CUR_DEPTH + 1, MAX_DEPTH, CHECK_SIM>(
-                    board_next, boards_out, hasher, move_next);
+                    board_next, boards_out, hasher, move_next, count);
         }
     }
 }
@@ -165,7 +167,9 @@ void make_fat_perm_list(c_PERMOBJ_t &board_in,
         (boards_out[0].*hasher)();
         boards_out.resize(1);
     } else {
+        u32 count = 0;
         make_fat_perm_list_recursive_helper<0, DEPTH, CHECK_SIM>(
-                board_in, boards_out, hasher, 0);
+                board_in, boards_out, hasher, 0, count);
+        boards_out.resize(count);
     }
 }

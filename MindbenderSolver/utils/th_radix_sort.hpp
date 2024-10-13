@@ -34,18 +34,15 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
     using vec1_count_t = std::vector<count_t>;
     using vec2_count_t = std::vector<vec1_count_t>;
 
-
     static constexpr int num_buckets = 1 << NUM_BITS_PER_PASS;
 
     const Timer total_time;
     float last_time = 0;
 
-
     if constexpr (DEBUG) {
         std::cout << total_time.getSeconds() - last_time << " Allocating Aux Phase\n";
         last_time = total_time.getSeconds();
     }
-
 
     count_t num_threads = std::thread::hardware_concurrency();
     if (num_threads == 0) num_threads = 8;

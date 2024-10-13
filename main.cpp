@@ -17,12 +17,11 @@ namespace std {
 
 
 
-// TODO: make get_fat_perm_list needs to be rewritten to use an index
 // TODO: make it choose all rows below last_row if its from the right
 
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    const auto pair = BoardLookup::getBoardPair("5-3");
+    const auto pair = BoardLookup::getBoardPair("4-4");
     std::cout << pair->toString() << std::endl;
 
     /*

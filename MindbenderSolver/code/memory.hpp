@@ -66,11 +66,3 @@ void Memory::setNextNMove(c_u64 moveValue) {
 
     moves = p1 | p2 | p3;
 }
-
-/*
-template void Memory::setNextNMove<1>(u64 moveValue);
-template void Memory::setNextNMove<2>(u64 moveValue);
-template void Memory::setNextNMove<3>(u64 moveValue);
-template void Memory::setNextNMove<4>(u64 moveValue);
-template void Memory::setNextNMove<5>(u64 moveValue);
-*/
