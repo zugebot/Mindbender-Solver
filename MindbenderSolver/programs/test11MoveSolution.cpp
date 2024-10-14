@@ -40,8 +40,8 @@ static constexpr u64 BUFFER_SIZE = 33'554'432;
 
 std::vector<Board> create5Depth(Board board) {
     vecBoard_t boards_initial_side_5;
-    Permutations::reserveForDepth(board, boards_initial_side_5, 5);
-    Permutations::getDepthFunc(board, boards_initial_side_5, 5, true);
+    Perms::reserveForDepth(board, boards_initial_side_5, 5);
+    Perms::getDepthFunc(board, boards_initial_side_5, 5, true);
     std::vector<Board> aux_buffer(boards_initial_side_5.size());
     radix_sort<5, 12>(boards_initial_side_5, aux_buffer);
     return boards_initial_side_5;
@@ -52,7 +52,7 @@ void create6Depth(const Board& board, vecBoard_t& boards_buffer, const std::stri
     auto boards5 = create5Depth(board);
 
     Timer timer;
-    Permutations::getDepthPlus1BufferedFunc(path, boards5, boards_buffer, 5);
+    Perms::getDepthPlus1BufferedFunc(path, boards5, boards_buffer, 5);
     std::cout << timer.getSeconds() << std::endl;
 }
 
@@ -109,7 +109,7 @@ int main() {
         auto results = intersection(boards6, boards5);
 
         for (const auto [fst, snd]: results) {
-            std::string moveset = fst->hashMem.mem.asmString(&snd->hashMem.mem);
+            std::string moveset = fst->hashMem.getMemory().asmString(&snd->hashMem.getMemory());
             resultSet.insert(moveset);
         }
         std::cout << " | Results: " << results.size() << "\n";

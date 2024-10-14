@@ -47,58 +47,6 @@ std::vector<std::string> readFileLines(const std::string& filename) {
 }
 
 
-std::vector<int> parseString(const std::string& input) {
-    std::vector<int> result;
-    std::istringstream iss(input);
-    std::string segment;
-
-    // Iterate through the string, splitting by spaces
-    while (iss >> segment) {
-        if (segment.length() == 3) {
-            char type = segment[0];
-            int firstNum = segment[1] - '0';  // Convert char to int
-            int secondNum = segment[2] - '0'; // Convert char to int
-
-            int baseValue = (type == 'R') ? 0 : 30;  // R=0, C=30
-            int value = baseValue + (firstNum * 5) + (secondNum - 1);
-            result.push_back(value);
-        }
-    }
-
-    return result;
-}
-
-
-std::vector<int> parseStringFat(const std::string& input) {
-    std::vector<int> result;
-    std::istringstream iss(input);
-    std::string segment;
-
-    // Iterate through the string, splitting by spaces
-    while (iss >> segment) {
-        if (segment.length() == 3) {
-            char type = segment[0];
-            int firstNum = segment[1] - '0';  // Convert char to int
-            int secondNum = segment[2] - '0'; // Convert char to int
-
-            int baseValue = (type == 'R') ? 0 : 30;  // R=0, C=30
-            int value = baseValue + (firstNum * 5) + (secondNum - 1);
-            result.push_back(value);
-        } else if (segment.length() == 4) {
-            char type = segment[0];
-            int firstNum = segment[1] - '0';  // Convert char to int
-            int secondNum = segment[3] - '0'; // Convert char to int
-            int baseValue = (type == 'R') ? 60 : 85;  // R=60, C=85
-            int value = baseValue + (firstNum * 5) + (secondNum - 1);
-            result.push_back(value);
-
-        }
-    }
-
-    return result;
-}
-
-
 std::string extractSegment(const std::string& input) {
     size_t pos = input.find('_');
     if (pos != std::string::npos) {
@@ -146,9 +94,9 @@ int main() {
         size_t totalSolutionCount = solutions.size();
         if (!startingBoard.getFatBool()) {
             for (const auto& solution : solutions) {
-                std::vector<int> action_numbers = parseString(solution);
+                std::vector<u8> action_numbers = Memory::parseNormMoveString(solution);
                 Board toCheckBoard = startingBoard;
-                for (const auto action_number : action_numbers) {
+                for (c_u8 action_number : action_numbers) {
                     allActionsList[action_number](toCheckBoard);
                 }
                 if (toCheckBoard == realSolutionBoard) {
@@ -161,9 +109,9 @@ int main() {
 
         } else {
             for (const auto& solution : solutions) {
-                std::vector<int> action_numbers = parseStringFat(solution);
+                std::vector<u8> action_numbers = Memory::parseFatMoveString(solution);
                 Board toCheckBoard = startingBoard;
-                for (const auto action_number : action_numbers) {
+                for (c_u8 action_number : action_numbers) {
                     allActionsList[action_number](toCheckBoard);
                 }
 

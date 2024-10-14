@@ -3,6 +3,7 @@
 #include "MindbenderSolver/utils/processor.hpp"
 
 #include <string>
+#include <vector>
 
 
 static constexpr u64 MEMORY_MOVE_TYPE_MASK = 0'77;
@@ -45,9 +46,10 @@ public:
     MUND std::string asmFatString(u8 fatPos, const Memory* other, u8 fatPosOther) const;
     MUND std::string asmFatStringForwards(u8 fatPos) const;
     MUND std::string asmFatStringBackwards(u8 fatPos) const;
+
+    MUND static std::vector<u8> parseNormMoveString(const std::string& input);
+    MUND static std::vector<u8> parseFatMoveString(const std::string& input);
 };
-
-
 
 
 template<int COUNT>

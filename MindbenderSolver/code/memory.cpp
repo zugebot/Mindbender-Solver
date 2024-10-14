@@ -4,6 +4,8 @@
 
 #include "rotations.hpp"
 
+#include <sstream>
+
 
 MUND u8 Memory::getMoveCount() const {
     return moves & MEMORY_MOVE_DATA_MASK;
@@ -178,7 +180,6 @@ std::string Memory::asmFatStringBackwards(c_u8 fatPos) const {
 std::string Memory::toString() const {
     std::string str = "Move[";
 
-
     c_int moveCount = getMoveCount();
     for (int i = 0; i < moveCount; i++) {
         str.append(std::to_string(getMove(i)));
@@ -188,4 +189,43 @@ std::string Memory::toString() const {
     }
     str.append("]");
     return str;
+}
+
+
+template<bool HAS_FAT>
+std::vector<u8> parseMoveStringTemplated(const std::string& input) {
+    std::vector<u8> result;
+    std::istringstream iss(input);
+    std::string seg;
+
+    // Iterate through the string, splitting by spaces
+    while (iss >> seg) {
+        if (seg.length() == 3) {
+            c_u8 baseValue = seg[0] == 'R' ? 0 : 30;  // R=0, C=30
+            u8 value = baseValue + (seg[1] - '0') * 5 + (seg[2] - '0') - 1;
+            result.push_back(value);
+            if constexpr(HAS_FAT) { continue; }
+        }
+        if constexpr(HAS_FAT) {
+            if (seg.length() == 4) {
+                c_u8 baseValue = seg[0] == 'R' ? 60 : 85;  // R=60, C=85
+                c_u8 value = baseValue + (seg[1] - '0') * 5 + (seg[3] - '0') - 1;
+                result.push_back(value);
+            }
+        }
+    }
+
+    return result;
+}
+
+
+
+
+std::vector<u8> Memory::parseNormMoveString(const std::string& input) {
+    return parseMoveStringTemplated<false>(input);
+}
+
+
+std::vector<u8> Memory::parseFatMoveString(const std::string& input) {
+    return parseMoveStringTemplated<true>(input);
 }
