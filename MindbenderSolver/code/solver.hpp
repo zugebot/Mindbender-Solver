@@ -13,6 +13,7 @@
 
 
 #define IF_DEBUG(stuff) if constexpr (debug) { stuff }
+#define IF_DEBUG_COUT(stuff) if constexpr (debug) { std::cout << stuff }
 
 
 class BoardSolver {
@@ -58,8 +59,8 @@ public:
     }
 
 
-    void preAllocateMemory(int maxDepth = 5) {
-        c_u32 highestDepth = std::max(1, std::min(maxDepth, static_cast<int>(depthTotalMax + 1) / 2));
+    void preAllocateMemory(c_u32 maxDepth = 5) {
+        c_u32 highestDepth = std::max(1U, std::min(maxDepth, depthTotalMax + 1) / 2);
         Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth);
         Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth);
 
@@ -91,7 +92,7 @@ public:
     }
 
 
-    std::string getMemorySize() {
+    std::string getMemorySize() const {
         u64 allocMemory = 0;
         for (const auto& boardTable : board1Table)
             allocMemory += boardTable.size() * sizeof(boardTable[0]);
@@ -107,56 +108,42 @@ public:
         const std::string start_left = "[" + std::to_string(index) + "L] ";
         const std::string start_right = "[" + std::to_string(index) + "R] ";
 
-        uint32_t colorCount = board1.getColorCount();
-        if (hasFat) {
-            colorCount = 4;
-        }
+        c_u32 colorCount = !hasFat ? board1.getColorCount() : 4;
 
         if (board1Table[depth1].empty()) {
-            c_bool should_alloc = board1Table[depth1].capacity() == 0;
+            IF_DEBUG_COUT(start_left<<"doing getDepthFunc for "<<depth1;)
+
             const Timer timer;
+            c_bool should_alloc = board1Table[depth1].capacity() == 0;
+            Perms::getDepthFunc<true>(board1, board1Table[depth1], depth1, should_alloc);
 
-            // if (allowGetDepthPlus1 && depth1 > 0 && !board1Table[depth1 - 1].empty() && !hasFat) {
-            //     IF_DEBUG(std::cout << start_left << "doing getDepthPlus1Func for " << depth1;)
-            //     Perms::getDepthPlus1Func(board1Table[depth1 - 1], board1Table[depth1], should_alloc);
-            // } else {
-            IF_DEBUG(std::cout << start_left << "doing getDepthFunc for " << depth1;)
-            Perms::getDepthFunc(board1, board1Table[depth1], depth1, should_alloc);
-            // }
-
-            IF_DEBUG(std::cout << "\n" << start_left << "Creation Time: " << timer.getSeconds();)
-            IF_DEBUG(std::cout << "\n" << start_left << "Size: " << board1Table[depth1].size() << "\n";)
+            IF_DEBUG_COUT("\n"<<start_left<<"Creation Time: "<<timer.getSeconds();)
+            IF_DEBUG_COUT("\n"<<start_left<<"Size: "<<board1Table[depth1].size() << "\n";)
 
             const Timer timerSort1;
             boardSorter.sortBoards(board1Table[depth1], depth1, colorCount);
-            IF_DEBUG(std::cout << start_left << "Sort Time: " << timerSort1.getSeconds() << "\n\n";)
+            IF_DEBUG(std::cout<<start_left<<"Sort Time: "<<timerSort1.getSeconds()<<"\n\n";)
         }
 
 
         if (board2Table[depth2].empty()) {
-            c_bool should_alloc = board2Table[depth2].capacity() == 0;
+            IF_DEBUG_COUT("\n"<<start_right<<"doing getDepthFunc for "<<depth2;)
+
             const Timer timer;
+            c_bool should_alloc = board2Table[depth2].capacity() == 0;
+            Perms::getDepthFunc<false>(board2, board2Table[depth2], depth2, should_alloc);
 
-            // if (allowGetDepthPlus1 && depth2 > 0 && !board2Table[depth2 - 1].empty() && !hasFat) {
-            // IF_DEBUG(std::cout  << "\n" << start_right << "doing getDepthPlus1Func for " << depth2;)
-            // Perms::getDepthPlus1Func(board2Table[depth2 - 1], board2Table[depth2], should_alloc);
-            // } else {
-            IF_DEBUG(std::cout << "\n" << start_right << "doing getDepthFunc for " << depth2;)
-            Perms::getDepthFunc(board2, board2Table[depth2], depth2, should_alloc);
-            // }
-
-            IF_DEBUG(std::cout << "\n" << start_right << "Creation Time: " << timer.getSeconds();)
-            IF_DEBUG(std::cout << "\n" << start_right << "Size: " << board2Table[depth2].size() << "\n";)
+            IF_DEBUG_COUT("\n"<<start_right<<"Creation Time: "<<timer.getSeconds();)
+            IF_DEBUG_COUT("\n"<<start_right<<"Size: "<<board2Table[depth2].size()<<"\n";)
 
             const Timer timerSort2;
             boardSorter.sortBoards(board2Table[depth2], depth2, colorCount);
-            IF_DEBUG(std::cout << start_right << "Sort Time: " << timerSort2.getSeconds() << "\n\n";)
+            IF_DEBUG_COUT(start_right<<"Sort Time: "<<timerSort2.getSeconds()<<"\n\n";)
         }
 
 
-
         if (searchResults) {
-            IF_DEBUG(std::cout << start_both << "Solving for depths [" << depth1 << ", " << depth2 << "]";)
+            IF_DEBUG_COUT(start_both<<"Solving for depths ["<<depth1<<", "<<depth2<<"]";)
 
             std::vector<std::pair<HashMem*, HashMem*>> results;
             if (depth1 != 0 && depth2 != 0) {
@@ -210,15 +197,12 @@ public:
             auto permutationsFromDepth = Perms::depthMap.at(currentDepth);
             int permCount = 0;
 
-
             // if depth == 9, pre-calculate (4, 4) ex.
             if (currentDepth > 1 && currentDepth % 2 == 1) {
-                IF_DEBUG(std::cout << "\nSolving for (depth - 1): " << currentDepth - 1 << "\n\n";)
+                IF_DEBUG_COUT("\nSolving for (depth - 1): "<<currentDepth - 1<<"\n\n";)
                 auto oneBefore = Perms::depthMap.at(currentDepth - 1);
                 findSolutionsAtDepth<debug>(permCount, oneBefore[0].first, oneBefore[0].second, false);
             }
-
-
 
             for (const auto &[fst, snd] : permutationsFromDepth) {
                 if (fst > depthSideMax) { continue; }
@@ -228,43 +212,34 @@ public:
                 permCount++;
                 if (permCount != permutationsFromDepth.size() - 1) {
                     if (!resultSet.empty()) {
-                        IF_DEBUG(std::cout << "Unique Solutions so far: " << resultSet.size() << std::endl;)
+                        IF_DEBUG_COUT("Unique Solutions so far: "<<resultSet.size()<<std::endl;)
                     }
                 } else if (!resultSet.empty()){
-                    IF_DEBUG(std::cout << "Total Unique Solutions: " << resultSet.size() << std::endl;)
+                    IF_DEBUG_COUT("Total Unique Solutions: "<<resultSet.size()<<std::endl;)
                 }
             }
-            if (!resultSet.empty()) {
-                break;
-            }
+            if (!resultSet.empty()) { break; }
             currentDepth++;
         }
-        std::cout << "Total Time: " << totalTime.getSeconds() << std::endl;
+        std::cout<<"Total Time: "<<totalTime.getSeconds()<<std::endl;
 
-        std::string allocMemory = getMemorySize();
-        std::cout << "Alloc Memory: " << allocMemory << std::endl;
-
+        const std::string allocMemory = getMemorySize();
+        std::cout<<"Alloc Memory: "<<allocMemory<<std::endl;
 
         if (!resultSet.empty()) {
             const std::string filename = pair->getName()
                                    + "_c" + std::to_string(currentDepth)
                                    + "_" + std::to_string(resultSet.size())
                                    + ".txt";
-            std::cout << "Saving results to '" << filename << "'.\n";
+            std::cout<<"Saving results to '"<<filename<<"'.\n";
             std::ofstream outfile(outDirectory + "\\levels\\" + filename);
             for (const auto& str: resultSet) {
                 outfile << str << std::endl;
             }
             outfile.close();
         } else {
-            std::cout << "No solutions found...\n";
+            std::cout<<"No solutions found...\n";
         }
-
     }
 
-
-
-
 };
-
-

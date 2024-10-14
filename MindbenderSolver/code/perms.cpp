@@ -86,35 +86,32 @@ MU void Perms::reserveForDepth(MU const Board& board_in, std::vector<HashMem> &b
 }
 
 
+
+Perms::toDepthFuncPtr_t Perms::toDepthFromLeftFuncPtrs[] = {
+    &make_perm_list<0, true, true, true, true>,
+    &make_perm_list<1, true, true, true, true>,
+    &make_perm_list<2, true, true, true, true>,
+    &make_perm_list<3, true, true, true, true>,
+    &make_perm_list<4, true, true, true, true>,
+    &make_perm_list<5, true, true, true, true>};
+
+Perms::toDepthFuncPtr_t Perms::toDepthFromRightFuncPtrs[] = {
+    &make_perm_list<0, true, true, true, false>,
+    &make_perm_list<1, true, true, true, false>,
+    &make_perm_list<2, true, true, true, false>,
+    &make_perm_list<3, true, true, true, false>,
+    &make_perm_list<4, true, true, true, false>,
+    &make_perm_list<5, true, true, true, false>};
+
+
 Perms::toDepthFuncPtr_t Perms::toDepthFatFuncPtrs[] = {
-        &make_fat_perm_list<0>,
-        &make_fat_perm_list<1>,
-        &make_fat_perm_list<2>,
-        &make_fat_perm_list<3>,
-        &make_fat_perm_list<4>,
-        &make_fat_perm_list<5>};
-Perms::toDepthFuncPtr_t Perms::toDepthFuncPtrs[] = {
-        &make_perm_list<0>,
-        &make_perm_list<1>,
-        &make_perm_list<2>,
-        &make_perm_list<3>,
-        &make_perm_list<4>,
-        &make_perm_list<5>};
+    &make_fat_perm_list<0>,
+    &make_fat_perm_list<1>,
+    &make_fat_perm_list<2>,
+    &make_fat_perm_list<3>,
+    &make_fat_perm_list<4>,
+    &make_fat_perm_list<5>};
 
-
-
-void Perms::getDepthFunc(const Board& board_in, std::vector<HashMem> &boards_out, c_u32 depth, c_bool shouldResize) {
-    if (depth >= PTR_LIST_SIZE) { return; }
-    if (shouldResize) { reserveForDepth(board_in, boards_out, depth); }
-
-    boards_out.resize(boards_out.capacity());
-    const HashMem::HasherPtr hasher = HashMem::getHashFunc(board_in);
-    if (!board_in.getFatBool()) {
-        toDepthFuncPtrs[depth](board_in, boards_out, hasher);
-    } else {
-        toDepthFatFuncPtrs[depth](board_in, boards_out, hasher);
-    }
-}
 
 
 Perms::toDepthPlusOneFuncPtr_t Perms::toDepthPlusOneFuncPtr = make_permutation_list_depth_plus_one;

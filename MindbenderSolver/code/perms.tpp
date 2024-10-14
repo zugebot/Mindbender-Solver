@@ -37,7 +37,7 @@ void make_perm_list_inner(const Board &board_in,
         }
 
         // Loop over cur indices
-        int base = ref.base_seq[CUR_DEPTH];
+        c_i32 base = ref.base_seq[CUR_DEPTH];
         u64& cur = ref.cur_seq[CUR_DEPTH];
 
         for (cur = base; cur < base + 5; ++cur) {
@@ -70,7 +70,7 @@ void make_perm_list_inner(const Board &board_in,
 
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS,
-        bool CHECK_SIM, bool CHANGE_SECT_START>
+        bool CHECK_SIM, bool CHANGE_SECT_START, bool SECT_ASCENDING>
 void make_perm_list_outer(const Board &board_in,
                           std::vector<HashMem> &boards_out,
                           Ref<MAX_DEPTH> &ref,
@@ -79,38 +79,72 @@ void make_perm_list_outer(const Board &board_in,
         // All depths have been processed; start the inner loops
         make_perm_list_inner<0, MAX_DEPTH, CHECK_CROSS, CHECK_SIM>(
                 board_in, boards_out, ref, 0, count);
-        return;
+
     } else {
+
+
         for (int dir = 0; dir < 2; ++dir) {
             ref.dir_seq[CUR_DEPTH] = dir;
 
-            i32 sect_start;
-            if constexpr (CHANGE_SECT_START && CUR_DEPTH != 0) {
-                sect_start = (ref.dir_seq[CUR_DEPTH] == ref.dir_seq[CUR_DEPTH - 1])
-                                     ? ref.sect_seq[CUR_DEPTH - 1] + 1 : 0;
-            } else {  sect_start = 0; }
+            if constexpr (SECT_ASCENDING) { // ASCENDING (0 -> 5)
+                static constexpr i32 SECT_START = 0;
+                static constexpr i32 SECT_END = 6;
 
-            for (int sect = sect_start; sect < 6; ++sect) {
-                ref.sect_seq[CUR_DEPTH] = sect;
-                ref.base_seq[CUR_DEPTH] = dir * 30 + sect * 5;
+                i32 sect_start;
+                if constexpr (CHANGE_SECT_START && CUR_DEPTH != 0) {
+                    sect_start = ref.dir_seq[CUR_DEPTH] == ref.dir_seq[CUR_DEPTH - 1]
+                                         ? ref.sect_seq[CUR_DEPTH - 1] + 1 : SECT_START;
+                } else { sect_start = SECT_START; }
 
-                // Determine do_RC_check
-                if (CUR_DEPTH > 0) {
-                    int prev_dir = ref.dir_seq[CUR_DEPTH - 1];
-                    ref.checkRC_seq[CUR_DEPTH] = prev_dir != dir && prev_dir != 0;
+                for (int sect = sect_start; sect < SECT_END; ++sect) {
+                    ref.sect_seq[CUR_DEPTH] = sect;
+                    ref.base_seq[CUR_DEPTH] = dir * 30 + sect * 5;
+
+                    // Determine do_RC_check
+                    if constexpr (CUR_DEPTH > 0) {
+                        c_int prev_dir = ref.dir_seq[CUR_DEPTH - 1];
+                        ref.checkRC_seq[CUR_DEPTH] = prev_dir != dir && prev_dir != 0;
+                    }
+
+                    // Recursive call to the next depth
+                    make_perm_list_outer<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS,
+                        CHECK_SIM, CHANGE_SECT_START, SECT_ASCENDING>(board_in, boards_out, ref, count);
                 }
 
-                // Recursive call to the next depth
-                make_perm_list_outer<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS,
-                                     CHECK_SIM, CHANGE_SECT_START>(
-                        board_in, boards_out, ref, count);
+            } else { // DESCENDING (5 -> 0)
+                static constexpr i32 SECT_START = 5;
+                static constexpr i32 SECT_END = 0;
+
+                i32 sect_start;
+                if constexpr (CHANGE_SECT_START && CUR_DEPTH != 0) {
+                    sect_start = ref.dir_seq[CUR_DEPTH] == ref.dir_seq[CUR_DEPTH - 1]
+                                         ? ref.sect_seq[CUR_DEPTH - 1] - 1 : SECT_START;
+                } else { sect_start = SECT_START; }
+
+                for (int sect = sect_start; sect >= SECT_END; --sect) {
+                    ref.sect_seq[CUR_DEPTH] = sect;
+                    ref.base_seq[CUR_DEPTH] = dir * 30 + sect * 5;
+
+                    // Determine do_RC_check
+                    if constexpr (CUR_DEPTH > 0) {
+                        c_int prev_dir = ref.dir_seq[CUR_DEPTH - 1];
+                        ref.checkRC_seq[CUR_DEPTH] = prev_dir != dir && prev_dir != 0;
+                    }
+
+                    // Recursive call to the next depth
+                    make_perm_list_outer<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS,
+                        CHECK_SIM, CHANGE_SECT_START, SECT_ASCENDING>(board_in, boards_out, ref, count);
+                }
             }
+
         }
+
     }
 }
 
 
-template<int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM, bool CHANGE_SECT_START>
+template<int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM,
+         bool CHANGE_SECT_START, bool SECT_ASCENDING>
 void make_perm_list(const Board &board_in,
                     std::vector<HashMem> &boards_out,
                     const HashMem::HasherPtr hasher) {
@@ -118,23 +152,21 @@ void make_perm_list(const Board &board_in,
     ref.hasher = hasher;
     int count = 0;
 
-    make_perm_list_outer<0, MAX_DEPTH, CHECK_CROSS, CHECK_SIM, CHANGE_SECT_START>(
+    make_perm_list_outer<0, MAX_DEPTH, CHECK_CROSS, CHECK_SIM, CHANGE_SECT_START, SECT_ASCENDING>(
             board_in, boards_out, ref, count);
     boards_out.resize(count);
 }
 
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_SIM>
-void make_fat_perm_list_recursive_helper(
+static void make_fat_perm_list_recursive_helper(
         const Board &board,
         std::vector<HashMem> &boards_out,
-        const HashMem::HasherPtr hasher,
-        u64 move,
-        u32& count) {
+        const HashMem::HasherPtr hasher, c_u64 move, u32& count) {
     static constexpr u64 FAT_PERM_COUNT = 48;
 
     // Get the function indexes for the current board state
-    u8 *funcIndexes = fatActionsIndexes[board.getFatXY()];
+    c_u8 *funcIndexes = fatActionsIndexes[board.getFatXY()];
 
     for (u64 actn_i = 0; actn_i < FAT_PERM_COUNT; ++actn_i) {
         Board board_next = board;
