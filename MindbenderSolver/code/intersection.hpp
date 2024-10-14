@@ -7,13 +7,16 @@
 #include <thread>
 #include <vector>
 
+#include "MindbenderSolver/utils/hasGetHash.hpp"
 
+
+template<HasGetHash T>
 inline void process_chunk(
-        const std::vector<Board> &boards1,
-        const std::vector<Board> &boards2,
+        const std::vector<T> &boards1,
+        const std::vector<T> &boards2,
         const size_t start1,
         const size_t end1,
-        std::vector<std::pair<Board *, Board *>> &results) {
+        std::vector<std::pair<T *, T *>> &results) {
     auto it1 = boards1.begin() + static_cast<i64>(start1);
     c_auto it1_end = boards1.begin() + static_cast<i64>(end1);
 
@@ -24,11 +27,11 @@ inline void process_chunk(
     // Find corresponding range in boards2
     c_auto boards2_start = std::lower_bound(
             boards2.begin(), boards2.end(), min_hash,
-            [](const Board &board, c_u64 hash) { return board.getHash() < hash; });
+            [](const T &board, c_u64 hash) { return board.getHash() < hash; });
 
     c_auto boards2_end = std::upper_bound(
             boards2.begin(), boards2.end(), max_hash,
-            [](c_u64 hash, const Board &board) { return hash < board.getHash(); });
+            [](c_u64 hash, const T &board) { return hash < board.getHash(); });
 
     auto it2 = boards2_start;
     c_auto it2_end = boards2_end;
@@ -50,7 +53,7 @@ inline void process_chunk(
             // Make pairs for all combinations of matching hashes
             for (auto it1_match = it1; it1_match != it1_range_end; ++it1_match) {
                 for (auto it2_match = it2; it2_match != it2_range_end; ++it2_match) {
-                    results.emplace_back(&const_cast<Board &>(*it1_match), &const_cast<Board &>(*it2_match));
+                    results.emplace_back(&const_cast<T &>(*it1_match), &const_cast<T &>(*it2_match));
                 }
             }
 
@@ -65,9 +68,10 @@ inline void process_chunk(
 }
 
 
-inline std::vector<std::pair<Board*, Board*>> intersection_threaded(
-        const std::vector<Board>& boards1,
-        const std::vector<Board>& boards2,
+template<HasGetHash T>
+std::vector<std::pair<T*, T*>> intersection_threaded(
+        const std::vector<T>& boards1,
+        const std::vector<T>& boards2,
         size_t num_threads = std::thread::hardware_concurrency()) {
     if (num_threads == 0) num_threads = 1;
 
@@ -75,7 +79,7 @@ inline std::vector<std::pair<Board*, Board*>> intersection_threaded(
     const size_t chunk_size = (total_size + num_threads - 1) / num_threads; // Round up
 
     std::vector<std::thread> threads;
-    std::vector<std::vector<std::pair<Board*, Board*>>> partial_results(num_threads);
+    std::vector<std::vector<std::pair<T*, T*>>> partial_results(num_threads);
 
     for (size_t i = 0; i < num_threads; ++i) {
         size_t start1 = i * chunk_size;
@@ -99,37 +103,36 @@ inline std::vector<std::pair<Board*, Board*>> intersection_threaded(
 
         // Capture by value to avoid data races
         threads.emplace_back([&, start1, end1, i]() {
-            process_chunk(boards1, boards2, start1, end1, partial_results[i]);
+            process_chunk<T>(boards1, boards2, start1, end1, partial_results[i]);
         });
     }
 
     // Wait for all threads to complete
-    for (auto& t : threads) {
-        t.join();
-    }
+    for (auto& t : threads) { t.join(); }
 
     // Combine partial results
-    std::vector<std::pair<Board*, Board*>> results;
+    std::vector<std::pair<T*, T*>> results;
     for (const auto& partial : partial_results) {
         results.insert(results.end(), partial.begin(), partial.end());
     }
 
-
-    // std::cout << "Total Hashes Found: " << results.size() << std::endl;
-    std::vector<std::pair<Board *, Board *>> realResults;
+    // removes board pairs that have the same hashes but different states
+    std::vector<std::pair<T *, T *>> realResults;
     realResults.reserve(results.size());
     for (auto& [fst, snd] : results) {
         if (*fst == *snd) {
             realResults.emplace_back(fst, snd);
         }
     }
-    return realResults;
 
+    return realResults;
 }
 
 
-inline std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>& boards1, std::vector<Board>& boards2) {
-    std::vector<std::pair<Board *, Board *>> results;
+template<HasGetHash T>
+std::vector<std::pair<T *, T *>> intersection(std::vector<T>& boards1,
+                                              std::vector<T>& boards2) {
+    std::vector<std::pair<T *, T *>> results;
     auto it1 = boards1.begin();
     auto it2 = boards2.begin();
     while (it1 != boards1.end() && it2 != boards2.end()) {
@@ -162,11 +165,8 @@ inline std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>&
         }
     }
 
-
     // removes board pairs that have the same hashes but different states
-
-    // std::cout << "Total Hashes Found: " << results.size() << std::endl;
-    std::vector<std::pair<Board *, Board *>> realResults;
+    std::vector<std::pair<T *, T *>> realResults;
     realResults.reserve(results.size());
     for (auto& [fst, snd] : results) {
         if (*fst == *snd) {

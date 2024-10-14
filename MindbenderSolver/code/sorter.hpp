@@ -7,8 +7,9 @@
 #include "MindbenderSolver/utils/th_radix_sort.hpp"
 
 
+template<typename T>
 class BoardSorter {
-    std::vector<vecBoard_t> aux_buffer;
+    std::vector<std::vector<T>> aux_buffer;
 
     enum DEPTH { D2 = 2, D3 = 3, D4 = 4, D5 = 5 };
     enum COLORS { C2 = 2, C3 = 3 };
@@ -32,7 +33,7 @@ public:
         resize(depth, size);
     }
 
-    MU void sortBoards(std::vector<Board>& boards, c_u32 depth, c_u32 colorCount) {
+    MU void sortBoards(std::vector<T>& boards, c_u32 depth, c_u32 colorCount) {
         switch (depth) {
             case (DEPTH::D2): {
                 std::sort(boards.begin(), boards.end());

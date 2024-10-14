@@ -5,6 +5,99 @@
 #include "MindbenderSolver/utils/colors.hpp"
 
 
+u64 prime_func1(c_u64 b1, c_u64 b2) {
+    static constexpr u64 MASK = 0'777777'777777'777777;
+    static constexpr u64 prime = 31;
+    u64 hash = 17;
+    hash = hash * prime + (b1 & MASK ^ (b1 & MASK) >> 32);
+    hash = hash * prime + (b2 & MASK ^ (b2 & MASK) >> 32);
+    return hash;
+}
+
+
+u64 getSegment2bits(c_u64 segment) {
+    static constexpr u64 MASK_A1 = 0'101010'101010'101010;
+    static constexpr u64 MASK_B1 = MASK_A1 >> 3;
+    static constexpr u64 MASK_A2 = 0'030000'030000'030000;
+    static constexpr u64 MASK_B2 = MASK_A2 >> 6;
+    static constexpr u64 MASK_C2 = MASK_A2 >> 12;
+    static constexpr u64 MASK_A3 = 0'000077'000000'000000;
+    static constexpr u64 MASK_B3 = MASK_A3 >> 18;
+    static constexpr u64 MASK_C3 = MASK_A3 >> 36;
+    c_u64 o1 = (segment & MASK_A1) >> 2 | segment & MASK_B1;
+    c_u64 o2 = (o1 & MASK_A2) >> 8 | (o1 & MASK_B2) >> 4 | o1 & MASK_C2;
+    c_u64 o3 = (o2 & MASK_A3) >> 24 | (o2 & MASK_B3) >> 12 | o2 & MASK_C3;
+    return o3;
+}
+
+
+u64 getSegment3bits(c_u64 segment) {
+    static constexpr u64 MASK_AS = 0'300300'300300'300300;
+    static constexpr u64 MASK_BS = MASK_AS >> 3;
+    static constexpr u64 MASK_CS = MASK_AS >> 6;
+    static constexpr u64 MASK_A1 = 0'037000'037000'037000;
+    static constexpr u64 MASK_B1 = MASK_A1 >> 9;
+    static constexpr u64 MASK_A2 = 0'001777'000000'000000;
+    static constexpr u64 MASK_B2 = MASK_A2 >> 18;
+    static constexpr u64 MASK_C2 = MASK_A2 >> 36;
+
+    c_u64 o1 = ((segment & MASK_AS) >> 6) * 9 | ((segment & MASK_BS) >> 3) * 3 | segment & MASK_CS;
+    c_u64 o2 = (o1 & MASK_A1) >> 4 | o1 & MASK_B1;
+    c_u64 o3 = (o2 & MASK_A2) >> 16 | (o2 & MASK_B2) >> 8 | o2 & MASK_C2;
+    return o3;
+}
+
+
+u64 getSegment4bits(c_u64 segment) {
+    static constexpr u64 MASK_A1 = 0'303030'303030'303030;
+    static constexpr u64 MASK_B1 = MASK_A1 >> 3;
+    static constexpr u64 MASK_A2 = 0'170000'170000'170000;
+    static constexpr u64 MASK_B2 = MASK_A2 >> 6;
+    static constexpr u64 MASK_C2 = MASK_A2 >> 12;
+    static constexpr u64 MASK_A3 = 0'007777'000000'000000;
+    static constexpr u64 MASK_B3 = MASK_A3 >> 18;
+    static constexpr u64 MASK_C3 = MASK_A3 >> 36;
+
+    c_u64 o1 = (segment & MASK_A1) >> 1 | segment & MASK_B1;
+    c_u64 o2 = (o1 & MASK_A2) >> 4 | (o1 & MASK_B2) >> 2 | o1 & MASK_C2;
+    c_u64 o3 = (o2 & MASK_A3) >> 12 | (o2 & MASK_B3) >> 6 | o2 & MASK_C3;
+    return o3;
+}
+
+
+void HashMem::precomputeHash2(c_u64 b1, c_u64 b2) {
+    c_u64 above = getSegment2bits(b1);
+    c_u64 below = getSegment2bits(b2);
+    setHash(above << 18 | below);
+}
+
+
+void HashMem::precomputeHash3(c_u64 b1, c_u64 b2) {
+    c_u64 above = getSegment3bits(b1);
+    c_u64 below = getSegment3bits(b2);
+    setHash(above << 30 | below);
+}
+
+
+void HashMem::precomputeHash4(c_u64 b1, c_u64 b2) {
+    setHash(prime_func1(b2, b1));
+}
+
+
+MU HashMem::HasherPtr HashMem::getHashFunc(const Board& board) {
+    c_u64 colorCount = board.getColorCount();
+    if (board.getFatBool() || colorCount > 3) {
+        return &HashMem::precomputeHash4;
+    }
+    if (colorCount == 1 || colorCount == 2) {
+        return &HashMem::precomputeHash2;
+    }
+    return &HashMem::precomputeHash3;
+}
+
+
+
+
 Board::Board(const u8 values[36]) {
     setState(values);
 }
@@ -314,68 +407,6 @@ u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
 }
 
 
-u64 prime_func1(c_u64 b1, c_u64 b2) {
-    static constexpr u64 MASK = 0'777777'777777'777777;
-    static constexpr u64 prime = 31;
-    u64 hash = 17;
-    hash = hash * prime + (b1 & MASK ^ (b1 & MASK) >> 32);
-    hash = hash * prime + (b2 & MASK ^ (b2 & MASK) >> 32);
-    return hash;
-}
-
-
-u64 getSegment2bits(c_u64 segment) {
-    static constexpr u64 MASK_A1 = 0'101010'101010'101010;
-    static constexpr u64 MASK_B1 = MASK_A1 >> 3;
-    static constexpr u64 MASK_A2 = 0'030000'030000'030000;
-    static constexpr u64 MASK_B2 = MASK_A2 >> 6;
-    static constexpr u64 MASK_C2 = MASK_A2 >> 12;
-    static constexpr u64 MASK_A3 = 0'000077'000000'000000;
-    static constexpr u64 MASK_B3 = MASK_A3 >> 18;
-    static constexpr u64 MASK_C3 = MASK_A3 >> 36;
-    c_u64 o1 = (segment & MASK_A1) >> 2 | segment & MASK_B1;
-    c_u64 o2 = (o1 & MASK_A2) >> 8 | (o1 & MASK_B2) >> 4 | o1 & MASK_C2;
-    c_u64 o3 = (o2 & MASK_A3) >> 24 | (o2 & MASK_B3) >> 12 | o2 & MASK_C3;
-    return o3;
-}
-
-
-u64 getSegment3bits(c_u64 segment) {
-    static constexpr u64 MASK_AS = 0'300300'300300'300300;
-    static constexpr u64 MASK_BS = MASK_AS >> 3;
-    static constexpr u64 MASK_CS = MASK_AS >> 6;
-    static constexpr u64 MASK_A1 = 0'037000'037000'037000;
-    static constexpr u64 MASK_B1 = MASK_A1 >> 9;
-    static constexpr u64 MASK_A2 = 0'001777'000000'000000;
-    static constexpr u64 MASK_B2 = MASK_A2 >> 18;
-    static constexpr u64 MASK_C2 = MASK_A2 >> 36;
-
-    c_u64 o1 = ((segment & MASK_AS) >> 6) * 9 | ((segment & MASK_BS) >> 3) * 3 | segment & MASK_CS;
-    c_u64 o2 = (o1 & MASK_A1) >> 4 | o1 & MASK_B1;
-    c_u64 o3 = (o2 & MASK_A2) >> 16 | (o2 & MASK_B2) >> 8 | o2 & MASK_C2;
-    return o3;
-}
-
-
-
-
-u64 getSegment4bits(c_u64 segment) {
-    static constexpr u64 MASK_A1 = 0'303030'303030'303030;
-    static constexpr u64 MASK_B1 = MASK_A1 >> 3;
-    static constexpr u64 MASK_A2 = 0'170000'170000'170000;
-    static constexpr u64 MASK_B2 = MASK_A2 >> 6;
-    static constexpr u64 MASK_C2 = MASK_A2 >> 12;
-    static constexpr u64 MASK_A3 = 0'007777'000000'000000;
-    static constexpr u64 MASK_B3 = MASK_A3 >> 18;
-    static constexpr u64 MASK_C3 = MASK_A3 >> 36;
-
-    c_u64 o1 = (segment & MASK_A1) >> 1 | segment & MASK_B1;
-    c_u64 o2 = (o1 & MASK_A2) >> 4 | (o1 & MASK_B2) >> 2 | o1 & MASK_C2;
-    c_u64 o3 = (o2 & MASK_A3) >> 12 | (o2 & MASK_B3) >> 6 | o2 & MASK_C3;
-    return o3;
-}
-
-
 void Board::precomputeHash2() {
     c_u64 above = getSegment2bits(b1);
     c_u64 below = getSegment2bits(b2);
@@ -405,7 +436,6 @@ Board::HasherPtr Board::getHashFunc() const {
     }
     return &Board::precomputeHash3;
 }
-
 
 
 void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY,

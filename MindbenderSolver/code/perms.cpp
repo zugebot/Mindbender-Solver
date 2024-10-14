@@ -7,7 +7,7 @@
 
 
 template<bool CHECK_CROSS, bool CHECK_SIM>
-void make_permutation_list_depth_plus_one(c_vec_PERMOBJ_t &boards_in, vec_PERMOBJ_t &boards_out, const PERMOBJ_t::HasherPtr hasher) {
+void make_permutation_list_depth_plus_one(const std::vector<Board> &boards_in, std::vector<Board> &boards_out, const Board::HasherPtr hasher) {
     int count = 0;
     u8 intersects = 0;
 
@@ -66,9 +66,20 @@ const Perms::depthMap_t Perms::depthMap = {
         {10, {{5, 5}}},
         {11, {{6, 5}}},
 };
-MU void Perms::reserveForDepth(MU c_PERMOBJ_t &board_in, vec_PERMOBJ_t &boards_out, c_u32 depth, c_bool isFat) {
-    c_double fraction = PERMOBJ_t::getDuplicateEstimateAtDepth(depth);
-    u64 allocSize = isFat ? BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
+
+
+MU void Perms::reserveForDepth(MU const Board& board_in, std::vector<Board> &boards_out, c_u32 depth) {
+    c_double fraction = Board::getDuplicateEstimateAtDepth(depth);
+    u64 allocSize = board_in.getFatBool() ? BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
+
+    allocSize = static_cast<u64>(static_cast<double>(allocSize) * fraction);
+    boards_out.reserve(allocSize);
+}
+
+
+MU void Perms::reserveForDepth(MU const Board& board_in, std::vector<HashMem> &boards_out, c_u32 depth) {
+    c_double fraction = Board::getDuplicateEstimateAtDepth(depth);
+    u64 allocSize = board_in.getFatBool() ? BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
 
     allocSize = static_cast<u64>(static_cast<double>(allocSize) * fraction);
     boards_out.reserve(allocSize);
@@ -92,17 +103,13 @@ Perms::toDepthFuncPtr_t Perms::toDepthFuncPtrs[] = {
 
 
 
-void Perms::getDepthFunc(c_PERMOBJ_t &board_in, vec_PERMOBJ_t &boards_out, c_u32 depth, c_bool shouldResize) {
-    if (depth >= PTR_LIST_SIZE) {
-        return;
-    }
-    const bool isFat = board_in.getFatBool();
-    const PERMOBJ_t::HasherPtr hasher = board_in.getHashFunc();
-    if (shouldResize) {
-        reserveForDepth(board_in, boards_out, depth, isFat);
-    }
+void Perms::getDepthFunc(const Board& board_in, std::vector<HashMem> &boards_out, c_u32 depth, c_bool shouldResize) {
+    if (depth >= PTR_LIST_SIZE) { return; }
+    if (shouldResize) { reserveForDepth(board_in, boards_out, depth); }
+
     boards_out.resize(boards_out.capacity());
-    if (!isFat) {
+    const HashMem::HasherPtr hasher = HashMem::getHashFunc(board_in);
+    if (!board_in.getFatBool()) {
         toDepthFuncPtrs[depth](board_in, boards_out, hasher);
     } else {
         toDepthFatFuncPtrs[depth](board_in, boards_out, hasher);
@@ -111,14 +118,11 @@ void Perms::getDepthFunc(c_PERMOBJ_t &board_in, vec_PERMOBJ_t &boards_out, c_u32
 
 
 Perms::toDepthPlusOneFuncPtr_t Perms::toDepthPlusOneFuncPtr = make_permutation_list_depth_plus_one;
-void Perms::getDepthPlus1Func(c_vec_PERMOBJ_t &boards_in, vec_PERMOBJ_t &boards_out, c_bool shouldResize) {
-    if (shouldResize) {
-        boards_out.resize(boards_in.size() * 60);
-    }
+void Perms::getDepthPlus1Func(const std::vector<Board> &boards_in, std::vector<Board> &boards_out, c_bool shouldResize) {
+    if (shouldResize) { boards_out.resize(boards_in.size() * 60); }
+
     boards_out.resize(boards_out.capacity());
-
-    const PERMOBJ_t::HasherPtr hasher = boards_in[0].getHashFunc();
-
+    const Board::HasherPtr hasher = boards_in[0].getHashFunc();
     toDepthPlusOneFuncPtr(boards_in, boards_out, hasher);
 }
 
@@ -126,7 +130,7 @@ void Perms::getDepthPlus1Func(c_vec_PERMOBJ_t &boards_in, vec_PERMOBJ_t &boards_
 template<bool CHECK_CROSS, bool CHECK_SIM, u32 BUFFER_SIZE>
 void make_permutation_list_depth_plus_one_buffered(
         const std::string &root_path,
-        c_vec_PERMOBJ_t &boards_in, vec_PERMOBJ_t &board_buffer, PERMOBJ_t::HasherPtr hasher) {
+        const std::vector<Board> &boards_in, std::vector<Board> &board_buffer, Board::HasherPtr hasher) {
 
     int vector_index = 0;
     int buffer_index = 0;
@@ -172,7 +176,7 @@ void make_permutation_list_depth_plus_one_buffered(
                         std::string filename = root_path + std::to_string(buffer_index) + ".bin";
                         std::cout << "writing to file '" + filename + "'.\n";
                         std::ofstream outfile(filename, std::ios::binary);
-                        outfile.write(reinterpret_cast<const char *>(board_buffer.data()), (i64) (board_buffer.size() * sizeof(PERMOBJ_t)));
+                        outfile.write(reinterpret_cast<const char *>(board_buffer.data()), (i64) (board_buffer.size() * sizeof(Board)));
                         outfile.close();
                         buffer_index++;
 
@@ -187,7 +191,7 @@ void make_permutation_list_depth_plus_one_buffered(
         std::string filename = root_path + std::to_string(buffer_index) + ".bin";
         std::cout << "writing to file '" + filename + "'.\n";
         std::ofstream outfile(filename, std::ios::binary);
-        outfile.write(reinterpret_cast<const char *>(board_buffer.data()), (i64) (vector_index * sizeof(PERMOBJ_t)));
+        outfile.write(reinterpret_cast<const char *>(board_buffer.data()), (i64) (vector_index * sizeof(Board)));
         outfile.close();
     }
 }
@@ -195,11 +199,11 @@ Perms::toDepthPlusOneFuncBufferedPtr_t Perms::toDepthPlusOneBufferedFuncPtr = ma
 
 void Perms::getDepthPlus1BufferedFunc(
         const std::string &root_path,
-        c_vec_PERMOBJ_t &boards_in, vec_PERMOBJ_t &boards_out, int depth) {
+        const std::vector<Board> &boards_in, std::vector<Board> &boards_out, int depth) {
 
     boards_out.resize(boards_out.capacity());
 
-    c_PERMOBJ_t::HasherPtr hasher = boards_in[0].getHashFunc();
+    const Board::HasherPtr hasher = boards_in[0].getHashFunc();
 
     std::string path = root_path + std::to_string(depth + 1) + "_";
     toDepthPlusOneBufferedFuncPtr(path, boards_in, boards_out, hasher);

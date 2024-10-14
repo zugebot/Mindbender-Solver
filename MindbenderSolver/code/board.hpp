@@ -8,6 +8,9 @@
 #include <vector>
 
 
+class Board;
+
+
 /**
  * Todo:
  * make it so that
@@ -22,6 +25,7 @@ class HashMem {
     u64 hash = 0;
     Memory mem;
 public:
+    typedef void (HashMem::*HasherPtr)(u64, u64);
 
     explicit HashMem() = default;
 
@@ -30,8 +34,23 @@ public:
 
     MUND u64 getHash() const { return hash; }
     MU void setHash(u64 value) { hash = value; }
-};
 
+    MU void precomputeHash2(c_u64 b1, c_u64 b2);
+    MU void precomputeHash3(c_u64 b1, c_u64 b2);
+    MU void precomputeHash4(c_u64 b1, c_u64 b2);
+    MUND static HasherPtr getHashFunc(const Board& board) ;
+
+
+    __forceinline bool operator==(const HashMem& other) const {
+        return this->getHash() == other.getHash(); }
+
+    __forceinline bool operator<(const HashMem& other) const {
+        return this->getHash() < other.getHash(); }
+
+    __forceinline bool operator>(const HashMem& other) const {
+        return this->getHash() > other.getHash(); }
+
+};
 
 
 class Board {
@@ -53,10 +72,7 @@ public:
      */
     u64 b2 = 0;
 
-
-
     HashMem hashMem;
-
 
     explicit Board() = default;
     explicit Board(c_u8 values[36]);
@@ -79,9 +95,7 @@ public:
     MU void addFatY(u8 y);
     MUND u8 getFatY() const;
 
-
     MUND u8 getColor(u8 x, u8 y) const;
-
 
     MUND u64 getHash() const { return hashMem.getHash(); }
     MUND Memory& getMemory() { return hashMem.getMemory(); }
@@ -94,7 +108,6 @@ public:
     MUND u64 getRowColIntersections(u32 x, u32 y) const;
 
     MUND u32 getColorCount() const;
-
 
     MU void precomputeHash2();
     MU void precomputeHash3();

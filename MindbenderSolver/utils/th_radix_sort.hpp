@@ -8,6 +8,7 @@
 #include <array>
 
 #include "timer.hpp"
+#include "hasGetHash.hpp"
 
 
 
@@ -28,7 +29,7 @@
  * @param data_out
  * @param aux_buffer
  */
-template<int NUM_PASSES, int NUM_BITS_PER_PASS, class T, bool DEBUG=false>
+template<int NUM_PASSES, int NUM_BITS_PER_PASS, HasGetHash T, bool DEBUG=false>
 void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
     using count_t = uint32_t;
     using vec1_count_t = std::vector<count_t>;
@@ -37,7 +38,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
     static constexpr int num_buckets = 1 << NUM_BITS_PER_PASS;
 
     const Timer total_time;
-    float last_time = 0;
+    double last_time = 0;
 
     if constexpr (DEBUG) {
         std::cout << total_time.getSeconds() - last_time << " Allocating Aux Phase\n";

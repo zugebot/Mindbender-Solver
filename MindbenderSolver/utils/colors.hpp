@@ -3,8 +3,7 @@
 #include <string>
 #include <vector>
 
-
-/*
+/**
 RED     0
 GREEN   1
 BLUE    2
@@ -13,9 +12,9 @@ YELLOW  4
 PURPLE  5
 WHITE   6
 CYAN    7
+BLACK   8
+RESET   9
  */
-
-
 class Colors {
 public:
     static constexpr std::string Red = "\033[31m";
@@ -45,16 +44,22 @@ public:
     static const std::string bgColors[10];
 
     static std::string getColor(const int index) {
-        if (index < 8) {
-            return colors[index];
-        }
+        if (index < 8) { return colors[index]; }
         return colors[8];
     }
 
     static std::string getBgColor(const int index) {
-        if (index < 8) {
-            return bgColors[index];
-        }
+        if (index < 8) { return bgColors[index]; }
         return bgColors[8];
     }
+};
+
+const std::string Colors::colors[10] = {
+        Red, Green, Blue, Orange, Yellow,
+        Magenta, White, Cyan, Black, Reset
+};
+
+const std::string Colors::bgColors[10] = {
+        bgRed, bgGreen, bgBlue, bgOrange, bgYellow,
+        bgMagenta, bgWhite, bgCyan, bgBlack, bgReset
 };

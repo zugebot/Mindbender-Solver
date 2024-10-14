@@ -4,8 +4,10 @@
 #include <thread>
 #include <vector>
 
+#include "hasGetHash.hpp"
 
-template <int NUM_THREADS, typename T>
+
+template <int NUM_THREADS, HasGetHash T>
 void parallel_sort(std::vector<T>& data) {
     size_t size = data.size();
     const size_t chunk_size = size / NUM_THREADS;

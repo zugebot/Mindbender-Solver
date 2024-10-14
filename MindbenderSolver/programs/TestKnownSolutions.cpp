@@ -132,22 +132,19 @@ int main() {
             continue;
         }
 
-        Board realSolutionBoard = pair->getInitialState();
-        Board startingBoard = pair->getSolutionState();
 
-        /*
-        if (startingBoard.hasFat()) {
-            std::cout << "[" << levelName << "] (has fat) skipping" << "...\n";
-            continue;
-        }
-         */
+        Board startingBoard = pair->getInitialState();
+        Board realSolutionBoard = pair->getSolutionState();
+
+        std::cout << realSolutionBoard.toString(startingBoard) << std::endl;
+
 
 
         auto solutions = readFileLines(outDirectory + file);
 
         size_t realSolutionCount = 0;
         size_t totalSolutionCount = solutions.size();
-        if (!startingBoard.hasFat()) {
+        if (!startingBoard.getFatBool()) {
             for (const auto& solution : solutions) {
                 std::vector<int> action_numbers = parseString(solution);
                 Board toCheckBoard = startingBoard;

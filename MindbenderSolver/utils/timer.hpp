@@ -1,18 +1,29 @@
 #pragma once
 
-#include <cstdint>
+#include <chrono>
 
 
-static uint64_t getNanoSeconds();
-static uint64_t getMilliseconds();
-static uint64_t getSeconds();
-
-
+/// @brief A simple Timer class for measuring elapsed time using a steady clock.
+/// @tparam Duration The duration type to represent elapsed time. Defaults to double seconds.
 class Timer {
-    uint64_t time = 0;
 public:
-    Timer();
-    [[nodiscard]] float getSeconds() const;
+    Timer() {
+        start_time = std::chrono::steady_clock::now();
+    }
+    [[nodiscard]] double getSeconds() const {
+        auto end_time = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed = end_time - start_time;
+        return elapsed.count();
+    }
+    [[maybe_unused]] void reset() {
+        start_time = std::chrono::steady_clock::now();
+    }
 
-    void reset();
+private:
+    /// Type alias for the steady clock's time point
+    using clock = std::chrono::steady_clock;
+    using time_point = std::chrono::time_point<clock>;
+
+    /// Starting time point
+    time_point start_time;
 };

@@ -22,7 +22,7 @@ int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     const auto pair = BoardLookup::getBoardPair("5-3");
     std::cout << pair->toString() << std::endl;
-    return 0;
+
     /*
     c_Board board = pair->getInitialState();
     c_auto hasher = board.getHashFunc();
@@ -51,15 +51,15 @@ int main() {
 
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(4, 7, 7);
+    solver.setDepthParams(5, 7, 7);
 
-    solver.preAllocateMemory(4);
+    solver.preAllocateMemory(5);
     Timer allocateTimer;
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
 
 
-    solver.findSolutions<false, false>();
+    solver.findSolutions<false>();
 
     return 0;
 

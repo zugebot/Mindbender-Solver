@@ -12,12 +12,15 @@
 #include "sorter.hpp"
 
 
+#define IF_DEBUG(stuff) if constexpr (debug) { stuff }
+
+
 class BoardSolver {
 public:
-    std::vector<std::vector<Board>> board1Table;
-    std::vector<std::vector<Board>> board2Table;
+    std::vector<std::vector<HashMem>> board1Table;
+    std::vector<std::vector<HashMem>> board2Table;
     std::unordered_set<std::string> resultSet;
-    BoardSorter boardSorter;
+    BoardSorter<HashMem> boardSorter;
     const BoardPair* pair;
     Board board1;
     Board board2;
@@ -57,20 +60,20 @@ public:
 
     void preAllocateMemory(int maxDepth = 5) {
         c_u32 highestDepth = std::max(1, std::min(maxDepth, static_cast<int>(depthTotalMax + 1) / 2));
-        Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth, hasFat);
-        Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth, hasFat);
+        Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth);
+        Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth);
 
         if (highestDepth != 1) {
-            Perms::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1, hasFat);
-            Perms::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1, hasFat);
+            Perms::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1);
+            Perms::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1);
         }
 
-        Perms::reserveForDepth(board2, board2Table[highestDepth], highestDepth, hasFat);
-        Perms::reserveForDepth(board2, board2Table[highestDepth], highestDepth, hasFat);
+        Perms::reserveForDepth(board2, board2Table[highestDepth], highestDepth);
+        Perms::reserveForDepth(board2, board2Table[highestDepth], highestDepth);
 
         if (highestDepth != 1) {
-            Perms::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1, hasFat);
-            Perms::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1, hasFat);
+            Perms::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1);
+            Perms::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1);
         }
 
         if (!hasFat) {
@@ -98,11 +101,7 @@ public:
     }
 
 
-
-#define IF_DEBUG(stuff) if constexpr (debug) { stuff }
-
-
-    template<bool allowGetDepthPlus1 = true, bool debug=true>
+    template<bool debug=true>
     void findSolutionsAtDepth(c_u32 index, c_u32 depth1, c_u32 depth2, c_bool searchResults = true) {
         const std::string start_both = "[" + std::to_string(index) + "] ";
         const std::string start_left = "[" + std::to_string(index) + "L] ";
@@ -117,13 +116,13 @@ public:
             c_bool should_alloc = board1Table[depth1].capacity() == 0;
             const Timer timer;
 
-            if (allowGetDepthPlus1 && depth1 > 0 && !board1Table[depth1 - 1].empty() && !hasFat) {
-                IF_DEBUG(std::cout << start_left << "doing getDepthPlus1Func for " << depth1;)
-                Perms::getDepthPlus1Func(board1Table[depth1 - 1], board1Table[depth1], should_alloc);
-            } else {
-                IF_DEBUG(std::cout << start_left << "doing getDepthFunc for " << depth1;)
-                Perms::getDepthFunc(board1, board1Table[depth1], depth1, should_alloc);
-            }
+            // if (allowGetDepthPlus1 && depth1 > 0 && !board1Table[depth1 - 1].empty() && !hasFat) {
+            //     IF_DEBUG(std::cout << start_left << "doing getDepthPlus1Func for " << depth1;)
+            //     Perms::getDepthPlus1Func(board1Table[depth1 - 1], board1Table[depth1], should_alloc);
+            // } else {
+            IF_DEBUG(std::cout << start_left << "doing getDepthFunc for " << depth1;)
+            Perms::getDepthFunc(board1, board1Table[depth1], depth1, should_alloc);
+            // }
 
             IF_DEBUG(std::cout << "\n" << start_left << "Creation Time: " << timer.getSeconds();)
             IF_DEBUG(std::cout << "\n" << start_left << "Size: " << board1Table[depth1].size() << "\n";)
@@ -138,13 +137,13 @@ public:
             c_bool should_alloc = board2Table[depth2].capacity() == 0;
             const Timer timer;
 
-            if (allowGetDepthPlus1 && depth2 > 0 && !board2Table[depth2 - 1].empty() && !hasFat) {
-                IF_DEBUG(std::cout  << "\n" << start_right << "doing getDepthPlus1Func for " << depth2;)
-                Perms::getDepthPlus1Func(board2Table[depth2 - 1], board2Table[depth2], should_alloc);
-            } else {
-                IF_DEBUG(std::cout << "\n" << start_right << "doing getDepthFunc for " << depth2;)
-                Perms::getDepthFunc(board2, board2Table[depth2], depth2, should_alloc);
-            }
+            // if (allowGetDepthPlus1 && depth2 > 0 && !board2Table[depth2 - 1].empty() && !hasFat) {
+            // IF_DEBUG(std::cout  << "\n" << start_right << "doing getDepthPlus1Func for " << depth2;)
+            // Perms::getDepthPlus1Func(board2Table[depth2 - 1], board2Table[depth2], should_alloc);
+            // } else {
+            IF_DEBUG(std::cout << "\n" << start_right << "doing getDepthFunc for " << depth2;)
+            Perms::getDepthFunc(board2, board2Table[depth2], depth2, should_alloc);
+            // }
 
             IF_DEBUG(std::cout << "\n" << start_right << "Creation Time: " << timer.getSeconds();)
             IF_DEBUG(std::cout << "\n" << start_right << "Size: " << board2Table[depth2].size() << "\n";)
@@ -159,7 +158,7 @@ public:
         if (searchResults) {
             IF_DEBUG(std::cout << start_both << "Solving for depths [" << depth1 << ", " << depth2 << "]";)
 
-            std::vector<std::pair<Board*, Board*>> results;
+            std::vector<std::pair<HashMem*, HashMem*>> results;
             if (depth1 != 0 && depth2 != 0) {
                 results = intersection_threaded(board1Table[depth1], board2Table[depth2]);
             } else {
@@ -181,8 +180,19 @@ public:
                 }
             } else {
                 for (const auto [fst, snd]: results) {
-                    std::string moveset = fst->getMemory().asmString(&snd->getMemory());
-                    resultSet.insert(moveset);
+                    // verify the results
+                    Board temp1 = board1;
+                    for (int i = 0; i < fst->getMemory().getMoveCount(); i++)
+                        allActionsList[fst->getMemory().getMove(i)](temp1);
+
+                    Board temp2 = board2;
+                    for (int i = 0; i < snd->getMemory().getMoveCount(); i++)
+                        allActionsList[snd->getMemory().getMove(i)](temp2);
+
+                    if (temp1 == temp2) {
+                        std::string moveset = fst->getMemory().asmString(&snd->getMemory());
+                        resultSet.insert(moveset);
+                    }
                 }
             }
         }
@@ -191,7 +201,7 @@ public:
     }
 
 
-    template<bool allowGetDepthPlus1 = true, bool debug=true>
+    template<bool debug=true>
     void findSolutions() {
 
         u32 currentDepth = depthGuessMax;
@@ -205,7 +215,7 @@ public:
             if (currentDepth > 1 && currentDepth % 2 == 1) {
                 IF_DEBUG(std::cout << "\nSolving for (depth - 1): " << currentDepth - 1 << "\n\n";)
                 auto oneBefore = Perms::depthMap.at(currentDepth - 1);
-                findSolutionsAtDepth<allowGetDepthPlus1, debug>(permCount, oneBefore[0].first, oneBefore[0].second, false);
+                findSolutionsAtDepth<debug>(permCount, oneBefore[0].first, oneBefore[0].second, false);
             }
 
 
@@ -214,7 +224,7 @@ public:
                 if (fst > depthSideMax) { continue; }
                 if (snd > depthSideMax) { continue; }
 
-                findSolutionsAtDepth<allowGetDepthPlus1, debug>(permCount, fst, snd);
+                findSolutionsAtDepth<debug>(permCount, fst, snd);
                 permCount++;
                 if (permCount != permutationsFromDepth.size() - 1) {
                     if (!resultSet.empty()) {
