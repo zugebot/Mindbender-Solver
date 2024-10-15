@@ -30,10 +30,10 @@ public:
     explicit HashMem() = default;
 
     MUND Memory& getMemory() { return mem; }
-    MUND const Memory& getMemory() const { return mem; }
+    MUND const Memory& getMemoryConst() const { return mem; }
 
     MUND u64 getHash() const { return hash; }
-    MU void setHash(u64 value) { hash = value; }
+    MU void setHash(c_u64 value) { hash = value; }
 
     MU void precomputeHash2(c_u64 b1, c_u64 b2);
     MU void precomputeHash3(c_u64 b1, c_u64 b2);
@@ -99,7 +99,7 @@ public:
 
     MUND u64 getHash() const { return hashMem.getHash(); }
     MUND Memory& getMemory() { return hashMem.getMemory(); }
-    MUND const Memory& getMemory() const { return hashMem.getMemory(); }
+    MUND const Memory& getMemory() const { return hashMem.getMemoryConst(); }
 
     // new generation of high IQ functions
     MUND bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
@@ -117,9 +117,10 @@ public:
     MUND u64 getScore1(const Board& other) const;
 
     MU static void appendBoardToString(std::string& str, const Board* board, c_i32 curY, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}, bool printASCII = true);
-    MUND std::string toString(std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}, bool printASCII = true) const;
-    MUND std::string toString(const Board& other, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}, bool printASCII = true) const;
-    MUND std::string toString(const Board* other, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}, bool printASCII = true) const;
+    MUND std::string toBlandString() const;
+    MUND std::string toString(bool printASCII = true, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}) const;
+    MUND std::string toString(const Board& other, bool printASCII = true, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}) const;
+    MUND std::string toString(const Board* other, bool printASCII = true, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}) const;
 
 
     __forceinline bool operator==(const Board& other) const {

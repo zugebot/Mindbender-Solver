@@ -1,5 +1,7 @@
 #include "board.hpp"
 
+#include "rotations.hpp"
+
 #include <string>
 
 #include "MindbenderSolver/utils/colors.hpp"
@@ -202,7 +204,7 @@ u64 cast_u64(T var) {
 }
 
 
-static constexpr u64 MASK_FAT_POS = 0x0FFF'FFFF'FFFF'FFFF;
+static constexpr u64 MASK_FAT_POS = 0x1FFF'FFFF'FFFF'FFFF;
 
 /**
  *
@@ -216,7 +218,7 @@ void Board::setFatXY(c_u8 x, c_u8 y) {
 }
 
 
-MU void Board::setFatBool(bool flag) {
+MU void Board::setFatBool(c_bool flag) {
     static constexpr u64 MASK_FAT_FLAG = 0xEFFF'FFFF'FFFF'FFFF;
     b1 = b1 & MASK_FAT_FLAG | cast_u64(flag) << 60;
 
@@ -482,7 +484,12 @@ void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY
 }
 
 
-std::string Board::toString(std::array<i8, 8> trueColors, bool printASCII) const {
+MUND std::string Board::toBlandString() const {
+    return toString(false);
+}
+
+
+std::string Board::toString(bool printASCII, std::array<i8, 8> trueColors) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
         appendBoardToString(str, this, i, trueColors, printASCII);
@@ -492,7 +499,7 @@ std::string Board::toString(std::array<i8, 8> trueColors, bool printASCII) const
 }
 
 
-MUND std::string Board::toString(const Board& other, std::array<i8, 8> trueColors, bool printASCII) const {
+MUND std::string Board::toString(const Board& other, bool printASCII, std::array<i8, 8> trueColors) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
         appendBoardToString(str, this, i, trueColors, printASCII);
@@ -504,7 +511,7 @@ MUND std::string Board::toString(const Board& other, std::array<i8, 8> trueColor
 }
 
 
-MUND std::string Board::toString(const Board* other, std::array<i8, 8> trueColors, bool printASCII) const {
+MUND std::string Board::toString(const Board* other, bool printASCII, std::array<i8, 8> trueColors) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
         appendBoardToString(str, this, i, trueColors, printASCII);

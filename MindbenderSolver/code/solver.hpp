@@ -161,23 +161,36 @@ public:
             if (hasFat) {
                 c_int xy1 = board1.getFatXY();
                 c_int xy2 = board2.getFatXY();
+
                 for (const auto &[fst, snd]: results) {
-                    std::string moveset = fst->getMemory().asmFatString(xy1, &snd->getMemory(), xy2);
-                    resultSet.insert(moveset);
-                }
-            } else {
-                for (const auto [fst, snd]: results) {
-                    // verify the results
+
                     Board temp1 = board1;
-                    for (int i = 0; i < fst->getMemory().getMoveCount(); i++)
-                        allActionsList[fst->getMemory().getMove(i)](temp1);
+                    applyMoves(temp1, *fst);
 
                     Board temp2 = board2;
-                    for (int i = 0; i < snd->getMemory().getMoveCount(); i++)
-                        allActionsList[snd->getMemory().getMove(i)](temp2);
+                    applyMoves(temp2, *snd);
 
                     if (temp1 == temp2) {
-                        std::string moveset = fst->getMemory().asmString(&snd->getMemory());
+                        std::string moveset = fst->getMemoryConst(
+                            ).asmString(&snd->getMemoryConst());
+                        resultSet.insert(moveset);
+                    }
+                }
+            } else {
+
+                // verify the results
+                // this filters out board states with identical hashes
+                for (auto& [fst, snd]: results) {
+
+                    Board temp1 = board1;
+                    applyMoves(temp1, *fst);
+
+                    Board temp2 = board2;
+                    applyMoves(temp2, *snd);
+
+                    if (temp1 == temp2) {
+                        std::string moveset = fst->getMemoryConst(
+                            ).asmString(&snd->getMemoryConst());
                         resultSet.insert(moveset);
                     }
                 }

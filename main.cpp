@@ -1,9 +1,8 @@
 #include "MindbenderSolver/include.hpp"
 
 #include <iostream>
-#include <set>
 #include <vector>
-
+#include <set>
 
 
 namespace std {
@@ -15,13 +14,45 @@ namespace std {
     };
 }
 
-
+// TODO: change the function index -> string to use the lookup table
+    // instead of building it in place
+// FIXME: make_fat_perm_helper: don't make it shift the final action index into the move
 // TODO: make it choose all rows below last_row if its from the right
 
 int main() {
-    const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    const auto pair = BoardLookup::getBoardPair("5-3");
+    const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
+    const auto pair = BoardLookup::getBoardPair("4-4");
     std::cout << pair->toString() << std::endl;
+
+    /*
+    std::vector<HashMem> boards_out(48);
+    const Board board = pair->getInitialState();
+    const auto hasher = HashMem::getHashFunc(board);
+    make_fat_perm_list<1>(board, boards_out, hasher);
+
+    std::cout << board.toString() << std::endl;
+
+    int index = 10;
+    int funcIndex = fatActionsIndexes[board.getFatXY()][index];
+
+    Board temp = board;
+
+    auto function = allActionsList[funcIndex];
+
+
+    std::cout << "is fat: " << temp.getFatBool() << "\n";
+    function(temp);
+    std::cout << "is fat: " << temp.getFatBool() << "\n";
+
+    temp.getMemory().setNextNMove<1>(funcIndex);
+    // applyMoves(temp, boards_out[index]);
+    std::cout << temp.toString() << std::endl;
+
+    std::cout << boards_out[index].getMemory().asmFatStringForwards(board.getFatXY());
+
+
+    return 0;
+    */
 
     /*
     c_Board board = pair->getInitialState();
@@ -51,10 +82,10 @@ int main() {
 
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(5, 7, 7);
+    solver.setDepthParams(4, 7, 7);
 
-    solver.preAllocateMemory(5);
-    Timer allocateTimer;
+    solver.preAllocateMemory(4);
+    const Timer allocateTimer;
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
 

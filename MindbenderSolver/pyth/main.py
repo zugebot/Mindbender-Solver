@@ -11,7 +11,7 @@ from sim import *
 # introduction to computing systems: from bits & gates to C/C++ & beyond
 
 
-SCALE = 1.2
+SCALE = 0.75
 CELL_SIZE = int(SCALE * 60)
 CANVAS_SIZE = GRID_SIZE * CELL_SIZE
 GRID_OFFSET_X = 5
@@ -338,7 +338,7 @@ class SolutionShower:
         self.solutions = []
         self.index = 0
 
-        with open(f"../{self.filename}", "r") as f:
+        with open(f"{self.filename}", "r") as f:
             lines = f.readlines()
             lines = [line.strip("\n") for line in lines if line != ""]
 
@@ -476,7 +476,7 @@ class UI:
         self.read_file(filepath)
 
     def load_files(self):
-        path = f"../{self.folder}"
+        path = f"{self.folder}"
         files = os.listdir(path)
         files = [f"{file}" for file in files if os.path.isfile(f"{path}/{file}")]
         files = [file for file in files if file.endswith(".txt")]
@@ -584,12 +584,12 @@ class UI:
 
 
 def main():
-    folder = "all_levels"
+    folder = "../levels"
 
     ui: UI = UI(folder)
     ui.load_files()
     # TODO: figure out why #128 makes line #6 become '5' units long instead of '4' when flipping it's direction
-    ui.solutions.load_file(f"{folder}/9-5_c9_1079.txt")
+    ui.solutions.load_file(f"{folder}/6-5_c10_8.txt")
     ui.update()
     ui.root.mainloop()
 

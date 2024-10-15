@@ -783,3 +783,8 @@ std::string getNameFromAction(const Action action) {
 Action getActionFromName(const std::string& name) {
     return nameToActionLookup[name];
 }
+
+void applyMoves(Board& board, HashMem& hashMem) {
+    for (int i = 0; i < hashMem.getMemory().getMoveCount(); i++)
+        allActionsList[hashMem.getMemory().getMove(i)](board);
+}

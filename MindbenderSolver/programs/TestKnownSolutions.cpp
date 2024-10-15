@@ -60,9 +60,7 @@ std::string extractSegment(const std::string& input) {
 int main() {
     // std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     std::string folder = "levels";
-    std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\)" + folder + "\\";
-
-
+    std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver\)" + folder + "\\";
 
 
     auto files = getTxtFiles(outDirectory);
@@ -84,7 +82,7 @@ int main() {
         Board startingBoard = pair->getInitialState();
         Board realSolutionBoard = pair->getSolutionState();
 
-        std::cout << realSolutionBoard.toString(startingBoard) << std::endl;
+        // std::cout << realSolutionBoard.toString(startingBoard) << std::endl;
 
 
 

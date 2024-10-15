@@ -46,8 +46,7 @@ void make_perm_list_inner(const Board &board_in,
             allActionsList[cur](board_next);
 
             if constexpr (CHECK_SIM) {
-                if (board_in.b1 == board_next.b1
-                    && board_in.b2 == board_next.b2) { continue; }
+                if (board_in == board_next) { continue; }
             }
 
             // check intersection here
@@ -158,26 +157,25 @@ void make_perm_list(const Board &board_in,
 }
 
 
-template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_SIM>
-static void make_fat_perm_list_recursive_helper(
+template<int CUR_DEPTH, int MAX_DEPTH>
+static void make_fat_perm_list_helper(
         const Board &board,
         std::vector<HashMem> &boards_out,
         const HashMem::HasherPtr hasher, c_u64 move, u32& count) {
-    static constexpr u64 FAT_PERM_COUNT = 48;
 
     // Get the function indexes for the current board state
     c_u8 *funcIndexes = fatActionsIndexes[board.getFatXY()];
 
+    static constexpr u64 FAT_PERM_COUNT = 48;
     for (u64 actn_i = 0; actn_i < FAT_PERM_COUNT; ++actn_i) {
         Board board_next = board;
-        allActionsList[funcIndexes[actn_i]](board_next);
+        c_u8 actionIndex = funcIndexes[actn_i];
+        allActionsList[actionIndex](board_next);
 
-        if constexpr (CHECK_SIM) {
-            if (board.b1 == board_next.b1 && board.b2 == board_next.b2) { continue; }
-        }
+        if (board == board_next) { continue; }
 
         // Update move
-        u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
+        u64 move_next = move | actionIndex << 6 * CUR_DEPTH;
 
         if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
             // Base case: process and store the final board
@@ -187,14 +185,14 @@ static void make_fat_perm_list_recursive_helper(
             count++;
         } else {
             // Recursive call to the next depth
-            make_fat_perm_list_recursive_helper<CUR_DEPTH + 1, MAX_DEPTH, CHECK_SIM>(
+            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH>(
                     board_next, boards_out, hasher, move_next, count);
         }
     }
 }
 
 
-template<int DEPTH, bool CHECK_SIM>
+template<int DEPTH>
 void make_fat_perm_list(const Board &board_in,
                         std::vector<HashMem> &boards_out,
                         const HashMem::HasherPtr hasher) {
@@ -205,7 +203,7 @@ void make_fat_perm_list(const Board &board_in,
         boards_out.resize(1);
     } else {
         u32 count = 0;
-        make_fat_perm_list_recursive_helper<0, DEPTH, CHECK_SIM>(
+        make_fat_perm_list_helper<0, DEPTH>(
                 board_in, boards_out, hasher, 0, count);
         boards_out.resize(count);
     }

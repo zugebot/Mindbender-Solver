@@ -40,14 +40,15 @@ void make_perm_list(
         HashMem::HasherPtr hasher);
 
 
-template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_SIM>
-static void make_fat_perm_list_recursive_helper(
+template<int CUR_DEPTH, int MAX_DEPTH>
+static void make_fat_perm_list_helper(
         const Board &board,
         std::vector<HashMem> &boards_out,
-        HashMem::HasherPtr hasher, c_u64 move, u32& count);
+        HashMem::HasherPtr hasher,
+        c_u64 move, u32& count);
 
 /// Entry point function
-template<int DEPTH, bool CHECK_SIM = true>
+template<int DEPTH>
 void make_fat_perm_list(
         const Board& board_in,
         std::vector<HashMem> &boards_out,
@@ -98,14 +99,14 @@ void Perms::getDepthFunc(const Board& board_in, std::vector<HashMem> &boards_out
 
     boards_out.resize(boards_out.capacity());
     const HashMem::HasherPtr hasher = HashMem::getHashFunc(board_in);
-    if (!board_in.getFatBool()) {
+    if (board_in.getFatBool()) {
+        toDepthFatFuncPtrs[depth](board_in, boards_out, hasher);
+    } else {
         if constexpr (SECT_ASCENDING) {
             toDepthFromLeftFuncPtrs[depth](board_in, boards_out, hasher);
         } else {
             toDepthFromRightFuncPtrs[depth](board_in, boards_out, hasher);
         }
-    } else {
-        toDepthFatFuncPtrs[depth](board_in, boards_out, hasher);
     }
 }
 

@@ -3,7 +3,7 @@ project(MindbenderSolver)
 
 
 set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 
 include_directories(${CMAKE_SOURCE_DIR}/)
@@ -25,11 +25,11 @@ add_executable(MindbenderSolver
         ${MINDBENDER_SOLVER_SOURCES}
         ${INCLUDE_SOURCES}
         main.cpp
+        # MindbenderSolver/programs/TestKnownSolutions.cpp
         # MindbenderSolver/programs/testHeuristics.cpp
         # MindbenderSolver/programs/testSorting.cpp
-        # MindbenderSolver/programs/TestKnownSolutions.cpp
         # MindbenderSolver/programs/UnitTesting.cpp
 )
 
-find_package(TBB REQUIRED)
-target_link_libraries(MindbenderSolver TBB::tbb)
+# find_package(TBB REQUIRED)
+# target_link_libraries(MindbenderSolver TBB::tbb)

@@ -37,3 +37,4 @@ MU extern u8 fatActionsIndexes[25][48];
 
 extern std::string getNameFromAction(Action action);
 extern Action getActionFromName(const std::string& name);
+extern void applyMoves(Board& board, HashMem& hashMem);

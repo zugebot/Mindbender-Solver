@@ -201,18 +201,18 @@ std::vector<u8> parseMoveStringTemplated(const std::string& input) {
     // Iterate through the string, splitting by spaces
     while (iss >> seg) {
         if (seg.length() == 3) {
+            // getActionFromName(seg);
             c_u8 baseValue = seg[0] == 'R' ? 0 : 30;  // R=0, C=30
-            u8 value = baseValue + (seg[1] - '0') * 5 + (seg[2] - '0') - 1;
+            c_u32 value = baseValue + (seg[1] - '0') * 5 + (seg[2] - '0') - 1;
             result.push_back(value);
-            if constexpr(HAS_FAT) { continue; }
+
+        } else if (seg.length() == 4) {
+            // getActionFromName(seg);
+            c_u8 baseValue = seg[0] == 'R' ? 60 : 85;  // R=60, C=85
+            c_u32 value = baseValue + (seg[1] - '0') * 5 + (seg[3] - '0') - 1;
+            result.push_back(value);
         }
-        if constexpr(HAS_FAT) {
-            if (seg.length() == 4) {
-                c_u8 baseValue = seg[0] == 'R' ? 60 : 85;  // R=60, C=85
-                c_u8 value = baseValue + (seg[1] - '0') * 5 + (seg[3] - '0') - 1;
-                result.push_back(value);
-            }
-        }
+
     }
 
     return result;

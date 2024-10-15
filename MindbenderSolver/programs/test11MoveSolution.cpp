@@ -38,10 +38,11 @@ std::vector<std::string> getFilesInDir(const std::string& path) {
 static constexpr u64 BUFFER_SIZE = 33'554'432;
 
 
+template<bool SECT_ASCENDING = true>
 std::vector<Board> create5Depth(Board board) {
     vecBoard_t boards_initial_side_5;
     Perms::reserveForDepth(board, boards_initial_side_5, 5);
-    Perms::getDepthFunc(board, boards_initial_side_5, 5, true);
+    Perms::getDepthFunc<SECT_ASCENDING>(board, boards_initial_side_5, 5, true);
     std::vector<Board> aux_buffer(boards_initial_side_5.size());
     radix_sort<5, 12>(boards_initial_side_5, aux_buffer);
     return boards_initial_side_5;
