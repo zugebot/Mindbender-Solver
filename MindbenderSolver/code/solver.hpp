@@ -170,11 +170,11 @@ public:
                     Board temp2 = board2;
                     applyMoves(temp2, *snd);
 
-                    if (temp1 == temp2) {
+                    // if (temp1 == temp2) {
                         std::string moveset = fst->getMemoryConst(
-                            ).asmString(&snd->getMemoryConst());
+                            ).asmFatString(xy1, &snd->getMemoryConst(), xy2);
                         resultSet.insert(moveset);
-                    }
+                    // }
                 }
             } else {
 

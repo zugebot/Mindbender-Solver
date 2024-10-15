@@ -118,9 +118,9 @@ public:
 
     MU static void appendBoardToString(std::string& str, const Board* board, c_i32 curY, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}, bool printASCII = true);
     MUND std::string toBlandString() const;
-    MUND std::string toString(bool printASCII = true, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}) const;
     MUND std::string toString(const Board& other, bool printASCII = true, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}) const;
     MUND std::string toString(const Board* other, bool printASCII = true, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}) const;
+    MUND std::string toStringSingle(bool printASCII = true, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}) const;
 
 
     __forceinline bool operator==(const Board& other) const {

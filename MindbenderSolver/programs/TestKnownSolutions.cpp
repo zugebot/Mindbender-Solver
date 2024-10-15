@@ -16,8 +16,39 @@
 #include <string>
 #include <thread>
 #include <algorithm>
+#include <regex>
 
 namespace fs = std::filesystem;
+
+
+// Function to split the filename and extract X, Y, N, M
+std::tuple<int, int, int, int> parseFileName(const std::string& filename) {
+    std::regex pattern(R"((\d+)\-(\d+)\_c(\d+)\_(\d+)\.txt)");
+    std::smatch match;
+
+    if (std::regex_match(filename, match, pattern)) {
+        int X = std::stoi(match[1].str());
+        int Y = std::stoi(match[2].str());
+        int N = std::stoi(match[3].str());
+        int M = std::stoi(match[4].str());
+
+        return std::make_tuple(X, Y, N, M);
+    }
+
+    // If the pattern doesn't match, return default values (could handle error)
+    return std::make_tuple(0, 0, 0, 0);
+}
+
+// Comparator for sorting the files
+bool compareFiles(const std::string& file1, const std::string& file2) {
+    auto [X1, Y1, N1, M1] = parseFileName(file1);
+    auto [X2, Y2, N2, M2] = parseFileName(file2);
+
+    if (X1 != X2) return X1 < X2;
+    if (Y1 != Y2) return Y1 < Y2;
+    if (N1 != N2) return N1 < N2;
+    return M1 < M2;
+}
 
 
 std::vector<std::string> getTxtFiles(const std::string& directory) {
@@ -47,16 +78,6 @@ std::vector<std::string> readFileLines(const std::string& filename) {
 }
 
 
-std::string extractSegment(const std::string& input) {
-    size_t pos = input.find('_');
-    if (pos != std::string::npos) {
-        return input.substr(0, pos);
-    }
-    return input; // If no underscore found, return the whole string.
-}
-
-
-
 int main() {
     // std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     std::string folder = "levels";
@@ -64,17 +85,23 @@ int main() {
 
 
     auto files = getTxtFiles(outDirectory);
-    std::sort(files.begin(), files.end());
+    std::sort(files.begin(), files.end(), compareFiles);
     for (const auto& file : files) {
-        std::string levelName = extractSegment(file);
+        auto [X, Y, M, N] = parseFileName(file);
+
+        std::string levelName = std::to_string(X) + "-" + std::to_string(Y);
         if (levelName.size() >= 5) {
-            std::cout << "[" << levelName << "] (invalid) skipping" << "...\n";
+            std::cout << "[" << std::setw(4) << levelName
+                      << ", " << std::setw(3) << "c" + std::to_string(M)
+                      << "] (invalid) skipping" << "...\n";
             continue;
         }
 
         BoardPair const* pair = BoardLookup::getBoardPair(levelName);
         if (pair == nullptr) {
-            std::cout << "[" << levelName << "] (nullptr) skipping" << "...\n";
+            std::cout << "[" << std::setw(4) << levelName
+                      << ", " << std::setw(3) << "c" + std::to_string(M)
+                      << "] (nullptr) skipping" << "...\n";
             continue;
         }
 
@@ -102,7 +129,8 @@ int main() {
                 }
             }
 
-            std::cout << "Norm [" << levelName << "]: ";
+            std::cout << "--- [" << std::setw(4) << levelName << " / "
+                      << std::setw(3) << "c" + std::to_string(M) << "]: ";
             std::cout << realSolutionCount << "/" << totalSolutionCount << "\n";
 
         } else {
@@ -118,7 +146,8 @@ int main() {
                 }
             }
 
-            std::cout << "Fat. [" << levelName << "]: ";
+            std::cout << "FAT [" << std::setw(4) << levelName << " / "
+                      << std::setw(3) << "c" + std::to_string(M) << "]: ";
             std::cout << realSolutionCount << "/" << totalSolutionCount << "\n";
         }
 

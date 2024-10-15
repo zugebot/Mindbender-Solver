@@ -175,7 +175,7 @@ static void make_fat_perm_list_helper(
         if (board == board_next) { continue; }
 
         // Update move
-        u64 move_next = move | actionIndex << 6 * CUR_DEPTH;
+        u64 move_next = move | actn_i << 6 * CUR_DEPTH;
 
         if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
             // Base case: process and store the final board

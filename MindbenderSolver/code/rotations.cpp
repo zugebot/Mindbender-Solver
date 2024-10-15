@@ -261,7 +261,7 @@ PERM_MACRO(C_5_5) {
 
 
 
-
+/*
 static constexpr u64 MASK_R01_NT = 0'1777'000000'000000'777777;
 static constexpr u64 MASK_R01_B1 = 0'0000'777770'777770'000000, MASK_R01_S1 = 0'0000'000007'000007'000000;
 static constexpr u64 MASK_R01_B2 = 0'0000'777700'777700'000000, MASK_R01_S2 = 0'0000'000077'000077'000000;
@@ -606,8 +606,9 @@ PERM_MACRO(C_45_5) {
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_45) & C_MASK_45;
     board.addFatY(5);
 }
+*/
 
-/*
+
 PERM_MACRO(R_01_1) { R_0_1(board); R_1_1(board); board.addFatX(1); }
 PERM_MACRO(R_01_2) { R_0_2(board); R_1_2(board); board.addFatX(2); }
 PERM_MACRO(R_01_3) { R_0_3(board); R_1_3(board); board.addFatX(3); }
@@ -663,7 +664,7 @@ PERM_MACRO(C_45_2) { C_4_2(board); C_5_2(board); board.addFatY(2); }
 PERM_MACRO(C_45_3) { C_4_3(board); C_5_3(board); board.addFatY(3); }
 PERM_MACRO(C_45_4) { C_4_4(board); C_5_4(board); board.addFatY(4); }
 PERM_MACRO(C_45_5) { C_4_5(board); C_5_5(board); board.addFatY(5); }
-*/
+
 
 
 Action allActionsList[110] = {
@@ -776,6 +777,32 @@ static std::map<std::string, Action> nameToActionLookup = {
 };
 
 
+std::map<Action, u8> actionToIndex = {
+        {R_0_1,    0},  {R_0_2,   1},  {R_0_3,   2},  {R_0_4,   3},  {R_0_5,   4},
+        {R_1_1,    5},  {R_1_2,   6},  {R_1_3,   7},  {R_1_4,   8},  {R_1_5,   9},
+        {R_2_1,   10},  {R_2_2,  11},  {R_2_3,  12},  {R_2_4,  13},  {R_2_5,  14},
+        {R_3_1,   15},  {R_3_2,  16},  {R_3_3,  17},  {R_3_4,  18},  {R_3_5,  19},
+        {R_4_1,   20},  {R_4_2,  21},  {R_4_3,  22},  {R_4_4,  23},  {R_4_5,  24},
+        {R_5_1,   25},  {R_5_2,  26},  {R_5_3,  27},  {R_5_4,  28},  {R_5_5,  29},
+        {C_0_1,   30},  {C_0_2,  31},  {C_0_3,  32},  {C_0_4,  33},  {C_0_5,  34},
+        {C_1_1,   35},  {C_1_2,  36},  {C_1_3,  37},  {C_1_4,  38},  {C_1_5,  39},
+        {C_2_1,   40},  {C_2_2,  41},  {C_2_3,  42},  {C_2_4,  43},  {C_2_5,  44},
+        {C_3_1,   45},  {C_3_2,  46},  {C_3_3,  47},  {C_3_4,  48},  {C_3_5,  49},
+        {C_4_1,   50},  {C_4_2,  51},  {C_4_3,  52},  {C_4_4,  53},  {C_4_5,  54},
+        {C_5_1,   55},  {C_5_2,  56},  {C_5_3,  57},  {C_5_4,  58},  {C_5_5,  59},
+        {R_01_1,  60}, {R_01_2,  61}, {R_01_3,  62}, {R_01_4,  63}, {R_01_5,  64},
+        {R_12_1,  65}, {R_12_2,  66}, {R_12_3,  67}, {R_12_4,  68}, {R_12_5,  69},
+        {R_23_1,  70}, {R_23_2,  71}, {R_23_3,  72}, {R_23_4,  73}, {R_23_5,  74},
+        {R_34_1,  75}, {R_34_2,  76}, {R_34_3,  77}, {R_34_4,  78}, {R_34_5,  79},
+        {R_45_1,  80}, {R_45_2,  81}, {R_45_3,  82}, {R_45_4,  83}, {R_45_5,  84},
+        {C_01_1,  85}, {C_01_2,  86}, {C_01_3,  87}, {C_01_4,  88}, {C_01_5,  89},
+        {C_12_1,  90}, {C_12_2,  91}, {C_12_3,  92}, {C_12_4,  93}, {C_12_5,  94},
+        {C_23_1,  95}, {C_23_2,  96}, {C_23_3,  97}, {C_23_4,  98}, {C_23_5,  99},
+        {C_34_1, 100}, {C_34_2, 101}, {C_34_3, 102}, {C_34_4, 103}, {C_34_5, 104},
+        {C_45_1, 105}, {C_45_2, 106}, {C_45_3, 107}, {C_45_4, 108}, {C_45_5, 109}
+};
+
+
 std::string getNameFromAction(const Action action) {
     return actionToNameLookup[action];
 }
@@ -783,6 +810,11 @@ std::string getNameFromAction(const Action action) {
 Action getActionFromName(const std::string& name) {
     return nameToActionLookup[name];
 }
+
+u8 getIndexFromAction(Action action) {
+    return actionToIndex[action];
+}
+
 
 void applyMoves(Board& board, HashMem& hashMem) {
     for (int i = 0; i < hashMem.getMemory().getMoveCount(); i++)

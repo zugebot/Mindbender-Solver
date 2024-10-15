@@ -21,8 +21,8 @@ CYAN    7
 
 
 class BoardPair {
-    Board const* board{};
-    Board const* solve{};
+    const Board* board{};
+    const Board* solve{};
     char name[5] = {};
     MU std::array<i8, 8> trueColors{};
 
@@ -41,7 +41,7 @@ public:
     MUND Board getSolutionState() const { return *solve; }
     MUND std::string getName() const { return name; }
     MUND i8 getTrueColor(u32 color) const { return trueColors[color]; }
-    MUND std::string toString() const { return board->toString(solve, trueColors); }
+    MUND std::string toString() const { return board->toString(solve, true, trueColors); }
 };
 
 

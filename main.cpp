@@ -19,10 +19,30 @@ namespace std {
 // FIXME: make_fat_perm_helper: don't make it shift the final action index into the move
 // TODO: make it choose all rows below last_row if its from the right
 
+
+void func(Board& board, Action action, std::vector<u8>& indexes) {
+    u8* list = fatActionsIndexes[board.getFatXY()];
+    indexes.push_back(std::find(list, list + 48, getIndexFromAction(action)) - list);
+    action(board);
+}
+
+
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
-    const auto pair = BoardLookup::getBoardPair("4-4");
-    std::cout << pair->toString() << std::endl;
+    const auto pair = BoardLookup::getBoardPair("6-5");
+
+    BoardSolver solver(pair);
+    solver.setWriteDirectory(outDirectory);
+    solver.setDepthParams(5, 10, 10);
+
+    solver.preAllocateMemory(5);
+    const Timer allocateTimer;
+    std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
+
+    solver.findSolutions<true>();
+
+    return 0;
+
 
     /*
     std::vector<HashMem> boards_out(48);
@@ -53,7 +73,6 @@ int main() {
 
     return 0;
     */
-
     /*
     c_Board board = pair->getInitialState();
     c_auto hasher = board.getHashFunc();
@@ -79,22 +98,6 @@ int main() {
 
     MU volatile int x = 0;
     */
-
-    BoardSolver solver(pair);
-    solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(4, 7, 7);
-
-    solver.preAllocateMemory(4);
-    const Timer allocateTimer;
-    std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
-
-
-
-    solver.findSolutions<false>();
-
-    return 0;
-
-
     /*
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);

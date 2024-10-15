@@ -1,6 +1,7 @@
 #pragma once
 
 #include "board.hpp"
+#include <map>
 
 
 #define PERM_MACRO(name) void name(Board &board)
@@ -34,7 +35,11 @@ PERM_MACRO(C_45_1); PERM_MACRO(C_45_2); PERM_MACRO(C_45_3); PERM_MACRO(C_45_4); 
 
 MU extern Action allActionsList[110];
 MU extern u8 fatActionsIndexes[25][48];
+MU extern std::map<Action, u8> actionToIndex;
+
 
 extern std::string getNameFromAction(Action action);
 extern Action getActionFromName(const std::string& name);
+extern u8 getIndexFromAction(Action action);
+
 extern void applyMoves(Board& board, HashMem& hashMem);

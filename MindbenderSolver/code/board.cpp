@@ -485,17 +485,7 @@ void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY
 
 
 MUND std::string Board::toBlandString() const {
-    return toString(false);
-}
-
-
-std::string Board::toString(bool printASCII, std::array<i8, 8> trueColors) const {
-    std::string str;
-    for (int i = 0; i < 6; i++) {
-        appendBoardToString(str, this, i, trueColors, printASCII);
-        str.append("\n");
-    }
-    return str;
+    return toStringSingle(false);
 }
 
 
@@ -517,6 +507,16 @@ MUND std::string Board::toString(const Board* other, bool printASCII, std::array
         appendBoardToString(str, this, i, trueColors, printASCII);
         str.append("   ");
         appendBoardToString(str, other, i, trueColors, printASCII);
+        str.append("\n");
+    }
+    return str;
+}
+
+
+std::string Board::toStringSingle(bool printASCII, std::array<i8, 8> trueColors) const {
+    std::string str;
+    for (int i = 0; i < 6; i++) {
+        appendBoardToString(str, this, i, trueColors, printASCII);
         str.append("\n");
     }
     return str;

@@ -113,7 +113,7 @@ std::string Memory::asmFatStringForwards(c_u8 fatPos) const {
 
 
         if (segment.size() == LONGER_PERMUTATION_LENGTH) {
-            c_int axisNum = segment.at(2) - '0';
+            c_int axisNum = segment.at(1) - '0';
             c_int amount = segment.back() - '0';
             if (segment.at(0) == 'R') {
                 if (axisNum == y) { x = (x + amount) % 6; }
@@ -148,21 +148,24 @@ std::string Memory::asmFatStringBackwards(c_u8 fatPos) const {
 
         std::string segment = getNameFromAction(func);
 
+        if (segment.size() == LONGER_PERMUTATION_LENGTH) {
+            c_int axisNum = segment.at(1) - '0';
+            c_int amount = segment.back() - '0';
+            if (segment.at(0) == 'R') {
+                if (axisNum == y) {
+                    x = (x + amount) % 6;
+                }
+            } else {
+                if (axisNum == x) {
+                    y = (y + amount) % 6;
+                }
+            }
+        }
 
         c_char new_amount = static_cast<char>('f' - segment.back());
         segment = segment.substr(0, segment.size() - 1) + new_amount;
 
         moves_vec[i] = segment;
-
-        if (segment.size() == LONGER_PERMUTATION_LENGTH) {
-            c_int axisNum = segment.at(2) - '0';
-            c_int amount = segment.back() - '0';
-            if (segment.at(0) == 'R') {
-                if (axisNum == y) { x = (x + amount) % 6; }
-            } else {
-                if (axisNum == x) { y = (y + amount) % 6; }
-            }
-        }
     }
 
     std::string moves_str;
