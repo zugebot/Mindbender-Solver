@@ -202,13 +202,13 @@ MU void Board::setFatBool(c_bool flag) {
 
 }
 
-MU void Board::setFatX(c_u8 x) {
-    b1 = b1 & MASK_FAT_POS | cast_u64(x) << 61;
+MU void Board::setFatX(c_u64 x) {
+    b1 = b1 & MASK_FAT_POS | x << 61;
 }
 
 
-MU void Board::setFatY(c_u8 y) {
-    b2 = b2 & MASK_FAT_POS | cast_u64(y) << 61;
+MU void Board::setFatY(c_u64 y) {
+    b2 = b2 & MASK_FAT_POS | y << 61;
 }
 
 
@@ -262,10 +262,7 @@ bool Board::getFatBool() const {
 
 u8 Board::getColor(c_u8 x, c_u8 y) const {
     c_i32 shift_amount = 51 - x * 3 - y % 3 * 18;
-    if (y < 3) {
-        return b1 >> shift_amount & 0'7;
-    }
-    return b2 >> shift_amount & 0'7;
+    return *(&b1 + (y >= 3)) >> shift_amount & 0'7;
 }
 
 

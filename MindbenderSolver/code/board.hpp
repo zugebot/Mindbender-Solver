@@ -87,11 +87,11 @@ public:
     MU void setFatBool(bool flag);
     MUND bool getFatBool() const;
 
-    MU void setFatX(u8 x);
+    MU void setFatX(u64 x);
     MU void addFatX(u8 x);
     MUND u8 getFatX() const;
 
-    MU void setFatY(u8 y);
+    MU void setFatY(u64 y);
     MU void addFatY(u8 y);
     MUND u8 getFatY() const;
 
