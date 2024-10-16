@@ -158,6 +158,8 @@ public:
                 std::cout << " found: 0\n";
             })
 
+            // verify the results
+            // this filters out board states with identical hashes
             if (hasFat) {
                 c_int xy1 = board1.getFatXY();
                 c_int xy2 = board2.getFatXY();
@@ -165,21 +167,18 @@ public:
                 for (const auto &[fst, snd]: results) {
 
                     Board temp1 = board1;
-                    applyMoves(temp1, *fst);
+                    applyFatMoves(temp1, *fst);
 
                     Board temp2 = board2;
-                    applyMoves(temp2, *snd);
+                    applyFatMoves(temp2, *snd);
 
-                    // if (temp1 == temp2) {
+                    if (temp1 == temp2) {
                         std::string moveset = fst->getMemoryConst(
                             ).asmFatString(xy1, &snd->getMemoryConst(), xy2);
                         resultSet.insert(moveset);
-                    // }
+                    }
                 }
             } else {
-
-                // verify the results
-                // this filters out board states with identical hashes
                 for (auto& [fst, snd]: results) {
 
                     Board temp1 = board1;

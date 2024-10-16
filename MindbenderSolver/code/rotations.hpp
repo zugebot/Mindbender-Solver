@@ -43,3 +43,4 @@ extern Action getActionFromName(const std::string& name);
 extern u8 getIndexFromAction(Action action);
 
 extern void applyMoves(Board& board, HashMem& hashMem);
+extern void applyFatMoves(Board& board, HashMem& hashMem);

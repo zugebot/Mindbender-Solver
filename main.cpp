@@ -1,50 +1,43 @@
 #include "MindbenderSolver/include.hpp"
 
 #include <iostream>
-#include <vector>
-#include <set>
 
 
-namespace std {
-    template <>
-    struct hash<Board> {
-        std::size_t operator()(const Board& b) const {
-            return b.getHash();
-        }
-    };
-}
-
-// TODO: change the function index -> string to use the lookup table
-    // instead of building it in place
-// FIXME: make_fat_perm_helper: don't make it shift the final action index into the move
-// TODO: make it choose all rows below last_row if its from the right
-
-
-void func(Board& board, Action action, std::vector<u8>& indexes) {
-    u8* list = fatActionsIndexes[board.getFatXY()];
-    indexes.push_back(std::find(list, list + 48, getIndexFromAction(action)) - list);
-    action(board);
-}
+// TODO: For Fats: make it choose all rows below last_row if its from the right
 
 
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
-    const auto pair = BoardLookup::getBoardPair("6-5");
+    const auto pair = BoardLookup::getBoardPair("4-4");
+
+    std::cout << pair->toString() << std::endl;
 
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(5, 10, 10);
+    solver.setDepthParams(4, 7, 7);
 
-    solver.preAllocateMemory(5);
+    solver.preAllocateMemory(4);
     const Timer allocateTimer;
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
-    solver.findSolutions<true>();
+    solver.findSolutions<false>();
 
     return 0;
 
-
     /*
+    namespace std {
+        template <>
+        struct hash<Board> {
+            std::size_t operator()(const Board& b) const {
+                return b.getHash();
+            }
+        };
+    }
+    void func(Board& board, Action action, std::vector<u8>& indexes) {
+        u8* list = fatActionsIndexes[board.getFatXY()];
+        indexes.push_back(std::find(list, list + 48, getIndexFromAction(action)) - list);
+        action(board);
+    }
     std::vector<HashMem> boards_out(48);
     const Board board = pair->getInitialState();
     const auto hasher = HashMem::getHashFunc(board);
