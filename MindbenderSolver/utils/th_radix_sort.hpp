@@ -11,6 +11,12 @@
 #include "hasGetHash.hpp"
 
 
+#define RADIX_IF_DEBUG_COUT(str) \
+    if constexpr (DEBUG) { \
+        std::cout << total_time.getSeconds() - last_time << (str); \
+        last_time = total_time.getSeconds(); \
+    }
+
 
 /**
  * 36:\n
@@ -40,10 +46,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
     const Timer total_time;
     double last_time = 0;
 
-    if constexpr (DEBUG) {
-        std::cout << total_time.getSeconds() - last_time << " Allocating Aux Phase\n";
-        last_time = total_time.getSeconds();
-    }
+    RADIX_IF_DEBUG_COUT(" Allocating Aux Phase\n")
 
     count_t num_threads = std::thread::hardware_concurrency();
     if (num_threads == 0) num_threads = 8;
@@ -59,10 +62,8 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
         masks[pass] = (1ULL << NUM_BITS_PER_PASS) - 1;
     }
 
-    if constexpr (DEBUG) {
-        std::cout << total_time.getSeconds() - last_time << " Precomputing Masks and Shifts\n";
-        last_time = total_time.getSeconds();
-    }
+
+    RADIX_IF_DEBUG_COUT(" Precomputing Masks and Shifts\n")
 
     vec2_count_t thread_counts(num_threads, vec1_count_t(num_buckets, 0));
     vec2_count_t thread_offsets(num_threads, vec1_count_t(num_buckets));
@@ -101,10 +102,8 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
         }
 
         for (auto& thread : thread_pool) thread.join();
-        if constexpr (DEBUG) {
-            std::cout << total_time.getSeconds() - last_time << " Counting Phase\n";
-            last_time = total_time.getSeconds();
-        }
+
+        RADIX_IF_DEBUG_COUT(" Counting Phase\n")
 
         // Accumulate Counts
         std::ranges::fill(count, 0);
@@ -114,10 +113,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
             }
         }
 
-        if constexpr (DEBUG) {
-            std::cout << total_time.getSeconds() - last_time << " Accumulate Counts Phase\n";
-            last_time = total_time.getSeconds();
-        }
+        RADIX_IF_DEBUG_COUT(" Accumulate Counts Phase\n")
 
         // Compute Offsets
         bucket_offsets[0] = 0;
@@ -125,10 +121,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
             bucket_offsets[b] = bucket_offsets[b - 1] + count[b - 1];
         }
 
-        if constexpr (DEBUG) {
-            std::cout << total_time.getSeconds() - last_time << " Compute Offsets Phase\n";
-            last_time = total_time.getSeconds();
-        }
+        RADIX_IF_DEBUG_COUT(" Compute Offsets Phase\n")
 
         // Compute Thread Offsets
         for (count_t b = 0; b < num_buckets; ++b) {
@@ -139,10 +132,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
             }
         }
 
-        if constexpr (DEBUG) {
-            std::cout << total_time.getSeconds() - last_time << " Compute Thread Offsets Phase\n";
-            last_time = total_time.getSeconds();
-        }
+        RADIX_IF_DEBUG_COUT(" Compute Thread Offsets Phase\n")
 
         // Distribution Phase
         for (count_t t = 0; t < num_threads; ++t) {
@@ -158,10 +148,7 @@ void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
         }
         for (auto& thread : thread_pool) thread.join();
 
-        if constexpr (DEBUG) {
-            std::cout << total_time.getSeconds() - last_time << " Distribution Phase\n";
-            last_time = total_time.getSeconds();
-        }
+        RADIX_IF_DEBUG_COUT(" Distribution Phase\n")
 
         // Swap Data and Aux
         data_out.swap(aux_buffer);
