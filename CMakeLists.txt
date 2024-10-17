@@ -33,5 +33,5 @@ add_executable(MindbenderSolver
 
 target_compile_options(MindbenderSolver PRIVATE -mbmi2)
 
-# find_package(TBB REQUIRED)
-# target_link_libraries(MindbenderSolver TBB::tbb)
+find_package(TBB REQUIRED)
+target_link_libraries(MindbenderSolver TBB::tbb)

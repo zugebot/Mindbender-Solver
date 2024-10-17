@@ -8,19 +8,19 @@
 
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
-    const auto pair = BoardLookup::getBoardPair("4-4");
+    const auto pair = BoardLookup::getBoardPair("6-5");
 
     std::cout << pair->toString() << std::endl;
 
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(4, 7, 7);
+    solver.setDepthParams(5, 10, 10);
 
-    solver.preAllocateMemory(4);
+    solver.preAllocateMemory(5);
     const Timer allocateTimer;
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
-    solver.findSolutions<false>();
+    solver.findSolutions<true>();
 
     return 0;
 
