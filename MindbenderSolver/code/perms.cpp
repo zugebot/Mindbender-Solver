@@ -104,13 +104,22 @@ Perms::toDepthFuncPtr_t Perms::toDepthFromRightFuncPtrs[] = {
     &make_perm_list<5, true, true, true, false>};
 
 
-Perms::toDepthFuncPtr_t Perms::toDepthFatFuncPtrs[] = {
-    &make_fat_perm_list<0>,
-    &make_fat_perm_list<1>,
-    &make_fat_perm_list<2>,
-    &make_fat_perm_list<3>,
-    &make_fat_perm_list<4>,
-    &make_fat_perm_list<5>};
+Perms::toDepthFuncPtr_t Perms::toDepthFromLeftFatFuncPtrs[] = {
+    &make_fat_perm_list<0, true, true>,
+    &make_fat_perm_list<1, true, true>,
+    &make_fat_perm_list<2, true, true>,
+    &make_fat_perm_list<3, true, true>,
+    &make_fat_perm_list<4, true, true>,
+    &make_fat_perm_list<5, true, true>};
+
+
+Perms::toDepthFuncPtr_t Perms::toDepthFromRightFatFuncPtrs[] = {
+        &make_fat_perm_list<0, true, false>,
+        &make_fat_perm_list<1, true, false>,
+        &make_fat_perm_list<2, true, false>,
+        &make_fat_perm_list<3, true, false>,
+        &make_fat_perm_list<4, true, false>,
+        &make_fat_perm_list<5, true, false>};
 
 
 

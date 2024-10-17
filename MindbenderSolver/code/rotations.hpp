@@ -5,7 +5,6 @@
 
 
 #define PERM_MACRO(name) void name(Board &board)
-typedef void (*Action)(Board &);
 
 PERM_MACRO(R_0_1); PERM_MACRO(R_0_2); PERM_MACRO(R_0_3); PERM_MACRO(R_0_4); PERM_MACRO(R_0_5);
 PERM_MACRO(R_1_1); PERM_MACRO(R_1_2); PERM_MACRO(R_1_3); PERM_MACRO(R_1_4); PERM_MACRO(R_1_5);
@@ -33,7 +32,18 @@ PERM_MACRO(C_34_1); PERM_MACRO(C_34_2); PERM_MACRO(C_34_3); PERM_MACRO(C_34_4); 
 PERM_MACRO(C_45_1); PERM_MACRO(C_45_2); PERM_MACRO(C_45_3); PERM_MACRO(C_45_4); PERM_MACRO(C_45_5);
 
 
+typedef void (*Action)(Board &);
 MU extern Action allActionsList[110];
+
+
+struct ActStruct {
+    Action action;
+    u32 index;
+};
+MU extern ActStruct allActStructList[110];
+
+
+
 MU extern u8 fatActionsIndexes[25][48];
 MU extern std::map<Action, u8> actionToIndex;
 

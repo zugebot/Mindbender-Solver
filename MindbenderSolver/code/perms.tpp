@@ -157,11 +157,13 @@ void make_perm_list(const Board &board_in,
 }
 
 
-template<int CUR_DEPTH, int MAX_DEPTH>
+template<int CUR_DEPTH, int MAX_DEPTH, bool LIMIT_MOVES, bool MOVES_ASCENDING>
 static void make_fat_perm_list_helper(
         const Board &board,
         std::vector<HashMem> &boards_out,
-        const HashMem::HasherPtr hasher, c_u64 move, u32& count) {
+        const HashMem::HasherPtr hasher,
+        c_u64 lastActionIndex,
+        c_u64 move, u32& count) {
 
     // Get the function indexes for the current board state
     c_u8 *funcIndexes = fatActionsIndexes[board.getFatXY()];
@@ -170,7 +172,23 @@ static void make_fat_perm_list_helper(
     for (u64 actn_i = 0; actn_i < FAT_PERM_COUNT; ++actn_i) {
         Board board_next = board;
         c_u8 actionIndex = funcIndexes[actn_i];
-        allActionsList[actionIndex](board_next);
+
+        const ActStruct& actStruct = allActStructList[actionIndex];
+        actStruct.action(board_next);
+
+
+        if constexpr (LIMIT_MOVES) {
+            if (lastActionIndex != 255) {
+                if ((actStruct.index < 30 & lastActionIndex < 30)
+                    | (actStruct.index < 60 & lastActionIndex < 60)) {
+                    if constexpr (MOVES_ASCENDING) {
+                        if (lastActionIndex <= actStruct.index) { continue; }
+                    } else {
+                        if (lastActionIndex >= actStruct.index) { continue; }
+                    }
+                }
+            }
+        }
 
         if (board == board_next) { continue; }
 
@@ -185,14 +203,16 @@ static void make_fat_perm_list_helper(
             count++;
         } else {
             // Recursive call to the next depth
-            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH>(
-                    board_next, boards_out, hasher, move_next, count);
+            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, LIMIT_MOVES, MOVES_ASCENDING>(
+                    board_next, boards_out, hasher,
+                    actStruct.index,
+                    move_next, count);
         }
     }
 }
 
 
-template<int DEPTH>
+template<int DEPTH, bool LIMIT_MOVES, bool MOVES_ASCENDING>
 void make_fat_perm_list(const Board &board_in,
                         std::vector<HashMem> &boards_out,
                         const HashMem::HasherPtr hasher) {
@@ -203,8 +223,8 @@ void make_fat_perm_list(const Board &board_in,
         boards_out.resize(1);
     } else {
         u32 count = 0;
-        make_fat_perm_list_helper<0, DEPTH>(
-                board_in, boards_out, hasher, 0, count);
+        make_fat_perm_list_helper<0, DEPTH, LIMIT_MOVES, MOVES_ASCENDING>(
+                board_in, boards_out, hasher, 255, 0, count);
         boards_out.resize(count);
     }
 }

@@ -40,15 +40,16 @@ void make_perm_list(
         HashMem::HasherPtr hasher);
 
 
-template<int CUR_DEPTH, int MAX_DEPTH>
+template<int CUR_DEPTH, int MAX_DEPTH, bool LIMIT_MOVES, bool MOVES_ASCENDING>
 static void make_fat_perm_list_helper(
         const Board &board,
         std::vector<HashMem> &boards_out,
         HashMem::HasherPtr hasher,
+        c_u64 lastActionIndex,
         c_u64 move, u32& count);
 
 /// Entry point function
-template<int DEPTH>
+template<int DEPTH, bool LIMIT_MOVES=true, bool MOVES_ASCENDING=true>
 void make_fat_perm_list(
         const Board& board_in,
         std::vector<HashMem> &boards_out,
@@ -78,7 +79,9 @@ public:
     static toDepthFuncPtr_t toDepthFromRightFuncPtrs[PTR_LIST_SIZE];
 
 
-    static toDepthFuncPtr_t toDepthFatFuncPtrs[PTR_LIST_SIZE];
+    static toDepthFuncPtr_t toDepthFromLeftFatFuncPtrs[PTR_LIST_SIZE];
+    static toDepthFuncPtr_t toDepthFromRightFatFuncPtrs[PTR_LIST_SIZE];
+
     static toDepthPlusOneFuncPtr_t toDepthPlusOneFuncPtr;
     static toDepthPlusOneFuncBufferedPtr_t toDepthPlusOneBufferedFuncPtr;
 
@@ -100,7 +103,11 @@ void Perms::getDepthFunc(const Board& board_in, std::vector<HashMem> &boards_out
     boards_out.resize(boards_out.capacity());
     const HashMem::HasherPtr hasher = HashMem::getHashFunc(board_in);
     if (board_in.getFatBool()) {
-        toDepthFatFuncPtrs[depth](board_in, boards_out, hasher);
+        if constexpr (SECT_ASCENDING) {
+            toDepthFromLeftFatFuncPtrs[depth](board_in, boards_out, hasher);
+        } else {
+            toDepthFromRightFatFuncPtrs[depth](board_in, boards_out, hasher);
+        }
     } else {
         if constexpr (SECT_ASCENDING) {
             toDepthFromLeftFuncPtrs[depth](board_in, boards_out, hasher);
