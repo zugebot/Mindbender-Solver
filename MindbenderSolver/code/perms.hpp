@@ -40,7 +40,7 @@ void make_perm_list(
         HashMem::HasherPtr hasher);
 
 
-template<int CUR_DEPTH, int MAX_DEPTH, bool LIMIT_MOVES, bool MOVES_ASCENDING>
+template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING>
 static void make_fat_perm_list_helper(
         const Board &board,
         std::vector<HashMem> &boards_out,
@@ -49,7 +49,7 @@ static void make_fat_perm_list_helper(
         c_u64 move, u32& count);
 
 /// Entry point function
-template<int DEPTH, bool LIMIT_MOVES=true, bool MOVES_ASCENDING=true>
+template<int DEPTH, bool MOVES_ASCENDING=true>
 void make_fat_perm_list(
         const Board& board_in,
         std::vector<HashMem> &boards_out,

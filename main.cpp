@@ -20,7 +20,7 @@ int main() {
     const Timer allocateTimer;
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
-    solver.findSolutions<true>();
+    solver.findSolutions<false>();
 
     return 0;
 

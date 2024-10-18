@@ -156,63 +156,67 @@ void make_perm_list(const Board &board_in,
     boards_out.resize(count);
 }
 
-
-template<int CUR_DEPTH, int MAX_DEPTH, bool LIMIT_MOVES, bool MOVES_ASCENDING>
+// 3.23 - 3.26
+template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING>
 static void make_fat_perm_list_helper(
         const Board &board,
         std::vector<HashMem> &boards_out,
         const HashMem::HasherPtr hasher,
         c_u64 lastActionIndex,
-        c_u64 move, u32& count) {
+        c_u64 move,
+        u32& count) {
+
+    static constexpr bool DO_CHECK = CUR_DEPTH != 0;
 
     // Get the function indexes for the current board state
     c_u8 *funcIndexes = fatActionsIndexes[board.getFatXY()];
 
-    static constexpr u64 FAT_PERM_COUNT = 48;
-    for (u64 actn_i = 0; actn_i < FAT_PERM_COUNT; ++actn_i) {
-        Board board_next = board;
+    c_bool lastActionLessThan30 = lastActionIndex < 30;
+    c_bool lastActionLessThan60 = lastActionIndex < 60;
+
+
+    for (u64 actn_i = 0; actn_i < 48; ++actn_i) {
         c_u8 actionIndex = funcIndexes[actn_i];
-
         const ActStruct& actStruct = allActStructList[actionIndex];
+        Board board_next = board;
         actStruct.action(board_next);
+        if (board == board_next) { continue; }
 
+        if constexpr (DO_CHECK && MOVES_ASCENDING) {
+            if ((actStruct.index < 30 && lastActionLessThan30) | (actStruct.index < 60 && lastActionLessThan60)) {
+                if (lastActionIndex <= actStruct.index) { continue; }
+            }
 
-        if constexpr (LIMIT_MOVES) {
-            if (lastActionIndex != 255) {
-                if ((actStruct.index < 30 & lastActionIndex < 30)
-                    | (actStruct.index < 60 & lastActionIndex < 60)) {
-                    if constexpr (MOVES_ASCENDING) {
-                        if (lastActionIndex <= actStruct.index) { continue; }
-                    } else {
-                        if (lastActionIndex >= actStruct.index) { continue; }
-                    }
-                }
+        } else if (DO_CHECK && !MOVES_ASCENDING){
+            if ((actStruct.index < 30 && lastActionLessThan30) | (actStruct.index < 60 && lastActionLessThan60)) {
+                if (lastActionIndex >= actStruct.index) { continue; }
             }
         }
 
-        if (board == board_next) { continue; }
-
-        // Update move
-        u64 move_next = move | actn_i << 6 * CUR_DEPTH;
 
         if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
             // Base case: process and store the final board
             boards_out[count] = board_next.hashMem;
             (boards_out[count].*hasher)(board_next.b1, board_next.b2);
+            u64 move_next = move | actn_i << 6 * CUR_DEPTH;
             boards_out[count].getMemory().setNextNMove<MAX_DEPTH>(move_next);
             count++;
         } else {
-            // Recursive call to the next depth
-            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, LIMIT_MOVES, MOVES_ASCENDING>(
+            // Other Case: recursive call to the next depth
+            u64 move_next = move | actn_i << 6 * CUR_DEPTH;
+            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING>(
                     board_next, boards_out, hasher,
                     actStruct.index,
-                    move_next, count);
+                    move_next,
+                    count
+            );
         }
+
     }
 }
 
 
-template<int DEPTH, bool LIMIT_MOVES, bool MOVES_ASCENDING>
+template<int DEPTH, bool MOVES_ASCENDING>
 void make_fat_perm_list(const Board &board_in,
                         std::vector<HashMem> &boards_out,
                         const HashMem::HasherPtr hasher) {
@@ -223,8 +227,8 @@ void make_fat_perm_list(const Board &board_in,
         boards_out.resize(1);
     } else {
         u32 count = 0;
-        make_fat_perm_list_helper<0, DEPTH, LIMIT_MOVES, MOVES_ASCENDING>(
-                board_in, boards_out, hasher, 255, 0, count);
+        make_fat_perm_list_helper<0, DEPTH, MOVES_ASCENDING>(
+                board_in, boards_out, hasher, 0, 0, count);
         boards_out.resize(count);
     }
 }
