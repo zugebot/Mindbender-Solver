@@ -7,6 +7,7 @@
 #include <thread>
 #include <vector>
 
+#include "MindbenderSolver/utils/jvec.hpp"
 #include "MindbenderSolver/utils/hasGetHash.hpp"
 
 

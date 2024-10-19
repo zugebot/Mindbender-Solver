@@ -12,7 +12,7 @@ struct Sizes {
 
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
-    const auto pair = BoardLookup::getBoardPair("6-5");
+    const auto pair = BoardLookup::getBoardPair("5-3");
 
     std::cout << pair->toString() << std::endl;
 
@@ -63,7 +63,7 @@ int main() {
     solver.preAllocateMemory(5);
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
-    solver.findSolutions<true>();
+    solver.findSolutions<false>();
 
     std::cout << "Calls: " << MAKE_FAT_PERM_LIST_HELPER_CALLS << std::endl;
     std::cout << "Checks: " << MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS << std::endl;

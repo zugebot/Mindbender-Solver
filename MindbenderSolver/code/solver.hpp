@@ -13,8 +13,6 @@
 #include "sorter.hpp"
 
 
-
-
 #define IF_DEBUG(stuff) if constexpr (debug) { stuff }
 #define IF_DEBUG_COUT(stuff) if constexpr (debug) { std::cout << stuff }
 

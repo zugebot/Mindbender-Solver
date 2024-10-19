@@ -2,8 +2,10 @@
 
 #include "board.hpp"
 #include "rotations.hpp"
-
 #include "reference.hpp"
+
+#include "MindbenderSolver/utils/jvec.hpp"
+
 
 #include <array>
 #include <vector>
