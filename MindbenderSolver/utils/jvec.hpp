@@ -11,17 +11,29 @@ class [[maybe_unused]] JVec {
     unsigned long long myCapacity{};
 
     inline T* ptr_t() { return static_cast<T*>(myRawMemory); }
+    inline const T* c_ptr_t() const { return static_cast<T*>(myRawMemory); }
 
 public:
+    [[maybe_unused]] explicit JVec();
     [[maybe_unused]] explicit JVec(unsigned long long theCapacity);
     ~JVec();
 
-    inline unsigned long long size() { return mySize; }
-    inline unsigned long long capacity() { return myCapacity; }
+    JVec(const JVec& other);
+    JVec& operator=(const JVec& other);
+    JVec(JVec&& other) noexcept;
+    JVec& operator=(JVec&& other) noexcept;
 
-    inline T* data() { return ptr_t(); }
+    [[nodiscard]] inline unsigned long long size() const { return mySize; }
+    [[nodiscard]] inline unsigned long long capacity() const { return myCapacity; }
+
+    [[nodiscard]] inline bool empty() const { return mySize == 0; }
+    inline const T* data() const { return c_ptr_t(); }
+
     inline T* begin() { return ptr_t(); }
     inline T* end() { return ptr_t() + mySize; }
+
+    inline const T* begin() const { return c_ptr_t(); }
+    inline const T* end() const { return c_ptr_t() + mySize; }
 
     inline void clear() { mySize = 0; }
     void resize(unsigned long long theSize);
@@ -29,13 +41,21 @@ public:
     void swap(JVec& other);
 
     inline T& operator[](unsigned long long index) { return ptr_t()[index]; }
-    inline const T& operator[](unsigned long long index) const { return ptr_t()[index]; }
-
-    JVec(const JVec&) = delete;
-    JVec& operator=(const JVec&) = delete;
-    JVec(JVec&&) = delete;
-    JVec& operator=(JVec&&) = delete;
+    inline const T& operator[](unsigned long long index) const { return c_ptr_t()[index]; }
 };
+
+
+template<class T>
+[[maybe_unused]] JVec<T>::JVec() {
+    static constexpr unsigned long long CAPACITY = 0;
+    mySize = 0;
+    myCapacity = CAPACITY;
+    myRawMemory = operator new[](CAPACITY * sizeof(T));
+    if (!myRawMemory) {
+        _JVEC_HIDDEN_PRINTF("failed to allocate jVec with size %llu", CAPACITY);
+    }
+}
+
 
 
 template<class T>
@@ -44,7 +64,7 @@ template<class T>
     myCapacity = theCapacity;
     myRawMemory = operator new[](theCapacity * sizeof(T));
     if (!myRawMemory) {
-        _JVEC_HIDDEN_PRINTF("failed to allocate jVec with size %d", theCapacity);
+        _JVEC_HIDDEN_PRINTF("failed to allocate jVec with size %llu", theCapacity);
     }
 }
 
@@ -59,13 +79,83 @@ template<class T>
 
 
 template<class T>
+JVec<T>::JVec(const JVec& other) {
+    mySize = other.mySize;
+    myCapacity = other.myCapacity;
+    if (myCapacity > 0) {
+        myRawMemory = operator new[](myCapacity * sizeof(T));
+        if (!myRawMemory) {
+            _JVEC_HIDDEN_PRINTF("failed to allocate JVec with size %llu", myCapacity);
+        }
+        _JVEC_HIDDEN_MEMCPY(myRawMemory, other.myRawMemory, mySize * sizeof(T));
+    } else {
+        myRawMemory = nullptr;
+    }
+}
+
+// Copy assignment operator
+template<class T>
+JVec<T>& JVec<T>::operator=(const JVec& other) {
+    if (this != &other) {
+        // Release current resources
+        operator delete[](myRawMemory);
+        // Copy size and capacity
+        mySize = other.mySize;
+        myCapacity = other.myCapacity;
+        if (myCapacity > 0) {
+            // Allocate new memory and copy elements
+            myRawMemory = operator new[](myCapacity * sizeof(T));
+            if (!myRawMemory) {
+                _JVEC_HIDDEN_PRINTF("failed to allocate JVec with size %llu", myCapacity);
+            }
+            _JVEC_HIDDEN_MEMCPY(myRawMemory, other.myRawMemory, mySize * sizeof(T));
+        } else {
+            myRawMemory = nullptr;
+        }
+    }
+    return *this;
+}
+
+// Move constructor
+template<class T>
+JVec<T>::JVec(JVec&& other) noexcept {
+    // Transfer ownership of resources
+    myRawMemory = other.myRawMemory;
+    mySize = other.mySize;
+    myCapacity = other.myCapacity;
+    // Reset the other object
+    other.myRawMemory = nullptr;
+    other.mySize = 0;
+    other.myCapacity = 0;
+}
+
+// Move assignment operator
+template<class T>
+JVec<T>& JVec<T>::operator=(JVec&& other)  noexcept {
+    if (this != &other) {
+        // Release current resources
+        operator delete[](myRawMemory);
+        // Transfer ownership of resources
+        myRawMemory = other.myRawMemory;
+        mySize = other.mySize;
+        myCapacity = other.myCapacity;
+        // Reset the other object
+        other.myRawMemory = nullptr;
+        other.mySize = 0;
+        other.myCapacity = 0;
+    }
+    return *this;
+}
+
+
+template<class T>
 void JVec<T>::resize(unsigned long long theSize) {
     if (theSize < myCapacity) {
         mySize = theSize;
     } else {
         void* newPtr = operator new[](theSize * sizeof(T));
         if (!myRawMemory) {
-            _JVEC_HIDDEN_PRINTF("failed to allocate jVec with size %d", theSize);
+            _JVEC_HIDDEN_PRINTF("failed to allocate jVec with size %llu", theSize);
         }
         _JVEC_HIDDEN_MEMCPY(newPtr, myRawMemory, mySize * sizeof(T));
         operator delete[](myRawMemory);
@@ -81,7 +171,7 @@ void JVec<T>::reserve(unsigned long long theCapacity) {
     if (theCapacity > myCapacity) {
         void* newPtr = operator new[](theCapacity * sizeof(T));
         if (!myRawMemory) {
-            _JVEC_HIDDEN_PRINTF("failed to allocate jVec with size %d", theCapacity);
+            _JVEC_HIDDEN_PRINTF("failed to allocate jVec with size %llu", theCapacity);
         }
         _JVEC_HIDDEN_MEMCPY(newPtr, myRawMemory, mySize * sizeof(T));
         operator delete[](myRawMemory);

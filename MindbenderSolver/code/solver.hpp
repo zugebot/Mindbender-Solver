@@ -6,10 +6,13 @@
 #include <vector>
 
 #include "MindbenderSolver/utils/format_bytes.hpp"
+
 #include "intersection.hpp"
 #include "levels.hpp"
 #include "perms.hpp"
 #include "sorter.hpp"
+
+
 
 
 #define IF_DEBUG(stuff) if constexpr (debug) { stuff }
@@ -18,8 +21,8 @@
 
 class BoardSolver {
 public:
-    std::vector<std::vector<HashMem>> board1Table;
-    std::vector<std::vector<HashMem>> board2Table;
+    std::vector<JVec<HashMem>> board1Table;
+    std::vector<JVec<HashMem>> board2Table;
     std::unordered_set<std::string> resultSet;
     BoardSorter<HashMem> boardSorter;
     const BoardPair* pair;
@@ -145,7 +148,7 @@ public:
         if (searchResults) {
             IF_DEBUG_COUT(start_both<<"Solving for depths ["<<depth1<<", "<<depth2<<"]";)
 
-            std::vector<std::pair<HashMem*, HashMem*>> results;
+            std::vector<std::pair<const HashMem*, const HashMem*>> results;
             if (depth1 != 0 && depth2 != 0) {
                 results = intersection_threaded(board1Table[depth1], board2Table[depth2]);
             } else {
@@ -174,7 +177,7 @@ public:
 
                     if (temp1 == temp2) {
                         std::string moveset = fst->getMemoryConst(
-                            ).asmFatString(xy1, &snd->getMemoryConst(), xy2);
+                                                         ).asmFatString(xy1, &snd->getMemoryConst(), xy2);
                         resultSet.insert(moveset);
                     }
                 }
@@ -189,7 +192,7 @@ public:
 
                     if (temp1 == temp2) {
                         std::string moveset = fst->getMemoryConst(
-                            ).asmString(&snd->getMemoryConst());
+                                                         ).asmString(&snd->getMemoryConst());
                         resultSet.insert(moveset);
                     }
                 }
@@ -240,9 +243,9 @@ public:
 
         if (!resultSet.empty()) {
             const std::string filename = pair->getName()
-                                   + "_c" + std::to_string(currentDepth)
-                                   + "_" + std::to_string(resultSet.size())
-                                   + ".txt";
+                                         + "_c" + std::to_string(currentDepth)
+                                         + "_" + std::to_string(resultSet.size())
+                                         + ".txt";
             std::cout<<"Saving results to '"<<filename<<"'.\n";
             std::ofstream outfile(outDirectory + "\\levels\\" + filename);
             for (const auto& str: resultSet) {

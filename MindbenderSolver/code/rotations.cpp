@@ -1054,15 +1054,15 @@ u8 getIndexFromAction(Action action) {
 }
 
 
-void applyMoves(Board &board, HashMem &hashMem) {
-    for (int i = 0; i < hashMem.getMemory().getMoveCount(); i++)
-        allActionsList[hashMem.getMemory().getMove(i)](board);
+void applyMoves(Board &board, const HashMem &hashMem) {
+    for (int i = 0; i < hashMem.getMemoryConst().getMoveCount(); i++)
+        allActionsList[hashMem.getMemoryConst().getMove(i)](board);
 }
 
 
-void applyFatMoves(Board &board, HashMem &hashMem) {
-    for (int index = 0; index < hashMem.getMemory().getMoveCount(); index++) {
-        u8 move = hashMem.getMemory().getMove(index);
+void applyFatMoves(Board &board, const HashMem &hashMem) {
+    for (int index = 0; index < hashMem.getMemoryConst().getMoveCount(); index++) {
+        u8 move = hashMem.getMemoryConst().getMove(index);
 
         u8* funcIndexes = fatActionsIndexes[board.getFatXY()];
         allActionsList[funcIndexes[move]](board);

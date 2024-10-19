@@ -9,7 +9,7 @@
 
 template<typename T>
 class BoardSorter {
-    std::vector<std::vector<T>> aux_buffer;
+    std::vector<JVec<T>> aux_buffer{};
 
     enum DEPTH { D2 = 2, D3 = 3, D4 = 4, D5 = 5 };
     enum COLORS { C2 = 2, C3 = 3 };
@@ -33,14 +33,15 @@ public:
         resize(depth, size);
     }
 
-    MU void sortBoards(std::vector<T>& boards, c_u32 depth, c_u32 colorCount) {
+    MU void sortBoards(JVec<T>& boards, c_u32 depth, c_u32 colorCount) {
         switch (depth) {
             case (DEPTH::D2): {
                 std::sort(boards.begin(), boards.end());
                 break;
             }
             case (DEPTH::D3): {
-                parallel_sort<2>(boards);
+                std::sort(boards.begin(), boards.end());
+                // parallel_sort<2>(boards);
                 break;
             }
             case (DEPTH::D4): {

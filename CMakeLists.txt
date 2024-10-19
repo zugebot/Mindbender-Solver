@@ -19,8 +19,8 @@ file(GLOB_RECURSE INCLUDE_SOURCES
 add_executable(MindbenderSolver
         ${MINDBENDER_SOLVER_SOURCES}
         ${INCLUDE_SOURCES}
-        # main.cpp
-        MindbenderSolver/programs/testJVec.cpp
+        main.cpp
+        # MindbenderSolver/programs/testJVec.cpp
         # MindbenderSolver/programs/TestKnownSolutions.cpp
         # MindbenderSolver/programs/testHeuristics.cpp
         # MindbenderSolver/programs/testSorting.cpp

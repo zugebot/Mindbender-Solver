@@ -1,6 +1,8 @@
 #pragma once
 
 #include "MindbenderSolver/utils/processor.hpp"
+#include "MindbenderSolver/utils/jvec.hpp"
+
 #include "memory.hpp"
 
 #include <string>

@@ -36,7 +36,7 @@
  * @param aux_buffer
  */
 template<int NUM_PASSES, int NUM_BITS_PER_PASS, HasGetHash T, bool DEBUG=false>
-void radix_sort(std::vector<T>&data_out, std::vector<T>&aux_buffer) {
+void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
     using count_t = uint32_t;
     using vec1_count_t = std::vector<count_t>;
     using vec2_count_t = std::vector<vec1_count_t>;

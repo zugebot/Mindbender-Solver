@@ -8,12 +8,12 @@
 
 
 template <int NUM_THREADS, HasGetHash T>
-void parallel_sort(std::vector<T>& data) {
+void parallel_sort(JVec<T>& data) {
     size_t size = data.size();
     const size_t chunk_size = size / NUM_THREADS;
 
     std::vector<std::thread> threads;
-    std::vector<std::vector<T>> sorted_chunks(NUM_THREADS);
+    std::vector<JVec<T>> sorted_chunks(NUM_THREADS);
 
     // Step 1: Divide the data and sort each chunk in a separate thread
     for (int i = 0; i < NUM_THREADS; ++i) {
@@ -21,7 +21,7 @@ void parallel_sort(std::vector<T>& data) {
         size_t end = (i == NUM_THREADS - 1) ? size : (i + 1) * chunk_size;
 
         // Assign a portion of the array to each thread for sorting
-        sorted_chunks[i] = std::vector<T>(data.begin() + start, data.begin() + end);
+        sorted_chunks[i] = JVec<T>(data.begin() + start, data.begin() + end);
 
         // Start thread to sort the chunk
         threads.emplace_back([&sorted_chunks, i]() {
@@ -35,12 +35,12 @@ void parallel_sort(std::vector<T>& data) {
     }
 
     // Step 3: Merge all sorted chunks
-    std::vector<T> result;
+    JVec<T> result;
     result.reserve(size);
 
     // Lambda to merge two sorted vectors
     auto merge_two_sorted = [](const std::vector<T>& left, const std::vector<T>& right) -> std::vector<T> {
-        std::vector<T> merged;
+        JVec<T> merged;
         merged.reserve(left.size() + right.size());
 
         auto it_left = left.begin();
@@ -63,7 +63,7 @@ void parallel_sort(std::vector<T>& data) {
 
     // Merging in a pairwise fashion (multi-way merge)
     while (sorted_chunks.size() > 1) {
-        std::vector<std::vector<T>> new_sorted_chunks;
+        std::vector<JVec<T>> new_sorted_chunks;
 
         for (size_t i = 0; i < sorted_chunks.size(); i += 2) {
             if (i + 1 < sorted_chunks.size()) {

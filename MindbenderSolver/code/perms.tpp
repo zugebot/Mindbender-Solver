@@ -5,7 +5,7 @@
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
 void make_perm_list_inner(const Board &board_in,
-                          std::vector<HashMem> &boards_out,
+                          JVec<HashMem> &boards_out,
                           Ref<MAX_DEPTH> &ref,
                           c_u64 move_prev,
                           int& count) {
@@ -71,7 +71,7 @@ void make_perm_list_inner(const Board &board_in,
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS,
         bool CHECK_SIM, bool CHANGE_SECT_START, bool SECT_ASCENDING>
 void make_perm_list_outer(const Board &board_in,
-                          std::vector<HashMem> &boards_out,
+                          JVec<HashMem> &boards_out,
                           Ref<MAX_DEPTH> &ref,
                           int& count) {
     if constexpr (CUR_DEPTH == MAX_DEPTH) {
@@ -145,7 +145,7 @@ void make_perm_list_outer(const Board &board_in,
 template<int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM,
          bool CHANGE_SECT_START, bool SECT_ASCENDING>
 void make_perm_list(const Board &board_in,
-                    std::vector<HashMem> &boards_out,
+                    JVec<HashMem> &boards_out,
                     const HashMem::HasherPtr hasher) {
     Ref<MAX_DEPTH> ref;
     ref.hasher = hasher;
@@ -165,7 +165,7 @@ void make_perm_list(const Board &board_in,
 template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING, bool DIRECTION>
 static void make_fat_perm_list_helper(
         const Board &board,
-        std::vector<HashMem> &boards_out,
+        JVec<HashMem> &boards_out,
         u32 &count, HashMem::HasherPtr hasher,
         u64 move,
         const ActStruct& lastActStruct,
@@ -276,7 +276,7 @@ static void make_fat_perm_list_helper(
 
 template<int DEPTH, bool MOVES_ASCENDING>
 void make_fat_perm_list(const Board &board_in,
-                        std::vector<HashMem> &boards_out,
+                        JVec<HashMem> &boards_out,
                         const HashMem::HasherPtr hasher) {
     u32 count = 0;
     if constexpr (DEPTH == 0) {

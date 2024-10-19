@@ -7,7 +7,7 @@
 
 
 template<bool CHECK_CROSS, bool CHECK_SIM>
-void make_permutation_list_depth_plus_one(const std::vector<Board> &boards_in, std::vector<Board> &boards_out, const Board::HasherPtr hasher) {
+void make_permutation_list_depth_plus_one(const JVec<Board> &boards_in, JVec<Board> &boards_out, const Board::HasherPtr hasher) {
     int count = 0;
     u8 intersects = 0;
 
@@ -68,7 +68,7 @@ const Perms::depthMap_t Perms::depthMap = {
 };
 
 
-MU void Perms::reserveForDepth(MU const Board& board_in, std::vector<Board> &boards_out, c_u32 depth) {
+MU void Perms::reserveForDepth(MU const Board& board_in, JVec<Board> &boards_out, c_u32 depth) {
     c_double fraction = Board::getDuplicateEstimateAtDepth(depth);
     u64 allocSize = board_in.getFatBool() ? BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
 
@@ -77,7 +77,7 @@ MU void Perms::reserveForDepth(MU const Board& board_in, std::vector<Board> &boa
 }
 
 
-MU void Perms::reserveForDepth(MU const Board& board_in, std::vector<HashMem> &boards_out, c_u32 depth) {
+MU void Perms::reserveForDepth(MU const Board& board_in, JVec<HashMem> &boards_out, c_u32 depth) {
     c_double fraction = Board::getDuplicateEstimateAtDepth(depth);
     u64 allocSize = board_in.getFatBool() ? BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
 
@@ -132,7 +132,7 @@ Perms::toDepthFuncPtr_t Perms::toDepthFromRightFatFuncPtrs[] = {
 
 
 Perms::toDepthPlusOneFuncPtr_t Perms::toDepthPlusOneFuncPtr = make_permutation_list_depth_plus_one;
-void Perms::getDepthPlus1Func(const std::vector<Board> &boards_in, std::vector<Board> &boards_out, c_bool shouldResize) {
+void Perms::getDepthPlus1Func(const JVec<Board>& boards_in, JVec<Board>& boards_out, c_bool shouldResize) {
     if (shouldResize) { boards_out.resize(boards_in.size() * 60); }
 
     boards_out.resize(boards_out.capacity());
@@ -144,13 +144,13 @@ void Perms::getDepthPlus1Func(const std::vector<Board> &boards_in, std::vector<B
 template<bool CHECK_CROSS, bool CHECK_SIM, u32 BUFFER_SIZE>
 void make_permutation_list_depth_plus_one_buffered(
         const std::string &root_path,
-        const std::vector<Board> &boards_in, std::vector<Board> &board_buffer, Board::HasherPtr hasher) {
+        const JVec<Board> &boards_in, JVec<Board> &board_buffer, Board::HasherPtr hasher) {
 
     int vector_index = 0;
     int buffer_index = 0;
 
 
-    for (const auto &board_index: boards_in) {
+    for (const auto &board_index : boards_in) {
         c_u8 a = board_index.getMemory().getLastMove();
         c_u8 a_dir = a / 30;
         c_u8 a_sect = a % 30 / 5;
@@ -213,7 +213,7 @@ Perms::toDepthPlusOneFuncBufferedPtr_t Perms::toDepthPlusOneBufferedFuncPtr = ma
 
 void Perms::getDepthPlus1BufferedFunc(
         const std::string &root_path,
-        const std::vector<Board> &boards_in, std::vector<Board> &boards_out, int depth) {
+        const JVec<Board> &boards_in, JVec<Board> &boards_out, int depth) {
 
     boards_out.resize(boards_out.capacity());
 
