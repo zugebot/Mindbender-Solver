@@ -14,9 +14,11 @@ static constexpr u64 BOARD_PRE_MAX_MALLOC_SIZES[8] = {
         1, 60, 2550, 104000, 4245000, 173325000, 7076687500, 288933750000,};
 
 
-static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
-        1, 48, 2304, 110592, 5308416, 254803968, 12230590464, 587068342272};
+// static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
+//         1, 48, 2304, 110592, 5308416, 254803968, 12230590464, 587068342272};
 
+static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
+        1, 48, 1484, 42952, 1243246, 35428416, 0, 0};
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
 static void make_perm_list_inner(
@@ -40,13 +42,19 @@ void make_perm_list(
         HashMem::HasherPtr hasher);
 
 
-template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING>
+extern u32 MAKE_FAT_PERM_LIST_HELPER_CALLS;
+
+
+template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING, bool DIRECTION>
 static void make_fat_perm_list_helper(
         const Board &board,
         std::vector<HashMem> &boards_out,
+        u32 &count,
         HashMem::HasherPtr hasher,
-        c_u64 lastActionIndex,
-        c_u64 move, u32& count);
+        u64 move,
+        u16 lastActionIndex,
+        u8 startIndex);
+
 
 /// Entry point function
 template<int DEPTH, bool MOVES_ASCENDING=true>
@@ -77,7 +85,6 @@ public:
     static const depthMap_t depthMap;
     static toDepthFuncPtr_t toDepthFromLeftFuncPtrs[PTR_LIST_SIZE];
     static toDepthFuncPtr_t toDepthFromRightFuncPtrs[PTR_LIST_SIZE];
-
 
     static toDepthFuncPtr_t toDepthFromLeftFatFuncPtrs[PTR_LIST_SIZE];
     static toDepthFuncPtr_t toDepthFromRightFatFuncPtrs[PTR_LIST_SIZE];

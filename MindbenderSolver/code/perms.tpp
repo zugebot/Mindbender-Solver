@@ -142,6 +142,12 @@ void make_perm_list_outer(const Board &board_in,
 }
 
 
+
+
+
+
+
+
 template<int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM,
          bool CHANGE_SECT_START, bool SECT_ASCENDING>
 void make_perm_list(const Board &board_in,
@@ -151,65 +157,86 @@ void make_perm_list(const Board &board_in,
     ref.hasher = hasher;
     int count = 0;
 
-    make_perm_list_outer<0, MAX_DEPTH, CHECK_CROSS, CHECK_SIM, CHANGE_SECT_START, SECT_ASCENDING>(
+    make_perm_list_outer<0, MAX_DEPTH,
+                         CHECK_CROSS, CHECK_SIM,
+                         CHANGE_SECT_START, SECT_ASCENDING>(
             board_in, boards_out, ref, count);
     boards_out.resize(count);
 }
 
-// 3.23 - 3.26
-template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING>
+
+template<int CUR_DEPTH, int MAX_DEPTH,
+        bool MOVES_ASCENDING,
+         bool DIRECTION>
 static void make_fat_perm_list_helper(
         const Board &board,
         std::vector<HashMem> &boards_out,
-        const HashMem::HasherPtr hasher,
-        c_u64 lastActionIndex,
-        c_u64 move,
-        u32& count) {
+        u32 &count, HashMem::HasherPtr hasher,
+        u64 move,
+        u16 lastActionIndex,
+        u8 startIndex) {
+
+    MAKE_FAT_PERM_LIST_HELPER_CALLS++;
 
     static constexpr bool DO_CHECK = CUR_DEPTH != 0;
 
     // Get the function indexes for the current board state
+    c_u8 currentFatXYFast = board.getFatXYFast();
     c_u8 *funcIndexes = fatActionsIndexes[board.getFatXY()];
 
     c_bool lastActionLessThan30 = lastActionIndex < 30;
     c_bool lastActionLessThan60 = lastActionIndex < 60;
 
+    constexpr u64 end = DIRECTION ? 24 : 48;
+    for (u64 actn_i = startIndex; actn_i < end; ++actn_i) {
 
-    for (u64 actn_i = 0; actn_i < 48; ++actn_i) {
         c_u8 actionIndex = funcIndexes[actn_i];
         const ActStruct& actStruct = allActStructList[actionIndex];
         Board board_next = board;
         actStruct.action(board_next);
+
+
         if (board == board_next) { continue; }
 
-        if constexpr (DO_CHECK && MOVES_ASCENDING) {
-            if ((actStruct.index < 30 && lastActionLessThan30) | (actStruct.index < 60 && lastActionLessThan60)) {
-                if (lastActionIndex <= actStruct.index) { continue; }
-            }
-
-        } else if (DO_CHECK && !MOVES_ASCENDING){
-            if ((actStruct.index < 30 && lastActionLessThan30) | (actStruct.index < 60 && lastActionLessThan60)) {
-                if (lastActionIndex >= actStruct.index) { continue; }
+        if constexpr (DO_CHECK) {
+            if (  (lastActionLessThan30 && actStruct.index < 30)
+                | (lastActionLessThan60 && actStruct.index < 60)
+                ) {
+                if constexpr (MOVES_ASCENDING) {
+                    if (lastActionIndex <= actStruct.index) { continue; }
+                } else {
+                    if (lastActionIndex >= actStruct.index) { continue; }
+                }
             }
         }
 
+        u64 move_next = move | actn_i << 6 * CUR_DEPTH;
 
         if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
             // Base case: process and store the final board
             boards_out[count] = board_next.hashMem;
             (boards_out[count].*hasher)(board_next.b1, board_next.b2);
-            u64 move_next = move | actn_i << 6 * CUR_DEPTH;
             boards_out[count].getMemory().setNextNMove<MAX_DEPTH>(move_next);
             count++;
         } else {
             // Other Case: recursive call to the next depth
-            u64 move_next = move | actn_i << 6 * CUR_DEPTH;
-            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING>(
-                    board_next, boards_out, hasher,
-                    actStruct.index,
-                    move_next,
-                    count
-            );
+            u32 rowStart = 0;
+            u32 colStart = 24;
+            if (currentFatXYFast == board_next.getFatXYFast() && !actStruct.isFat) {
+                if constexpr (DIRECTION) {
+                    // if the fat is moved on the row,
+                    // we should still assume we aren't doing any row ops
+                    // above row-N, are things of the same row have similar starting funcs?
+                    rowStart = actn_i;
+                } else {
+                    colStart = actn_i;
+                }
+            }
+            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, true>(
+                    board_next, boards_out, count, hasher, move_next, actStruct.index, rowStart);
+
+            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, false>(
+                    board_next, boards_out, count, hasher, move_next, actStruct.index, colStart);
         }
 
     }
@@ -220,15 +247,16 @@ template<int DEPTH, bool MOVES_ASCENDING>
 void make_fat_perm_list(const Board &board_in,
                         std::vector<HashMem> &boards_out,
                         const HashMem::HasherPtr hasher) {
+    u32 count = 0;
     if constexpr (DEPTH == 0) {
-        // Special case for depth 0
-        boards_out[0] = board_in.hashMem;
-        (boards_out[0].*hasher)(board_in.b1, board_in.b2);
+        boards_out[count] = board_in.hashMem;
+        (boards_out[count].*hasher)(board_in.b1, board_in.b2);
         boards_out.resize(1);
     } else {
-        u32 count = 0;
-        make_fat_perm_list_helper<0, DEPTH, MOVES_ASCENDING>(
-                board_in, boards_out, hasher, 0, 0, count);
+        make_fat_perm_list_helper<0, DEPTH, MOVES_ASCENDING, true>(
+                board_in, boards_out, count, hasher, 0, 0, 0);
+        make_fat_perm_list_helper<0, DEPTH, MOVES_ASCENDING, false>(
+                board_in, boards_out, count, hasher, 0, 0, 24);
         boards_out.resize(count);
     }
 }

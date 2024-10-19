@@ -83,6 +83,7 @@ public:
 
     MU void setFatXY(u8 x, u8 y);
     MUND u8 getFatXY() const;
+    MUND u8 getFatXYFast() const;
 
     MU void setFatBool(bool flag);
     MUND bool getFatBool() const;

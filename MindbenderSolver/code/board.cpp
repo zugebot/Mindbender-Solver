@@ -241,6 +241,10 @@ u8 Board::getFatXY() const {
     return (b1 >> 61) * 5 + (b2 >> 61);
 }
 
+u8 Board::getFatXYFast() const {
+    return ((b1 >> 61) << 3) + (b2 >> 61);
+}
+
 
 bool Board::getFatBool() const {
     c_bool state = (b1 >> 60 & 1) != 0;

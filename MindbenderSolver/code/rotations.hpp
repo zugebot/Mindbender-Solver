@@ -38,8 +38,22 @@ MU extern Action allActionsList[110];
 
 struct ActStruct {
     Action action;
-    u32 index;
+    union {
+        struct {
+            u32 isFat :  8;
+            u32 isRow :  8;
+            u32 index : 16;
+        };
+    };
+
+    ActStruct(Action theAction, c_u16 theIndex, c_u16 theIsRow, c_u16 theIsFat) {
+        action = theAction;
+        index = theIndex;
+        isRow = theIsRow;
+        isFat = theIsFat;
+    }
 };
+
 MU extern ActStruct allActStructList[110];
 
 

@@ -104,22 +104,28 @@ Perms::toDepthFuncPtr_t Perms::toDepthFromRightFuncPtrs[] = {
     &make_perm_list<5, true, true, true, false>};
 
 
+u32 MAKE_FAT_PERM_LIST_HELPER_CALLS = 0;
+
+
+static constexpr bool tDFL1 = true;
 Perms::toDepthFuncPtr_t Perms::toDepthFromLeftFatFuncPtrs[] = {
-    &make_fat_perm_list<0, true>,
-    &make_fat_perm_list<1, true>,
-    &make_fat_perm_list<2, true>,
-    &make_fat_perm_list<3, true>,
-    &make_fat_perm_list<4, true>,
-    &make_fat_perm_list<5, true>};
+        &make_fat_perm_list<0, tDFL1>,
+        &make_fat_perm_list<1, tDFL1>,
+        &make_fat_perm_list<2, tDFL1>,
+        &make_fat_perm_list<3, tDFL1>,
+        &make_fat_perm_list<4, tDFL1>,
+        &make_fat_perm_list<5, tDFL1>};
 
 
+static constexpr bool tDFR1 = false;
 Perms::toDepthFuncPtr_t Perms::toDepthFromRightFatFuncPtrs[] = {
-        &make_fat_perm_list<0, false>,
-        &make_fat_perm_list<1, false>,
-        &make_fat_perm_list<2, false>,
-        &make_fat_perm_list<3, false>,
-        &make_fat_perm_list<4, false>,
-        &make_fat_perm_list<5, false>};
+        &make_fat_perm_list<0, tDFR1>,
+        &make_fat_perm_list<1, tDFR1>,
+        &make_fat_perm_list<2, tDFR1>,
+        &make_fat_perm_list<3, tDFR1>,
+        &make_fat_perm_list<4, tDFR1>,
+        &make_fat_perm_list<5, tDFR1>
+};
 
 
 

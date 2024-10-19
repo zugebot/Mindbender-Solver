@@ -5,12 +5,55 @@
 
 // TODO: For Fats: make it choose all rows below last_row if its from the right
 
+struct Sizes {
+    std::vector<u64> sizes = std::vector<u64>(6);
+};
+
 
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
     const auto pair = BoardLookup::getBoardPair("6-5");
 
     std::cout << pair->toString() << std::endl;
+
+    /*
+    Board board = pair->getSolutionState();
+    std::vector<std::vector<HashMem>> boards_vec(6);
+    Perms::reserveForDepth(board, boards_vec[0], 0);
+    Perms::reserveForDepth(board, boards_vec[0], 1);
+    Perms::reserveForDepth(board, boards_vec[0], 2);
+    Perms::reserveForDepth(board, boards_vec[1], 3);
+    Perms::reserveForDepth(board, boards_vec[2], 4);
+    Perms::reserveForDepth(board, boards_vec[3], 5);
+
+    std::vector<Sizes> sizes(25);
+    int index = 0;
+    for (int x = 0; x < 5; x++) {
+        for (int y = 0; y < 5; y++) {
+            board.setFatXY(x, y);
+            for (int i = 0; i < 6; i++) {
+                Perms::getDepthFunc(board, boards_vec[i], i, true);
+                std::cout << x << " " << y << " Size " << i << ": " << boards_vec[i].size() << std::endl;
+                sizes[index].sizes[i] = boards_vec[i].size();
+                boards_vec[i].resize(0);
+            }
+            index++;
+        }
+    }
+
+    for (int x = 0; x < 6; x++) {
+        u64 lowest = 0;
+        for (auto size : sizes) {
+            if (size.sizes[x] > lowest) {
+                lowest = size.sizes[x];
+            }
+        }
+        std::cout << "Size " << x << ": " << lowest << std::endl;
+
+    }
+
+    return 0;
+    */
 
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
@@ -21,6 +64,8 @@ int main() {
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
     solver.findSolutions<false>();
+
+    std::cout << "Calls: " << MAKE_FAT_PERM_LIST_HELPER_CALLS << std::endl;
 
     return 0;
 
