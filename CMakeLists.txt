@@ -9,22 +9,18 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 include_directories(${CMAKE_SOURCE_DIR}/)
 
 file(GLOB_RECURSE MINDBENDER_SOLVER_SOURCES
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/*.cpp"
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/*.hpp"
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/*.tpp"
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/utils/*.cpp"
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/utils/*.hpp"
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/utils/*.tpp"
+        "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/*.*pp"
+        "${CMAKE_SOURCE_DIR}/MindbenderSolver/utils/*.*pp"
         "${CMAKE_SOURCE_DIR}/MindbenderSolver/include.hpp")
 file(GLOB_RECURSE INCLUDE_SOURCES
-        "${CMAKE_SOURCE_DIR}/include/*.cpp"
-        "${CMAKE_SOURCE_DIR}/include/*.hpp")
+        "${CMAKE_SOURCE_DIR}/include/*.*pp")
 
 
 add_executable(MindbenderSolver
         ${MINDBENDER_SOLVER_SOURCES}
         ${INCLUDE_SOURCES}
-        main.cpp
+        # main.cpp
+        MindbenderSolver/programs/testJVec.cpp
         # MindbenderSolver/programs/TestKnownSolutions.cpp
         # MindbenderSolver/programs/testHeuristics.cpp
         # MindbenderSolver/programs/testSorting.cpp

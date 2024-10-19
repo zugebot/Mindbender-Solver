@@ -105,6 +105,8 @@ Perms::toDepthFuncPtr_t Perms::toDepthFromRightFuncPtrs[] = {
 
 
 u32 MAKE_FAT_PERM_LIST_HELPER_CALLS = 0;
+u32 MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS = 0;
+u32 MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR = 0;
 
 
 static constexpr bool tDFL1 = true;

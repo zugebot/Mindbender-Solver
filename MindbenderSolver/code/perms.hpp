@@ -18,7 +18,7 @@ static constexpr u64 BOARD_PRE_MAX_MALLOC_SIZES[8] = {
 //         1, 48, 2304, 110592, 5308416, 254803968, 12230590464, 587068342272};
 
 static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
-        1, 48, 1484, 42952, 1243246, 35428416, 0, 0};
+        1, 48, 1320, 36402, 1001168, 27513569, 0, 0};
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
 static void make_perm_list_inner(
@@ -43,6 +43,8 @@ void make_perm_list(
 
 
 extern u32 MAKE_FAT_PERM_LIST_HELPER_CALLS;
+extern u32 MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS;
+extern u32 MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR;
 
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING, bool DIRECTION>
@@ -52,8 +54,9 @@ static void make_fat_perm_list_helper(
         u32 &count,
         HashMem::HasherPtr hasher,
         u64 move,
-        u16 lastActionIndex,
-        u8 startIndex);
+        const ActStruct&,
+        u8 startIndex,
+        u8 endIndex);
 
 
 /// Entry point function

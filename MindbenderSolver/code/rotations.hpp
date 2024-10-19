@@ -38,21 +38,21 @@ MU extern Action allActionsList[110];
 
 struct ActStruct {
     Action action;
-    union {
-        struct {
-            u32 isFat :  8;
-            u32 isRow :  8;
-            u32 index : 16;
-        };
-    };
+    u8 index;
+    u8 isColNotFat;
+    u8 tillNext;
+    u8 tillLast;
 
-    ActStruct(Action theAction, c_u16 theIndex, c_u16 theIsRow, c_u16 theIsFat) {
+    MU ActStruct(Action theAction, c_u8 theIndex, c_u8 theIsColNotFat, c_u8 theTillNext, c_u8 theTillLast) {
         action = theAction;
         index = theIndex;
-        isRow = theIsRow;
-        isFat = theIsFat;
+        isColNotFat = theIsColNotFat;
+        tillNext = theTillNext;
+        tillLast = theTillLast;
     }
 };
+
+
 
 MU extern ActStruct allActStructList[110];
 

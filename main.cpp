@@ -59,13 +59,15 @@ int main() {
     solver.setWriteDirectory(outDirectory);
     solver.setDepthParams(5, 10, 10);
 
-    solver.preAllocateMemory(5);
     const Timer allocateTimer;
+    solver.preAllocateMemory(5);
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
-    solver.findSolutions<false>();
+    solver.findSolutions<true>();
 
     std::cout << "Calls: " << MAKE_FAT_PERM_LIST_HELPER_CALLS << std::endl;
+    std::cout << "Checks: " << MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS << std::endl;
+    std::cout << "Similar: " << MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR << std::endl;
 
     return 0;
 

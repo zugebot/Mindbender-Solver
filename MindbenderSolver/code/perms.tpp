@@ -142,12 +142,6 @@ void make_perm_list_outer(const Board &board_in,
 }
 
 
-
-
-
-
-
-
 template<int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM,
          bool CHANGE_SECT_START, bool SECT_ASCENDING>
 void make_perm_list(const Board &board_in,
@@ -165,30 +159,33 @@ void make_perm_list(const Board &board_in,
 }
 
 
-template<int CUR_DEPTH, int MAX_DEPTH,
-        bool MOVES_ASCENDING,
-         bool DIRECTION>
+
+// 1159841931514363924
+
+template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING, bool DIRECTION>
 static void make_fat_perm_list_helper(
         const Board &board,
         std::vector<HashMem> &boards_out,
         u32 &count, HashMem::HasherPtr hasher,
         u64 move,
-        u16 lastActionIndex,
-        u8 startIndex) {
+        const ActStruct& lastActStruct,
+        u8 startIndex,
+        u8 endIndex) {
 
     MAKE_FAT_PERM_LIST_HELPER_CALLS++;
 
-    static constexpr bool DO_CHECK = CUR_DEPTH != 0;
+    bool lastActIsRow;
+    bool lastActIsCol;
+    if constexpr (DIRECTION) {
+        lastActIsRow = lastActStruct.isColNotFat & 2;
+    } else {
+        lastActIsCol = lastActStruct.isColNotFat & 1;
+    }
 
-    // Get the function indexes for the current board state
-    c_u8 currentFatXYFast = board.getFatXYFast();
+
     c_u8 *funcIndexes = fatActionsIndexes[board.getFatXY()];
 
-    c_bool lastActionLessThan30 = lastActionIndex < 30;
-    c_bool lastActionLessThan60 = lastActionIndex < 60;
-
-    constexpr u64 end = DIRECTION ? 24 : 48;
-    for (u64 actn_i = startIndex; actn_i < end; ++actn_i) {
+    for (u64 actn_i = startIndex; actn_i < endIndex; ++actn_i) {
 
         c_u8 actionIndex = funcIndexes[actn_i];
         const ActStruct& actStruct = allActStructList[actionIndex];
@@ -196,49 +193,83 @@ static void make_fat_perm_list_helper(
         actStruct.action(board_next);
 
 
-        if (board == board_next) { continue; }
+        if constexpr (CUR_DEPTH != 0) {
 
-        if constexpr (DO_CHECK) {
-            if (  (lastActionLessThan30 && actStruct.index < 30)
-                | (lastActionLessThan60 && actStruct.index < 60)
-                ) {
-                if constexpr (MOVES_ASCENDING) {
-                    if (lastActionIndex <= actStruct.index) { continue; }
-                } else {
-                    if (lastActionIndex >= actStruct.index) { continue; }
+            if constexpr (DIRECTION) {
+                if (lastActIsRow && actStruct.isColNotFat & 2) {
+                    if constexpr (MOVES_ASCENDING) {
+                        if (lastActStruct.index <= actStruct.index) {
+                            continue;
+                        }
+                    } else {
+                        if (lastActStruct.index >= actStruct.index) {
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            if constexpr (!DIRECTION) {
+                if (lastActIsCol && actStruct.isColNotFat & 1) {
+                    if constexpr (MOVES_ASCENDING) {
+                        if (lastActStruct.index <= actStruct.index) {
+                            MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS++;
+                            continue;
+                        }
+                    } else {
+                        if (lastActStruct.index >= actStruct.index) {
+                            MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS++;
+                            continue;
+                        }
+                    }
                 }
             }
         }
 
-        u64 move_next = move | actn_i << 6 * CUR_DEPTH;
+        if (board == board_next) {
+            MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR++;
+            continue;
+        }
 
         if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
             // Base case: process and store the final board
             boards_out[count] = board_next.hashMem;
             (boards_out[count].*hasher)(board_next.b1, board_next.b2);
+            u64 move_next = move | actn_i << 6 * CUR_DEPTH;
             boards_out[count].getMemory().setNextNMove<MAX_DEPTH>(move_next);
             count++;
-        } else {
-            // Other Case: recursive call to the next depth
-            u32 rowStart = 0;
-            u32 colStart = 24;
-            if (currentFatXYFast == board_next.getFatXYFast() && !actStruct.isFat) {
-                if constexpr (DIRECTION) {
-                    // if the fat is moved on the row,
-                    // we should still assume we aren't doing any row ops
-                    // above row-N, are things of the same row have similar starting funcs?
-                    rowStart = actn_i;
-                } else {
-                    colStart = actn_i;
-                }
+        } else if constexpr (DIRECTION) {
+            u8 nextStart = 0;
+            u8 nextEnd = 24;
+
+            if constexpr (MOVES_ASCENDING) {
+                nextStart = actn_i + actStruct.tillNext;
+            } else {
+                nextEnd = actn_i - actStruct.tillLast;
+                if (nextEnd == 255) { nextEnd = 0; }
             }
+            u64 move_next = move | actn_i << 6 * CUR_DEPTH;
             make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, true>(
-                    board_next, boards_out, count, hasher, move_next, actStruct.index, rowStart);
+                    board_next, boards_out, count, hasher, move_next, actStruct, nextStart, nextEnd);
+            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, false>(
+                    board_next, boards_out, count, hasher, move_next, actStruct, 24, 48);
+
+        } else { // if constexpr (!DIRECTION)
+            u8 nextStart = 24;
+            u8 nextEnd = 48;
+            if constexpr (MOVES_ASCENDING) {
+                nextStart = actn_i + actStruct.tillNext;
+            } else {
+                nextEnd = actn_i - actStruct.tillLast;
+                nextEnd += (nextEnd == 255);
+            }
+            u64 move_next = move | actn_i << 6 * CUR_DEPTH;
+            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, true>(
+                    board_next, boards_out, count, hasher, move_next, actStruct, 0, 24);
 
             make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, false>(
-                    board_next, boards_out, count, hasher, move_next, actStruct.index, colStart);
+                    board_next, boards_out, count, hasher, move_next, actStruct, nextStart, nextEnd);
         }
-
     }
 }
 
@@ -254,9 +285,9 @@ void make_fat_perm_list(const Board &board_in,
         boards_out.resize(1);
     } else {
         make_fat_perm_list_helper<0, DEPTH, MOVES_ASCENDING, true>(
-                board_in, boards_out, count, hasher, 0, 0, 0);
+                board_in, boards_out, count, hasher, 0, {nullptr, 0, 0, 0, 0}, 0, 24);
         make_fat_perm_list_helper<0, DEPTH, MOVES_ASCENDING, false>(
-                board_in, boards_out, count, hasher, 0, 0, 24);
+                board_in, boards_out, count, hasher, 0, {nullptr, 0, 0, 0, 0}, 24, 48);
         boards_out.resize(count);
     }
 }
