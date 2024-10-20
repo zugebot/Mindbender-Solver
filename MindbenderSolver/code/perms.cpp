@@ -36,7 +36,7 @@ void make_permutation_list_depth_plus_one(const JVec<Board> &boards_in, JVec<Boa
                     c_int b_cur = b_base + b_amount;
 
                     boards_out[count] = board_index;
-                    allActionsList[b_cur](boards_out[count]);
+                    allActStructList[b_cur].action(boards_out[count]);
                     if constexpr (CHECK_SIM) {
                         if (boards_out[count].b1 == board_index.b1 && boards_out[count].b2 == board_index.b2) { continue; }
                     }
@@ -85,7 +85,6 @@ MU void Perms::reserveForDepth(MU const Board& board_in, JVec<Memory> &boards_ou
 }
 
 
-
 Perms::toDepthFuncPtr_t Perms::toDepthFromLeftFuncPtrs[] = {
     &make_perm_list<0, true, true, true, true>,
     &make_perm_list<1, true, true, true, true>,
@@ -93,6 +92,7 @@ Perms::toDepthFuncPtr_t Perms::toDepthFromLeftFuncPtrs[] = {
     &make_perm_list<3, true, true, true, true>,
     &make_perm_list<4, true, true, true, true>,
     &make_perm_list<5, true, true, true, true>};
+
 
 Perms::toDepthFuncPtr_t Perms::toDepthFromRightFuncPtrs[] = {
     &make_perm_list<0, true, true, true, false>,
@@ -176,7 +176,7 @@ void make_permutation_list_depth_plus_one_buffered(
                     c_int b_cur = b_base + b_amount;
 
                     board_buffer[vector_index] = board_index;
-                    allActionsList[b_cur](board_buffer[vector_index]);
+                    allActStructList[b_cur].action(board_buffer[vector_index]);
                     if constexpr (CHECK_SIM) {
                         if (board_buffer[vector_index].b1 == board_index.b1 && board_buffer[vector_index].b2 == board_index.b2) { continue; }
                     }
@@ -208,7 +208,10 @@ void make_permutation_list_depth_plus_one_buffered(
         outfile.close();
     }
 }
+
+
 Perms::toDepthPlusOneFuncBufferedPtr_t Perms::toDepthPlusOneBufferedFuncPtr = make_permutation_list_depth_plus_one_buffered;
+
 
 void Perms::getDepthPlus1BufferedFunc(
         const std::string &root_path,

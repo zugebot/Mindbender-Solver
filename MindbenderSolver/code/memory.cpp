@@ -70,10 +70,6 @@ u8 Memory::getLastMove() const {
 // ############################################################
 
 
-static constexpr u32 NORMAL_PERMUTATION_LENGTH = 3;
-static constexpr u32 LONGER_PERMUTATION_LENGTH = 4;
-
-
 std::string removeTrailingSpace(std::string& str) {
     if (!str.empty() && str.back() == ' ') {
         str.pop_back();
@@ -90,11 +86,15 @@ std::string Memory::asmString(const Memory* other) const {
 }
 
 
-std::string Memory::formatMoveString(c_u8 move, c_bool isBackwards) {
-    c_u8 rowCol = move % 30 / 5;
-    c_u8 amount = isBackwards ? 6 - (1 + move % 5) : 1 + move % 5;
-    c_char letter = static_cast<char>('C' + 15 * (move < 30));
-    return letter + std::to_string(rowCol) + std::to_string(amount);
+std::string Memory::formatMoveString(c_u8 move, c_bool isForwards) {
+    char temp[5] = {};
+    if (isForwards) {
+        memcpy(temp, allActStructList[move].name.data(), 4);
+    } else {
+        u32 index = move + allActStructList[move].tillNext - 1 - allActStructList[move].tillLast;
+        memcpy(temp, allActStructList[index].name.data(), 4);
+    }
+    return temp;
 }
 
 
@@ -102,11 +102,11 @@ std::string Memory::asmStringForwards() const {
     c_u32 count = getMoveCount();
 
     std::string moves_str;
-    moves_str.reserve(NORMAL_PERMUTATION_LENGTH * count);
+    moves_str.reserve(3 * count);
 
     for (u32 i = 0; i < count; i++) {
         c_u8 move = getMove(i);
-        moves_str += formatMoveString(move, false) + " ";
+        moves_str += formatMoveString(move, true) + " ";
     }
     removeTrailingSpace(moves_str);
 
@@ -118,11 +118,11 @@ std::string Memory::asmStringBackwards() const {
     c_u32 count = getMoveCount();
 
     std::string moves_str;
-    moves_str.reserve(NORMAL_PERMUTATION_LENGTH * count);
+    moves_str.reserve(3 * count);
 
     for (u32 i = count; i != 0; i--) {
         c_u8 move = getMove(i - 1);
-        moves_str += formatMoveString(move, true) + " ";
+        moves_str += formatMoveString(move, false) + " ";
     }
 
     removeTrailingSpace(moves_str);
@@ -148,29 +148,28 @@ std::string Memory::asmFatStringForwards(c_u8 fatPos) const {
     int y = fatPos % 5;
 
     for (u32 i = 0; i < count; i++) {
-        c_u8 move = getMove(i);
+        char temp[5] = {};
+        memcpy(temp, allActStructList[
+            fatActionsIndexes[x * 5 + y][getMove(i)]].name.data(), 4);
+        u32 back = 2 + (temp[3] != '\0');
+        moves_str += temp;
 
-        c_auto func = allActionsList[fatActionsIndexes[x * 5 + y][move]];
-        std::string segment = getNameFromAction(func);
-        moves_str += segment;
-
-
-        if (segment.size() == LONGER_PERMUTATION_LENGTH) {
-            c_int axisNum = segment.at(1) - '0';
-            c_int amount = segment.back() - '0';
-            if (segment.at(0) == 'R') {
-                if (axisNum == y) { x = (x + amount) % 6; }
-            } else {
-                if (axisNum == x) { y = (y + amount) % 6; }
+        if (back == 3) { // if it is a fat move
+            if (temp[0] == 'R') {
+                if (temp[1] - '0' == y) { // axisNum
+                    x += temp[back] - '0'; // amount
+                    x -= 6 * (x > 5);
+                }
+            } else if EXPECT_TRUE (temp[0] == 'C') {
+                if (temp[1] - '0' == x) { // axisNum
+                    y += temp[back] - '0'; // amount
+                    y -= 6 * (y > 5);
+                }
             }
         }
-
-
-
         if (i != count - 1) {
             moves_str += " ";
         }
-
     }
     return moves_str;
 }
@@ -186,29 +185,26 @@ std::string Memory::asmFatStringBackwards(c_u8 fatPos) const {
     int y = fatPos % 5;
 
     for (u32 i = 0; i < count; i++) {
-        c_u8 move = getMove(i);
-        c_auto func = allActionsList[fatActionsIndexes[x * 5 + y][move]];
+        char temp[5] = {};
+        memcpy(temp, allActStructList[fatActionsIndexes[x * 5 + y][getMove(i)]].name.data(), 4);
+        u32 back = 2 + (temp[3] != '\0');
 
-        std::string segment = getNameFromAction(func);
-
-        if (segment.size() == LONGER_PERMUTATION_LENGTH) {
-            c_int axisNum = segment.at(1) - '0';
-            c_int amount = segment.back() - '0';
-            if (segment.at(0) == 'R') {
-                if (axisNum == y) {
-                    x = (x + amount) % 6;
+        if (back == 3) { // if it is a fat move
+            if (temp[0] == 'R') {
+                if (temp[1] - '0' == y) { // axisNum
+                    x += temp[back] - '0'; // amount
+                    x -= 6 * (x > 5);
                 }
-            } else {
-                if (axisNum == x) {
-                    y = (y + amount) % 6;
+            } else if EXPECT_FALSE(temp[0] == 'C') {
+                if (temp[1] - '0' == x) { // axisNum
+                    y += temp[back] - '0'; // amount
+                    y -= 6 * (y > 5);
                 }
             }
         }
 
-        c_char new_amount = static_cast<char>('f' - segment.back());
-        segment = segment.substr(0, segment.size() - 1) + new_amount;
-
-        moves_vec[i] = segment;
+        temp[back] = static_cast<char>('f' - temp[back]);
+        moves_vec[i] = temp;
     }
 
     std::string moves_str;
@@ -263,8 +259,6 @@ std::vector<u8> parseMoveStringTemplated(const std::string& input) {
 
     return result;
 }
-
-
 
 
 std::vector<u8> Memory::parseNormMoveString(const std::string& input) {

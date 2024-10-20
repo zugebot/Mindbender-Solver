@@ -1,7 +1,5 @@
 #pragma once
 
-#include "reference.hpp"
-
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
 void make_perm_list_inner(const Board &board_in,
@@ -43,7 +41,7 @@ void make_perm_list_inner(const Board &board_in,
         for (cur = base; cur < base + 5; ++cur) {
 
             Board board_next = board_in;
-            allActionsList[cur](board_next);
+            allActStructList[cur].action(board_next);
 
             if constexpr (CHECK_SIM) {
                 if (board_in == board_next) { continue; }
@@ -159,9 +157,6 @@ void make_perm_list(const Board &board_in,
 }
 
 
-
-// 1159841931514363924
-
 template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING, bool DIRECTION>
 static void make_fat_perm_list_helper(
         const Board &board,
@@ -187,8 +182,7 @@ static void make_fat_perm_list_helper(
 
     for (u64 actn_i = startIndex; actn_i < endIndex; ++actn_i) {
 
-        c_u8 actionIndex = funcIndexes[actn_i];
-        const ActStruct& actStruct = allActStructList[actionIndex];
+        const ActStruct& actStruct = allActStructList[funcIndexes[actn_i]];
         Board board_next = board;
         actStruct.action(board_next);
 
@@ -285,9 +279,9 @@ void make_fat_perm_list(const Board &board_in,
         boards_out.resize(1);
     } else {
         make_fat_perm_list_helper<0, DEPTH, MOVES_ASCENDING, true>(
-                board_in, boards_out, count, hasher, 0, {nullptr, 0, 0, 0, 0}, 0, 24);
+                board_in, boards_out, count, hasher, 0, {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 0, 24);
         make_fat_perm_list_helper<0, DEPTH, MOVES_ASCENDING, false>(
-                board_in, boards_out, count, hasher, 0, {nullptr, 0, 0, 0, 0}, 24, 48);
+                board_in, boards_out, count, hasher, 0, {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 24, 48);
         boards_out.resize(count);
     }
 }

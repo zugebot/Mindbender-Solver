@@ -2,10 +2,8 @@
 
 #include "board.hpp"
 #include "rotations.hpp"
-#include "reference.hpp"
 
 #include "MindbenderSolver/utils/jvec.hpp"
-
 
 #include <array>
 #include <vector>
@@ -19,8 +17,33 @@ static constexpr u64 BOARD_PRE_MAX_MALLOC_SIZES[8] = {
 // static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
 //         1, 48, 2304, 110592, 5308416, 254803968, 12230590464, 587068342272};
 
+/**
+ * these are an upper-limit for each depth,
+ * it's dependent on the fat location
+ *
+ * so a good upper limit for guessing more is
+ * 1: 48
+ * 2: 27.5
+ * 3: 27.577272727
+ * 4: 27.503104225
+ * 5: 27.4814706423
+ * SIZE = 48 * 27.6 ^ (depth - 1)
+ */
 static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
         1, 48, 1320, 36402, 1001168, 27513569, 0, 0};
+
+
+template<int MAX_DEPTH>
+class Ref {
+public:
+    std::array<int, MAX_DEPTH> dir_seq = {};
+    std::array<int, MAX_DEPTH> sect_seq = {};
+    std::array<int, MAX_DEPTH> base_seq = {};
+    std::array<u64, MAX_DEPTH> cur_seq = {};
+    std::array<bool, MAX_DEPTH> checkRC_seq = {}; // first index not used
+    std::array<u8, MAX_DEPTH> intersect_seq = {}; // first index not used
+    Memory::HasherPtr hasher{};
+};
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
 static void make_perm_list_inner(
@@ -44,10 +67,11 @@ void make_perm_list(
         Memory::HasherPtr hasher);
 
 
+
+
 extern u32 MAKE_FAT_PERM_LIST_HELPER_CALLS;
 extern u32 MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS;
 extern u32 MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR;
-
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING, bool DIRECTION>
 static void make_fat_perm_list_helper(
@@ -60,13 +84,13 @@ static void make_fat_perm_list_helper(
         u8 startIndex,
         u8 endIndex);
 
-
 /// Entry point function
 template<int DEPTH, bool MOVES_ASCENDING=true>
 void make_fat_perm_list(
         const Board& board_in,
         JVec<Memory> &boards_out,
         Memory::HasherPtr hasher);
+
 
 
 
@@ -77,6 +101,8 @@ void make_permutation_list_depth_plus_one(
 template<bool CHECK_CROSS=true, bool CHECK_SIM=true, u32 BUFFER_SIZE=33'554'432>
 void make_permutation_list_depth_plus_one_buffered(const std::string& root_path,
     const JVec<Board> &boards_in, JVec<Board> &boards_out, Board::HasherPtr hasher);
+
+
 
 
 class Perms {
@@ -114,18 +140,13 @@ void Perms::getDepthFunc(const Board& board_in, JVec<Memory> &boards_out, c_u32 
 
     boards_out.resize(boards_out.capacity());
     const Memory::HasherPtr hasher = Memory::getHashFunc(board_in);
+
     if (board_in.getFatBool()) {
-        if constexpr (SECT_ASCENDING) {
-            toDepthFromLeftFatFuncPtrs[depth](board_in, boards_out, hasher);
-        } else {
-            toDepthFromRightFatFuncPtrs[depth](board_in, boards_out, hasher);
-        }
+        constexpr auto FUNC_DIR = SECT_ASCENDING ? toDepthFromLeftFatFuncPtrs : toDepthFromRightFatFuncPtrs;
+        FUNC_DIR[depth](board_in, boards_out, hasher);
     } else {
-        if constexpr (SECT_ASCENDING) {
-            toDepthFromLeftFuncPtrs[depth](board_in, boards_out, hasher);
-        } else {
-            toDepthFromRightFuncPtrs[depth](board_in, boards_out, hasher);
-        }
+        constexpr auto FUNC_DIR = SECT_ASCENDING ? toDepthFromLeftFuncPtrs : toDepthFromRightFuncPtrs;
+        FUNC_DIR[depth](board_in, boards_out, hasher);
     }
 }
 

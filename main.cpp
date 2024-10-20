@@ -3,16 +3,9 @@
 #include <iostream>
 
 
-// TODO: For Fats: make it choose all rows below last_row if its from the right
-
-struct Sizes {
-    std::vector<u64> sizes = std::vector<u64>(6);
-};
-
-
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
-    const auto pair = BoardLookup::getBoardPair("5-3");
+    const auto pair = BoardLookup::getBoardPair("7-3");
 
     std::cout << pair->toString() << std::endl;
 
@@ -57,17 +50,19 @@ int main() {
 
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(5, 10, 10);
+    solver.setDepthParams(5, 7, 10);
 
     const Timer allocateTimer;
     solver.preAllocateMemory(5);
     std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
 
-    solver.findSolutions<true>();
+    solver.findSolutions<false>();
 
-    std::cout << "Calls: " << MAKE_FAT_PERM_LIST_HELPER_CALLS << std::endl;
-    std::cout << "Checks: " << MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS << std::endl;
-    std::cout << "Similar: " << MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR << std::endl;
+    if (pair->getInitialState().getFatBool()) {
+        std::cout << "Calls: " << MAKE_FAT_PERM_LIST_HELPER_CALLS << std::endl;
+        std::cout << "Checks: " << MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS << std::endl;
+        std::cout << "Similar: " << MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR << std::endl;
+    }
 
     return 0;
 

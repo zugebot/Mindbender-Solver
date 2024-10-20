@@ -1,7 +1,6 @@
 #pragma once
 
 #include "board.hpp"
-#include <map>
 
 
 #define PERM_MACRO(name) void name(Board &board)
@@ -33,18 +32,20 @@ PERM_MACRO(C_45_1); PERM_MACRO(C_45_2); PERM_MACRO(C_45_3); PERM_MACRO(C_45_4); 
 
 
 typedef void (*Action)(Board &);
-MU extern Action allActionsList[110];
 
 
 struct ActStruct {
     Action action;
+    std::array<char, 4> name{};
     u8 index;
     u8 isColNotFat;
     u8 tillNext;
     u8 tillLast;
 
-    MU ActStruct(Action theAction, c_u8 theIndex, c_u8 theIsColNotFat, c_u8 theTillNext, c_u8 theTillLast) {
+    MU ActStruct(Action theAction, c_u8 theIndex, c_u8 theIsColNotFat,
+                 c_u8 theTillNext, c_u8 theTillLast, const char* theName) {
         action = theAction;
+        memcpy(name.data(), theName, 4 * sizeof(char));
         index = theIndex;
         isColNotFat = theIsColNotFat;
         tillNext = theTillNext;
@@ -55,20 +56,12 @@ struct ActStruct {
 
 
 MU extern ActStruct allActStructList[110];
-
-
-
 MU extern u8 fatActionsIndexes[25][48];
-MU extern std::map<Action, u8> actionToIndex;
+// extern ActStruct getActionFromName(const std::string& name);
 
-
-extern std::string getNameFromAction(Action action);
-extern Action getActionFromName(const std::string& name);
-extern u8 getIndexFromAction(Action action);
 
 extern void applyMoves(Board& board, const Memory& memory);
 extern void applyFatMoves(Board& board, const Memory& memory);
-
 
 extern Board makeBoardWithMoves(const Board& board, const Memory& memory);
 extern Board makeBoardWithFatMoves(const Board& board, const Memory& memory);

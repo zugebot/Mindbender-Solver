@@ -72,7 +72,7 @@ public:
 
     MUND std::string toString() const;
 
-    MUND static std::string formatMoveString(u8 move, bool isBackwards) ;
+    MUND static std::string formatMoveString(u8 move, bool isForwards) ;
 
     MUND std::string asmString(const Memory* other) const;
     MUND std::string asmStringForwards() const;

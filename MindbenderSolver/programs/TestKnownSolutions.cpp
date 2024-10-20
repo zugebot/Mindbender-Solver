@@ -122,7 +122,7 @@ int main() {
                 std::vector<u8> action_numbers = Memory::parseNormMoveString(solution);
                 Board toCheckBoard = startingBoard;
                 for (c_u8 action_number : action_numbers) {
-                    allActionsList[action_number](toCheckBoard);
+                    allActStructList[action_number].action(toCheckBoard);
                 }
                 if (toCheckBoard == realSolutionBoard) {
                     realSolutionCount += 1;
@@ -138,7 +138,7 @@ int main() {
                 std::vector<u8> action_numbers = Memory::parseFatMoveString(solution);
                 Board toCheckBoard = startingBoard;
                 for (c_u8 action_number : action_numbers) {
-                    allActionsList[action_number](toCheckBoard);
+                    allActStructList[action_number].action(toCheckBoard);
                 }
 
                 if (toCheckBoard == realSolutionBoard) {

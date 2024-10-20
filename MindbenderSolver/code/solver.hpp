@@ -21,6 +21,8 @@
 
 class BoardSolver {
 public:
+    static constexpr u32 MAX_DEPTH = 5;
+
     std::vector<JVec<Memory>> board1Table;
     std::vector<JVec<Memory>> board2Table;
     std::unordered_set<std::string> resultSet;
@@ -61,7 +63,7 @@ public:
     }
 
 
-    void preAllocateMemory(c_u32 maxDepth = 5) {
+    void preAllocateMemory(c_u32 maxDepth = MAX_DEPTH) {
         c_u32 highestDepth = std::max(1U, std::min(maxDepth, depthTotalMax + 1) / 2);
         Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth);
         Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth);
