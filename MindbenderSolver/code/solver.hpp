@@ -15,14 +15,14 @@
 #include "perms.hpp"
 
 
-#define IF_DEBUG(stuff) if constexpr (debug) { stuff }
+
 #define IF_DEBUG_COUT(stuff) if constexpr (debug) { std::cout << stuff }
 
 
 class BoardSolver {
 public:
-    std::vector<JVec<HashMem>> board1Table;
-    std::vector<JVec<HashMem>> board2Table;
+    std::vector<JVec<Memory>> board1Table;
+    std::vector<JVec<Memory>> board2Table;
     std::unordered_set<std::string> resultSet;
     const BoardPair* pair;
     Board board1;
@@ -109,7 +109,7 @@ public:
 
             const Timer timerSort1;
             boost::sort::block_indirect_sort(board1Table[depth1].begin(), board1Table[depth1].end());
-            IF_DEBUG(std::cout<<start_left<<"Sort Time: "<<timerSort1.getSeconds()<<"\n\n";)
+            IF_DEBUG_COUT(start_left<<"Sort Time: "<<timerSort1.getSeconds()<<"\n\n";)
         }
 
 
@@ -133,7 +133,7 @@ public:
             IF_DEBUG_COUT(start_both<<"Solving for depths ["<<depth1<<", "<<depth2<<"]";)
 
             const Timer timerInter;
-            std::vector<std::pair<const HashMem*, const HashMem*>> results;
+            std::vector<std::pair<const Memory*, const Memory*>> results;
             if (depth1 != 0 && depth2 != 0) {
                 results = intersection_threaded(board1Table[depth1], board2Table[depth2]);
             } else {
@@ -141,11 +141,7 @@ public:
             }
             auto timerInterEnd = timerInter.getSeconds();
 
-            IF_DEBUG(if (!results.empty()) {
-                std::cout << " found: " << results.size() << "\n";
-            } else {
-                std::cout << " found: 0\n";
-            })
+            IF_DEBUG_COUT(" found: " << results.size() << "\n";)
             IF_DEBUG_COUT(start_both<<"Inter Time: "<<timerInterEnd<<"\n";)
 
             // verify the results
@@ -153,15 +149,11 @@ public:
             if (hasFat) {
                 c_int xy1 = board1.getFatXY();
                 c_int xy2 = board2.getFatXY();
-
                 for (const auto &[fst, snd]: results) {
                     const Board temp1 = makeBoardWithFatMoves(board1, *fst);
                     const Board temp2 = makeBoardWithFatMoves(board2, *snd);
-
-
                     if (temp1 == temp2) {
-                        std::string moveset = fst->getMemoryConst(
-                                                         ).asmFatString(xy1, &snd->getMemoryConst(), xy2);
+                        std::string moveset = fst->asmFatString(xy1, snd, xy2);
                         resultSet.insert(moveset);
                     }
                 }
@@ -169,10 +161,8 @@ public:
                 for (auto& [fst, snd]: results) {
                     const Board temp1 = makeBoardWithMoves(board1, *fst);
                     const Board temp2 = makeBoardWithMoves(board2, *snd);
-
                     if (temp1 == temp2) {
-                        std::string moveset = fst->getMemoryConst(
-                                                         ).asmString(&snd->getMemoryConst());
+                        std::string moveset = fst->asmString(snd);
                         resultSet.insert(moveset);
                     }
                 }

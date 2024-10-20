@@ -12,7 +12,7 @@ struct Sizes {
 
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
-    const auto pair = BoardLookup::getBoardPair("6-5");
+    const auto pair = BoardLookup::getBoardPair("5-3");
 
     std::cout << pair->toString() << std::endl;
 

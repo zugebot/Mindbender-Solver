@@ -3,22 +3,65 @@
 #include <vector>
 
 #include "rotations.hpp"
+#include "segments.hpp"
 
 #include <sstream>
 
 
+
+// ############################################################
+// #                       u64 hash                           #
+// ############################################################
+
+
+void Memory::precomputeHash2(c_u64 b1, c_u64 b2) {
+    c_u64 above = getSegment2bits(b1);
+    c_u64 below = getSegment2bits(b2);
+    setHash(above << 18 | below);
+}
+
+
+void Memory::precomputeHash3(c_u64 b1, c_u64 b2) {
+    c_u64 above = getSegment3bits(b1);
+    c_u64 below = getSegment3bits(b2);
+    setHash(above << 30 | below);
+}
+
+
+void Memory::precomputeHash4(c_u64 b1, c_u64 b2) {
+    setHash(prime_func1(b2, b1));
+}
+
+
+MU Memory::HasherPtr Memory::getHashFunc(const Board& board) {
+    c_u64 colorCount = board.getColorCount();
+    if (board.getFatBool() || colorCount > 3) {
+        return &Memory::precomputeHash4;
+    }
+    if (colorCount == 1 || colorCount == 2) {
+        return &Memory::precomputeHash2;
+    }
+    return &Memory::precomputeHash3;
+}
+
+
+// ############################################################
+// #                       u64 moves                          #
+// ############################################################
+
+
 MUND u8 Memory::getMoveCount() const {
-    return moves & MEMORY_MOVE_DATA_MASK;
+    return mem & MEMORY_MOVE_DATA_MASK;
 }
 
 
 u8 Memory::getMove(c_u8 index) const {
-    return moves >> getShift(index) & MEMORY_MOVE_TYPE_MASK;
+    return mem >> getShift(index) & MEMORY_MOVE_TYPE_MASK;
 }
 
 
 u8 Memory::getLastMove() const {
-    return moves >> getShift(getMoveCount() - 1) & MEMORY_MOVE_TYPE_MASK;
+    return mem >> getShift(getMoveCount() - 1) & MEMORY_MOVE_TYPE_MASK;
 }
 
 

@@ -9,54 +9,18 @@
 #include <vector>
 
 
-class Board;
-
-
-/**
- * Todo:
- * make it so that
- * 1-bit. - isSolved
- * 1-bit. - has Fat
- * 3-bits - fat X
- * 3-bits - fat Y
- * 3/4bit - color count
- * this would leave mem to having a max of 8 moves.
- */
-class HashMem {
-    u64 hash = 0;
-    Memory mem;
-public:
-    typedef void (HashMem::*HasherPtr)(u64, u64);
-
-    explicit HashMem() = default;
-
-    MUND Memory& getMemory() { return mem; }
-    MUND const Memory& getMemoryConst() const { return mem; }
-
-    MUND u64 getHash() const { return hash; }
-    MU void setHash(c_u64 value) { hash = value; }
-
-    MU void precomputeHash2(c_u64 b1, c_u64 b2);
-    MU void precomputeHash3(c_u64 b1, c_u64 b2);
-    MU void precomputeHash4(c_u64 b1, c_u64 b2);
-    MUND static HasherPtr getHashFunc(const Board& board) ;
-
-
-    __forceinline bool operator==(const HashMem& other) const {
-        return this->getHash() == other.getHash(); }
-
-    __forceinline bool operator<(const HashMem& other) const {
-        return this->getHash() < other.getHash(); }
-
-    __forceinline bool operator>(const HashMem& other) const {
-        return this->getHash() > other.getHash(); }
-
-};
-
-
 class Board {
 public:
     typedef void (Board::*HasherPtr)();
+    typedef std::array<i8, 8> ColorArray_t;
+    static ColorArray_t ColorsDefault;
+    struct PrintSettings {
+        bool useAscii;
+        ColorArray_t trueColors = ColorsDefault;
+        PrintSettings() : useAscii(true) {}
+        PrintSettings(bool useAscii, ColorArray_t colors)
+            : useAscii(useAscii), trueColors(colors) {}
+    };
 
     /**
      *  3 bits: fat x position
@@ -73,16 +37,16 @@ public:
      */
     u64 b2 = 0;
 
-    HashMem hashMem;
+    Memory memory;
 
     explicit Board() = default;
     explicit Board(c_u8 values[36]);
     explicit Board(c_u8 values[36], u8 x, u8 y);
 
     MU void setState(c_u8 values[36]);
-    MU std::array<i8, 8> setStateAndRetColors(c_u8 values[36]);
+    MU ColorArray_t setStateAndRetColors(c_u8 values[36]);
 
-    MU void setFatXY(u8 x, u8 y);
+    MU void setFatXY(u64 x, u64 y);
     MUND u8 getFatXY() const;
     MUND u8 getFatXYFast() const;
 
@@ -99,9 +63,9 @@ public:
 
     MUND u8 getColor(u8 x, u8 y) const;
 
-    MUND u64 getHash() const { return hashMem.getHash(); }
-    MUND Memory& getMemory() { return hashMem.getMemory(); }
-    MUND const Memory& getMemory() const { return hashMem.getMemoryConst(); }
+    MUND u64 getHash() const { return memory.getHash(); }
+    MUND Memory& getMemory() { return memory; }
+    MUND const Memory& getMemory() const { return memory; }
 
     // new generation of high IQ functions
     MUND bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
@@ -118,11 +82,11 @@ public:
 
     MUND u64 getScore1(const Board& other) const;
 
-    MU static void appendBoardToString(std::string& str, const Board* board, c_i32 curY, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}, bool printASCII = true);
+    MU static void appendBoardToString(std::string &str, const Board *board, i32 curY, PrintSettings theSettings = PrintSettings());
+    MUND std::string toString(const Board& other, PrintSettings theSettings = PrintSettings()) const;
+    MUND std::string toString(const Board* other, PrintSettings theSettings = PrintSettings()) const;
+    MUND std::string toStringSingle(PrintSettings theSettings) const;
     MUND std::string toBlandString() const;
-    MUND std::string toString(const Board& other, bool printASCII = true, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}) const;
-    MUND std::string toString(const Board* other, bool printASCII = true, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}) const;
-    MUND std::string toStringSingle(bool printASCII = true, std::array<i8, 8> trueColors={0,1,2,3,4,5,6,7}) const;
 
 
     __forceinline bool operator==(const Board& other) const {

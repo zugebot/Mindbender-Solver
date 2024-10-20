@@ -47,7 +47,7 @@ how about this?
 - # # # - -
 
 
-for a series of moves:
+for a series of mem:
 
 current
  |  next
@@ -60,16 +60,16 @@ Pos [R, C]
 so if a row that is moved through a column that will move next, if the 
 1. intersection of that row and column
 2. the original cell of the row (before either move)
-3. the new cell of the column (after the 2 moves)
+3. the new cell of the column (after the 2 mem)
 
 if the color at their intersection [i] does not change,
-that means the moves [R] and [C] can swap.
+that means the mem [R] and [C] can swap.
 
 if this is the case, how can I ensure only
 move1, move2 occurs, and never
 move2, move1?
 
-well, if it catches that the next two moves:
+well, if it catches that the next two mem:
 1. satisfy the intersection rule
 2. is a [C] followed by a [R]
 3. it can skip it

@@ -1054,15 +1054,15 @@ u8 getIndexFromAction(Action action) {
 }
 
 
-void applyMoves(Board &board, const HashMem &hashMem) {
-    for (int i = 0; i < hashMem.getMemoryConst().getMoveCount(); i++)
-        allActionsList[hashMem.getMemoryConst().getMove(i)](board);
+void applyMoves(Board &board, const Memory &memory) {
+    for (int i = 0; i < memory.getMoveCount(); i++)
+        allActionsList[memory.getMove(i)](board);
 }
 
 
-void applyFatMoves(Board &board, const HashMem &hashMem) {
-    for (int index = 0; index < hashMem.getMemoryConst().getMoveCount(); index++) {
-        u8 move = hashMem.getMemoryConst().getMove(index);
+void applyFatMoves(Board &board, const Memory &memory) {
+    for (int index = 0; index < memory.getMoveCount(); index++) {
+        u8 move = memory.getMove(index);
 
         u8* funcIndexes = fatActionsIndexes[board.getFatXY()];
         allActionsList[funcIndexes[move]](board);
@@ -1070,15 +1070,15 @@ void applyFatMoves(Board &board, const HashMem &hashMem) {
 }
 
 
-Board makeBoardWithMoves(const Board& board, const HashMem& hashMem) {
+Board makeBoardWithMoves(const Board& board, const Memory& memory) {
     Board temp = board;
-    applyMoves(temp, hashMem);
+    applyMoves(temp, memory);
     return temp;
 }
 
 
-Board makeBoardWithFatMoves(const Board& board, const HashMem& hashMem) {
+Board makeBoardWithFatMoves(const Board& board, const Memory& memory) {
     Board temp = board;
-    applyFatMoves(temp, hashMem);
+    applyFatMoves(temp, memory);
     return temp;
 }

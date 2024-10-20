@@ -16,7 +16,7 @@ public:
     std::array<u64, MAX_DEPTH> cur_seq = {};
     std::array<bool, MAX_DEPTH> checkRC_seq = {}; // first index not used
     std::array<u8, MAX_DEPTH> intersect_seq = {}; // first index not used
-    HashMem::HasherPtr hasher{};
+    Memory::HasherPtr hasher{};
 };
 
 

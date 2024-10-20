@@ -5,22 +5,22 @@
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
 void make_perm_list_inner(const Board &board_in,
-                          JVec<HashMem> &boards_out,
+                          JVec<Memory> &boards_out,
                           Ref<MAX_DEPTH> &ref,
                           c_u64 move_prev,
                           int& count) {
 
     if constexpr (MAX_DEPTH == 0) {
-        boards_out[0] = board_in.hashMem;
+        boards_out[0] = board_in.memory;
         (boards_out[0].*ref.hasher)(board_in.b1, board_in.b2);
         boards_out.resize(1);
         return;
 
     } else if constexpr (CUR_DEPTH == MAX_DEPTH) {
         // Base case: process and store the final board
-        boards_out[count] = board_in.hashMem;
+        boards_out[count] = board_in.memory;
         (boards_out[count].*ref.hasher)(board_in.b1, board_in.b2);
-        boards_out[count].getMemory().setNextNMove<MAX_DEPTH>(move_prev);
+        boards_out[count].setNextNMove<MAX_DEPTH>(move_prev);
         ++count;
         return;
 
@@ -71,7 +71,7 @@ void make_perm_list_inner(const Board &board_in,
 template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS,
         bool CHECK_SIM, bool CHANGE_SECT_START, bool SECT_ASCENDING>
 void make_perm_list_outer(const Board &board_in,
-                          JVec<HashMem> &boards_out,
+                          JVec<Memory> &boards_out,
                           Ref<MAX_DEPTH> &ref,
                           int& count) {
     if constexpr (CUR_DEPTH == MAX_DEPTH) {
@@ -145,8 +145,8 @@ void make_perm_list_outer(const Board &board_in,
 template<int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM,
          bool CHANGE_SECT_START, bool SECT_ASCENDING>
 void make_perm_list(const Board &board_in,
-                    JVec<HashMem> &boards_out,
-                    const HashMem::HasherPtr hasher) {
+                    JVec<Memory> &boards_out,
+                    const Memory::HasherPtr hasher) {
     Ref<MAX_DEPTH> ref;
     ref.hasher = hasher;
     int count = 0;
@@ -165,8 +165,8 @@ void make_perm_list(const Board &board_in,
 template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING, bool DIRECTION>
 static void make_fat_perm_list_helper(
         const Board &board,
-        JVec<HashMem> &boards_out,
-        u32 &count, HashMem::HasherPtr hasher,
+        JVec<Memory> &boards_out,
+        u32 &count, Memory::HasherPtr hasher,
         u64 move,
         const ActStruct& lastActStruct,
         u8 startIndex,
@@ -233,10 +233,10 @@ static void make_fat_perm_list_helper(
 
         if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
             // Base case: process and store the final board
-            boards_out[count] = board_next.hashMem;
+            boards_out[count] = board_next.memory;
             (boards_out[count].*hasher)(board_next.b1, board_next.b2);
             u64 move_next = move | actn_i << 6 * CUR_DEPTH;
-            boards_out[count].getMemory().setNextNMove<MAX_DEPTH>(move_next);
+            boards_out[count].setNextNMove<MAX_DEPTH>(move_next);
             count++;
         } else if constexpr (DIRECTION) {
             u8 nextStart = 0;
@@ -276,11 +276,11 @@ static void make_fat_perm_list_helper(
 
 template<int DEPTH, bool MOVES_ASCENDING>
 void make_fat_perm_list(const Board &board_in,
-                        JVec<HashMem> &boards_out,
-                        const HashMem::HasherPtr hasher) {
+                        JVec<Memory> &boards_out,
+                        const Memory::HasherPtr hasher) {
     u32 count = 0;
     if constexpr (DEPTH == 0) {
-        boards_out[count] = board_in.hashMem;
+        boards_out[count] = board_in.memory;
         (boards_out[count].*hasher)(board_in.b1, board_in.b2);
         boards_out.resize(1);
     } else {

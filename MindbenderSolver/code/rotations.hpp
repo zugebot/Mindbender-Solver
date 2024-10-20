@@ -66,12 +66,12 @@ extern std::string getNameFromAction(Action action);
 extern Action getActionFromName(const std::string& name);
 extern u8 getIndexFromAction(Action action);
 
-extern void applyMoves(Board& board, const HashMem& hashMem);
-extern void applyFatMoves(Board& board, const HashMem& hashMem);
+extern void applyMoves(Board& board, const Memory& memory);
+extern void applyFatMoves(Board& board, const Memory& memory);
 
 
-extern Board makeBoardWithMoves(const Board& board, const HashMem& hashMem);
-extern Board makeBoardWithFatMoves(const Board& board, const HashMem& hashMem);
+extern Board makeBoardWithMoves(const Board& board, const Memory& memory);
+extern Board makeBoardWithFatMoves(const Board& board, const Memory& memory);
 
 
 

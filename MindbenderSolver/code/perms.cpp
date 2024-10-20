@@ -1,7 +1,6 @@
 #include "perms.hpp"
 #include "rotations.hpp"
 
-#include <array>
 #include <fstream>
 #include <iostream>
 
@@ -77,7 +76,7 @@ MU void Perms::reserveForDepth(MU const Board& board_in, JVec<Board> &boards_out
 }
 
 
-MU void Perms::reserveForDepth(MU const Board& board_in, JVec<HashMem> &boards_out, c_u32 depth) {
+MU void Perms::reserveForDepth(MU const Board& board_in, JVec<Memory> &boards_out, c_u32 depth) {
     c_double fraction = Board::getDuplicateEstimateAtDepth(depth);
     u64 allocSize = board_in.getFatBool() ? BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
 

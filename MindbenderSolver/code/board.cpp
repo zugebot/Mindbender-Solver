@@ -1,82 +1,13 @@
 #include "board.hpp"
 
-#include "rotations.hpp"
 
 #include <string>
-#include <immintrin.h>
 
 #include "MindbenderSolver/utils/colors.hpp"
+#include "segments.hpp"
 
 
-u64 prime_func1(c_u64 b1, c_u64 b2) {
-    static constexpr u64 MASK = 0'777777'777777'777777;
-    static constexpr u64 prime = 31;
-    u64 hash = 17;
-    hash = hash * prime + (b1 & MASK ^ (b1 & MASK) >> 32);
-    hash = hash * prime + (b2 & MASK ^ (b2 & MASK) >> 32);
-    return hash;
-}
-
-
-// check commits before 10/16/24 for previous impl.
-u64 getSegment2bits(c_u64 segment) {
-    static constexpr u64 MASK_X0 = 0'111111'111111'111111;
-    return _pext_u64(segment, MASK_X0);
-}
-
-
-// check commits before 10/16/24 for previous impl.
-u64 getSegment3bits(c_u64 segment) {
-    static constexpr u64 MASK_AS = 0'300300'300300'300300;
-    static constexpr u64 MASK_BS = 0'030030'030030'030030;
-    static constexpr u64 MASK_CS = 0'003003'003003'003003;
-    c_u64 o1 = ((segment & MASK_AS) >> 6) * 9 |
-               ((segment & MASK_BS) >> 3) * 3 |
-               segment & MASK_CS;
-    static constexpr u64 MASK_X23 = 0'037037'037037'037037;
-    c_u64 x23 = _pext_u64(o1, MASK_X23);
-    return x23;
-}
-
-
-// check commits before 10/16/24 for previous impl.
-u64 getSegment4bits(c_u64 segment) {
-    static constexpr u64 MASK_X0 = 0'333333'333333'333333;
-    return _pext_u64(segment, MASK_X0);
-}
-
-
-void HashMem::precomputeHash2(c_u64 b1, c_u64 b2) {
-    c_u64 above = getSegment2bits(b1);
-    c_u64 below = getSegment2bits(b2);
-    setHash(above << 18 | below);
-}
-
-
-void HashMem::precomputeHash3(c_u64 b1, c_u64 b2) {
-    c_u64 above = getSegment3bits(b1);
-    c_u64 below = getSegment3bits(b2);
-    setHash(above << 30 | below);
-}
-
-
-void HashMem::precomputeHash4(c_u64 b1, c_u64 b2) {
-    setHash(prime_func1(b2, b1));
-}
-
-
-MU HashMem::HasherPtr HashMem::getHashFunc(const Board& board) {
-    c_u64 colorCount = board.getColorCount();
-    if (board.getFatBool() || colorCount > 3) {
-        return &HashMem::precomputeHash4;
-    }
-    if (colorCount == 1 || colorCount == 2) {
-        return &HashMem::precomputeHash2;
-    }
-    return &HashMem::precomputeHash3;
-}
-
-
+Board::ColorArray_t Board::ColorsDefault = {0, 1, 2, 3, 4, 5, 6, 7};
 
 
 Board::Board(const u8 values[36]) {
@@ -122,9 +53,9 @@ void Board::setState(c_u8 values[36]) {
 }
 
 
-MU std::array<i8, 8> Board::setStateAndRetColors(c_u8 values[36]) {
-    std::array<i8, 8> colors = {8, 8, 8, 8, 8, 8, 8, 8};
-    std::array<i8, 8> trueColors = {8, 8, 8, 8, 8, 8, 8, 8};
+MU Board::ColorArray_t Board::setStateAndRetColors(c_u8 values[36]) {
+    ColorArray_t colors = {8, 8, 8, 8, 8, 8, 8, 8};
+    ColorArray_t trueColors = {8, 8, 8, 8, 8, 8, 8, 8};
 
     for (int i = 0; i < 36; i++) {
         c_int val = values[i] & 0'7;
@@ -171,17 +102,6 @@ u32 Board::getColorCount() const {
 }
 
 
-
-
-
-
-
-template<typename T>
-u64 cast_u64(T var) {
-    return static_cast<u64>(var);
-}
-
-
 static constexpr u64 MASK_FAT_POS = 0x1FFF'FFFF'FFFF'FFFF;
 
 /**
@@ -189,16 +109,16 @@ static constexpr u64 MASK_FAT_POS = 0x1FFF'FFFF'FFFF'FFFF;
  * @param x value 0-4
  * @param y value 0-4
  */
-void Board::setFatXY(c_u8 x, c_u8 y) {
-    b1 = b1 & MASK_FAT_POS | cast_u64(x) << 61;
-    b2 = b2 & MASK_FAT_POS | cast_u64(y) << 61;
+void Board::setFatXY(c_u64 x, c_u64 y) {
+    b1 = b1 & MASK_FAT_POS | x << 61;
+    b2 = b2 & MASK_FAT_POS | y << 61;
     setFatBool(true);
 }
 
 
 MU void Board::setFatBool(c_bool flag) {
     static constexpr u64 MASK_FAT_FLAG = 0xEFFF'FFFF'FFFF'FFFF;
-    b1 = b1 & MASK_FAT_FLAG | cast_u64(flag) << 60;
+    b1 = b1 & MASK_FAT_FLAG | static_cast<u64>(flag) << 60;
 
 }
 
@@ -391,19 +311,19 @@ u64 Board::getRowColIntersections(c_u32 x, c_u32 y) const {
 void Board::precomputeHash2() {
     c_u64 above = getSegment2bits(b1);
     c_u64 below = getSegment2bits(b2);
-    hashMem.setHash(above << 18 | below);
+    memory.setHash(above << 18 | below);
 }
 
 
 void Board::precomputeHash3() {
     c_u64 above = getSegment3bits(b1);
     c_u64 below = getSegment3bits(b2);
-    hashMem.setHash(above << 30 | below);
+    memory.setHash(above << 30 | below);
 }
 
 
 void Board::precomputeHash4() {
-    hashMem.setHash(prime_func1(b2, b1));
+    memory.setHash(prime_func1(b2, b1));
 }
 
 
@@ -419,8 +339,7 @@ Board::HasherPtr Board::getHashFunc() const {
 }
 
 
-void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY,
-                                std::array<i8, 8> trueColors, bool printASCII) {
+void Board::appendBoardToString(std::string &str, const Board *board, c_i32 curY, PrintSettings theSettings) {
     c_bool isFat = board->getFatBool();
     c_u8 curFatX = board->getFatX();
     c_u8 curFatY = board->getFatY();
@@ -436,26 +355,26 @@ void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY
     }
 
     for (int x = 0; x < 18; x += 3) {
-        c_u8 value = trueColors[board_b >> (51 - x - (curY % 3) * 18) & 0'7];
+        c_u8 value = theSettings.trueColors[board_b >> (51 - x - (curY % 3) * 18) & 0'7];
         if (isFat) {
             c_u32 curX = x / 3;
             if (curFatX == curX || curFatX == curX - 1) {
                 if (curFatY == curY || curFatY == curY - 1) {
-                    if (printASCII)
+                    if (theSettings.useAscii)
                         str.append(Colors::getBgColor(value));
                     inMiddle = curFatX == curX;
                 }
             }
         }
-        if (printASCII)
+        if (theSettings.useAscii)
             str.append(Colors::getColor(value));
         str.append(std::to_string(value));
         if (inMiddle) {
             if (x != 15) { str.append(" "); }
-            if (printASCII)
+            if (theSettings.useAscii)
                 str.append(Colors::bgReset);
         } else {
-            if (printASCII)
+            if (theSettings.useAscii)
                 str.append(Colors::bgReset);
             if (x != 15) { str.append(" "); }
         }
@@ -464,38 +383,38 @@ void Board::appendBoardToString(std::string& str, const Board* board, c_i32 curY
 
 
 MUND std::string Board::toBlandString() const {
-    return toStringSingle(false);
+    return toStringSingle(PrintSettings());
 }
 
 
-MUND std::string Board::toString(const Board& other, bool printASCII, std::array<i8, 8> trueColors) const {
+MUND std::string Board::toString(const Board& other, PrintSettings theSettings) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
-        appendBoardToString(str, this, i, trueColors, printASCII);
+        appendBoardToString(str, this, i, theSettings);
         str.append("   ");
-        appendBoardToString(str, &other, i, trueColors, printASCII);
+        appendBoardToString(str, &other, i, theSettings);
         str.append("\n");
     }
     return str;
 }
 
 
-MUND std::string Board::toString(const Board* other, bool printASCII, std::array<i8, 8> trueColors) const {
+MUND std::string Board::toString(const Board* other, PrintSettings theSettings) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
-        appendBoardToString(str, this, i, trueColors, printASCII);
+        appendBoardToString(str, this, i, theSettings);
         str.append("   ");
-        appendBoardToString(str, other, i, trueColors, printASCII);
+        appendBoardToString(str, other, i, theSettings);
         str.append("\n");
     }
     return str;
 }
 
 
-std::string Board::toStringSingle(bool printASCII, std::array<i8, 8> trueColors) const {
+std::string Board::toStringSingle(PrintSettings theSettings) const {
     std::string str;
     for (int i = 0; i < 6; i++) {
-        appendBoardToString(str, this, i, trueColors, printASCII);
+        appendBoardToString(str, this, i, theSettings);
         str.append("\n");
     }
     return str;
