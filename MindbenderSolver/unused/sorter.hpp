@@ -1,10 +1,12 @@
 #pragma once
 
+#include <boost/sort/block_indirect_sort/block_indirect_sort.hpp>
 #include <vector>
 
-#include "board.hpp"
-#include "MindbenderSolver/utils/th_parallel_sort.hpp"
-#include "MindbenderSolver/utils/th_radix_sort.hpp"
+#include "MindbenderSolver/code/board.hpp"
+#include "MindbenderSolver/utils/jvec.hpp"
+#include "th_parallel_sort.hpp"
+#include "th_radix_sort.hpp"
 
 
 template<typename T>
@@ -34,6 +36,9 @@ public:
     }
 
     MU void sortBoards(JVec<T>& boards, c_u32 depth, c_u32 colorCount) {
+        // boost::sort::block_indirect_sort(boards.begin(), boards.end());
+        // return;
+
         switch (depth) {
             case (DEPTH::D2): {
                 std::sort(boards.begin(), boards.end());

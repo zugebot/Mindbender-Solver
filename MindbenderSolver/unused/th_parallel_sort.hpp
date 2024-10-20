@@ -4,7 +4,8 @@
 #include <thread>
 #include <vector>
 
-#include "hasGetHash.hpp"
+#include "MindbenderSolver/utils/hasGetHash.hpp"
+#include "MindbenderSolver/utils/jvec.hpp"
 
 
 template <int NUM_THREADS, HasGetHash T>

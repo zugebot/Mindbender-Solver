@@ -7,8 +7,9 @@
 #include <vector>
 #include <array>
 
-#include "timer.hpp"
-#include "hasGetHash.hpp"
+#include "MindbenderSolver/utils/hasGetHash.hpp"
+#include "MindbenderSolver/utils/jvec.hpp"
+#include "MindbenderSolver/utils/timer.hpp"
 
 
 #define RADIX_IF_DEBUG_COUT(str) \

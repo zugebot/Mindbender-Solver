@@ -1068,3 +1068,17 @@ void applyFatMoves(Board &board, const HashMem &hashMem) {
         allActionsList[funcIndexes[move]](board);
     }
 }
+
+
+Board makeBoardWithMoves(const Board& board, const HashMem& hashMem) {
+    Board temp = board;
+    applyMoves(temp, hashMem);
+    return temp;
+}
+
+
+Board makeBoardWithFatMoves(const Board& board, const HashMem& hashMem) {
+    Board temp = board;
+    applyFatMoves(temp, hashMem);
+    return temp;
+}

@@ -68,3 +68,11 @@ extern u8 getIndexFromAction(Action action);
 
 extern void applyMoves(Board& board, const HashMem& hashMem);
 extern void applyFatMoves(Board& board, const HashMem& hashMem);
+
+
+extern Board makeBoardWithMoves(const Board& board, const HashMem& hashMem);
+extern Board makeBoardWithFatMoves(const Board& board, const HashMem& hashMem);
+
+
+
+

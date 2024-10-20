@@ -7,10 +7,11 @@
 
 
 #include "MindbenderSolver/code/board.hpp"
-#include "MindbenderSolver/code/sorter.hpp"
-#include "MindbenderSolver/utils/th_parallel_sort.hpp"
-#include "MindbenderSolver/utils/th_radix_sort.hpp"
+#include "MindbenderSolver/unused/sorter.hpp"
+#include "MindbenderSolver/unused/th_parallel_sort.hpp"
 #include "MindbenderSolver/utils/timer.hpp"
+
+#include <boost/sort/sort.hpp>
 
 
 // 2 colors: 3, 12
@@ -18,31 +19,52 @@
 
 
 int main() {
-    const size_t size = 173325000;
-    std::vector<Board> data(size);
-    std::vector<Board> aux(size);
-    BoardSorter<Board> sorter;
-    sorter.resize(5, data.size());
+    const size_t size = 1'000'000;
+
+    JVec<Board> data1(size); data1.resize(size);
+    JVec<Board> data2(size); data2.resize(size);
+
+    JVec<Board> aux(size); aux.resize(size);
+
+    BoardSorter<Board> sorter; sorter.resize(5, data1.size());
 
     std::random_device rd;
     std::mt19937_64 gen(rd());
     std::uniform_int_distribution<uint64_t> dist(0, 0x0FFF'FFFF'FFFF'FFFF);
-    for (auto& obj : data) { obj.hashMem.setHash(dist(gen)); }
-    std::cout << "Starting sort now!" << std::endl;
-    const Timer timer;
+
+    for (u64 index = 0; index < size; index++) {
+        uint64_t value = dist(gen);
+        data1[index].hashMem.setHash(value);
+        data2[index].hashMem.setHash(value);
+    }
 
 
-    sorter.sortBoards(data, 5, 3);
 
+    std::cout << "Starting Sort1 now! (threaded radix)" << std::endl;
+    const Timer timer1;
 
-    std::cout << "Sort Time: " << timer.getSeconds() << std::endl;
-    if (std::is_sorted(data.begin(), data.end())) {
+    sorter.sortBoards(data1, 5, 3);
+
+    std::cout << "Sort Time: " << timer1.getSeconds() << std::endl;
+    if (std::is_sorted(data1.begin(), data1.end())) {
         std::cout << "Sorting successful!" << std::endl;
     } else {
         std::cout << "Sorting failed!" << std::endl;
     }
 
 
+
+    std::cout << "\nStarting Sort2 now! (boost::block_indirect)" << std::endl;
+    const Timer timer2;
+
+    boost::sort::block_indirect_sort(data2.begin(), data2.end());
+
+    std::cout << "Sort Time: " << timer2.getSeconds() << std::endl;
+    if (std::is_sorted(data2.begin(), data2.end())) {
+        std::cout << "Sorting successful!" << std::endl;
+    } else {
+        std::cout << "Sorting failed!" << std::endl;
+    }
 
 
     return 0;

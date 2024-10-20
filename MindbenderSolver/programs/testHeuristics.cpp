@@ -1,18 +1,17 @@
 #include "MindbenderSolver/code/board.hpp"
+#include "MindbenderSolver/code/intersection.hpp"
 #include "MindbenderSolver/code/levels.hpp"
 #include "MindbenderSolver/code/memory.hpp"
 #include "MindbenderSolver/code/perms.hpp"
-#include "MindbenderSolver/code/sorter.hpp"
-#include "MindbenderSolver/code/intersection.hpp"
 #include "MindbenderSolver/code/rotations.hpp"
+#include "MindbenderSolver/unused/sorter.hpp"
 #include "MindbenderSolver/utils/timer.hpp"
 #include <fstream>
 #include <iostream>
-#include <set>
-#include <vector>
 #include <queue>
+#include <set>
 #include <unordered_set>
-
+#include <vector>
 
 
 int calculateColorDistributionHeuristic(const Board& currentBoard, const Board& goalBoard) {

@@ -1,16 +1,18 @@
 #pragma once
 
+#include <boost/sort/block_indirect_sort/block_indirect_sort.hpp>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
 #include "MindbenderSolver/utils/format_bytes.hpp"
 
+#include "MindbenderSolver/utils/timer.hpp"
 #include "intersection.hpp"
 #include "levels.hpp"
 #include "perms.hpp"
-#include "sorter.hpp"
 
 
 #define IF_DEBUG(stuff) if constexpr (debug) { stuff }
@@ -22,7 +24,6 @@ public:
     std::vector<JVec<HashMem>> board1Table;
     std::vector<JVec<HashMem>> board2Table;
     std::unordered_set<std::string> resultSet;
-    BoardSorter<HashMem> boardSorter;
     const BoardPair* pair;
     Board board1;
     Board board2;
@@ -77,19 +78,6 @@ public:
             Perms::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1);
             Perms::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1);
         }
-
-        if (!hasFat) {
-            boardSorter.ensureAux(highestDepth, BOARD_PRE_MAX_MALLOC_SIZES[highestDepth]);
-            if (highestDepth != 1) {
-                boardSorter.ensureAux(highestDepth - 1, BOARD_PRE_MAX_MALLOC_SIZES[highestDepth - 1]);
-            }
-
-        } else {
-            boardSorter.ensureAux(highestDepth, BOARD_FAT_MAX_MALLOC_SIZES[highestDepth]);
-            if (highestDepth != 1) {
-                boardSorter.ensureAux(highestDepth - 1, BOARD_FAT_MAX_MALLOC_SIZES[highestDepth - 1]);
-            }
-        }
     }
 
 
@@ -109,8 +97,6 @@ public:
         const std::string start_left = "[" + std::to_string(index) + "L] ";
         const std::string start_right = "[" + std::to_string(index) + "R] ";
 
-        c_u32 colorCount = !hasFat ? board1.getColorCount() : 4;
-
         if (board1Table[depth1].empty()) {
             IF_DEBUG_COUT(start_left<<"doing getDepthFunc for "<<depth1;)
 
@@ -118,27 +104,27 @@ public:
             c_bool should_alloc = board1Table[depth1].capacity() == 0;
             Perms::getDepthFunc<true>(board1, board1Table[depth1], depth1, should_alloc);
 
-            IF_DEBUG_COUT("\n"<<start_left<<"Creation Time: "<<timer.getSeconds();)
-            IF_DEBUG_COUT("\n"<<start_left<<"Size: "<<board1Table[depth1].size() << "\n";)
+            IF_DEBUG_COUT("\n"<<start_left<<"Size: "<<board1Table[depth1].size();)
+            IF_DEBUG_COUT("\n"<<start_left<<"Make Time: "<<timer.getSeconds()<<"\n";)
 
             const Timer timerSort1;
-            boardSorter.sortBoards(board1Table[depth1], depth1, colorCount);
+            boost::sort::block_indirect_sort(board1Table[depth1].begin(), board1Table[depth1].end());
             IF_DEBUG(std::cout<<start_left<<"Sort Time: "<<timerSort1.getSeconds()<<"\n\n";)
         }
 
 
         if (board2Table[depth2].empty()) {
-            IF_DEBUG_COUT("\n"<<start_right<<"doing getDepthFunc for "<<depth2;)
+            IF_DEBUG_COUT(start_right<<"doing getDepthFunc for "<<depth2;)
 
             const Timer timer;
             c_bool should_alloc = board2Table[depth2].capacity() == 0;
             Perms::getDepthFunc<false>(board2, board2Table[depth2], depth2, should_alloc);
 
-            IF_DEBUG_COUT("\n"<<start_right<<"Creation Time: "<<timer.getSeconds();)
-            IF_DEBUG_COUT("\n"<<start_right<<"Size: "<<board2Table[depth2].size()<<"\n";)
+            IF_DEBUG_COUT("\n"<<start_right<<"Size: "<<board2Table[depth2].size();)
+            IF_DEBUG_COUT("\n"<<start_right<<"Make Time: "<<timer.getSeconds()<<"\n";)
 
             const Timer timerSort2;
-            boardSorter.sortBoards(board2Table[depth2], depth2, colorCount);
+            boost::sort::block_indirect_sort(board2Table[depth2].begin(), board2Table[depth2].end());
             IF_DEBUG_COUT(start_right<<"Sort Time: "<<timerSort2.getSeconds()<<"\n\n";)
         }
 
@@ -146,18 +132,21 @@ public:
         if (searchResults) {
             IF_DEBUG_COUT(start_both<<"Solving for depths ["<<depth1<<", "<<depth2<<"]";)
 
+            const Timer timerInter;
             std::vector<std::pair<const HashMem*, const HashMem*>> results;
             if (depth1 != 0 && depth2 != 0) {
                 results = intersection_threaded(board1Table[depth1], board2Table[depth2]);
             } else {
                 results = intersection(board1Table[depth1], board2Table[depth2]);
             }
+            auto timerInterEnd = timerInter.getSeconds();
 
             IF_DEBUG(if (!results.empty()) {
                 std::cout << " found: " << results.size() << "\n";
             } else {
                 std::cout << " found: 0\n";
             })
+            IF_DEBUG_COUT(start_both<<"Inter Time: "<<timerInterEnd<<"\n";)
 
             // verify the results
             // this filters out board states with identical hashes
@@ -166,12 +155,9 @@ public:
                 c_int xy2 = board2.getFatXY();
 
                 for (const auto &[fst, snd]: results) {
+                    const Board temp1 = makeBoardWithFatMoves(board1, *fst);
+                    const Board temp2 = makeBoardWithFatMoves(board2, *snd);
 
-                    Board temp1 = board1;
-                    applyFatMoves(temp1, *fst);
-
-                    Board temp2 = board2;
-                    applyFatMoves(temp2, *snd);
 
                     if (temp1 == temp2) {
                         std::string moveset = fst->getMemoryConst(
@@ -181,12 +167,8 @@ public:
                 }
             } else {
                 for (auto& [fst, snd]: results) {
-
-                    Board temp1 = board1;
-                    applyMoves(temp1, *fst);
-
-                    Board temp2 = board2;
-                    applyMoves(temp2, *snd);
+                    const Board temp1 = makeBoardWithMoves(board1, *fst);
+                    const Board temp2 = makeBoardWithMoves(board2, *snd);
 
                     if (temp1 == temp2) {
                         std::string moveset = fst->getMemoryConst(
