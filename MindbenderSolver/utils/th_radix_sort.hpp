@@ -96,7 +96,7 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
                 auto& local_count = thread_counts[t];
                 std::ranges::fill(local_count, 0);
                 for (count_t i = start; i < end; ++i) {
-                    c_u64 bucket = (data_out[i].getHash() >> shift) & mask;
+                    C u64 bucket = (data_out[i].getHash() >> shift) & mask;
                     ++local_count[bucket];
                 }
             });
@@ -142,7 +142,7 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
             thread_pool[t] = std::thread([&, t, start, end]() {
                 auto& local_offset = thread_offsets[t];
                 for (count_t i = start; i < end; ++i) {
-                    c_u64 bucket = (data_out[i].getHash() >> shift) & mask;
+                    C u64 bucket = (data_out[i].getHash() >> shift) & mask;
                     aux_buffer[local_offset[bucket]++] = data_out[i];
                 }
             });

@@ -6,23 +6,23 @@
 
 
 template<bool CHECK_CROSS, bool CHECK_SIM>
-void make_permutation_list_depth_plus_one(const JVec<Board> &boards_in, JVec<Board> &boards_out, const Board::HasherPtr hasher) {
+void make_permutation_list_depth_plus_one(C JVec<Board> &boards_in, JVec<Board> &boards_out, C Board::HasherPtr hasher) {
     int count = 0;
     u8 intersects = 0;
 
-    for (const auto &board_index: boards_in) {
-        c_u8 a = board_index.getMemory().getLastMove();
-        c_u8 a_dir = a / 30;
-        c_u8 a_sect = a % 30 / 5;
-        c_u8 a_amount = a % 5 + 1;
+    for (C auto &board_index: boards_in) {
+        C u8 a = board_index.getMemory().getLastMove();
+        C u8 a_dir = a / 30;
+        C u8 a_sect = a % 30 / 5;
+        C u8 a_amount = a % 5 + 1;
 
 
         for (int b_dir = 0; b_dir < 2; b_dir++) {
-            c_bool do_RC_check = a_dir != b_dir && a_dir != 0;
+            C bool do_RC_check = a_dir != b_dir && a_dir != 0;
 
-            c_int b_start = (b_dir == a_dir) ? a_sect + 1 : 0;
+            C int b_start = (b_dir == a_dir) ? a_sect + 1 : 0;
             for (int b_sect = b_start; b_sect < 6; b_sect++) {
-                c_int b_base = b_dir * 30 + b_sect * 5;
+                C int b_base = b_dir * 30 + b_sect * 5;
 
                 if constexpr (CHECK_CROSS) {
                     if (do_RC_check) { intersects = board_index.doActISColMatchBatched(a_sect, b_sect, a_amount); }
@@ -33,7 +33,7 @@ void make_permutation_list_depth_plus_one(const JVec<Board> &boards_in, JVec<Boa
                         if (do_RC_check && intersects & (1 << (b_amount))) { continue; }
                     }
 
-                    c_int b_cur = b_base + b_amount;
+                    C int b_cur = b_base + b_amount;
 
                     boards_out[count] = board_index;
                     allActStructList[b_cur].action(boards_out[count]);
@@ -52,7 +52,7 @@ void make_permutation_list_depth_plus_one(const JVec<Board> &boards_in, JVec<Boa
 }
 
 
-const Perms::depthMap_t Perms::depthMap = {
+C Perms::depthMap_t Perms::depthMap = {
         {1, {{1, 0}, {0, 1}}},
         {2, {{1, 1}, {0, 2}, {2, 0}}},
         {3, {{1, 2}, {2, 1}, {0, 3}, {3, 0}}},
@@ -67,8 +67,8 @@ const Perms::depthMap_t Perms::depthMap = {
 };
 
 
-MU void Perms::reserveForDepth(MU const Board& board_in, JVec<Board> &boards_out, c_u32 depth) {
-    c_double fraction = Board::getDuplicateEstimateAtDepth(depth);
+MU void Perms::reserveForDepth(MU C Board& board_in, JVec<Board> &boards_out, C u32 depth) {
+    C double fraction = Board::getDuplicateEstimateAtDepth(depth);
     u64 allocSize = board_in.getFatBool() ? BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
 
     allocSize = static_cast<u64>(static_cast<double>(allocSize) * fraction);
@@ -76,8 +76,8 @@ MU void Perms::reserveForDepth(MU const Board& board_in, JVec<Board> &boards_out
 }
 
 
-MU void Perms::reserveForDepth(MU const Board& board_in, JVec<Memory> &boards_out, c_u32 depth) {
-    c_double fraction = Board::getDuplicateEstimateAtDepth(depth);
+MU void Perms::reserveForDepth(MU C Board& board_in, JVec<Memory> &boards_out, C u32 depth) {
+    C double fraction = Board::getDuplicateEstimateAtDepth(depth);
     u64 allocSize = board_in.getFatBool() ? BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
 
     allocSize = static_cast<u64>(static_cast<double>(allocSize) * fraction);
@@ -131,37 +131,37 @@ Perms::toDepthFuncPtr_t Perms::toDepthFromRightFatFuncPtrs[] = {
 
 
 Perms::toDepthPlusOneFuncPtr_t Perms::toDepthPlusOneFuncPtr = make_permutation_list_depth_plus_one;
-void Perms::getDepthPlus1Func(const JVec<Board>& boards_in, JVec<Board>& boards_out, c_bool shouldResize) {
+void Perms::getDepthPlus1Func(C JVec<Board>& boards_in, JVec<Board>& boards_out, C bool shouldResize) {
     if (shouldResize) { boards_out.resize(boards_in.size() * 60); }
 
     boards_out.resize(boards_out.capacity());
-    const Board::HasherPtr hasher = boards_in[0].getHashFunc();
+    C Board::HasherPtr hasher = boards_in[0].getHashFunc();
     toDepthPlusOneFuncPtr(boards_in, boards_out, hasher);
 }
 
 
 template<bool CHECK_CROSS, bool CHECK_SIM, u32 BUFFER_SIZE>
 void make_permutation_list_depth_plus_one_buffered(
-        const std::string &root_path,
-        const JVec<Board> &boards_in, JVec<Board> &board_buffer, Board::HasherPtr hasher) {
+        C std::string &root_path,
+        C JVec<Board> &boards_in, JVec<Board>& boards_buffer, Board::HasherPtr hasher) {
 
     int vector_index = 0;
     int buffer_index = 0;
 
 
-    for (const auto &board_index : boards_in) {
-        c_u8 a = board_index.getMemory().getLastMove();
-        c_u8 a_dir = a / 30;
-        c_u8 a_sect = a % 30 / 5;
-        c_u8 a_amount = a % 5 + 1;
+    for (C auto &board_index : boards_in) {
+        C u8 a = board_index.getMemory().getLastMove();
+        C u8 a_dir = a / 30;
+        C u8 a_sect = a % 30 / 5;
+        C u8 a_amount = a % 5 + 1;
 
 
         for (int b_dir = 0; b_dir < 2; b_dir++) {
-            c_bool do_RC_check = a_dir != b_dir && a_dir != 0;
+            C bool do_RC_check = a_dir != b_dir && a_dir != 0;
 
-            c_int b_start = (b_dir == a_dir) ? a_sect + 1 : 0;
+            C int b_start = (b_dir == a_dir) ? a_sect + 1 : 0;
             for (int b_sect = b_start; b_sect < 6; b_sect++) {
-                c_int b_base = b_dir * 30 + b_sect * 5;
+                C int b_base = b_dir * 30 + b_sect * 5;
 
                 u8 intersects = 0;
                 if constexpr (CHECK_CROSS) {
@@ -173,23 +173,23 @@ void make_permutation_list_depth_plus_one_buffered(
                         if (do_RC_check && intersects & (1 << (b_amount))) { continue; }
                     }
 
-                    c_int b_cur = b_base + b_amount;
+                    C int b_cur = b_base + b_amount;
 
-                    board_buffer[vector_index] = board_index;
-                    allActStructList[b_cur].action(board_buffer[vector_index]);
+                    boards_buffer[vector_index] = board_index;
+                    allActStructList[b_cur].action(boards_buffer[vector_index]);
                     if constexpr (CHECK_SIM) {
-                        if (board_buffer[vector_index].b1 == board_index.b1 && board_buffer[vector_index].b2 == board_index.b2) { continue; }
+                        if (boards_buffer[vector_index].b1 == board_index.b1 && boards_buffer[vector_index].b2 == board_index.b2) { continue; }
                     }
 
-                    (board_buffer[vector_index].*hasher)();
-                    board_buffer[vector_index].getMemory().setNextNMove<1>(b_cur);
+                    (boards_buffer[vector_index].*hasher)();
+                    boards_buffer[vector_index].getMemory().setNextNMove<1>(b_cur);
                     vector_index++;
 
                     if EXPECT_FALSE (vector_index > BUFFER_SIZE) {
                         std::string filename = root_path + std::to_string(buffer_index) + ".bin";
                         std::cout << "writing to file '" + filename + "'.\n";
                         std::ofstream outfile(filename, std::ios::binary);
-                        outfile.write(reinterpret_cast<const char *>(board_buffer.data()), (i64) (board_buffer.size() * sizeof(Board)));
+                        outfile.write(reinterpret_cast<C char *>(boards_buffer.data()), static_cast<int64_t>(boards_buffer.size() * sizeof(Board)));
                         outfile.close();
                         buffer_index++;
 
@@ -204,7 +204,7 @@ void make_permutation_list_depth_plus_one_buffered(
         std::string filename = root_path + std::to_string(buffer_index) + ".bin";
         std::cout << "writing to file '" + filename + "'.\n";
         std::ofstream outfile(filename, std::ios::binary);
-        outfile.write(reinterpret_cast<const char *>(board_buffer.data()), (i64) (vector_index * sizeof(Board)));
+        outfile.write(reinterpret_cast<C char *>(boards_buffer.data()), static_cast<int64_t>(vector_index * sizeof(Board)));
         outfile.close();
     }
 }
@@ -214,13 +214,13 @@ Perms::toDepthPlusOneFuncBufferedPtr_t Perms::toDepthPlusOneBufferedFuncPtr = ma
 
 
 void Perms::getDepthPlus1BufferedFunc(
-        const std::string &root_path,
-        const JVec<Board> &boards_in, JVec<Board> &boards_out, int depth) {
+        C std::string &root_path,
+        C JVec<Board> &boards_in, JVec<Board> &boards_buffer, C int depth) {
 
-    boards_out.resize(boards_out.capacity());
+    boards_buffer.resize(boards_buffer.capacity());
 
-    const Board::HasherPtr hasher = boards_in[0].getHashFunc();
+    C Board::HasherPtr hasher = boards_in[0].getHashFunc();
 
-    std::string path = root_path + std::to_string(depth + 1) + "_";
-    toDepthPlusOneBufferedFuncPtr(path, boards_in, boards_out, hasher);
+    C std::string path = root_path + std::to_string(depth + 1) + "_";
+    toDepthPlusOneBufferedFuncPtr(path, boards_in, boards_buffer, hasher);
 }

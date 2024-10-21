@@ -9,4 +9,4 @@
 #include "MindbenderSolver/code/perms.hpp"
 #include "MindbenderSolver/code/rotations.hpp"
 #include "MindbenderSolver/code/solver.hpp"
-#include "MindbenderSolver/unused/sorter.hpp"
+#include "MindbenderSolver/code/sorter.hpp"

@@ -2,12 +2,40 @@
 
 #include <iostream>
 
+#include "MindbenderSolver/utils/get_free_memory.hpp"
+
 
 int main() {
+
+    static constexpr u32 GB_NEEDED = 8;
+    if (!hasAtLeastGBMemoryTotal(GB_NEEDED)) {
+        std::cout << "Program requires more RAM, exiting...\n";
+        C u64 mem = getTotalSystemMemory();
+        std::cout<<bytesFormatted(mem)<<"/"<<GB_NEEDED<<".000GB"<<std::endl;
+        return -1;
+    }
+
+
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
     const auto pair = BoardLookup::getBoardPair("5-3");
 
     std::cout << pair->toString() << std::endl;
+
+    BoardSolver solver(pair);
+    solver.setWriteDirectory(outDirectory);
+    solver.setDepthParams(5, 10, 10);
+
+    solver.preAllocateMemory(5);
+    solver.findSolutions<false>();
+
+    if (pair->getStartState().getFatBool()) {
+        std::cout << "\n";
+        std::cout << "Calls: " << MAKE_FAT_PERM_LIST_HELPER_CALLS << std::endl;
+        std::cout << "Checks: " << MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS << std::endl;
+        std::cout << "Similar: " << MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR << std::endl;
+    }
+
+    return 0;
 
     /*
     Board board = pair->getSolutionState();
@@ -47,26 +75,6 @@ int main() {
 
     return 0;
     */
-
-    BoardSolver solver(pair);
-    solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(5, 10, 10);
-
-    const Timer allocateTimer;
-    solver.preAllocateMemory(5);
-    std::cout << "Alloc Time: " << allocateTimer.getSeconds() << std::endl;
-
-    solver.findSolutions<false>();
-
-    if (pair->getInitialState().getFatBool()) {
-        std::cout << "\n";
-        std::cout << "Calls: " << MAKE_FAT_PERM_LIST_HELPER_CALLS << std::endl;
-        std::cout << "Checks: " << MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS << std::endl;
-        std::cout << "Similar: " << MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR << std::endl;
-    }
-
-    return 0;
-
     /*
     namespace std {
         template <>

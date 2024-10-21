@@ -1,12 +1,15 @@
 #pragma once
 
+#ifdef BOOST_FOUND
 #include <boost/sort/block_indirect_sort/block_indirect_sort.hpp>
+#else
+#include "MindbenderSolver/utils/th_parallel_sort.hpp"
+#include "MindbenderSolver/utils/th_radix_sort.hpp"
+#endif
 #include <vector>
 
-#include "MindbenderSolver/code/board.hpp"
 #include "MindbenderSolver/utils/jvec.hpp"
-#include "th_parallel_sort.hpp"
-#include "th_radix_sort.hpp"
+
 
 
 template<typename T>
@@ -17,14 +20,14 @@ class BoardSorter {
     enum COLORS { C2 = 2, C3 = 3 };
 public:
 
-    MU void resize(const u32 depth, const size_t size) {
+    MU void resize(C u32 depth, C size_t size) {
         if (aux_buffer.size() < depth) {
             aux_buffer.resize(depth + 1);
         }
         aux_buffer[depth].resize(size);
     }
 
-    MU void ensureAux(const u32 depth, const u64 size) {
+    MU void ensureAux(C u32 depth, C u64 size) {
         if (aux_buffer.size() < depth + 1) {
             aux_buffer.resize(depth + 1);
         }
@@ -35,10 +38,7 @@ public:
         resize(depth, size);
     }
 
-    MU void sortBoards(JVec<T>& boards, c_u32 depth, c_u32 colorCount) {
-        // boost::sort::block_indirect_sort(boards.begin(), boards.end());
-        // return;
-
+    MU void sortBoards(JVec<T>& boards, C u32 depth, C u32 colorCount) {
         switch (depth) {
             case (DEPTH::D2): {
                 std::sort(boards.begin(), boards.end());

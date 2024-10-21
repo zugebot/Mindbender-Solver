@@ -14,9 +14,9 @@
 #include <vector>
 
 
-int calculateColorDistributionHeuristic(const Board& currentBoard, const Board& goalBoard) {
-    const int numColors = 8; // Assuming colors are numbered from 0 to 7
-    const int gridSize = 6;  // 6x6 grid
+int calculateColorDistributionHeuristic(C Board& currentBoard, C Board& goalBoard) {
+    C int numColors = 8; // Assuming colors are numbered from 0 to 7
+    C int gridSize = 6;  // 6x6 grid
 
     // Arrays to hold color counts for rows and columns
     int currentRowColorCounts[gridSize][numColors] = {0};
@@ -79,16 +79,16 @@ struct SearchNode {
     int gCost{}; // Cost from start to current node
     int hCost{}; // Heuristic cost estimate to goal
     int fCost{}; // Total estimated cost (gCost + hCost)
-    std::vector<Action> actionsTaken; // Sequence of actions leading to this node
+    std::vector<ActStruct> actionsTaken; // Sequence of actions leading to this node
 
-    bool operator>(const SearchNode& other) const {
+    bool operator>(C SearchNode& other) C {
         return fCost > other.fCost; // Min-heap based on fCost
     }
 };
 
-std::pair<Board, int> solvePuzzle(const Board& startBoard, const Board& goalBoard) {
+std::pair<Board, int> solvePuzzle(C Board& startBoard, C Board& goalBoard) {
     std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<>> openSet;
-    std::unordered_set<uint64_t> closedSet; // Using hash of the board for fast lookup
+    std::unordered_set<u64> closedSet; // Using hash of the board for fast lookup
 
     // Initial node
     SearchNode startNode;
@@ -117,12 +117,12 @@ std::pair<Board, int> solvePuzzle(const Board& startBoard, const Board& goalBoar
         // Generate possible moves
         for (int i = 0; i < 60; i++) {
             Board nextBoard = currentNode.board;
-            allActionsList[i](nextBoard); // Apply action to the board
+            allActStructList[i].action(nextBoard); // Apply action to the board
             nextBoard.precomputeHash2();
-            nextBoard.hashMem.mem.setNextNMove<1>(i);
+            nextBoard.memory.setNextNMove<1>(i);
 
             // Check if the next state has already been visited
-            if (closedSet.find(nextBoard.hashMem.mem) != closedSet.end()) {
+            if (closedSet.find(nextBoard.memory.getMem()) != closedSet.end()) {
                 continue; // Skip already visited states
             }
 
@@ -138,7 +138,7 @@ std::pair<Board, int> solvePuzzle(const Board& startBoard, const Board& goalBoar
             nextNode.hCost = hCost;
             nextNode.fCost = fCost;
             nextNode.actionsTaken = currentNode.actionsTaken;
-            nextNode.actionsTaken.push_back(allActionsList[i]); // Record the action taken
+            nextNode.actionsTaken.push_back(allActStructList[i]); // Record the action taken
 
             // Add to open set
             openSet.push(nextNode);
@@ -177,7 +177,7 @@ int main() {
 
     std::cout << "Cost: " << cost << std::endl;
     std::cout << "Time: " << timer.getSeconds() << std::endl;
-    std::cout << board.hashMem.mem.asmStringForwards() << std::endl;
+    std::cout << board.memory.asmStringForwards() << std::endl;
     std::cout << board1.toString(board) << std::endl;
 
 

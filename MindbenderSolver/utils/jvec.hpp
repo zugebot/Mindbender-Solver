@@ -58,7 +58,7 @@ template<class T>
 
 
 template<class T>
-[[maybe_unused]] JVec<T>::JVec(unsigned long long theCapacity) {
+[[maybe_unused]] JVec<T>::JVec(const unsigned long long theCapacity) {
     mySize = 0;
     myCapacity = theCapacity;
     myRawMemory = operator new[](theCapacity * sizeof(T));
@@ -140,7 +140,7 @@ JVec<T>& JVec<T>::operator=(JVec&& other)  noexcept {
 
 
 template<class T>
-void JVec<T>::resize(unsigned long long theSize) {
+void JVec<T>::resize(const unsigned long long theSize) {
     if (theSize < myCapacity) {
         mySize = theSize;
     } else {
@@ -158,7 +158,7 @@ void JVec<T>::resize(unsigned long long theSize) {
 
 
 template<class T>
-void JVec<T>::reserve(unsigned long long theCapacity) {
+void JVec<T>::reserve(const unsigned long long theCapacity) {
     if (theCapacity > myCapacity) {
         void* newPtr = operator new[](theCapacity * sizeof(T));
         if (!myRawMemory) {

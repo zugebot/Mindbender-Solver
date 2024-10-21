@@ -12,30 +12,30 @@
 
 
 template<HasGetHash T>
-inline void process_chunk(
-        const JVec<T> &boards1,
-        const JVec<T> &boards2,
-        const size_t start1,
-        const size_t end1,
-        std::vector<std::pair<const T *, const T *>> &results) {
+void process_chunk(
+        C JVec<T> &boards1,
+        C JVec<T> &boards2,
+        C size_t start1,
+        C size_t end1,
+        std::vector<std::pair<C T *, C T *>> &results) {
     auto it1 = boards1.begin() + static_cast<i64>(start1);
-    c_auto it1_end = boards1.begin() + static_cast<i64>(end1);
+    C auto it1_end = boards1.begin() + static_cast<i64>(end1);
 
     // Get min and max hash values in this chunk
-    c_u64 min_hash = it1->getHash();
-    c_u64 max_hash = (it1_end - 1)->getHash();
+    C u64 min_hash = it1->getHash();
+    C u64 max_hash = (it1_end - 1)->getHash();
 
     // Find corresponding range in boards2
-    c_auto boards2_start = std::lower_bound(
+    C auto boards2_start = std::lower_bound(
             boards2.begin(), boards2.end(), min_hash,
-            [](const T &board, c_u64 hash) { return board.getHash() < hash; });
+            [](C T &board, C u64 hash) { return board.getHash() < hash; });
 
-    c_auto boards2_end = std::upper_bound(
+    C auto boards2_end = std::upper_bound(
             boards2.begin(), boards2.end(), max_hash,
-            [](c_u64 hash, const T &board) { return hash < board.getHash(); });
+            [](C u64 hash, C T &board) { return hash < board.getHash(); });
 
     auto it2 = boards2_start;
-    c_auto it2_end = boards2_end;
+    C auto it2_end = boards2_end;
 
     while (it1 != it1_end && it2 != it2_end) {
         if (it1->getHash() == it2->getHash()) {
@@ -67,28 +67,28 @@ inline void process_chunk(
 
 
 template<HasGetHash T>
-std::vector<std::pair<const T*, const T*>> intersection_threaded(
-        const JVec<T>& boards1,
-        const JVec<T>& boards2,
+std::vector<std::pair<C T*, C T*>> intersection_threaded(
+        C JVec<T>& boards1,
+        C JVec<T>& boards2,
         size_t num_threads = std::thread::hardware_concurrency()) {
     if (num_threads == 0) num_threads = 1;
-    const size_t total_size = boards1.size();
-    const size_t chunk_size = (total_size + num_threads - 1) / num_threads; // Round up
+    C size_t total_size = boards1.size();
+    C size_t chunk_size = (total_size + num_threads - 1) / num_threads; // Round up
     std::vector<std::thread> threads;
-    std::vector<std::vector<std::pair<const T*, const T*>>> partial_results(num_threads);
+    std::vector<std::vector<std::pair<C T*, C T*>>> partial_results(num_threads);
     for (size_t i = 0; i < num_threads; ++i) {
         size_t start1 = i * chunk_size;
         size_t end1 = std::min(start1 + chunk_size, total_size);
         // Adjust start1
         if (start1 != 0) {
-            c_u64 current_hash = boards1[start1].getHash();
+            C u64 current_hash = boards1[start1].getHash();
             while (start1 > 0 && boards1[start1 - 1].getHash() == current_hash) {
                 --start1;
             }
         }
         // Adjust end1
         if (end1 < total_size) {
-            c_u64 current_hash = boards1[end1 - 1].getHash();
+            C u64 current_hash = boards1[end1 - 1].getHash();
             while (end1 < total_size && boards1[end1].getHash() == current_hash) {
                 ++end1;
             }
@@ -101,12 +101,12 @@ std::vector<std::pair<const T*, const T*>> intersection_threaded(
     // Wait for all threads to complete
     for (auto& t : threads) { t.join(); }
     // Combine partial results
-    std::vector<std::pair<const T*, const T*>> results;
-    for (const auto& partial : partial_results) {
+    std::vector<std::pair<C T*, C T*>> results;
+    for (C auto& partial : partial_results) {
         results.insert(results.end(), partial.begin(), partial.end());
     }
     // removes board pairs that have the same hashes but different states
-    std::vector<std::pair<const T *, const T *>> realResults;
+    std::vector<std::pair<C T *, C T *>> realResults;
     realResults.reserve(results.size());
     for (auto& [fst, snd] : results) {
         if (*fst == *snd) {
@@ -119,9 +119,9 @@ std::vector<std::pair<const T*, const T*>> intersection_threaded(
 
 
 template<HasGetHash T>
-std::vector<std::pair<const T *, const T *>> intersection(JVec<T>& boards1,
+std::vector<std::pair<C T *, C T *>> intersection(JVec<T>& boards1,
                                               JVec<T>& boards2) {
-    std::vector<std::pair<const T *, const T *>> results;
+    std::vector<std::pair<C T *, C T *>> results;
     auto it1 = boards1.begin();
     auto it2 = boards2.begin();
     while (it1 != boards1.end() && it2 != boards2.end()) {
@@ -155,7 +155,7 @@ std::vector<std::pair<const T *, const T *>> intersection(JVec<T>& boards1,
     }
 
     // removes board pairs that have the same hashes but different states
-    std::vector<std::pair<const T *, const T *>> realResults;
+    std::vector<std::pair<C T *, C T *>> realResults;
     realResults.reserve(results.size());
     for (auto& [fst, snd] : results) {
         if (*fst == *snd) {

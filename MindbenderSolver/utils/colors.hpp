@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <vector>
+
 
 /**
 RED     0
@@ -44,11 +44,13 @@ public:
     static const std::string bgColors[10];
 
     static std::string getColor(const int index) {
+        if (index < 0) { return colors[8]; }
         if (index < 8) { return colors[index]; }
         return colors[8];
     }
 
     static std::string getBgColor(const int index) {
+        if (index < 0) { return bgColors[8]; }
         if (index < 8) { return bgColors[index]; }
         return bgColors[8];
     }

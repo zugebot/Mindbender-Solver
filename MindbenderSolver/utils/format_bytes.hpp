@@ -5,7 +5,7 @@
 
 
 template<int BASE=1024>
-std::string bytesFormatted(uint64_t bytes) {
+std::string bytesFormatted(const uint64_t bytes) {
     int bases = 0;
     int leftover = 0;
 
@@ -16,16 +16,15 @@ std::string bytesFormatted(uint64_t bytes) {
         bases += 1;
     }
 
-    std::string baseStrs[6] = {"B", "KB", "MB", "GB", "TB", "?B"};
+    const std::string baseStrs[6] = {"B", "KB", "MB", "GB", "TB", "?B"};
     if (bases > 5) bases = 5;
 
-    std::string floatStr;
-    floatStr = std::to_string(float(leftover) / float(BASE));
+    const std::string floatStr = std::to_string(static_cast<float>(leftover) / static_cast<float>(BASE));
 
 
     std::string ret;
     ret.append(std::to_string(bytesCopy));
-    ret.append(floatStr.substr(1, std::min((int)floatStr.size() - 1, 4)));
+    ret.append(floatStr.substr(1, std::min(static_cast<int>(floatStr.size() - 1), 4)));
     ret.append(baseStrs[bases]);
     return ret;
 }

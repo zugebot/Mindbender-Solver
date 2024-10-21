@@ -11,8 +11,8 @@ public:
         start_time = std::chrono::steady_clock::now();
     }
     [[nodiscard]] double getSeconds() const {
-        auto end_time = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed = end_time - start_time;
+        const auto end_time = std::chrono::steady_clock::now();
+        const std::chrono::duration<double> elapsed = end_time - start_time;
         return elapsed.count();
     }
     [[maybe_unused]] void reset() {

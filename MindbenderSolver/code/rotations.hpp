@@ -42,8 +42,8 @@ struct ActStruct {
     u8 tillNext;
     u8 tillLast;
 
-    MU ActStruct(Action theAction, c_u8 theIndex, c_u8 theIsColNotFat,
-                 c_u8 theTillNext, c_u8 theTillLast, const char* theName) {
+    MU ActStruct(C Action theAction, C u8 theIndex, C u8 theIsColNotFat,
+                 C u8 theTillNext, C u8 theTillLast, C char* theName) {
         action = theAction;
         memcpy(name.data(), theName, 4 * sizeof(char));
         index = theIndex;
@@ -57,14 +57,14 @@ struct ActStruct {
 
 MU extern ActStruct allActStructList[110];
 MU extern u8 fatActionsIndexes[25][48];
-// extern ActStruct getActionFromName(const std::string& name);
+// extern ActStruct getActionFromName(C std::string& name);
 
 
-extern void applyMoves(Board& board, const Memory& memory);
-extern void applyFatMoves(Board& board, const Memory& memory);
+extern void applyMoves(Board& board, C Memory& memory);
+extern void applyFatMoves(Board& board, C Memory& memory);
 
-extern Board makeBoardWithMoves(const Board& board, const Memory& memory);
-extern Board makeBoardWithFatMoves(const Board& board, const Memory& memory);
+extern Board makeBoardWithMoves(C Board& board, C Memory& memory);
+extern Board makeBoardWithFatMoves(C Board& board, C Memory& memory);
 
 
 

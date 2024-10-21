@@ -44,7 +44,7 @@ std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>& boards
 }
 
 
-auto BOARD_SORTER = [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); };
+auto BOARD_SORTER = [](C Board &a, C Board &b) { return a.getHash() < b.getHash(); };
 
 
 
@@ -135,8 +135,8 @@ std::vector<Board> boards2 = makeFatPermutationListFuncs[4](board2, 4);
 
 std::cout << "did perms" << std::endl;
 
-std::sort(boards1.begin(), boards1.end(), [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); });
-std::sort(boards2.begin(), boards2.end(), [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); });
+std::sort(boards1.begin(), boards1.end(), [](C Board &a, C Board &b) { return a.getHash() < b.getHash(); });
+std::sort(boards2.begin(), boards2.end(), [](C Board &a, C Board &b) { return a.getHash() < b.getHash(); });
 
 std::cout << "did sorting" << std::endl;
 
@@ -167,7 +167,7 @@ volatile int _ = 0;
 
 
 
-        int main() {
+int main() {
     static constexpr uint64_t MASK = 0x003F'FFFF'FFFF'FFFF;
     static constexpr uint64_t VAL = 0xAA80'0000'0000'0000;
 
@@ -197,7 +197,7 @@ volatile int _ = 0;
 
     for (int action = 0; action < 60; action++) {
         for (int i = 0; i < 6; i++) {
-            actions[action](board);
+            allActStructList[action].action(board);
             if ((board.b1 & ~MASK) != VAL) {
                 std::cout << "upper 10 bits changed... ("
                           << action << ")" << std::endl;
@@ -264,10 +264,10 @@ volatile int _ = 0;
 
     // C24 C32 R24
     Board board_right = level.getSolutionState();
-    allActionsList[11](board_right); // R_2_2(board_right);
-    allActionsList[41](board_right); // C_2_2(board_right);
-    allActionsList[48](board_right); // C_3_4(board_right);
-    (board_right.hashMem.mem.setNextMoveFuncs[2])(11 | 41 << 6 | 48 << 12);
+    allActStructList[11].action(board_right); // R_2_2(board_right);
+    allActStructList[41].action(board_right); // C_2_2(board_right);
+    allActStructList[48].action(board_right); // C_3_4(board_right);
+    (board_right.memory.setNextMoveFuncs[2])(11 | 41 << 6 | 48 << 12);
 
     board_right.precomputeHash();
 
@@ -304,7 +304,7 @@ volatile int _ = 0;
     std::vector<Board> boards_depth_3 = makePermutationListFuncs[3](board);
     std::vector<Board> boards_depth_4 = makePermutationListFuncs[4](board);
     bool found1 = false;
-    for (const auto& iterBoard : boards_depth_4) {
+    for (C auto& iterBoard : boards_depth_4) {
         if (iterBoard.getHash() == board_left.getHash()) {
             found1 = true;
         }
@@ -325,8 +325,8 @@ volatile int _ = 0;
     std::vector<Board> solves_depth_3 = makePermutationListFuncs[3](solve);
     std::vector<Board> solves_depth_4 = makePermutationListFuncs[4](solve);
     bool found2 = false;
-    for (const auto& iterBoard : solves_depth_3) {
-        std::string str = iterBoard.hashMem.mem.toString();
+    for (C auto& iterBoard : solves_depth_3) {
+        std::string str = iterBoard.memory.toString();
         if (str == "Move[11, 41, 48]") {
             volatile int x = 0;
         }
