@@ -10,10 +10,10 @@
 class Board;
 
 
-static constexpr u64 MEMORY_MOVE_TYPE_MASK = 0'77;
 static constexpr u32 MEMORY_MOVE_TYPE_BITSIZE = 6;
-static constexpr u64 MEMORY_MOVE_DATA_MASK = 0xF;
+static constexpr u64 MEMORY_MOVE_TYPE_MASK = 0'77;
 static constexpr u32 MEMORY_MOVE_DATA_BITSIZE = 4;
+static constexpr u64 MEMORY_MOVE_DATA_MASK = 0xF;
 
 class Memory {
     static u8 getShift(c_u32 moveCount) { return MEMORY_MOVE_DATA_BITSIZE + moveCount * MEMORY_MOVE_TYPE_BITSIZE; }

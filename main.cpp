@@ -5,7 +5,7 @@
 
 int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
-    const auto pair = BoardLookup::getBoardPair("7-3");
+    const auto pair = BoardLookup::getBoardPair("5-3");
 
     std::cout << pair->toString() << std::endl;
 
@@ -50,7 +50,7 @@ int main() {
 
     BoardSolver solver(pair);
     solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(5, 7, 10);
+    solver.setDepthParams(5, 10, 10);
 
     const Timer allocateTimer;
     solver.preAllocateMemory(5);
@@ -59,6 +59,7 @@ int main() {
     solver.findSolutions<false>();
 
     if (pair->getInitialState().getFatBool()) {
+        std::cout << "\n";
         std::cout << "Calls: " << MAKE_FAT_PERM_LIST_HELPER_CALLS << std::endl;
         std::cout << "Checks: " << MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS << std::endl;
         std::cout << "Similar: " << MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR << std::endl;

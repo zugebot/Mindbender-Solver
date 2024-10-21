@@ -19,9 +19,9 @@ static u64 getSegment2bits(c_u64 segment) {
 // check commits before 10/16/24 for previous impl.
 static u64 getSegment3bits(c_u64 segment) {
     static constexpr u64 MASK_CS = 0'003003'003003'003003;
-    c_u64 o1 = ((segment >> 6) & MASK_CS) * 9
+    c_u64 o1 = ((segment >> 6) & MASK_CS) * 9 /* 0b1001 */
                |
-               ((segment >> 3) & MASK_CS) * 3
+               ((segment >> 3) & MASK_CS) * 3 /* 0b1001 */
                |
                segment & MASK_CS
             ;
