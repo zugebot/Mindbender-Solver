@@ -23,8 +23,8 @@ endif()
 
 
 set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++ -static")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+# set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++ -static")
 
 
 include_directories(${CMAKE_SOURCE_DIR}/)
@@ -42,7 +42,10 @@ add_executable(MindbenderSolver
         ${MINDBENDER_SOLVER_SOURCES}
         ${INCLUDE_SOURCES}
         # main.cpp
-        MindbenderSolver/programs/ensurePuzzlesValid.cpp
+        MindbenderSolver/programs/testPerms.cpp
+        MindbenderSolver/code/perms_gen.hpp
+        # MindbenderSolver/programs/ensurePuzzlesValid.cpp
+        # MindbenderSolver/docs/expand.hpp
         # MindbenderSolver/programs/TestKnownSolutions.cpp
         # MindbenderSolver/programs/testJVec.cpp
         # MindbenderSolver/programs/testHeuristics.cpp

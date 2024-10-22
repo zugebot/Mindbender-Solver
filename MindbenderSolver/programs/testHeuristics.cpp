@@ -1,10 +1,4 @@
-#include "MindbenderSolver/code/board.hpp"
-#include "MindbenderSolver/code/intersection.hpp"
-#include "MindbenderSolver/code/levels.hpp"
-#include "MindbenderSolver/code/memory.hpp"
-#include "MindbenderSolver/code/perms.hpp"
-#include "MindbenderSolver/code/rotations.hpp"
-#include "MindbenderSolver/unused/sorter.hpp"
+#include "MindbenderSolver/include.hpp"
 #include "MindbenderSolver/utils/timer.hpp"
 #include <fstream>
 #include <iostream>

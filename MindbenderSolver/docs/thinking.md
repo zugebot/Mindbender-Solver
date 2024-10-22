@@ -30,11 +30,29 @@ def FIND_SOLVES(MEMORIES_LEFT, BOARDS_RIGHT, DEPTH)
     ARRAY_FROM_DEPTH = {60, 60^2, 60^3}
     boards_needed = (BOARDS_RIGHT.size() / ARRAY_FROM_DEPTH[DEPTH])
     .
+    MEMORIES_RIGHT = JVec(BUFFER_SIZE);
     for (i = 0; i < boards_size - boards_needed; i += boards_needed) {
-        func<DEPTH>(MEMORIES_LEFT, BOARDS_RIGHT, [i], [i + boards_needed])
+        func<DEPTH>(MEMORIES_LEFT, BOARDS_RIGHT, [MEMORIES_RIGHT][&], [i], [i + boards_needed])
     }
     right_before = boards_size - boards_size % boards_needed
-    func<DEPTH>(MEMORIES_LEFT, BOARDS_RIGHT, [right_before], [boards_size])
+    func<DEPTH>(MEMORIES_LEFT, BOARDS_RIGHT, [MEMORIES_RIGHT][&], [right_before], [boards_size])
+
+
+func<> should just be like the code from perms.tpp, but
+- it takes a [vector][input] instead of a [board][input].
+- func will:
+  1. call the generator that fills [MEMORIES_RIGHT][&]
+  2. sort [MEMORIES_RIGHT][&]
+  3. find the intersection of [MEMORIES_LEFT][&] and [MEMORIES_RIGHT][&]
+  4. using a thread lock, write any solutions found to a file
+  5. using a thread lock, write to a file the current progress (so it could be resumed later).
+
+
+Would it be faster if BOARDS_RIGHT were sorted first?
+it could be sorted:
+1. how they are normally sorted (easy to implement)
+2. by the last move (would help prevent cache misses?)
+3. by a score heuristic (yes or no)
 
 
 
@@ -44,6 +62,10 @@ def FIND_SOLVES(MEMORIES_LEFT, BOARDS_RIGHT, DEPTH)
 
 
 
+
+given
+
+std::vector<Memory>, where Memory == JVec<u8>,
 
 
 
