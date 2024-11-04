@@ -21,7 +21,8 @@ public:
     static constexpr std::string Green = "\033[32m";
     static constexpr std::string Blue = "\033[34m";
     static constexpr std::string Orange = "\033[38;5;208m";
-    static constexpr std::string Yellow = "\033[93m";
+    // static constexpr std::string Yellow = "\033[93m";
+    static constexpr std::string Yellow = "\033[33m";
     static constexpr std::string Magenta = "\033[35m";
     static constexpr std::string White = "\033[37m";
     static constexpr std::string Cyan = "\033[96m";
@@ -33,7 +34,7 @@ public:
     static constexpr std::string bgGreen    = "\033[42m";
     static constexpr std::string bgBlue     = "\033[44m";
     static constexpr std::string bgOrange   = "\033[48;5;166m";
-    static constexpr std::string bgYellow   = "\033[103m";
+    static constexpr std::string bgYellow   = "\033[43m";
     static constexpr std::string bgMagenta  = "\033[45m";
     static constexpr std::string bgWhite    = "\033[47m";
     static constexpr std::string bgCyan     = "\033[106m";

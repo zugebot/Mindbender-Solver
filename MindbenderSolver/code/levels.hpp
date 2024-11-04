@@ -42,6 +42,7 @@ public:
     MUND std::string getName() C { return name; }
     MUND i8 getTrueColor(C u32 color) C { return trueColors[color]; }
     MUND std::string toString() C { return board->toString(solve, {true, trueColors}); }
+    MUND std::string toStringReversed() C { return solve->toString(board, {true, trueColors}); }
 };
 
 

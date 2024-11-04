@@ -7,19 +7,14 @@
 #include <string>
 #include <array>
 
+extern int GET_SCORE_3_CALLS;
 
-class Board {
-public:
-    typedef void (Board::*HasherPtr)();
+
+/**
+ * Holds the chuzzle colors and other information.
+ */
+struct B1B2 {
     typedef std::array<i8, 8> ColorArray_t;
-    static ColorArray_t ColorsDefault;
-    struct PrintSettings {
-        bool useAscii;
-        ColorArray_t trueColors = ColorsDefault;
-        PrintSettings() : useAscii(true) {}
-        PrintSettings(C bool useAscii, C ColorArray_t colors)
-            : useAscii(useAscii), trueColors(colors) {}
-    };
 
     /**
      *  3 bits: fat x position
@@ -36,14 +31,8 @@ public:
      */
     u64 b2 = 0;
 
-    Memory memory;
-
-    explicit Board() = default;
-    explicit Board(C u8 values[36]);
-    explicit Board(C u8 values[36], u8 x, u8 y);
-
     MU void setState(C u8 values[36]);
-    MU ColorArray_t setStateAndRetColors(C u8 values[36]);
+    MU std::array<i8, 8> setStateAndRetColors(C u8 values[36]);
 
     MU void setFatXY(u64 x, u64 y);
     MUND u8 getFatXY() C;
@@ -61,6 +50,39 @@ public:
     MUND u8 getFatY() C;
 
     MUND u8 getColor(u8 x, u8 y) C;
+    MUND u32 getColorCount() C;
+
+    MUND u64 getScore1(C B1B2& other) C;
+    MUND int getScore3(C B1B2 theOther) C;
+
+    template<int MAX_DEPTH>
+    MUND bool getScore3Till(C B1B2 theOther) C;
+
+
+    __forceinline bool operator==(C B1B2& other) C {
+        return b1 == other.b1 && b2 == other.b2; }
+};
+
+
+class Board : public B1B2 {
+public:
+    typedef void (Board::*HasherPtr)();
+
+    static ColorArray_t ColorsDefault;
+    struct PrintSettings {
+        bool useAscii;
+        ColorArray_t trueColors = ColorsDefault;
+        PrintSettings() : useAscii(true) {}
+        MU PrintSettings(C bool useAscii, C ColorArray_t colors)
+            : useAscii(useAscii), trueColors(colors) {}
+    };
+
+    MU B1B2 state;
+    Memory memory;
+
+    explicit Board() = default;
+    explicit Board(C u8 values[36]);
+    explicit Board(C u8 values[36], u8 x, u8 y);
 
     MUND u64 getHash() C { return memory.getHash(); }
     MUND Memory& getMemory() { return memory; }
@@ -72,14 +94,13 @@ public:
     MUND static double getDuplicateEstimateAtDepth(u32 depth);
     MUND u64 getRowColIntersections(u32 x, u32 y) C;
 
-    MUND u32 getColorCount() C;
+
 
     MU void precomputeHash2();
     MU void precomputeHash3();
     MU void precomputeHash4();
     MUND HasherPtr getHashFunc() C;
 
-    MUND u64 getScore1(C Board& other) C;
 
     MU static void appendBoardToString(std::string &str, C Board *board, i32 curY, PrintSettings theSettings = PrintSettings());
     MUND std::string toString(C Board& other, PrintSettings theSettings = PrintSettings()) C;
@@ -96,4 +117,15 @@ public:
 
     __forceinline bool operator>(C Board& other) C {
         return this->getHash() > other.getHash(); }
+
 };
+
+
+extern template bool B1B2::getScore3Till<1>(C B1B2 theOther) C;
+extern template bool B1B2::getScore3Till<2>(C B1B2 theOther) C;
+extern template bool B1B2::getScore3Till<3>(C B1B2 theOther) C;
+extern template bool B1B2::getScore3Till<4>(C B1B2 theOther) C;
+extern template bool B1B2::getScore3Till<5>(C B1B2 theOther) C;
+
+
+

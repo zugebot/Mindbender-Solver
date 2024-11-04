@@ -23,7 +23,7 @@
 #define IF_DEBUG_COUT(stuff) if constexpr (debug) { std::cout << stuff }
 
 
-class BoardSolver {
+class MU BoardSolver {
 public:
     static constexpr u32 MAX_DEPTH = 5;
 
@@ -47,7 +47,7 @@ public:
 
 
 
-    explicit BoardSolver(C BoardPair* pairIn) {
+    MU explicit BoardSolver(C BoardPair* pairIn) {
         pair = pairIn;
         board1 = pair->getStartState();
         board2 = pair->getEndState();
@@ -56,7 +56,7 @@ public:
     }
 
 
-    void setDepthParams(C u32 depthSideMaxIn, C u32 depthGuessMaxIn, C u32 depthTotalMaxIn) {
+    MU void setDepthParams(C u32 depthSideMaxIn, C u32 depthGuessMaxIn, C u32 depthTotalMaxIn) {
         depthSideMax = depthSideMaxIn;
         depthTotalMax = depthTotalMaxIn;
         depthGuessMax = depthGuessMaxIn;
@@ -66,27 +66,27 @@ public:
     }
 
 
-    void setWriteDirectory(C std::string& directory) {
+    MU void setWriteDirectory(C std::string& directory) {
         outDirectory = directory;
     }
 
 
-    void preAllocateMemory(C u32 maxDepth = MAX_DEPTH) {
+    MU void preAllocateMemory(C u32 maxDepth = MAX_DEPTH) {
         C u32 highestDepth = std::max(1U, std::min(maxDepth, depthTotalMax + 1) / 2);
-        Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth);
-        Perms::reserveForDepth(board1, board1Table[highestDepth], highestDepth);
+        Perms<Memory>::reserveForDepth(board1, board1Table[highestDepth], highestDepth);
+        Perms<Memory>::reserveForDepth(board1, board1Table[highestDepth], highestDepth);
 
         if (highestDepth != 1) {
-            Perms::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1);
-            Perms::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1);
+            Perms<Memory>::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1);
+            Perms<Memory>::reserveForDepth(board1, board1Table[highestDepth - 1], highestDepth - 1);
         }
 
-        Perms::reserveForDepth(board2, board2Table[highestDepth], highestDepth);
-        Perms::reserveForDepth(board2, board2Table[highestDepth], highestDepth);
+        Perms<Memory>::reserveForDepth(board2, board2Table[highestDepth], highestDepth);
+        Perms<Memory>::reserveForDepth(board2, board2Table[highestDepth], highestDepth);
 
         if (highestDepth != 1) {
-            Perms::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1);
-            Perms::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1);
+            Perms<Memory>::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1);
+            Perms<Memory>::reserveForDepth(board2, board2Table[highestDepth - 1], highestDepth - 1);
         }
 #ifdef BOOST_FOUND
 #else
@@ -127,7 +127,7 @@ public:
 
             C Timer timer;
             C bool should_alloc = board1Table[depth1].capacity() == 0;
-            Perms::getDepthFunc<true>(board1, board1Table[depth1], depth1, should_alloc);
+            Perms<Memory>::getDepthFunc<true>(board1, board1Table[depth1], depth1, should_alloc);
 
             IF_DEBUG_COUT("\n"<<start_left<<"Size: "<<board1Table[depth1].size();)
             IF_DEBUG_COUT("\n"<<start_left<<"Make Time: "<<timer.getSeconds()<<"\n";)
@@ -148,7 +148,7 @@ public:
 
             C Timer timer;
             C bool should_alloc = board2Table[depth2].capacity() == 0;
-            Perms::getDepthFunc<false>(board2, board2Table[depth2], depth2, should_alloc);
+            Perms<Memory>::getDepthFunc<false>(board2, board2Table[depth2], depth2, should_alloc);
 
             IF_DEBUG_COUT("\n"<<start_right<<"Size: "<<board2Table[depth2].size();)
             IF_DEBUG_COUT("\n"<<start_right<<"Make Time: "<<timer.getSeconds()<<"\n";)
@@ -209,18 +209,18 @@ public:
 
 
     template<bool debug=true>
-    void findSolutions() {
+    MU void findSolutions() {
 
         u32 currentDepth = depthGuessMax;
         C Timer totalTime;
         while (currentDepth <= depthTotalMax) {
-            auto permutationsFromDepth = Perms::depthMap.at(currentDepth);
+            auto permutationsFromDepth = Perms<Memory>::depthMap.at(currentDepth);
             int permCount = 0;
 
             // if depth == 9, pre-calculate (4, 4) ex.
             if (currentDepth > 1 && currentDepth % 2 == 1) {
                 IF_DEBUG_COUT("\nSolving for (depth - 1): "<<currentDepth - 1<<"\n\n";)
-                auto oneBefore = Perms::depthMap.at(currentDepth - 1);
+                auto oneBefore = Perms<Memory>::depthMap.at(currentDepth - 1);
                 findSolutionsAtDepth<debug>(permCount, oneBefore[0].first, oneBefore[0].second, false);
             }
 

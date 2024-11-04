@@ -38,7 +38,7 @@ public:
         allPermutations(thePairs[0].start, 0);
     }
 
-    void printVectors() {
+    MU void printVectors() {
         std::cout << "\n";
 
         for (int index = 0; index < myOutput.size(); ++index) {
@@ -86,7 +86,7 @@ private:
 };
 
 
-static std::vector<u8> createMemoryPermutations(
+static std::vector<std::vector<u8>> createMemoryPermutations(
     C std::vector<u8>& theMemory) {
     u32 index = 0, length = 1;
     std::vector<PermGenPair> pairs;
@@ -100,7 +100,7 @@ static std::vector<u8> createMemoryPermutations(
             length++;
         } else {
             if (length != 1) {
-                pairs.push_back({index, length});
+                pairs.emplace_back(index, length);
             }
             index = i;
             length = 1;
@@ -109,7 +109,7 @@ static std::vector<u8> createMemoryPermutations(
         i++;
     }
 
-    PermGen<u8> gen;
+    PermGen gen;
     gen.allPermutations(theMemory, pairs);
 
     return gen.myOutput;

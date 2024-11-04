@@ -1,24 +1,37 @@
 #pragma once
 
 
-template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
-void make_perm_list_inner(C Board &board_in,
-                          JVec<Memory> &boards_out,
-                          Ref<MAX_DEPTH> &ref,
-                          C u64 move_prev,
-                          int& count) {
-
+template<AllowedPermsType T, int CUR_DEPTH, int MAX_DEPTH,
+        bool CHECK_CROSS, bool CHECK_SIM>
+void make_perm_list_inner(C Board &board_in, JVec<T> &boards_out,
+                          Ref<T, MAX_DEPTH> &ref,
+                          C u64 move_prev, int& count) {
     if constexpr (MAX_DEPTH == 0) {
-        boards_out[0] = board_in.memory;
-        (boards_out[0].*ref.hasher)(board_in.b1, board_in.b2);
+
+        if constexpr (std::is_same_v<T, Memory>) {
+            boards_out[0] = board_in.memory;
+            (boards_out[0].*ref.hasher)(board_in.b1, board_in.b2);
+        } else if constexpr (std::is_same_v<T, Board>) {
+            boards_out[0] = board_in;
+            (boards_out[0].*ref.hasher)();
+        }
+
         boards_out.resize(1);
         return;
 
+    // Base case: process and store the final board
     } else if constexpr (CUR_DEPTH == MAX_DEPTH) {
-        // Base case: process and store the final board
-        boards_out[count] = board_in.memory;
-        (boards_out[count].*ref.hasher)(board_in.b1, board_in.b2);
-        boards_out[count].setNextNMove<MAX_DEPTH>(move_prev);
+
+        if constexpr (std::is_same_v<T, Memory>) {
+            boards_out[count] = board_in.memory;
+            (boards_out[count].*ref.hasher)(board_in.b1, board_in.b2);
+            boards_out[count].template setNextNMove<MAX_DEPTH>(move_prev);
+        } else if constexpr (std::is_same_v<T, Board>) {
+            boards_out[count] = board_in;
+            (boards_out[0].*ref.hasher)();
+            boards_out[count].memory.template setNextNMove<MAX_DEPTH>(move_prev);
+        }
+
         ++count;
         return;
 
@@ -59,22 +72,22 @@ void make_perm_list_inner(C Board &board_in,
             u64 move_next = move_prev | (cur << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
 
             // Recursive call to the next depth
-            make_perm_list_inner<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS, CHECK_SIM>(
+            make_perm_list_inner<T, CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS, CHECK_SIM>(
                     board_next, boards_out, ref, move_next, count);
         }
     }
 }
 
 
-template<int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS,
+template<AllowedPermsType T, int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS,
         bool CHECK_SIM, bool CHANGE_SECT_START, bool SECT_ASCENDING>
 void make_perm_list_outer(C Board &board_in,
-                          JVec<Memory> &boards_out,
-                          Ref<MAX_DEPTH> &ref,
+                          JVec<T> &boards_out,
+                          Ref<T, MAX_DEPTH> &ref,
                           int& count) {
     if constexpr (CUR_DEPTH == MAX_DEPTH) {
         // All depths have been processed; start the inner loops
-        make_perm_list_inner<0, MAX_DEPTH, CHECK_CROSS, CHECK_SIM>(
+        make_perm_list_inner<T, 0, MAX_DEPTH, CHECK_CROSS, CHECK_SIM>(
                 board_in, boards_out, ref, 0, count);
 
     } else {
@@ -104,7 +117,7 @@ void make_perm_list_outer(C Board &board_in,
                     }
 
                     // Recursive call to the next depth
-                    make_perm_list_outer<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS,
+                    make_perm_list_outer<T, CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS,
                         CHECK_SIM, CHANGE_SECT_START, SECT_ASCENDING>(board_in, boards_out, ref, count);
                 }
 
@@ -129,7 +142,7 @@ void make_perm_list_outer(C Board &board_in,
                     }
 
                     // Recursive call to the next depth
-                    make_perm_list_outer<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS,
+                    make_perm_list_outer<T, CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS,
                         CHECK_SIM, CHANGE_SECT_START, SECT_ASCENDING>(board_in, boards_out, ref, count);
                 }
             }
@@ -140,18 +153,19 @@ void make_perm_list_outer(C Board &board_in,
 }
 
 
-template<int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM,
+template<AllowedPermsType T, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM,
          bool CHANGE_SECT_START, bool SECT_ASCENDING>
 void make_perm_list(C Board &board_in,
-                    JVec<Memory> &boards_out,
-                    C Memory::HasherPtr hasher) {
-    Ref<MAX_DEPTH> ref;
+                    JVec<T> &boards_out,
+                    C typename T::HasherPtr hasher) {
+    Ref<T, MAX_DEPTH> ref;
     ref.hasher = hasher;
     int count = 0;
 
-    make_perm_list_outer<0, MAX_DEPTH,
+    make_perm_list_outer<T, 0, MAX_DEPTH,
                          CHECK_CROSS, CHECK_SIM,
                          CHANGE_SECT_START, SECT_ASCENDING>(
             board_in, boards_out, ref, count);
     boards_out.resize(count);
 }
+

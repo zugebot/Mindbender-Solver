@@ -94,8 +94,8 @@ template<int COUNT>
 void Memory::setNextNMove(C u64 moveValue) {
     static_assert(COUNT >= 1 && COUNT <= 5, "Template argument must be in range 1-5");
 
-    constexpr u64 MOVE_SET_SHIFT = (5 - COUNT) * MEMORY_MOVE_TYPE_BITSIZE;
-    constexpr u64 MOVE_SET_MASK = 0'77'77'77'77'77 >> MOVE_SET_SHIFT;
+    constexpr u64 MOVE_SET_SHIFT = (5 - COUNT) * MEMORY_MOVE_TYPE_BITSIZE; // 6
+    constexpr u64 MOVE_SET_MASK = 0'77'77'77'77'77 >> MOVE_SET_SHIFT; // 6
 
     C u32 moveCount = mem & MEMORY_MOVE_DATA_MASK;
     C u8 shiftAmount = getShift(moveCount);

@@ -2,12 +2,13 @@
 
 
 
-template<int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING, bool DIRECTION>
+template<AllowedPermsType T, int CUR_DEPTH, int MAX_DEPTH,
+        bool MOVES_ASCENDING, bool DIRECTION>
 static void make_fat_perm_list_helper(
         C Board &board,
-        JVec<Memory> &boards_out,
+        JVec<T> &boards_out,
         u32 &count,
-        C Memory::HasherPtr hasher,
+        C typename T::HasherPtr hasher,
         C u64 move,
         C ActStruct& lastActStruct,
         C u8 startIndex,
@@ -73,10 +74,19 @@ static void make_fat_perm_list_helper(
 
         if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
             // Base case: process and store the final board
-            boards_out[count] = board_next.memory;
-            (boards_out[count].*hasher)(board_next.b1, board_next.b2);
-            u64 move_next = move | actn_i << 6 * CUR_DEPTH;
-            boards_out[count].setNextNMove<MAX_DEPTH>(move_next);
+
+            if constexpr (std::is_same_v<T, Memory>) {
+                boards_out[count] = board_next.memory;
+                (boards_out[count].*hasher)(board_next.b1, board_next.b2);
+                u64 move_next = move | actn_i << 6 * CUR_DEPTH;
+                boards_out[count].template setNextNMove<MAX_DEPTH>(move_next);
+            } else if constexpr (std::is_same_v<T, Board>) {
+                boards_out[count] = board_next;
+                (boards_out[count].*hasher)();
+                u64 move_next = move | actn_i << 6 * CUR_DEPTH;
+                boards_out[count].memory.template setNextNMove<MAX_DEPTH>(move_next);
+            }
+
             count++;
         } else if constexpr (DIRECTION) {
             u8 nextStart = 0;
@@ -89,9 +99,9 @@ static void make_fat_perm_list_helper(
                 if (nextEnd == 255) { nextEnd = 0; }
             }
             u64 move_next = move | actn_i << 6 * CUR_DEPTH;
-            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, true>(
+            make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, true>(
                     board_next, boards_out, count, hasher, move_next, actStruct, nextStart, nextEnd);
-            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, false>(
+            make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, false>(
                     board_next, boards_out, count, hasher, move_next, actStruct, 24, 48);
 
         } else { // if constexpr (!DIRECTION)
@@ -104,29 +114,36 @@ static void make_fat_perm_list_helper(
                 nextEnd += (nextEnd == 255);
             }
             u64 move_next = move | actn_i << 6 * CUR_DEPTH;
-            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, true>(
+            make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, true>(
                     board_next, boards_out, count, hasher, move_next, actStruct, 0, 24);
 
-            make_fat_perm_list_helper<CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, false>(
+            make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, MOVES_ASCENDING, false>(
                     board_next, boards_out, count, hasher, move_next, actStruct, nextStart, nextEnd);
         }
     }
 }
 
 
-template<int DEPTH, bool MOVES_ASCENDING>
+template<AllowedPermsType T, int DEPTH, bool MOVES_ASCENDING>
 void make_fat_perm_list(C Board &board_in,
-                        JVec<Memory> &boards_out,
-                        C Memory::HasherPtr hasher) {
+                        JVec<T> &boards_out,
+                        C typename T::HasherPtr hasher) {
     u32 count = 0;
     if constexpr (DEPTH == 0) {
-        boards_out[count] = board_in.memory;
-        (boards_out[count].*hasher)(board_in.b1, board_in.b2);
+
+        if constexpr (std::is_same_v<T, Memory>) {
+            boards_out[count] = board_in.memory;
+            (boards_out[count].*hasher)(board_in.b1, board_in.b2);
+        } else if constexpr (std::is_same_v<T, Board>) {
+            boards_out[0] = board_in;
+            (boards_out[0].*hasher)();
+        }
+
         boards_out.resize(1);
     } else {
-        make_fat_perm_list_helper<0, DEPTH, MOVES_ASCENDING, true>(
+        make_fat_perm_list_helper<T, 0, DEPTH, MOVES_ASCENDING, true>(
                 board_in, boards_out, count, hasher, 0, {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 0, 24);
-        make_fat_perm_list_helper<0, DEPTH, MOVES_ASCENDING, false>(
+        make_fat_perm_list_helper<T, 0, DEPTH, MOVES_ASCENDING, false>(
                 board_in, boards_out, count, hasher, 0, {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 24, 48);
         boards_out.resize(count);
     }

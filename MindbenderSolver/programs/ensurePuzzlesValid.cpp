@@ -69,7 +69,7 @@ int main() {
         clear_cmd();
         std::cout << "\n";
         std::cout << boardPair->getName() << "\n\n";
-        std::cout << boardPair->toString() << "\n";
+        std::cout << boardPair->toStringReversed() << "\n";
         std::cout << std::flush;
     }
 

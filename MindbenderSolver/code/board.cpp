@@ -7,6 +7,9 @@
 #include "segments.hpp"
 
 
+int GET_SCORE_3_CALLS = 0;
+
+
 Board::ColorArray_t Board::ColorsDefault = {0, 1, 2, 3, 4, 5, 6, 7};
 
 
@@ -21,7 +24,7 @@ Board::Board(C u8 values[36], C u8 x, C u8 y) {
 }
 
 
-void Board::setState(C u8 values[36]) {
+void B1B2::setState(C u8 values[36]) {
     std::array<i8, 8> colors = {8, 8, 8, 8, 8, 8, 8, 8};
     for (int i = 0; i < 36; i++) {
         C int val = values[i] & 0'7;
@@ -53,7 +56,7 @@ void Board::setState(C u8 values[36]) {
 }
 
 
-MU Board::ColorArray_t Board::setStateAndRetColors(C u8 values[36]) {
+MU Board::ColorArray_t B1B2::setStateAndRetColors(C u8 values[36]) {
     ColorArray_t colors = {8, 8, 8, 8, 8, 8, 8, 8};
     ColorArray_t trueColors = {8, 8, 8, 8, 8, 8, 8, 8};
 
@@ -94,9 +97,7 @@ MU Board::ColorArray_t Board::setStateAndRetColors(C u8 values[36]) {
 
 
 
-
-
-u32 Board::getColorCount() C {
+u32 B1B2::getColorCount() C {
     C u64 colorCount = b1 >> 56 & 0xF;
     return colorCount;
 }
@@ -109,85 +110,74 @@ static constexpr u64 MASK_FAT_POS = 0x1FFF'FFFF'FFFF'FFFF;
  * @param x value 0-4
  * @param y value 0-4
  */
-void Board::setFatXY(C u64 x, C u64 y) {
+void B1B2::setFatXY(C u64 x, C u64 y) {
     b1 = b1 & MASK_FAT_POS | x << 61;
     b2 = b2 & MASK_FAT_POS | y << 61;
     setFatBool(true);
 }
 
 
-MU void Board::setFatBool(C bool flag) {
+MU void B1B2::setFatBool(C bool flag) {
     static constexpr u64 MASK_FAT_FLAG = 0xEFFF'FFFF'FFFF'FFFF;
     b1 = b1 & MASK_FAT_FLAG | static_cast<u64>(flag) << 60;
 
 }
 
-MU void Board::setFatX(C u64 x) {
+MU void B1B2::setFatX(C u64 x) {
     b1 = b1 & MASK_FAT_POS | x << 61;
 }
 
 
-MU void Board::setFatY(C u64 y) {
+MU void B1B2::setFatY(C u64 y) {
     b2 = b2 & MASK_FAT_POS | y << 61;
 }
 
 
-MU void Board::addFatX(C u8 x) {
+MU void B1B2::addFatX(C u8 x) {
     u64 cur_x = getFatX() + x;
     cur_x -= 6 * (cur_x > 5);
     b1 = b1 & MASK_FAT_POS | cur_x << 61;
 }
 
 
-MU void Board::addFatY(C u8 y) {
+MU void B1B2::addFatY(C u8 y) {
     u64 cur_y = getFatY() + y;
     cur_y -= 6 * (cur_y > 5);
     b2 = b2 & MASK_FAT_POS | cur_y << 61;
 }
 
 
-u8 Board::getFatX() C {
+u8 B1B2::getFatX() C {
     return (b1 & ~MASK_FAT_POS) >> 61;
 }
 
 
-u8 Board::getFatY() C {
+u8 B1B2::getFatY() C {
     return (b2 & ~MASK_FAT_POS) >> 61;
 }
 
 
 /// always returns a value between 0-24.
-u8 Board::getFatXY() C {
+u8 B1B2::getFatXY() C {
     return (b1 >> 61) * 5 + (b2 >> 61);
 }
 
-u8 Board::getFatXYFast() C {
+MU u8 B1B2::getFatXYFast() C {
     return ((b1 >> 61) << 3) + (b2 >> 61);
 }
 
 
-bool Board::getFatBool() C {
+bool B1B2::getFatBool() C {
     C bool state = (b1 >> 60 & 1) != 0;
     return state;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-u8 Board::getColor(C u8 x, C u8 y) C {
+MU u8 B1B2::getColor(C u8 x, C u8 y) C {
     C i32 shift_amount = 51 - x * 3 - y % 3 * 18;
     return *(&b1 + (y >= 3)) >> shift_amount & 0'7;
 }
+
+
 
 
 /**
@@ -196,7 +186,7 @@ u8 Board::getColor(C u8 x, C u8 y) C {
  * int m = 1 + action1 % 5;
  * int n = 1 + action2 % 5;
  */
-bool Board::doActISColMatch(C u8 x1, C u8 y1, C u8 m, C u8 n) C {
+MU bool Board::doActISColMatch(C u8 x1, C u8 y1, C u8 m, C u8 n) C {
     C int y2 = (y1 - n + 6) % 6;
     C int x2 = (x1 - m + 6) % 6;
 
@@ -271,13 +261,237 @@ inline u64 getSimilar54(C u64& sect1, C u64& sect2) {
 }
 
 
-u64 Board::getScore1(C Board &other) C {
+
+
+
+MU u64 B1B2::getScore1(C B1B2 &other) C {
     return __builtin_popcountll(getSimilar54(b1, other.b1))
-         + __builtin_popcountll(getSimilar54(b2, other.b2));
+           + __builtin_popcountll(getSimilar54(b2, other.b2));
 }
 
 
-u64 Board::getRowColIntersections(C u32 x, C u32 y) C {
+
+
+inline u64 getAntiSimilar54(C u64& sect1, C u64& sect2) {
+    C u64 s = sect1 ^ sect2;
+    return (s | s >> 1 | s >> 2) & 0'111111'111111'111111;
+}
+
+
+MUND int B1B2::getScore3(C B1B2 theOther) C {
+    ++GET_SCORE_3_CALLS;
+
+    // Find all differing cells and update the counts in uncoveredRows and uncoveredCols
+    static constexpr u64 PENIS_MASK = 0'111'111'111'111'111'111;
+    C u64 full = _pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
+                 | _pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
+
+    u8 differingCells   = __builtin_popcountll(full);
+
+    alignas(u64) u8 uncRows[8] = {0};
+    uncRows[0] = __builtin_popcountll(full & 0'770000000000);
+    uncRows[1] = __builtin_popcountll(full & 0'007700000000);
+    uncRows[2] = __builtin_popcountll(full & 0'000077000000);
+    uncRows[3] = __builtin_popcountll(full & 0'000000770000);
+    uncRows[4] = __builtin_popcountll(full & 0'000000007700);
+    uncRows[5] = __builtin_popcountll(full & 0'000000000077);
+
+    alignas(u64) u8 uncCols[8] = {0};
+    uncCols[0] = __builtin_popcountll(full & 0'404040404040);
+    uncCols[1] = __builtin_popcountll(full & 0'202020202020);
+    uncCols[2] = __builtin_popcountll(full & 0'101010101010);
+    uncCols[3] = __builtin_popcountll(full & 0'040404040404);
+    uncCols[4] = __builtin_popcountll(full & 0'020202020202);
+    uncCols[5] = __builtin_popcountll(full & 0'010101010101);
+
+
+    u8 lanes = 0;
+    // While there are still uncovered differing cells (at most 6 loops)
+    while (differingCells > 0) {
+
+
+
+        // Find the row or column that covers the most uncovered differing cells
+        // in C++, can probably reinterpret the bytes to see if either can be skipped,
+        // base which level of checking I am doing off of getScore1?
+        // can be recoded to find the index and value of the max in both?
+
+        u64 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
+                             | 1 << uncRows[2] | 1 << uncRows[3]
+                             | 1 << uncRows[4] | 1 << uncRows[5];
+        u8 highestRow = 31 - __builtin_clz(promoteRowMask);
+
+        u64 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
+                             | 1 << uncCols[2] | 1 << uncCols[3]
+                             | 1 << uncCols[4] | 1 << uncCols[5];
+        u8 highestCol = 31 - __builtin_clz(promoteColMask);
+
+
+        if (highestRow == 0 && highestCol == 0) {
+            break;
+        }
+
+        int index;
+        bool isRow = highestRow >= highestCol;
+        if (isRow) {
+            index = (uncRows[0] == highestRow) ? 0 :
+                    (uncRows[1] == highestRow) ? 1 :
+                    (uncRows[2] == highestRow) ? 2 :
+                    (uncRows[3] == highestRow) ? 3 :
+                    (uncRows[4] == highestRow) ? 4 : 5;
+        } else {
+            index = (uncCols[0] == highestCol) ? 0 :
+                    (uncCols[1] == highestCol) ? 1 :
+                    (uncCols[2] == highestCol) ? 2 :
+                    (uncCols[3] == highestCol) ? 3 :
+                    (uncCols[4] == highestCol) ? 4 : 5;
+        }
+
+        // Cover the chosen row or column and update the counts in
+        // uncoveredRows and uncoveredColumns
+        if (isRow) {
+            differingCells -= uncRows[index];
+            uncRows[index] = 0;
+            for (int j = 0; j < 6; j++) {
+                if (getColor(j, index) != theOther.getColor(j, index) && uncCols[j] > 0) {
+                    uncCols[j]--;
+                }
+            }
+        } else {
+            differingCells -= uncCols[index];
+            uncCols[index] = 0;
+            for (int j = 0; j < 6; j++) {
+                if (getColor(index, j) != theOther.getColor(index, j) && uncRows[j] > 0) {
+                    uncRows[j]--;
+                }
+            }
+        }
+
+        lanes++;
+    }
+
+    return lanes;
+}
+
+
+
+
+
+
+
+template<int MAX_DEPTH>
+bool B1B2::getScore3Till(C B1B2 theOther) C {
+    ++GET_SCORE_3_CALLS;
+
+    // Find all differing cells and update the counts in uncoveredRows and uncoveredCols
+    static constexpr u64 PENIS_MASK = 0'111'111'111'111'111'111;
+    C u64 full = _pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
+                 | _pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
+
+    u8 diffCells = __builtin_popcountll(full);
+
+    alignas(u64) u8 uncRows[8] = {0};
+    uncRows[0] = __builtin_popcountll(full & 0'770000000000);
+    uncRows[1] = __builtin_popcountll(full & 0'007700000000);
+    uncRows[2] = __builtin_popcountll(full & 0'000077000000);
+    uncRows[3] = __builtin_popcountll(full & 0'000000770000);
+    uncRows[4] = __builtin_popcountll(full & 0'000000007700);
+    uncRows[5] = __builtin_popcountll(full & 0'000000000077);
+
+    alignas(u64) u8 uncCols[8] = {0};
+    uncCols[0] = __builtin_popcountll(full & 0'404040404040);
+    uncCols[1] = __builtin_popcountll(full & 0'202020202020);
+    uncCols[2] = __builtin_popcountll(full & 0'101010101010);
+    uncCols[3] = __builtin_popcountll(full & 0'040404040404);
+    uncCols[4] = __builtin_popcountll(full & 0'020202020202);
+    uncCols[5] = __builtin_popcountll(full & 0'010101010101);
+
+
+
+    // While there are still uncovered differing cells (at most 6 loops)
+    for (int depth = 0; depth < MAX_DEPTH; depth++) {
+        ++depth;
+
+        u64 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
+                             | 1 << uncRows[2] | 1 << uncRows[3]
+                             | 1 << uncRows[4] | 1 << uncRows[5];
+        u8 highestRow = 31 - __builtin_clz(promoteRowMask);
+
+        u64 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
+                             | 1 << uncCols[2] | 1 << uncCols[3]
+                             | 1 << uncCols[4] | 1 << uncCols[5];
+        u8 highestCol = 31 - __builtin_clz(promoteColMask);
+
+
+        if (highestRow == 0 && highestCol == 0) {
+            break;
+        }
+
+        int index;
+        bool isRow = highestRow >= highestCol;
+        if (isRow) {
+            index = (uncRows[0] == highestRow) ? 0 :
+                    (uncRows[1] == highestRow) ? 1 :
+                    (uncRows[2] == highestRow) ? 2 :
+                    (uncRows[3] == highestRow) ? 3 :
+                    (uncRows[4] == highestRow) ? 4 : 5;
+        } else {
+            index = (uncCols[0] == highestCol) ? 0 :
+                    (uncCols[1] == highestCol) ? 1 :
+                    (uncCols[2] == highestCol) ? 2 :
+                    (uncCols[3] == highestCol) ? 3 :
+                    (uncCols[4] == highestCol) ? 4 : 5;
+        }
+
+        // Cover the chosen row or column and update the counts in
+        // uncoveredRows and uncoveredColumns
+        if (isRow) {
+            diffCells -= uncRows[index];
+            uncRows[index] = 0;
+            for (int j = 0; j < 6; j++) {
+                if (getColor(j, index) != theOther.getColor(j, index) && uncCols[j] > 0) {
+                    uncCols[j]--;
+                }
+            }
+        } else {
+            diffCells -= uncCols[index];
+            uncCols[index] = 0;
+            for (int j = 0; j < 6; j++) {
+                if (getColor(index, j) != theOther.getColor(index, j) && uncRows[j] > 0) {
+                    uncRows[j]--;
+                }
+            }
+        }
+
+        if (diffCells == 0) {
+            break;
+        }
+    }
+
+
+
+    return diffCells != 0;
+}
+
+
+
+template bool B1B2::getScore3Till<1>(C B1B2 theOther) C;
+template bool B1B2::getScore3Till<2>(C B1B2 theOther) C;
+template bool B1B2::getScore3Till<3>(C B1B2 theOther) C;
+template bool B1B2::getScore3Till<4>(C B1B2 theOther) C;
+template bool B1B2::getScore3Till<5>(C B1B2 theOther) C;
+
+
+
+
+
+
+
+
+
+
+
+MU u64 Board::getRowColIntersections(C u32 x, C u32 y) C {
     static constexpr u64 C_MAIN_MASK = 0'000007'000007'000007;
     static constexpr u32 C_CNTR_MASKS[8] = {
             0x00000000, 0x02108421, 0x04210842, 0x06318C63,
@@ -330,7 +544,7 @@ void Board::precomputeHash4() {
 }
 
 
-Board::HasherPtr Board::getHashFunc() C {
+MU Board::HasherPtr Board::getHashFunc() C {
     C u64 colorCount = getColorCount();
     if (getFatBool() || colorCount > 3) {
         return &Board::precomputeHash4;

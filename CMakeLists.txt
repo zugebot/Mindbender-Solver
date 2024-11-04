@@ -23,7 +23,7 @@ endif()
 
 
 set(CMAKE_CXX_STANDARD 23)
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 # set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++ -static")
 
 
@@ -42,9 +42,11 @@ add_executable(MindbenderSolver
         ${MINDBENDER_SOLVER_SOURCES}
         ${INCLUDE_SOURCES}
         # main.cpp
-        MindbenderSolver/programs/testPerms.cpp
-        MindbenderSolver/code/perms_gen.hpp
+        MindbenderSolver/programs/testDFS.cpp
+        # MindbenderSolver/programs/testPerms.cpp
+        # MindbenderSolver/code/perms_gen.hpp
         # MindbenderSolver/programs/ensurePuzzlesValid.cpp
+        # MindbenderSolver/code/B1B2Only.hpp
         # MindbenderSolver/docs/expand.hpp
         # MindbenderSolver/programs/TestKnownSolutions.cpp
         # MindbenderSolver/programs/testJVec.cpp
@@ -53,5 +55,5 @@ add_executable(MindbenderSolver
         # MindbenderSolver/programs/UnitTesting.cpp
 )
 
-target_compile_options(MindbenderSolver PRIVATE -mbmi2)
+target_compile_options(MindbenderSolver PRIVATE -mbmi2 -msse4.1)
 

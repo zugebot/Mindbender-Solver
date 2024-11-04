@@ -1,10 +1,86 @@
 #include "perms.hpp"
 #include "rotations.hpp"
 
-#include <fstream>
-#include <iostream>
+
+template class Perms<Memory>;
+template class Perms<Board>;
 
 
+template<AllowedPermsType T>
+MU C Perms<T>::depthMap_t Perms<T>::depthMap = {
+        {1, {{1, 0}, {0, 1}}},
+        {2, {{1, 1}, {0, 2}, {2, 0}}},
+        {3, {{1, 2}, {2, 1}, {0, 3}, {3, 0}}},
+        {4, {{2, 2}, {3, 1}, {1, 3}, {4, 0}, {0, 4}}},
+        {5, {{3, 2}, {3, 2}, {4, 1}, {1, 4}, {5, 0}, {0, 5}}},
+        {6, {{3, 3}, {4, 2}, {2, 4}, {5, 1}, {1, 5}}},
+        {7, {{4, 3}, {3, 4}, {5, 2}, {2, 5}}},
+        {8, {{4, 4}, {5, 3}, {3, 5}}},
+        {9, {{4, 5}, {5, 4}}},
+        {10, {{5, 5}}},
+        {11, {{6, 5}}},
+};
+
+
+template<AllowedPermsType T>
+MU void Perms<T>::reserveForDepth(MU C Board& board_in, JVec<T> &boards_out, C u32 depth) {
+    C double fraction = Board::getDuplicateEstimateAtDepth(depth);
+    u64 allocSize = board_in.getFatBool() ?
+        BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
+    allocSize = static_cast<u64>(static_cast<double>(allocSize) * fraction);
+    boards_out.reserve(allocSize);
+}
+
+
+template<AllowedPermsType T>
+MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromLeft::funcPtrs[] = {
+    &make_perm_list<T, 0, true, true, true, true>,
+    &make_perm_list<T, 1, true, true, true, true>,
+    &make_perm_list<T, 2, true, true, true, true>,
+    &make_perm_list<T, 3, true, true, true, true>,
+    &make_perm_list<T, 4, true, true, true, true>,
+    &make_perm_list<T, 5, true, true, true, true>};
+
+
+template<AllowedPermsType T>
+MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromRight::funcPtrs[] = {
+    &make_perm_list<T, 0, true, true, true, false>,
+    &make_perm_list<T, 1, true, true, true, false>,
+    &make_perm_list<T, 2, true, true, true, false>,
+    &make_perm_list<T, 3, true, true, true, false>,
+    &make_perm_list<T, 4, true, true, true, false>,
+    &make_perm_list<T, 5, true, true, true, false>};
+
+
+u32 MAKE_FAT_PERM_LIST_HELPER_CALLS = 0;
+u32 MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS = 0;
+u32 MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR = 0;
+
+
+static constexpr bool tDFL1 = true;
+template<AllowedPermsType T>
+MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromLeft::fatFuncPtrs[] = {
+        &make_fat_perm_list<T, 0, tDFL1>,
+        &make_fat_perm_list<T, 1, tDFL1>,
+        &make_fat_perm_list<T, 2, tDFL1>,
+        &make_fat_perm_list<T, 3, tDFL1>,
+        &make_fat_perm_list<T, 4, tDFL1>,
+        &make_fat_perm_list<T, 5, tDFL1>};
+
+
+static constexpr bool tDFR1 = false;
+template<AllowedPermsType T>
+MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromRight::fatFuncPtrs[] = {
+        &make_fat_perm_list<T, 0, tDFR1>,
+        &make_fat_perm_list<T, 1, tDFR1>,
+        &make_fat_perm_list<T, 2, tDFR1>,
+        &make_fat_perm_list<T, 3, tDFR1>,
+        &make_fat_perm_list<T, 4, tDFR1>,
+        &make_fat_perm_list<T, 5, tDFR1>
+};
+
+
+/*
 template<bool CHECK_CROSS, bool CHECK_SIM>
 void make_permutation_list_depth_plus_one(C JVec<Board> &boards_in, JVec<Board> &boards_out, C Board::HasherPtr hasher) {
     int count = 0;
@@ -50,86 +126,10 @@ void make_permutation_list_depth_plus_one(C JVec<Board> &boards_in, JVec<Board> 
     }
     boards_out.resize(count);
 }
+ */
 
 
-C Perms::depthMap_t Perms::depthMap = {
-        {1, {{1, 0}, {0, 1}}},
-        {2, {{1, 1}, {0, 2}, {2, 0}}},
-        {3, {{1, 2}, {2, 1}, {0, 3}, {3, 0}}},
-        {4, {{2, 2}, {3, 1}, {1, 3}, {4, 0}, {0, 4}}},
-        {5, {{3, 2}, {3, 2}, {4, 1}, {1, 4}, {5, 0}, {0, 5}}},
-        {6, {{3, 3}, {4, 2}, {2, 4}, {5, 1}, {1, 5}}},
-        {7, {{4, 3}, {3, 4}, {5, 2}, {2, 5}}},
-        {8, {{4, 4}, {5, 3}, {3, 5}}},
-        {9, {{4, 5}, {5, 4}}},
-        {10, {{5, 5}}},
-        {11, {{6, 5}}},
-};
-
-
-MU void Perms::reserveForDepth(MU C Board& board_in, JVec<Board> &boards_out, C u32 depth) {
-    C double fraction = Board::getDuplicateEstimateAtDepth(depth);
-    u64 allocSize = board_in.getFatBool() ? BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
-
-    allocSize = static_cast<u64>(static_cast<double>(allocSize) * fraction);
-    boards_out.reserve(allocSize);
-}
-
-
-MU void Perms::reserveForDepth(MU C Board& board_in, JVec<Memory> &boards_out, C u32 depth) {
-    C double fraction = Board::getDuplicateEstimateAtDepth(depth);
-    u64 allocSize = board_in.getFatBool() ? BOARD_FAT_MAX_MALLOC_SIZES[depth] : BOARD_PRE_MAX_MALLOC_SIZES[depth];
-
-    allocSize = static_cast<u64>(static_cast<double>(allocSize) * fraction);
-    boards_out.reserve(allocSize);
-}
-
-
-Perms::toDepthFuncPtr_t Perms::toDepthFromLeftFuncPtrs[] = {
-    &make_perm_list<0, true, true, true, true>,
-    &make_perm_list<1, true, true, true, true>,
-    &make_perm_list<2, true, true, true, true>,
-    &make_perm_list<3, true, true, true, true>,
-    &make_perm_list<4, true, true, true, true>,
-    &make_perm_list<5, true, true, true, true>};
-
-
-Perms::toDepthFuncPtr_t Perms::toDepthFromRightFuncPtrs[] = {
-    &make_perm_list<0, true, true, true, false>,
-    &make_perm_list<1, true, true, true, false>,
-    &make_perm_list<2, true, true, true, false>,
-    &make_perm_list<3, true, true, true, false>,
-    &make_perm_list<4, true, true, true, false>,
-    &make_perm_list<5, true, true, true, false>};
-
-
-u32 MAKE_FAT_PERM_LIST_HELPER_CALLS = 0;
-u32 MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS = 0;
-u32 MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR = 0;
-
-
-static constexpr bool tDFL1 = true;
-Perms::toDepthFuncPtr_t Perms::toDepthFromLeftFatFuncPtrs[] = {
-        &make_fat_perm_list<0, tDFL1>,
-        &make_fat_perm_list<1, tDFL1>,
-        &make_fat_perm_list<2, tDFL1>,
-        &make_fat_perm_list<3, tDFL1>,
-        &make_fat_perm_list<4, tDFL1>,
-        &make_fat_perm_list<5, tDFL1>};
-
-
-static constexpr bool tDFR1 = false;
-Perms::toDepthFuncPtr_t Perms::toDepthFromRightFatFuncPtrs[] = {
-        &make_fat_perm_list<0, tDFR1>,
-        &make_fat_perm_list<1, tDFR1>,
-        &make_fat_perm_list<2, tDFR1>,
-        &make_fat_perm_list<3, tDFR1>,
-        &make_fat_perm_list<4, tDFR1>,
-        &make_fat_perm_list<5, tDFR1>
-};
-
-
-
+/*
 Perms::toDepthPlusOneFuncPtr_t Perms::toDepthPlusOneFuncPtr = make_permutation_list_depth_plus_one;
 void Perms::getDepthPlus1Func(C JVec<Board>& boards_in, JVec<Board>& boards_out, C bool shouldResize) {
     if (shouldResize) { boards_out.resize(boards_in.size() * 60); }
@@ -224,3 +224,4 @@ void Perms::getDepthPlus1BufferedFunc(
     C std::string path = root_path + std::to_string(depth + 1) + "_";
     toDepthPlusOneBufferedFuncPtr(path, boards_in, boards_buffer, hasher);
 }
+*/
