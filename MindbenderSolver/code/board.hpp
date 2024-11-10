@@ -53,10 +53,12 @@ struct B1B2 {
     MUND u32 getColorCount() C;
 
     MUND u64 getScore1(C B1B2& other) C;
-    MUND int getScore3(C B1B2 theOther) C;
+    MUND int getScore3(B1B2 theOther) C;
 
     template<int MAX_DEPTH>
-    MUND bool getScore3Till(C B1B2 theOther) C;
+    MUND bool getScore3Till(B1B2 theOther) C;
+
+    MUND bool canBeSolvedIn1Move(B1B2 theOther) C;
 
 
     __forceinline bool operator==(C B1B2& other) C {
@@ -77,7 +79,6 @@ public:
             : useAscii(useAscii), trueColors(colors) {}
     };
 
-    MU B1B2 state;
     Memory memory;
 
     explicit Board() = default;

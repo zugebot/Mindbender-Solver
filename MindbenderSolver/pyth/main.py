@@ -589,7 +589,7 @@ def main():
     ui: UI = UI(folder)
     ui.load_files()
     # TODO: figure out why #128 makes line #6 become '5' units long instead of '4' when flipping it's direction
-    ui.solutions.load_file(f"{folder}/6-5_c10_8.txt")
+    ui.solutions.load_file(f"{folder}/9-4_c8_5896.txt")
     ui.update()
     ui.root.mainloop()
 

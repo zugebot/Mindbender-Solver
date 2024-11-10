@@ -15,7 +15,6 @@ int main() {
         return -1;
     }
 
-
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver)";
     const auto pair = BoardLookup::getBoardPair("5-3");
 

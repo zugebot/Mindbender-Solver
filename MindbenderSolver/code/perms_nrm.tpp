@@ -15,9 +15,8 @@ void make_perm_list_inner(C Board &board_in, JVec<T> &boards_out,
             boards_out[0] = board_in;
             (boards_out[0].*ref.hasher)();
         }
-
         boards_out.resize(1);
-        return;
+
 
     // Base case: process and store the final board
     } else if constexpr (CUR_DEPTH == MAX_DEPTH) {
@@ -28,12 +27,11 @@ void make_perm_list_inner(C Board &board_in, JVec<T> &boards_out,
             boards_out[count].template setNextNMove<MAX_DEPTH>(move_prev);
         } else if constexpr (std::is_same_v<T, Board>) {
             boards_out[count] = board_in;
-            (boards_out[0].*ref.hasher)();
+            (boards_out[count].*ref.hasher)();
             boards_out[count].memory.template setNextNMove<MAX_DEPTH>(move_prev);
         }
-
         ++count;
-        return;
+
 
     } else {
 

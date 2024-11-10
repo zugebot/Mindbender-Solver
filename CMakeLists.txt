@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.24)
 project(MindbenderSolver)
 
 
+# include(CheckCXXCompilerFlag)
+
+
 find_library(BOOST_FOUND Boost)
 if(BOOST_FOUND)
     message(STATUS "Boost found")
@@ -25,6 +28,7 @@ endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 # set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++ -static")
+
 
 
 include_directories(${CMAKE_SOURCE_DIR}/)
@@ -55,5 +59,15 @@ add_executable(MindbenderSolver
         # MindbenderSolver/programs/UnitTesting.cpp
 )
 
-target_compile_options(MindbenderSolver PRIVATE -mbmi2 -msse4.1)
 
+
+# check_cxx_compiler_flag("-mavx512f" COMPILER_SUPPORTS_AVX512_1)
+# check_cxx_compiler_flag("-mavx512vl" COMPILER_SUPPORTS_AVX512_2)
+# check_cxx_compiler_flag("-mavx512dq" COMPILER_SUPPORTS_AVX512_3)
+# check_cxx_compiler_flag("-mavx512bw" COMPILER_SUPPORTS_AVX512_4)
+# if(COMPILER_SUPPORTS_AVX512_1 AND COMPILER_SUPPORTS_AVX512_2
+#         AND COMPILER_SUPPORTS_AVX512_3 AND COMPILER_SUPPORTS_AVX512_4)
+target_compile_options(MindbenderSolver PRIVATE -mbmi2 -msse4.1)
+# else()
+#     message(WARNING "AVX-512 not supported by the compiler.")
+# endif()

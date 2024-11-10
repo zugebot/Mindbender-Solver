@@ -2,6 +2,7 @@
 
 
 #include <string>
+#include <immintrin.h>
 
 #include "MindbenderSolver/utils/colors.hpp"
 #include "segments.hpp"
@@ -278,6 +279,30 @@ inline u64 getAntiSimilar54(C u64& sect1, C u64& sect2) {
 }
 
 
+/*
+void simd_popcount_avx512(C uint64_t full, uint8_t* uncRows) {
+    // Define masks for each row
+    static constexpr uint64_t masks[8] = {
+        0x770000000000, 0x007700000000,
+        0x000077000000, 0x000000770000,
+        0x000000007700, 0x000000000077,
+        0, 0  // Two extra zeroes for alignment
+    };
+
+    // Load the masks into a 512-bit register (each lane holds one mask)
+    C __m512i mask_vec = _mm512_loadu_si512(masks);
+    // Broadcast `full` across all eight 64-bit lanes in a 512-bit register
+    C __m512i full_vec = _mm512_set1_epi64(full);
+    // Perform bitwise AND across each lane
+    C __m512i and_result = _mm512_and_si512(full_vec, mask_vec);
+    // Use AVX-512 popcount to count set bits in each 64-bit lane
+    C __m512i popcount_result = _mm512_popcnt_epi64(and_result);
+    // Store the result back to uncRows (only need the first 6 elements)
+    _mm512_storeu_si512(reinterpret_cast<__m512i*>(uncRows), popcount_result);
+}
+*/
+
+
 MUND int B1B2::getScore3(C B1B2 theOther) C {
     ++GET_SCORE_3_CALLS;
 
@@ -288,7 +313,7 @@ MUND int B1B2::getScore3(C B1B2 theOther) C {
 
     u8 differingCells   = __builtin_popcountll(full);
 
-    alignas(u64) u8 uncRows[8] = {0};
+    alignas(u64) u8 uncRows[8] = {};
     uncRows[0] = __builtin_popcountll(full & 0'770000000000);
     uncRows[1] = __builtin_popcountll(full & 0'007700000000);
     uncRows[2] = __builtin_popcountll(full & 0'000077000000);
@@ -296,7 +321,7 @@ MUND int B1B2::getScore3(C B1B2 theOther) C {
     uncRows[4] = __builtin_popcountll(full & 0'000000007700);
     uncRows[5] = __builtin_popcountll(full & 0'000000000077);
 
-    alignas(u64) u8 uncCols[8] = {0};
+    alignas(u64) u8 uncCols[8] = {};
     uncCols[0] = __builtin_popcountll(full & 0'404040404040);
     uncCols[1] = __builtin_popcountll(full & 0'202020202020);
     uncCols[2] = __builtin_popcountll(full & 0'101010101010);
@@ -316,40 +341,30 @@ MUND int B1B2::getScore3(C B1B2 theOther) C {
         // base which level of checking I am doing off of getScore1?
         // can be recoded to find the index and value of the max in both?
 
-        u64 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
+        C u64 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
                              | 1 << uncRows[2] | 1 << uncRows[3]
                              | 1 << uncRows[4] | 1 << uncRows[5];
-        u8 highestRow = 31 - __builtin_clz(promoteRowMask);
+        C u8 highestRow = 31 - __builtin_clz(promoteRowMask);
 
-        u64 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
+        C u64 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
                              | 1 << uncCols[2] | 1 << uncCols[3]
                              | 1 << uncCols[4] | 1 << uncCols[5];
-        u8 highestCol = 31 - __builtin_clz(promoteColMask);
+        C u8 highestCol = 31 - __builtin_clz(promoteColMask);
 
 
         if (highestRow == 0 && highestCol == 0) {
             break;
         }
 
-        int index;
-        bool isRow = highestRow >= highestCol;
-        if (isRow) {
-            index = (uncRows[0] == highestRow) ? 0 :
+
+        if (highestRow >= highestCol) {
+            C int index = (uncRows[0] == highestRow) ? 0 :
                     (uncRows[1] == highestRow) ? 1 :
                     (uncRows[2] == highestRow) ? 2 :
                     (uncRows[3] == highestRow) ? 3 :
                     (uncRows[4] == highestRow) ? 4 : 5;
-        } else {
-            index = (uncCols[0] == highestCol) ? 0 :
-                    (uncCols[1] == highestCol) ? 1 :
-                    (uncCols[2] == highestCol) ? 2 :
-                    (uncCols[3] == highestCol) ? 3 :
-                    (uncCols[4] == highestCol) ? 4 : 5;
-        }
 
-        // Cover the chosen row or column and update the counts in
-        // uncoveredRows and uncoveredColumns
-        if (isRow) {
+            // Cover the chosen row and update the counts in uncCols
             differingCells -= uncRows[index];
             uncRows[index] = 0;
             for (int j = 0; j < 6; j++) {
@@ -357,7 +372,15 @@ MUND int B1B2::getScore3(C B1B2 theOther) C {
                     uncCols[j]--;
                 }
             }
+
         } else {
+            C int index = (uncCols[0] == highestCol) ? 0 :
+                    (uncCols[1] == highestCol) ? 1 :
+                    (uncCols[2] == highestCol) ? 2 :
+                    (uncCols[3] == highestCol) ? 3 :
+                    (uncCols[4] == highestCol) ? 4 : 5;
+
+            // Cover the chosen col and update the counts in uncRows
             differingCells -= uncCols[index];
             uncCols[index] = 0;
             for (int j = 0; j < 6; j++) {
@@ -366,6 +389,7 @@ MUND int B1B2::getScore3(C B1B2 theOther) C {
                 }
             }
         }
+
 
         lanes++;
     }
@@ -377,9 +401,13 @@ MUND int B1B2::getScore3(C B1B2 theOther) C {
 
 
 
+#define countmore(x) \
+(((((x)&~0UL/255*127)+~0UL/255*(127)|(x))&~0UL/255*128)/128%255)
 
 
-template<int MAX_DEPTH>
+
+
+template<i32 MAX_DEPTH>
 bool B1B2::getScore3Till(C B1B2 theOther) C {
     ++GET_SCORE_3_CALLS;
 
@@ -390,15 +418,15 @@ bool B1B2::getScore3Till(C B1B2 theOther) C {
 
     u8 diffCells = __builtin_popcountll(full);
 
-    alignas(u64) u8 uncRows[8] = {0};
-    uncRows[0] = __builtin_popcountll(full & 0'770000000000);
+    alignas(u64) u8 uncRows[8] = {};
+    uncRows[0] = __builtin_popcountll(full & 0'770000000000); // this is base-8 LOL
     uncRows[1] = __builtin_popcountll(full & 0'007700000000);
     uncRows[2] = __builtin_popcountll(full & 0'000077000000);
     uncRows[3] = __builtin_popcountll(full & 0'000000770000);
     uncRows[4] = __builtin_popcountll(full & 0'000000007700);
     uncRows[5] = __builtin_popcountll(full & 0'000000000077);
 
-    alignas(u64) u8 uncCols[8] = {0};
+    alignas(u64) u8 uncCols[8] = {};
     uncCols[0] = __builtin_popcountll(full & 0'404040404040);
     uncCols[1] = __builtin_popcountll(full & 0'202020202020);
     uncCols[2] = __builtin_popcountll(full & 0'101010101010);
@@ -407,56 +435,78 @@ bool B1B2::getScore3Till(C B1B2 theOther) C {
     uncCols[5] = __builtin_popcountll(full & 0'010101010101);
 
 
+    // could break early if there are more total rows or more total columns than MAX_DEPTH
+    // but how to implement that in a fast way
+
+    /*
+    if constexpr (MAX_DEPTH < 5) {
+        C u64 rd = *reinterpret_cast<u64*>(uncRows);
+        C u64 rowsMask = __builtin_popcountll(
+            (rd | rd >> 1 | rd >> 2) & 0x01'01'01'01'01'01'01'01);
+        C u64 cd = *reinterpret_cast<u64*>(uncCols);
+        C u64 colsMask = __builtin_popcountll(
+            (cd | cd >> 1 | cd >> 2) & 0x01'01'01'01'01'01'01'01);
+        if (std::min(rowsMask, colsMask) > MAX_DEPTH) {
+            return true;
+        }
+    }*/
+
+
+
+
+
 
     // While there are still uncovered differing cells (at most 6 loops)
-    for (int depth = 0; depth < MAX_DEPTH; depth++) {
-        ++depth;
+    for (i32 depth = 0; depth < MAX_DEPTH; depth++) {
 
-        u64 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
+        C u64 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
                              | 1 << uncRows[2] | 1 << uncRows[3]
                              | 1 << uncRows[4] | 1 << uncRows[5];
-        u8 highestRow = 31 - __builtin_clz(promoteRowMask);
+        C u8 highestRow = 31 - __builtin_clz(promoteRowMask);
 
-        u64 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
+        C u64 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
                              | 1 << uncCols[2] | 1 << uncCols[3]
                              | 1 << uncCols[4] | 1 << uncCols[5];
-        u8 highestCol = 31 - __builtin_clz(promoteColMask);
+        C u8 highestCol = 31 - __builtin_clz(promoteColMask);
 
 
         if (highestRow == 0 && highestCol == 0) {
-            break;
+            return false;
         }
 
-        int index;
-        bool isRow = highestRow >= highestCol;
-        if (isRow) {
-            index = (uncRows[0] == highestRow) ? 0 :
+        if (highestRow >= highestCol) {
+            C i32 index = (uncRows[0] == highestRow) ? 0 :
                     (uncRows[1] == highestRow) ? 1 :
                     (uncRows[2] == highestRow) ? 2 :
                     (uncRows[3] == highestRow) ? 3 :
                     (uncRows[4] == highestRow) ? 4 : 5;
-        } else {
-            index = (uncCols[0] == highestCol) ? 0 :
-                    (uncCols[1] == highestCol) ? 1 :
-                    (uncCols[2] == highestCol) ? 2 :
-                    (uncCols[3] == highestCol) ? 3 :
-                    (uncCols[4] == highestCol) ? 4 : 5;
-        }
 
-        // Cover the chosen row or column and update the counts in
-        // uncoveredRows and uncoveredColumns
-        if (isRow) {
+            // Cover the chosen row and update the counts in uncCols
             diffCells -= uncRows[index];
             uncRows[index] = 0;
-            for (int j = 0; j < 6; j++) {
+            for (i32 j = 0; j < 6; j++) {
                 if (getColor(j, index) != theOther.getColor(j, index) && uncCols[j] > 0) {
                     uncCols[j]--;
                 }
             }
+
         } else {
+            C i32 index = (uncCols[0] == highestCol) ? 0 :
+                    (uncCols[1] == highestCol) ? 1 :
+                    (uncCols[2] == highestCol) ? 2 :
+                    (uncCols[3] == highestCol) ? 3 :
+                    (uncCols[4] == highestCol) ? 4 : 5;
+
+            // Cover the chosen col and update the counts in uncRows
             diffCells -= uncCols[index];
             uncCols[index] = 0;
-            for (int j = 0; j < 6; j++) {
+
+            // here, couldn't I just construct a 64-bit mask
+            // from the column indices and the uncRows[j] > 0
+            // and just and that with 0x010101 then
+            // reinterpret uncRows as u64 and subtract from all at the same time?
+
+            for (i32 j = 0; j < 6; j++) {
                 if (getColor(index, j) != theOther.getColor(index, j) && uncRows[j] > 0) {
                     uncRows[j]--;
                 }
@@ -464,26 +514,55 @@ bool B1B2::getScore3Till(C B1B2 theOther) C {
         }
 
         if (diffCells == 0) {
-            break;
+            return false;
         }
+
     }
-
-
 
     return diffCells != 0;
 }
 
 
 
-template bool B1B2::getScore3Till<1>(C B1B2 theOther) C;
-template bool B1B2::getScore3Till<2>(C B1B2 theOther) C;
-template bool B1B2::getScore3Till<3>(C B1B2 theOther) C;
-template bool B1B2::getScore3Till<4>(C B1B2 theOther) C;
-template bool B1B2::getScore3Till<5>(C B1B2 theOther) C;
+template bool B1B2::getScore3Till<1>(B1B2 theOther) C;
+template bool B1B2::getScore3Till<2>(B1B2 theOther) C;
+template bool B1B2::getScore3Till<3>(B1B2 theOther) C;
+template bool B1B2::getScore3Till<4>(B1B2 theOther) C;
+template bool B1B2::getScore3Till<5>(B1B2 theOther) C;
 
 
 
+MUND bool B1B2::canBeSolvedIn1Move(C B1B2 theOther) C {
+    static constexpr u64 PENIS_MASK = 0'111'111'111'111'111'111;
+    C u64 full = _pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
+                 | _pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
 
+    if EXPECT_FALSE(__builtin_popcountll(full) == 0) {
+        return true;
+    }
+
+    alignas(u64) u8 uncRows[8] = {};
+    uncRows[0] = __builtin_popcountll(full & 0'770000000000); // this is base-8 LOL
+    uncRows[1] = __builtin_popcountll(full & 0'007700000000);
+    uncRows[2] = __builtin_popcountll(full & 0'000077000000);
+    uncRows[3] = __builtin_popcountll(full & 0'000000770000);
+    uncRows[4] = __builtin_popcountll(full & 0'000000007700);
+    uncRows[5] = __builtin_popcountll(full & 0'000000000077);
+
+
+    alignas(u64) u8 uncCols[8] = {};
+    uncCols[0] = __builtin_popcountll(full & 0'404040404040);
+    uncCols[1] = __builtin_popcountll(full & 0'202020202020);
+    uncCols[2] = __builtin_popcountll(full & 0'101010101010);
+    uncCols[3] = __builtin_popcountll(full & 0'040404040404);
+    uncCols[4] = __builtin_popcountll(full & 0'020202020202);
+    uncCols[5] = __builtin_popcountll(full & 0'010101010101);
+
+    C u32 countRow = countmore(*reinterpret_cast<u64*>(uncRows));
+    C u32 countCol = countmore(*reinterpret_cast<u64*>(uncCols));
+    C u32 minimum = std::min(countRow, countCol);
+    return minimum < 2;
+}
 
 
 

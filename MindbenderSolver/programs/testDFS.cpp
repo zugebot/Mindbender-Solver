@@ -1,5 +1,7 @@
 #include "MindbenderSolver/include.hpp"
 
+#include <cmath>
+#include <set>
 
 
 template<int DEPTH>
@@ -13,15 +15,23 @@ struct RefState {
 
 
 
-static constexpr int DEPTH = 7;
-static RefState<DEPTH> THE_STATE = RefState<DEPTH>();
+
+
+static constexpr int DEPTH = 9;
+static int DEPTHS_COUNT[DEPTH + 1] = {};
+static auto THE_STATE = RefState<DEPTH>();
 static int states_traversed = 0;
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool ROW_TRUE>
-void recursive_helper(B1B2 theBoard, int theNext) {
+void recursive_helper(C B1B2 theBoard, C int theNext) {
+    ++DEPTHS_COUNT[CUR_DEPTH];
     ++states_traversed;
 
+    static constexpr int DIFF_DEPTH = MAX_DEPTH - CUR_DEPTH;
+
     if constexpr (CUR_DEPTH == MAX_DEPTH) {
+        // std::cout << theBoard.getScore3(THE_STATE.end) << ", ";
+        // should be a mix of 0's and 1's.
         if EXPECT_FALSE(theBoard == THE_STATE.end) {
             THE_STATE.count++;
         }
@@ -43,31 +53,13 @@ void recursive_helper(B1B2 theBoard, int theNext) {
         // Loop for normal row and modified column
         for (int actIndex = startRow; actIndex < 30; ++actIndex) {
             nextBoard = theBoard;
-            auto func = allActStructList[actIndex];
+            C auto func = allActStructList[actIndex];
 
             func.action(nextBoard);
             if (nextBoard == theBoard) { continue; }
 
-
-
-            if constexpr (CUR_DEPTH + 5 == MAX_DEPTH) {
-                if (nextBoard.getScore3Till<5>(THE_STATE.end)) { continue; }
-            }
-            if constexpr (CUR_DEPTH + 4 == MAX_DEPTH) {
-                if (nextBoard.getScore3Till<4>(THE_STATE.end)) { continue; }
-            }
-            if constexpr (CUR_DEPTH + 3 == MAX_DEPTH) {
-                if (nextBoard.getScore3Till<3>(THE_STATE.end)) { continue; }
-            }
-            if constexpr (CUR_DEPTH + 2 == MAX_DEPTH) {
-                if (nextBoard.getScore3Till<2>(THE_STATE.end)) { continue; }
-            }
-            if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
-                if (nextBoard.getScore3Till<1>(THE_STATE.end)) { continue; }
-            }
-
-
-
+            if constexpr (DIFF_DEPTH > 0 && DIFF_DEPTH < 6) {
+                if (nextBoard.getScore3Till<DIFF_DEPTH>(THE_STATE.end)) { continue; } }
 
             recursive_helper<CUR_DEPTH + 1, MAX_DEPTH, true>(
                     nextBoard, func.index + func.tillNext);
@@ -75,85 +67,78 @@ void recursive_helper(B1B2 theBoard, int theNext) {
 
         for (int actIndex = startCol; actIndex < 60; ++actIndex) {
             nextBoard = theBoard;
-            auto func = allActStructList[actIndex];
+            C auto func = allActStructList[actIndex];
 
             func.action(nextBoard);
             if (nextBoard == theBoard) { continue; }
 
 
-            if constexpr (CUR_DEPTH + 5 == MAX_DEPTH) {
-                if (nextBoard.getScore3Till<5>(THE_STATE.end)) { continue; }
-            }
-            if constexpr (CUR_DEPTH + 4 == MAX_DEPTH) {
-                if (nextBoard.getScore3Till<4>(THE_STATE.end)) { continue; }
-            }
-            if constexpr (CUR_DEPTH + 3 == MAX_DEPTH) {
-                if (nextBoard.getScore3Till<3>(THE_STATE.end)) { continue; }
-            }
-            if constexpr (CUR_DEPTH + 2 == MAX_DEPTH) {
-                if (nextBoard.getScore3Till<2>(THE_STATE.end)) { continue; }
-            }
-            if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
-                if (nextBoard.getScore3Till<1>(THE_STATE.end)) { continue; }
-            }
-
-
-
+            if constexpr (DIFF_DEPTH > 0 && DIFF_DEPTH < 6) {
+                if (nextBoard.getScore3Till<DIFF_DEPTH>(THE_STATE.end)) { continue; } }
 
 
             recursive_helper<CUR_DEPTH + 1, MAX_DEPTH, false>(
                     nextBoard, func.index + func.tillNext);
         }
-
-
-
-
-
     }
 }
 
 
 template<int MAX_DEPTH>
 double recursive() {
-    Timer timer;
+    C Timer timer;
     recursive_helper<0, MAX_DEPTH, true>(THE_STATE.start, 0);
     return timer.getSeconds();
 }
 
 
 int main() {
-    // C BoardPair* pair = BoardLookup::getBoardPair("4-3");
-    // C Board board = pair->getStartState();
-    // C Board solve = pair->getEndState();
-
     C Board board = BoardLookup::getBoardPair("13-1")->getStartState();
     Board solve = board;
-    // std::cout << "0: " << board.getScore3(solve) << "\n";
-    R_4_1(solve); // std::cout << "1: " << board.getScore3(solve) << "\n";
-    C_5_5(solve); // std::cout << "2: " << board.getScore3(solve) << "\n";
-    R_2_2(solve); // std::cout << "3: " << board.getScore3(solve) << "\n";
-    R_1_5(solve); // std::cout << "4: " << board.getScore3(solve) << "\n";
-    C_3_4(solve); // std::cout << "5: " << board.getScore3(solve) << "\n";
-    R_2_2(solve); // std::cout << "6: " << board.getScore3(solve) << "\n";
-    R_4_4(solve); // std::cout << "7: " << board.getScore3(solve) << "\n";
-    // std::cout << std::flush;
+
+    R_4_1(solve); // 0
+    C_5_5(solve); // 1
+    R_2_2(solve); // 2
+    R_1_5(solve); // 3
+    C_3_4(solve); // 4
+    R_2_2(solve); // 5
+    R_4_4(solve); // 6
+    C_3_4(solve); // 7
+    R_1_1(solve); // 8
 
     THE_STATE.start = static_cast<B1B2>(board);
     THE_STATE.end = static_cast<B1B2>(solve);
 
 
     JVec<Board> boards;
-    Perms<Board>::reserveForDepth(board, boards, 2);
-    Perms<Board>::toDepthFromLeft::funcPtrs[2](board, boards, board.getHashFunc());
-    std::cout << "Length: " << boards.size() << std::endl;
+    Perms<Board>::reserveForDepth(board, boards, 5);
+    Perms<Board>::toDepthFromLeft::funcPtrs[5](board, boards, board.getHashFunc());
+    std::cout << "[Arr] Length: " << boards.size() << std::endl;
+    std::set<Board> boardSet;
+    for (int i = 0; i < boards.size(); i++) {
+        Board bi = boards[i];
+        boardSet.insert(bi);
+    }
+    std::cout << "[Set] Length: " << boardSet.size() << std::endl;
 
 
-    double time = recursive<DEPTH>();
+
+
+    C double time = recursive<DEPTH>();
 
     std::cout << "Time: " << time << std::endl;
+    std::cout << "Depth: " << DEPTH << std::endl;
     std::cout << "Solves: " << THE_STATE.count << std::endl;
     std::cout << "Traversed: " << states_traversed << std::endl;
+    std::cout << "Total States: " << pow(60, DEPTH) << std::endl;
     std::cout << "GetScore3: " << GET_SCORE_3_CALLS << std::endl;
+
+    std::cout << "Depths: [";
+    for (int i = 0; i < DEPTH + 1; ++i) {
+        std::cout << DEPTHS_COUNT[i];
+        if (i != DEPTH) {  std::cout << ", "; }
+    }
+    std::cout << "]\n";
 
     return 0;
 }
