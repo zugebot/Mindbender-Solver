@@ -17,68 +17,94 @@ struct RefState {
 
 
 
-static constexpr int DEPTH = 9;
+
+
+static constexpr int DEPTH = 7;
 static int DEPTHS_COUNT[DEPTH + 1] = {};
 static auto THE_STATE = RefState<DEPTH>();
 static int states_traversed = 0;
+
+
+
+template<int CUR_DEPTH, int MAX_DEPTH, bool ROW_TRUE>
+__forceinline void rec_iter1(C B1B2 theBoard, C int theNext) {
+    static constexpr int DIFF_DEPTH = MAX_DEPTH - CUR_DEPTH;
+
+    // set boundaries
+    int startRow, startCol;
+    if constexpr (ROW_TRUE) {
+        startRow = theNext;
+        startCol = 30;
+    } else {
+        startRow = 0;
+        startCol = theNext;
+    }
+
+    B1B2 nextBoard;
+
+    // Loop for normal row and modified column
+    for (int actIndex = startRow; actIndex < 30; ++actIndex) {
+        nextBoard = theBoard;
+        C auto func = allActStructList[actIndex];
+
+        func.action(nextBoard);
+        if (nextBoard == theBoard) { continue; }
+
+        if constexpr (DIFF_DEPTH > 0 && DIFF_DEPTH < 6) {
+            if (nextBoard.getScore3Till<DIFF_DEPTH>(THE_STATE.end)) { continue; } }
+
+        recursive_helper<CUR_DEPTH + 1, MAX_DEPTH, true>(
+                nextBoard, func.index + func.tillNext);
+    }
+
+    for (int actIndex = startCol; actIndex < 60; ++actIndex) {
+        nextBoard = theBoard;
+        C auto func = allActStructList[actIndex];
+
+        func.action(nextBoard);
+        if (nextBoard == theBoard) { continue; }
+
+
+        if constexpr (DIFF_DEPTH > 0 && DIFF_DEPTH < 6) {
+            if (nextBoard.getScore3Till<DIFF_DEPTH>(THE_STATE.end)) { continue; } }
+
+
+        recursive_helper<CUR_DEPTH + 1, MAX_DEPTH, false>(
+                nextBoard, func.index + func.tillNext);
+    }
+}
+
+
+
+
+
+template<int CUR_DEPTH, int MAX_DEPTH, bool ROW_TRUE>
+__forceinline void rec_iter2(C B1B2 theBoard, C int theNext) {
+    static constexpr int DIFF_DEPTH = MAX_DEPTH - CUR_DEPTH;
+
+    // check Row, Col
+    // check Col, Row
+    // check Row, Row // 
+    // Check Col, Col // 
+}
+
+
+
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool ROW_TRUE>
 void recursive_helper(C B1B2 theBoard, C int theNext) {
     ++DEPTHS_COUNT[CUR_DEPTH];
     ++states_traversed;
 
-    static constexpr int DIFF_DEPTH = MAX_DEPTH - CUR_DEPTH;
+    if constexpr (CUR_DEPTH == 0) {
+        rec_iter1<CUR_DEPTH, MAX_DEPTH, ROW_TRUE>(theBoard, theNext);
 
-    if constexpr (CUR_DEPTH == MAX_DEPTH) {
-        // std::cout << theBoard.getScore3(THE_STATE.end) << ", ";
-        // should be a mix of 0's and 1's.
+    } else if constexpr (CUR_DEPTH < MAX_DEPTH) {
+        rec_iter1<CUR_DEPTH, MAX_DEPTH, ROW_TRUE>(theBoard, theNext);
+
+    } else if constexpr (CUR_DEPTH == MAX_DEPTH) {
         if EXPECT_FALSE(theBoard == THE_STATE.end) {
             THE_STATE.count++;
-        }
-
-    } else {
-
-        // set boundaries
-        int startRow, startCol;
-        if constexpr (ROW_TRUE) {
-            startRow = theNext;
-            startCol = 30;
-        } else {
-            startRow = 0;
-            startCol = theNext;
-        }
-
-        B1B2 nextBoard;
-
-        // Loop for normal row and modified column
-        for (int actIndex = startRow; actIndex < 30; ++actIndex) {
-            nextBoard = theBoard;
-            C auto func = allActStructList[actIndex];
-
-            func.action(nextBoard);
-            if (nextBoard == theBoard) { continue; }
-
-            if constexpr (DIFF_DEPTH > 0 && DIFF_DEPTH < 6) {
-                if (nextBoard.getScore3Till<DIFF_DEPTH>(THE_STATE.end)) { continue; } }
-
-            recursive_helper<CUR_DEPTH + 1, MAX_DEPTH, true>(
-                    nextBoard, func.index + func.tillNext);
-        }
-
-        for (int actIndex = startCol; actIndex < 60; ++actIndex) {
-            nextBoard = theBoard;
-            C auto func = allActStructList[actIndex];
-
-            func.action(nextBoard);
-            if (nextBoard == theBoard) { continue; }
-
-
-            if constexpr (DIFF_DEPTH > 0 && DIFF_DEPTH < 6) {
-                if (nextBoard.getScore3Till<DIFF_DEPTH>(THE_STATE.end)) { continue; } }
-
-
-            recursive_helper<CUR_DEPTH + 1, MAX_DEPTH, false>(
-                    nextBoard, func.index + func.tillNext);
         }
     }
 }
@@ -103,16 +129,17 @@ int main() {
     C_3_4(solve); // 4
     R_2_2(solve); // 5
     R_4_4(solve); // 6
-    C_3_4(solve); // 7
-    R_1_1(solve); // 8
+    // C_3_4(solve); // 7
+    // R_1_1(solve); // 8
 
-    THE_STATE.start = static_cast<B1B2>(board);
-    THE_STATE.end = static_cast<B1B2>(solve);
+    THE_STATE.start = static_cast<B1B2>(solve);
+    THE_STATE.end = static_cast<B1B2>(board);
 
 
     JVec<Board> boards;
     Perms<Board>::reserveForDepth(board, boards, 5);
     Perms<Board>::toDepthFromLeft::funcPtrs[5](board, boards, board.getHashFunc());
+    /*
     std::cout << "[Arr] Length: " << boards.size() << std::endl;
     std::set<Board> boardSet;
     for (int i = 0; i < boards.size(); i++) {
@@ -120,7 +147,7 @@ int main() {
         boardSet.insert(bi);
     }
     std::cout << "[Set] Length: " << boardSet.size() << std::endl;
-
+    */
 
 
 

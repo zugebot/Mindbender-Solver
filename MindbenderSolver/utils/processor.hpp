@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
+
 
 ///=============================================================================
 ///                      Compiler and Platform Features
@@ -33,3 +35,10 @@
 #define u16 uint16_t
 #define u32 uint32_t
 #define u64 uint64_t
+
+template <typename T>
+constexpr auto always_false = false;
+
+#define is_instance(val, type) constexpr (std::is_same_v<decltype(val), type>)
+
+#define not_instance(val) static_assert(always_false<decltype(val)>, "Unsupported type!")
