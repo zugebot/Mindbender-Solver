@@ -7,7 +7,7 @@ static unsigned long long getTotalSystemMemory();
 static bool hasAtLeastGBMemoryTotal(unsigned int theGB);
 
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <windows.h>
 unsigned long long getTotalSystemMemory() {
     MEMORYSTATUSEX status;
@@ -15,7 +15,7 @@ unsigned long long getTotalSystemMemory() {
     GlobalMemoryStatusEx(&status);
     return status.ullTotalPhys;
 }
-#elif UNIX
+#elif defined(__unix__) || defined(__unix) || defined(_POSIX_VERSION)
 #include <unistd.h>
 
 unsigned long long getTotalSystemMemory() {
@@ -25,7 +25,7 @@ unsigned long long getTotalSystemMemory() {
 }
 #endif
 
-bool hasAtLeastGBMemoryTotal(const unsigned int theGB) {
+[[maybe_unused]] bool hasAtLeastGBMemoryTotal(const unsigned int theGB) {
     const unsigned long long mem = getTotalSystemMemory();
     const unsigned long long memGB = mem / 1024 / 1024 / 1024;
     return theGB <= memGB - 1;

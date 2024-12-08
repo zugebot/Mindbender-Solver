@@ -1,9 +1,19 @@
 #pragma once
 
+#include "MindbenderSolver/utils/processor.hpp"
+#include "MindbenderSolver/utils/hasGetHash.hpp"
+#include "MindbenderSolver/utils/jvec.hpp"
+
+#include "board.hpp"
+#include "rotations.hpp"
+#include "allowed_type.hpp"
+#include "reference.hpp"
 
 
-template<AllowedPermsType T, int CUR_DEPTH, int MAX_DEPTH,
-        bool MOVES_ASCENDING, bool DIRECTION>
+template<typename T,
+        int CUR_DEPTH, int MAX_DEPTH,
+        bool MOVES_ASCENDING, bool DIRECTION
+        >
 static void make_fat_perm_list_helper(
         C Board &board,
         JVec<T> &boards_out,
@@ -13,11 +23,13 @@ static void make_fat_perm_list_helper(
         C ActStruct& lastActStruct,
         C u8 startIndex,
         C u8 endIndex) {
+    static_assert(AllowedPermsType<T>, "T must be Memory or Board");
+    static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
 
-    MAKE_FAT_PERM_LIST_HELPER_CALLS++;
+    // MAKE_FAT_PERM_LIST_HELPER_CALLS++;
 
-    bool lastActIsRow;
-    bool lastActIsCol;
+    MU bool lastActIsRow;
+    MU bool lastActIsCol;
     if constexpr (DIRECTION) {
         lastActIsRow = lastActStruct.isColNotFat & 2;
     } else {
@@ -54,12 +66,12 @@ static void make_fat_perm_list_helper(
                 if (lastActIsCol && actStruct.isColNotFat & 1) {
                     if constexpr (MOVES_ASCENDING) {
                         if (lastActStruct.index <= actStruct.index) {
-                            MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS++;
+                            // MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS++;
                             continue;
                         }
                     } else {
                         if (lastActStruct.index >= actStruct.index) {
-                            MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS++;
+                            // MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS++;
                             continue;
                         }
                     }
@@ -68,7 +80,7 @@ static void make_fat_perm_list_helper(
         }
 
         if (board == board_next) {
-            MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR++;
+            // MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR++;
             continue;
         }
 
@@ -124,11 +136,16 @@ static void make_fat_perm_list_helper(
 }
 
 
-template<AllowedPermsType T, int DEPTH, bool MOVES_ASCENDING>
+template<typename T,
+         int DEPTH, bool MOVES_ASCENDING
+        >
 void make_fat_perm_list(C Board &board_in,
                         JVec<T> &boards_out,
                         C typename T::HasherPtr hasher) {
-    u32 count = 0;
+    static_assert(AllowedPermsType<T>, "T must be Memory or Board");
+    static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
+
+    MU u32 count = 0;
     if constexpr (DEPTH == 0) {
 
         if constexpr (std::is_same_v<T, Memory>) {
@@ -142,9 +159,11 @@ void make_fat_perm_list(C Board &board_in,
         boards_out.resize(1);
     } else {
         make_fat_perm_list_helper<T, 0, DEPTH, MOVES_ASCENDING, true>(
-                board_in, boards_out, count, hasher, 0, {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 0, 24);
+                board_in, boards_out, count, hasher, 0,
+                {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 0, 24);
         make_fat_perm_list_helper<T, 0, DEPTH, MOVES_ASCENDING, false>(
-                board_in, boards_out, count, hasher, 0, {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 24, 48);
+                board_in, boards_out, count, hasher, 0,
+                {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 24, 48);
         boards_out.resize(count);
     }
 }

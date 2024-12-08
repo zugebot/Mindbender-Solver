@@ -86,7 +86,7 @@ private:
 };
 
 
-static std::vector<std::vector<u8>> createMemoryPermutations(
+MU static std::vector<std::vector<u8>> createMemoryPermutations(
     C std::vector<u8>& theMemory) {
     u32 index = 0, length = 1;
     std::vector<PermGenPair> pairs;

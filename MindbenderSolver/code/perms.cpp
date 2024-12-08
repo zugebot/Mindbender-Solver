@@ -6,8 +6,8 @@ template class Perms<Memory>;
 template class Perms<Board>;
 
 
-template<AllowedPermsType T>
-MU C Perms<T>::depthMap_t Perms<T>::depthMap = {
+template<typename T>
+MU C typename Perms<T>::depthMap_t Perms<T>::depthMap = {
         {1, {{1, 0}, {0, 1}}},
         {2, {{1, 1}, {0, 2}, {2, 0}}},
         {3, {{1, 2}, {2, 1}, {0, 3}, {3, 0}}},
@@ -22,7 +22,7 @@ MU C Perms<T>::depthMap_t Perms<T>::depthMap = {
 };
 
 
-template<AllowedPermsType T>
+template<typename T>
 MU void Perms<T>::reserveForDepth(MU C Board& board_in, JVec<T> &boards_out, C u32 depth) {
     C double fraction = Board::getDuplicateEstimateAtDepth(depth);
     u64 allocSize = board_in.getFatBool() ?
@@ -32,8 +32,8 @@ MU void Perms<T>::reserveForDepth(MU C Board& board_in, JVec<T> &boards_out, C u
 }
 
 
-template<AllowedPermsType T>
-MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromLeft::funcPtrs[] = {
+template<typename T>
+MU typename Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromLeft::funcPtrs[] = {
     &make_perm_list<T, 0, true, true, true, true>,
     &make_perm_list<T, 1, true, true, true, true>,
     &make_perm_list<T, 2, true, true, true, true>,
@@ -42,8 +42,8 @@ MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromLeft::funcPtrs[] = {
     &make_perm_list<T, 5, true, true, true, true>};
 
 
-template<AllowedPermsType T>
-MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromRight::funcPtrs[] = {
+template<typename T>
+MU typename Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromRight::funcPtrs[] = {
     &make_perm_list<T, 0, true, true, true, false>,
     &make_perm_list<T, 1, true, true, true, false>,
     &make_perm_list<T, 2, true, true, true, false>,
@@ -52,14 +52,14 @@ MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromRight::funcPtrs[] = {
     &make_perm_list<T, 5, true, true, true, false>};
 
 
-u32 MAKE_FAT_PERM_LIST_HELPER_CALLS = 0;
-u32 MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS = 0;
-u32 MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR = 0;
+// u32 MAKE_FAT_PERM_LIST_HELPER_CALLS = 0;
+// u32 MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS = 0;
+// u32 MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR = 0;
 
 
 static constexpr bool tDFL1 = true;
-template<AllowedPermsType T>
-MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromLeft::fatFuncPtrs[] = {
+template<typename T>
+MU typename Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromLeft::fatFuncPtrs[] = {
         &make_fat_perm_list<T, 0, tDFL1>,
         &make_fat_perm_list<T, 1, tDFL1>,
         &make_fat_perm_list<T, 2, tDFL1>,
@@ -69,8 +69,8 @@ MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromLeft::fatFuncPtrs[] = {
 
 
 static constexpr bool tDFR1 = false;
-template<AllowedPermsType T>
-MU Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromRight::fatFuncPtrs[] = {
+template<typename T>
+MU typename Perms<T>::toDepthFuncPtr_t Perms<T>::toDepthFromRight::fatFuncPtrs[] = {
         &make_fat_perm_list<T, 0, tDFR1>,
         &make_fat_perm_list<T, 1, tDFR1>,
         &make_fat_perm_list<T, 2, tDFR1>,

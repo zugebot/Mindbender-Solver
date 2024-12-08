@@ -14,26 +14,26 @@
 // ############################################################
 
 
-void Memory::precomputeHash2(C u64 b1, C u64 b2) {
+HD void Memory::precomputeHash2(C u64 b1, C u64 b2) {
     C u64 above = getSegment2bits(b1);
     C u64 below = getSegment2bits(b2);
     setHash(above << 18 | below);
 }
 
 
-void Memory::precomputeHash3(C u64 b1, C u64 b2) {
+HD void Memory::precomputeHash3(C u64 b1, C u64 b2) {
     C u64 above = getSegment3bits(b1);
     C u64 below = getSegment3bits(b2);
     setHash(above << 30 | below);
 }
 
 
-void Memory::precomputeHash4(C u64 b1, C u64 b2) {
+HD void Memory::precomputeHash4(C u64 b1, C u64 b2) {
     setHash(prime_func1(b2, b1));
 }
 
 
-MU Memory::HasherPtr Memory::getHashFunc(C Board& board) {
+MU HD Memory::HasherPtr Memory::getHashFunc(C Board& board) {
     C u64 colorCount = board.getColorCount();
     if (board.getFatBool() || colorCount > 3) {
         return &Memory::precomputeHash4;
@@ -50,17 +50,17 @@ MU Memory::HasherPtr Memory::getHashFunc(C Board& board) {
 // ############################################################
 
 
-MUND u8 Memory::getMoveCount() C {
+MUND HD u8 Memory::getMoveCount() C {
     return mem & MEMORY_MOVE_DATA_MASK;
 }
 
 
-u8 Memory::getMove(C u8 index) C {
+HD u8 Memory::getMove(C u8 index) C {
     return mem >> getShift(index) & MEMORY_MOVE_TYPE_MASK;
 }
 
 
-u8 Memory::getLastMove() C {
+HD u8 Memory::getLastMove() C {
     return mem >> getShift(getMoveCount() - 1) & MEMORY_MOVE_TYPE_MASK;
 }
 
@@ -219,7 +219,7 @@ std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
     return moves_str;
 }
 
-std::string Memory::toString() C {
+MU std::string Memory::toString() C {
     std::string str = "Move[";
 
     C int moveCount = getMoveCount();
@@ -261,11 +261,11 @@ std::vector<u8> parseMoveStringTemplated(C std::string& input) {
 }
 
 
-std::vector<u8> Memory::parseNormMoveString(C std::string& input) {
+MU std::vector<u8> Memory::parseNormMoveString(C std::string& input) {
     return parseMoveStringTemplated<false>(input);
 }
 
 
-std::vector<u8> Memory::parseFatMoveString(C std::string& input) {
+MU std::vector<u8> Memory::parseFatMoveString(C std::string& input) {
     return parseMoveStringTemplated<true>(input);
 }

@@ -36,8 +36,15 @@
  * @param data_out
  * @param aux_buffer
  */
+
+#ifdef USE_CUDA
+template<int NUM_PASSES, int NUM_BITS_PER_PASS, typename T, bool DEBUG=false>
+#else
 template<int NUM_PASSES, int NUM_BITS_PER_PASS, HasGetHash T, bool DEBUG=false>
+#endif
 void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
+    static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
+
     using count_t = uint32_t;
     using vec1_count_t = std::vector<count_t>;
     using vec2_count_t = std::vector<vec1_count_t>;
@@ -94,7 +101,7 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
             count_t end = std::min(start + chunk_size, static_cast<count_t>(data_out.size()));
             thread_pool[t] = std::thread([&, t, start, end]() {
                 auto& local_count = thread_counts[t];
-                std::ranges::fill(local_count, 0);
+                std::fill(local_count.begin(), local_count.end(), 0);
                 for (count_t i = start; i < end; ++i) {
                     C u64 bucket = (data_out[i].getHash() >> shift) & mask;
                     ++local_count[bucket];
@@ -107,7 +114,7 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
         RADIX_IF_DEBUG_COUT(" Counting Phase\n")
 
         // Accumulate Counts
-        std::ranges::fill(count, 0);
+        std::fill(count.begin(), count.end(), 0);
         for (count_t b = 0; b < num_buckets; ++b) {
             for (count_t t = 0; t < num_threads; ++t) {
                 count[b] += thread_counts[t][b];

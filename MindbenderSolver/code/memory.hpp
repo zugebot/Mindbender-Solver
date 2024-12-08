@@ -10,13 +10,14 @@
 class Board;
 
 
-static constexpr u32 MEMORY_MOVE_TYPE_BITSIZE = 6;
-static constexpr u64 MEMORY_MOVE_TYPE_MASK = 0'77;
-static constexpr u32 MEMORY_MOVE_DATA_BITSIZE = 4;
-static constexpr u64 MEMORY_MOVE_DATA_MASK = 0xF;
+MU static constexpr u32 MEMORY_MOVE_TYPE_BITSIZE = 6;
+MU static constexpr u64 MEMORY_MOVE_TYPE_MASK = 0'77;
+MU static constexpr u32 MEMORY_MOVE_DATA_BITSIZE = 4;
+MU static constexpr u64 MEMORY_MOVE_DATA_MASK = 0xF;
 
 class Memory {
-    static u8 getShift(C u32 moveCount) { return MEMORY_MOVE_DATA_BITSIZE + moveCount * MEMORY_MOVE_TYPE_BITSIZE; }
+    static HD u8 getShift(C u32 moveCount) {
+        return MEMORY_MOVE_DATA_BITSIZE + moveCount * MEMORY_MOVE_TYPE_BITSIZE; }
 
     /**
      * Todo: actually probably don't do this so 16+ moves don't require a re-write?
@@ -36,7 +37,7 @@ public:
      * first 4 bits: move count
      * next 10 * 6 bits: moves
      */
-    Memory() : hash(0), mem(0) {}
+    HD Memory() : hash(0), mem(0) {}
 
     // ############################################################
     // #                       u64 hash                           #
@@ -44,30 +45,30 @@ public:
 
     typedef void (Memory::*HasherPtr)(u64, u64);
 
-    MUND u64 getMem() C { return mem; }
-    MU void setMem(C u64 value) { mem = value; }
+    MUND HD u64 getMem() C { return mem; }
+    MU HD void setMem(C u64 value) { mem = value; }
 
-    MUND u64 getHash() C { return hash; }
-    MU void setHash(C u64 value) { hash = value; }
+    MUND HD u64 getHash() C { return hash; }
+    MU HD void setHash(C u64 value) { hash = value; }
 
-    MU void precomputeHash2(u64 b1, u64 b2);
-    MU void precomputeHash3(u64 b1, u64 b2);
-    MU void precomputeHash4(u64 b1, u64 b2);
-    MUND static HasherPtr getHashFunc(C Board& board);
+    MU HD void precomputeHash2(u64 b1, u64 b2);
+    MU HD void precomputeHash3(u64 b1, u64 b2);
+    MU HD void precomputeHash4(u64 b1, u64 b2);
+    MUND HD static HasherPtr getHashFunc(C Board& board);
 
-    __forceinline bool operator==(C Memory& other) C { return hash == other.hash; }
-    __forceinline bool operator<(C Memory& other) C { return hash < other.hash; }
-    __forceinline bool operator>(C Memory& other) C { return hash > other.hash; }
+    __forceinline HD bool operator==(C Memory& other) C { return hash == other.hash; }
+    __forceinline HD bool operator<(C Memory& other) C { return hash < other.hash; }
+    __forceinline HD bool operator>(C Memory& other) C { return hash > other.hash; }
 
     // ############################################################
     // #                       u64 moves                          #
     // ############################################################
 
-    MUND u8 getMoveCount() C;
-    MUND u8 getMove(u8 index) C;
-    MUND u8 getLastMove() C;
+    MUND HD u8 getMoveCount() C;
+    MUND HD u8 getMove(u8 index) C;
+    MUND HD u8 getLastMove() C;
 
-    template<int COUNT> void setNextNMove(u64 moveValue);
+    template<int COUNT> HD void setNextNMove(u64 moveValue);
 
     // ############################################################
     // #            To String -Similar- Functions                 #
@@ -91,7 +92,7 @@ public:
 
 
 template<int COUNT>
-void Memory::setNextNMove(C u64 moveValue) {
+HD void Memory::setNextNMove(C u64 moveValue) {
     static_assert(COUNT >= 1 && COUNT <= 5, "Template argument must be in range 1-5");
 
     constexpr u64 MOVE_SET_SHIFT = (5 - COUNT) * MEMORY_MOVE_TYPE_BITSIZE; // 6

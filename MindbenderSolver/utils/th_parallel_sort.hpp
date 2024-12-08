@@ -8,8 +8,16 @@
 #include "MindbenderSolver/utils/jvec.hpp"
 
 
+
+#ifdef USE_CUDA
+template <int NUM_THREADS, typename T>
+#else
 template <int NUM_THREADS, HasGetHash T>
-void parallel_sort(JVec<T>& data) {
+#endif
+MU void parallel_sort(JVec<T>& data) {
+ static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
+
+
     size_t size = data.size();
     const size_t chunk_size = size / NUM_THREADS;
 

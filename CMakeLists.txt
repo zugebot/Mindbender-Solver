@@ -1,12 +1,30 @@
 cmake_minimum_required(VERSION 3.24)
-project(MindbenderSolver)
 
 
-# include(CheckCXXCompilerFlag)
+set(CMAKE_CXX_STANDARD 23)
+option(USE_CUDA "Enable CUDA support" ON) # "ON" or "OFF"
 
 
+# project decl
+if (USE_CUDA)
+    project(MindbenderSolver LANGUAGES C CXX CUDA)
+    add_compile_definitions(-DUSE_CUDA)
+    enable_language(CUDA)
+    message(STATUS "CUDA support enabled")
+
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED True)
+    find_package(CUDAToolkit REQUIRED)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
+else()
+    project(MindbenderSolver LANGUAGES C CXX)
+    message(STATUS "CUDA support disabled")
+endif()
+
+
+# find Boost
 find_library(BOOST_FOUND Boost)
-if(BOOST_FOUND)
+if (BOOST_FOUND)
     message(STATUS "Boost found")
     add_compile_definitions(BOOST_FOUND)
 else()
@@ -14,60 +32,75 @@ else()
 endif()
 
 
+# find TBB
 find_library(TBB_FOUND TBB)
-if(TBB_FOUND)
+if (TBB_FOUND)
     message(STATUS "TBB found")
     add_compile_definitions(TBB_FOUND)
     find_package(TBB REQUIRED)
-    target_link_libraries(MindbenderSolver TBB::tbb)
 else()
     message(STATUS "TBB not found")
 endif()
 
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-# set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++ -static")
+# include dirs
+include_directories(${CMAKE_SOURCE_DIR})
+if (USE_CUDA)
+    include_directories(${CUDAToolkit_INCLUDE_DIRS})
+endif()
 
 
-
-include_directories(${CMAKE_SOURCE_DIR}/)
-
+# file structure of project
 file(GLOB_RECURSE MINDBENDER_SOLVER_SOURCES
         "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/*.*pp"
+        "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/*.*cu"
         "${CMAKE_SOURCE_DIR}/MindbenderSolver/utils/*.*pp"
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/include.hpp")
+        "${CMAKE_SOURCE_DIR}/MindbenderSolver/include.hpp"
+)
 file(GLOB_RECURSE INCLUDE_SOURCES
-        "${CMAKE_SOURCE_DIR}/include/*.*pp")
-
-
-
+        "${CMAKE_SOURCE_DIR}/include/*.*pp"
+)
+set(MAIN_FILE "${CMAKE_SOURCE_DIR}/MindbenderSolver/programs/testDFS.cpp")
+set_source_files_properties(${MAIN_FILE} PROPERTIES LANGUAGE CUDA)
 add_executable(MindbenderSolver
+        ${MAIN_FILE}
         ${MINDBENDER_SOLVER_SOURCES}
         ${INCLUDE_SOURCES}
-        # main.cpp
-        MindbenderSolver/programs/testDFS.cpp
-        # MindbenderSolver/programs/testPerms.cpp
-        # MindbenderSolver/code/perms_gen.hpp
-        # MindbenderSolver/programs/ensurePuzzlesValid.cpp
-        # MindbenderSolver/code/B1B2Only.hpp
-        # MindbenderSolver/docs/expand.hpp
-        # MindbenderSolver/programs/TestKnownSolutions.cpp
-        # MindbenderSolver/programs/testJVec.cpp
-        # MindbenderSolver/programs/testHeuristics.cpp
-        # MindbenderSolver/programs/testSorting.cpp
-        # MindbenderSolver/programs/UnitTesting.cpp
 )
 
 
+# link TBB if found
+if (TBB_FOUND)
+    target_link_libraries(MindbenderSolver PRIVATE TBB::tbb)
+endif()
 
-# check_cxx_compiler_flag("-mavx512f" COMPILER_SUPPORTS_AVX512_1)
-# check_cxx_compiler_flag("-mavx512vl" COMPILER_SUPPORTS_AVX512_2)
-# check_cxx_compiler_flag("-mavx512dq" COMPILER_SUPPORTS_AVX512_3)
-# check_cxx_compiler_flag("-mavx512bw" COMPILER_SUPPORTS_AVX512_4)
-# if(COMPILER_SUPPORTS_AVX512_1 AND COMPILER_SUPPORTS_AVX512_2
-#         AND COMPILER_SUPPORTS_AVX512_3 AND COMPILER_SUPPORTS_AVX512_4)
-target_compile_options(MindbenderSolver PRIVATE -mbmi2 -msse4.1)
-# else()
-#     message(WARNING "AVX-512 not supported by the compiler.")
-# endif()
+
+# compiler-specific options
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(MindbenderSolver PRIVATE
+            $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -flto -funroll-loops -fstrict-aliasing -fomit-frame-pointer>
+            $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O3,-Xcompiler=-march=native,-Xcompiler=-flto,-Xcompiler=-funroll-loops,-Xcompiler=-fstrict-aliasing,-Xcompiler=-fomit-frame-pointer>
+    )
+    target_link_options(MindbenderSolver PRIVATE -flto)
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+        target_compile_options(MindbenderSolver PRIVATE
+                $<$<COMPILE_LANGUAGE:CXX>:/O2 /GL>
+                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/O2>
+        )
+    else()
+        # For Debug builds, add only necessary flags without conflicting optimizations
+        target_compile_options(MindbenderSolver PRIVATE
+                $<$<COMPILE_LANGUAGE:CXX>:/Zi>
+                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zi>
+        )
+    endif()
+endif()
+
+
+# CUDA being dumb
+if (USE_CUDA)
+    set_target_properties(MindbenderSolver PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+    set_source_files_properties(${MINDBENDER_SOLVER_SOURCES} PROPERTIES LANGUAGE CUDA)
+    message(STATUS "CUDA Toolkit Include Directories: ${CUDAToolkit_INCLUDE_DIRS}")
+endif()

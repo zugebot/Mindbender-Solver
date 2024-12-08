@@ -2,8 +2,11 @@
 
 #include "board.hpp"
 #include "rotations.hpp"
+#include "allowed_type.hpp"
+#include "reference.hpp"
 
 #include "MindbenderSolver/utils/jvec.hpp"
+
 
 #include <array>
 #include <vector>
@@ -11,7 +14,7 @@
 #include <unordered_map>
 
 
-static constexpr u64 BOARD_PRE_MAX_MALLOC_SIZES[8] = {
+MU static constexpr u64 BOARD_PRE_MAX_MALLOC_SIZES[8] = {
         1, 60, 2550, 104000, 4245000, 173325000, 7076687500, 288933750000,};
 
 
@@ -27,13 +30,11 @@ static constexpr u64 BOARD_PRE_MAX_MALLOC_SIZES[8] = {
  * 5: 27.4814706423
  * SIZE = 48 * 27.6 ^ (depth - 1)
  */
-static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
+MU static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
         1, 48, 1320, 36402, 1001168, 27513569, 0, 0};
 
 
 
-template<typename T>
-concept AllowedPermsType = std::is_same_v<T, Memory> || std::is_same_v<T, Board>;
 
 
 // ######################################################################################
@@ -41,31 +42,23 @@ concept AllowedPermsType = std::is_same_v<T, Memory> || std::is_same_v<T, Board>
 // ######################################################################################
 
 
-template<AllowedPermsType T, int MAX_DEPTH>
-class Ref {
-public:
-    std::array<int, MAX_DEPTH> dir_seq = {};
-    std::array<int, MAX_DEPTH> sect_seq = {};
-    std::array<int, MAX_DEPTH> base_seq = {};
-    std::array<u64, MAX_DEPTH> cur_seq = {};
-    std::array<bool, MAX_DEPTH> checkRC_seq = {}; // first index not used
-    std::array<u8, MAX_DEPTH> intersect_seq = {}; // first index not used
-    T::HasherPtr hasher{};
-};
-
-template<AllowedPermsType T, int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS, bool CHECK_SIM>
+template<typename T,
+         int CUR_DEPTH, int MAX_DEPTH,
+         bool CHECK_CROSS, bool CHECK_SIM>
 static void make_perm_list_inner(C Board &board_in, JVec<T> &boards_out,
     Ref<T, MAX_DEPTH> &ref, u64 move_prev, int& count);
 
-template<AllowedPermsType T, int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS,
+template<typename T,
+        int CUR_DEPTH, int MAX_DEPTH, bool CHECK_CROSS,
          bool CHECK_SIM, bool CHANGE_SECT_START, bool SECT_ASCENDING>
 static void make_perm_list_outer(C Board &board_in, JVec<T> &boards_out,
     Ref<T, MAX_DEPTH> &ref, int& count);
 
 /// Entry point function
-template<AllowedPermsType T, int MAX_DEPTH, bool CHECK_CROSS = true, bool CHECK_SIM = true,
+template<typename T,
          bool CHANGE_SECT_START = true, bool SECT_ASCENDING = true>
-void make_perm_list(C Board &board_in, JVec<T> &boards_out, typename T::HasherPtr hasher);
+void make_perm_list(C Board &board_in, JVec<T> &boards_out,
+                    typename T::HasherPtr hasher);
 
 
 
@@ -74,18 +67,24 @@ void make_perm_list(C Board &board_in, JVec<T> &boards_out, typename T::HasherPt
 // ######################################################################################
 
 
-extern u32 MAKE_FAT_PERM_LIST_HELPER_CALLS;
-extern u32 MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS;
-extern u32 MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR;
+// extern u32 MAKE_FAT_PERM_LIST_HELPER_CALLS;
+// extern u32 MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS;
+// extern u32 MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR;
 
-template<AllowedPermsType T, int CUR_DEPTH, int MAX_DEPTH, bool MOVES_ASCENDING, bool DIRECTION>
+template<typename T,
+         int CUR_DEPTH, int MAX_DEPTH,
+         bool MOVES_ASCENDING, bool DIRECTION>
 static void make_fat_perm_list_helper(
-        C Board &board, JVec<T> &boards_out, u32 &count, typename T::HasherPtr hasher,
+        C Board &board, JVec<T> &boards_out, u32 &count,
+        typename T::HasherPtr hasher,
         u64 move, C ActStruct&, u8 startIndex, u8 endIndex);
 
 /// Entry point function
-template<AllowedPermsType T, int DEPTH, bool MOVES_ASCENDING=true>
-void make_fat_perm_list(C Board& board_in, JVec<T> &boards_out, typename T::HasherPtr hasher);
+template<typename T,
+         int DEPTH, bool MOVES_ASCENDING=true>
+void make_fat_perm_list(
+        C Board& board_in, JVec<T> &boards_out,
+        typename T::HasherPtr hasher);
 
 
 /*
@@ -103,11 +102,13 @@ void make_permutation_list_depth_plus_one_buffered(C std::string& root_path,
 */
 
 
-template<AllowedPermsType T>
+template<typename T>
 class Perms {
+    static_assert(AllowedPermsType<T>, "T must be Memory or Board");
+
     static constexpr u32 PTR_LIST_SIZE = 6;
 public:
-    typedef void (*toDepthFuncPtr_t)(C Board &, JVec<T> &, T::HasherPtr);
+    typedef void (*toDepthFuncPtr_t)(C Board &, JVec<T> &, typename T::HasherPtr);
 
     typedef std::unordered_map<u32, std::vector<std::pair<u32, u32>>> depthMap_t;
     static C depthMap_t depthMap;
@@ -139,7 +140,7 @@ public:
 };
 
 
-template<AllowedPermsType T>
+template<typename T>
 template<bool SECT_ASCENDING>
 void Perms<T>::getDepthFunc(C Board& board_in, JVec<T> &boards_out,
                             C u32 depth, C bool shouldResize) {
@@ -151,11 +152,13 @@ void Perms<T>::getDepthFunc(C Board& board_in, JVec<T> &boards_out,
 
     if (board_in.getFatBool()) {
         constexpr auto FUNC_DIR =
-                SECT_ASCENDING ? toDepthFromLeft::fatFuncPtrs : toDepthFromRight::fatFuncPtrs;
+                SECT_ASCENDING ? toDepthFromLeft::fatFuncPtrs
+                               : toDepthFromRight::fatFuncPtrs;
         FUNC_DIR[depth](board_in, boards_out, hasher);
     } else {
         constexpr auto FUNC_DIR =
-                SECT_ASCENDING ? toDepthFromLeft::funcPtrs : toDepthFromRight::funcPtrs;
+                SECT_ASCENDING ? toDepthFromLeft::funcPtrs
+                               : toDepthFromRight::funcPtrs;
         FUNC_DIR[depth](board_in, boards_out, hasher);
     }
 }

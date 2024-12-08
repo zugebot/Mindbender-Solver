@@ -1,56 +1,62 @@
 #include "rotations.hpp"
 
 #include <map>
+#ifdef USE_CUDA
+#include <cuda_runtime.h>
+#endif
 
 
 static constexpr u64 MASK_R0_NT = 0'1777'000000'777777'777777;
+static constexpr u64 MASK_R1_NT = 0'1777'777777'000000'777777;
+static constexpr u64 MASK_R2_NT = 0'1777'777777'777777'000000;
+
 static constexpr u64 MASK_R0_B1 = 0'0000'777770'000000'000000, MASK_R0_S1 = 0'0000'000007'000000'000000;
 static constexpr u64 MASK_R0_B2 = 0'0000'777700'000000'000000, MASK_R0_S2 = 0'0000'000077'000000'000000;
 static constexpr u64 MASK_R0_B3 = 0'0000'777000'000000'000000, MASK_R0_S3 = 0'0000'000777'000000'000000;
 static constexpr u64 MASK_R0_B4 = 0'0000'770000'000000'000000, MASK_R0_S4 = 0'0000'007777'000000'000000;
 static constexpr u64 MASK_R0_B5 = 0'0000'700000'000000'000000, MASK_R0_S5 = 0'0000'077777'000000'000000;
-static constexpr u64 MASK_R1_NT = 0'1777'777777'000000'777777;
+
 static constexpr u64 MASK_R1_B1 = 0'0000'000000'777770'000000, MASK_R1_S1 = 0'0000'000000'000007'000000;
 static constexpr u64 MASK_R1_B2 = 0'0000'000000'777700'000000, MASK_R1_S2 = 0'0000'000000'000077'000000;
 static constexpr u64 MASK_R1_B3 = 0'0000'000000'777000'000000, MASK_R1_S3 = 0'0000'000000'000777'000000;
 static constexpr u64 MASK_R1_B4 = 0'0000'000000'770000'000000, MASK_R1_S4 = 0'0000'000000'007777'000000;
 static constexpr u64 MASK_R1_B5 = 0'0000'000000'700000'000000, MASK_R1_S5 = 0'0000'000000'077777'000000;
-static constexpr u64 MASK_R2_NT = 0'1777'777777'777777'000000;
+
 static constexpr u64 MASK_R2_B1 = 0'0000'000000'000000'777770, MASK_R2_S1 = 0'0000'000000'000000'000007;
 static constexpr u64 MASK_R2_B2 = 0'0000'000000'000000'777700, MASK_R2_S2 = 0'0000'000000'000000'000077;
 static constexpr u64 MASK_R2_B3 = 0'0000'000000'000000'777000, MASK_R2_S3 = 0'0000'000000'000000'000777;
 static constexpr u64 MASK_R2_B4 = 0'0000'000000'000000'770000, MASK_R2_S4 = 0'0000'000000'000000'007777;
 static constexpr u64 MASK_R2_B5 = 0'0000'000000'000000'700000, MASK_R2_S5 = 0'0000'000000'000000'077777;
-PERM_MACRO(R_0_1) { board.b1 = board.b1 & MASK_R0_NT | (board.b1 & MASK_R0_B1) >> 3 | (board.b1 & MASK_R0_S1) << 15; }
-PERM_MACRO(R_0_2) { board.b1 = board.b1 & MASK_R0_NT | (board.b1 & MASK_R0_B2) >> 6 | (board.b1 & MASK_R0_S2) << 12; }
-PERM_MACRO(R_0_3) { board.b1 = board.b1 & MASK_R0_NT | (board.b1 & MASK_R0_B3) >> 9 | (board.b1 & MASK_R0_S3) << 9; }
-PERM_MACRO(R_0_4) { board.b1 = board.b1 & MASK_R0_NT | (board.b1 & MASK_R0_B4) >> 12 | (board.b1 & MASK_R0_S4) << 6; }
-PERM_MACRO(R_0_5) { board.b1 = board.b1 & MASK_R0_NT | (board.b1 & MASK_R0_B5) >> 15 | (board.b1 & MASK_R0_S5) << 3; }
-PERM_MACRO(R_1_1) { board.b1 = board.b1 & MASK_R1_NT | (board.b1 & MASK_R1_B1) >> 3 | (board.b1 & MASK_R1_S1) << 15; }
-PERM_MACRO(R_1_2) { board.b1 = board.b1 & MASK_R1_NT | (board.b1 & MASK_R1_B2) >> 6 | (board.b1 & MASK_R1_S2) << 12; }
-PERM_MACRO(R_1_3) { board.b1 = board.b1 & MASK_R1_NT | (board.b1 & MASK_R1_B3) >> 9 | (board.b1 & MASK_R1_S3) << 9; }
-PERM_MACRO(R_1_4) { board.b1 = board.b1 & MASK_R1_NT | (board.b1 & MASK_R1_B4) >> 12 | (board.b1 & MASK_R1_S4) << 6; }
-PERM_MACRO(R_1_5) { board.b1 = board.b1 & MASK_R1_NT | (board.b1 & MASK_R1_B5) >> 15 | (board.b1 & MASK_R1_S5) << 3; }
-PERM_MACRO(R_2_1) { board.b1 = board.b1 & MASK_R2_NT | (board.b1 & MASK_R2_B1) >> 3 | (board.b1 & MASK_R2_S1) << 15; }
-PERM_MACRO(R_2_2) { board.b1 = board.b1 & MASK_R2_NT | (board.b1 & MASK_R2_B2) >> 6 | (board.b1 & MASK_R2_S2) << 12; }
-PERM_MACRO(R_2_3) { board.b1 = board.b1 & MASK_R2_NT | (board.b1 & MASK_R2_B3) >> 9 | (board.b1 & MASK_R2_S3) << 9; }
-PERM_MACRO(R_2_4) { board.b1 = board.b1 & MASK_R2_NT | (board.b1 & MASK_R2_B4) >> 12 | (board.b1 & MASK_R2_S4) << 6; }
-PERM_MACRO(R_2_5) { board.b1 = board.b1 & MASK_R2_NT | (board.b1 & MASK_R2_B5) >> 15 | (board.b1 & MASK_R2_S5) << 3; }
-PERM_MACRO(R_3_1) { board.b2 = board.b2 & MASK_R0_NT | (board.b2 & MASK_R0_B1) >> 3 | (board.b2 & MASK_R0_S1) << 15; }
-PERM_MACRO(R_3_2) { board.b2 = board.b2 & MASK_R0_NT | (board.b2 & MASK_R0_B2) >> 6 | (board.b2 & MASK_R0_S2) << 12; }
-PERM_MACRO(R_3_3) { board.b2 = board.b2 & MASK_R0_NT | (board.b2 & MASK_R0_B3) >> 9 | (board.b2 & MASK_R0_S3) << 9; }
-PERM_MACRO(R_3_4) { board.b2 = board.b2 & MASK_R0_NT | (board.b2 & MASK_R0_B4) >> 12 | (board.b2 & MASK_R0_S4) << 6; }
-PERM_MACRO(R_3_5) { board.b2 = board.b2 & MASK_R0_NT | (board.b2 & MASK_R0_B5) >> 15 | (board.b2 & MASK_R0_S5) << 3; }
-PERM_MACRO(R_4_1) { board.b2 = board.b2 & MASK_R1_NT | (board.b2 & MASK_R1_B1) >> 3 | (board.b2 & MASK_R1_S1) << 15; }
-PERM_MACRO(R_4_2) { board.b2 = board.b2 & MASK_R1_NT | (board.b2 & MASK_R1_B2) >> 6 | (board.b2 & MASK_R1_S2) << 12; }
-PERM_MACRO(R_4_3) { board.b2 = board.b2 & MASK_R1_NT | (board.b2 & MASK_R1_B3) >> 9 | (board.b2 & MASK_R1_S3) << 9; }
-PERM_MACRO(R_4_4) { board.b2 = board.b2 & MASK_R1_NT | (board.b2 & MASK_R1_B4) >> 12 | (board.b2 & MASK_R1_S4) << 6; }
-PERM_MACRO(R_4_5) { board.b2 = board.b2 & MASK_R1_NT | (board.b2 & MASK_R1_B5) >> 15 | (board.b2 & MASK_R1_S5) << 3; }
-PERM_MACRO(R_5_1) { board.b2 = board.b2 & MASK_R2_NT | (board.b2 & MASK_R2_B1) >> 3 | (board.b2 & MASK_R2_S1) << 15; }
-PERM_MACRO(R_5_2) { board.b2 = board.b2 & MASK_R2_NT | (board.b2 & MASK_R2_B2) >> 6 | (board.b2 & MASK_R2_S2) << 12; }
-PERM_MACRO(R_5_3) { board.b2 = board.b2 & MASK_R2_NT | (board.b2 & MASK_R2_B3) >> 9 | (board.b2 & MASK_R2_S3) << 9; }
-PERM_MACRO(R_5_4) { board.b2 = board.b2 & MASK_R2_NT | (board.b2 & MASK_R2_B4) >> 12 | (board.b2 & MASK_R2_S4) << 6; }
-PERM_MACRO(R_5_5) { board.b2 = board.b2 & MASK_R2_NT | (board.b2 & MASK_R2_B5) >> 15 | (board.b2 & MASK_R2_S5) << 3; }
+PERM_MACRO(R_0_1) { board.b1 = board.b1 & MASK_R0_NT | (board.b1 & MASK_R0_B1) >>  3 | (board.b1 & MASK_R0_S1) << 15; }
+PERM_MACRO(R_0_2) { board.b1 = board.b1 & MASK_R0_NT | (board.b1 & MASK_R0_B2) >>  6 | (board.b1 & MASK_R0_S2) << 12; }
+PERM_MACRO(R_0_3) { board.b1 = board.b1 & MASK_R0_NT | (board.b1 & MASK_R0_B3) >>  9 | (board.b1 & MASK_R0_S3) <<  9; }
+PERM_MACRO(R_0_4) { board.b1 = board.b1 & MASK_R0_NT | (board.b1 & MASK_R0_B4) >> 12 | (board.b1 & MASK_R0_S4) <<  6; }
+PERM_MACRO(R_0_5) { board.b1 = board.b1 & MASK_R0_NT | (board.b1 & MASK_R0_B5) >> 15 | (board.b1 & MASK_R0_S5) <<  3; }
+PERM_MACRO(R_1_1) { board.b1 = board.b1 & MASK_R1_NT | (board.b1 & MASK_R1_B1) >>  3 | (board.b1 & MASK_R1_S1) << 15; }
+PERM_MACRO(R_1_2) { board.b1 = board.b1 & MASK_R1_NT | (board.b1 & MASK_R1_B2) >>  6 | (board.b1 & MASK_R1_S2) << 12; }
+PERM_MACRO(R_1_3) { board.b1 = board.b1 & MASK_R1_NT | (board.b1 & MASK_R1_B3) >>  9 | (board.b1 & MASK_R1_S3) <<  9; }
+PERM_MACRO(R_1_4) { board.b1 = board.b1 & MASK_R1_NT | (board.b1 & MASK_R1_B4) >> 12 | (board.b1 & MASK_R1_S4) <<  6; }
+PERM_MACRO(R_1_5) { board.b1 = board.b1 & MASK_R1_NT | (board.b1 & MASK_R1_B5) >> 15 | (board.b1 & MASK_R1_S5) <<  3; }
+PERM_MACRO(R_2_1) { board.b1 = board.b1 & MASK_R2_NT | (board.b1 & MASK_R2_B1) >>  3 | (board.b1 & MASK_R2_S1) << 15; }
+PERM_MACRO(R_2_2) { board.b1 = board.b1 & MASK_R2_NT | (board.b1 & MASK_R2_B2) >>  6 | (board.b1 & MASK_R2_S2) << 12; }
+PERM_MACRO(R_2_3) { board.b1 = board.b1 & MASK_R2_NT | (board.b1 & MASK_R2_B3) >>  9 | (board.b1 & MASK_R2_S3) <<  9; }
+PERM_MACRO(R_2_4) { board.b1 = board.b1 & MASK_R2_NT | (board.b1 & MASK_R2_B4) >> 12 | (board.b1 & MASK_R2_S4) <<  6; }
+PERM_MACRO(R_2_5) { board.b1 = board.b1 & MASK_R2_NT | (board.b1 & MASK_R2_B5) >> 15 | (board.b1 & MASK_R2_S5) <<  3; }
+PERM_MACRO(R_3_1) { board.b2 = board.b2 & MASK_R0_NT | (board.b2 & MASK_R0_B1) >>  3 | (board.b2 & MASK_R0_S1) << 15; }
+PERM_MACRO(R_3_2) { board.b2 = board.b2 & MASK_R0_NT | (board.b2 & MASK_R0_B2) >>  6 | (board.b2 & MASK_R0_S2) << 12; }
+PERM_MACRO(R_3_3) { board.b2 = board.b2 & MASK_R0_NT | (board.b2 & MASK_R0_B3) >>  9 | (board.b2 & MASK_R0_S3) <<  9; }
+PERM_MACRO(R_3_4) { board.b2 = board.b2 & MASK_R0_NT | (board.b2 & MASK_R0_B4) >> 12 | (board.b2 & MASK_R0_S4) <<  6; }
+PERM_MACRO(R_3_5) { board.b2 = board.b2 & MASK_R0_NT | (board.b2 & MASK_R0_B5) >> 15 | (board.b2 & MASK_R0_S5) <<  3; }
+PERM_MACRO(R_4_1) { board.b2 = board.b2 & MASK_R1_NT | (board.b2 & MASK_R1_B1) >>  3 | (board.b2 & MASK_R1_S1) << 15; }
+PERM_MACRO(R_4_2) { board.b2 = board.b2 & MASK_R1_NT | (board.b2 & MASK_R1_B2) >>  6 | (board.b2 & MASK_R1_S2) << 12; }
+PERM_MACRO(R_4_3) { board.b2 = board.b2 & MASK_R1_NT | (board.b2 & MASK_R1_B3) >>  9 | (board.b2 & MASK_R1_S3) <<  9; }
+PERM_MACRO(R_4_4) { board.b2 = board.b2 & MASK_R1_NT | (board.b2 & MASK_R1_B4) >> 12 | (board.b2 & MASK_R1_S4) <<  6; }
+PERM_MACRO(R_4_5) { board.b2 = board.b2 & MASK_R1_NT | (board.b2 & MASK_R1_B5) >> 15 | (board.b2 & MASK_R1_S5) <<  3; }
+PERM_MACRO(R_5_1) { board.b2 = board.b2 & MASK_R2_NT | (board.b2 & MASK_R2_B1) >>  3 | (board.b2 & MASK_R2_S1) << 15; }
+PERM_MACRO(R_5_2) { board.b2 = board.b2 & MASK_R2_NT | (board.b2 & MASK_R2_B2) >>  6 | (board.b2 & MASK_R2_S2) << 12; }
+PERM_MACRO(R_5_3) { board.b2 = board.b2 & MASK_R2_NT | (board.b2 & MASK_R2_B3) >>  9 | (board.b2 & MASK_R2_S3) <<  9; }
+PERM_MACRO(R_5_4) { board.b2 = board.b2 & MASK_R2_NT | (board.b2 & MASK_R2_B4) >> 12 | (board.b2 & MASK_R2_S4) <<  6; }
+PERM_MACRO(R_5_5) { board.b2 = board.b2 & MASK_R2_NT | (board.b2 & MASK_R2_B5) >> 15 | (board.b2 & MASK_R2_S5) <<  3; }
 
 
 static constexpr u64 C_MASK_0 = 0'700000'700000'700000;
@@ -60,197 +66,210 @@ static constexpr u64 C_MASK_3 = 0'000700'000700'000700;
 static constexpr u64 C_MASK_4 = 0'000070'000070'000070;
 static constexpr u64 C_MASK_5 = 0'000007'000007'000007;
 
+#define var1var2(mask) C u64 var1 = board.b1 & (mask); C u64 var2 = board.b2 & (mask);
 
 PERM_MACRO(C_0_1) {
-    C u64 var1 = board.b1 & C_MASK_0;
-    C u64 var2 = board.b2 & C_MASK_0;
-    board.b1 = board.b1 & ~C_MASK_0 | (var1 >> 18 | var2 << 36) & C_MASK_0;
-    board.b2 = board.b2 & ~C_MASK_0 | (var2 >> 18 | var1 << 36) & C_MASK_0;
+    var1var2(C_MASK_0)
+    board.b1 = board.b1 & ~C_MASK_0 | (var2 << 36 | var1 >> 18) & C_MASK_0;
+    board.b2 = board.b2 & ~C_MASK_0 | (var1 << 36 | var2 >> 18) & C_MASK_0;
 }
 PERM_MACRO(C_0_2) {
-    C u64 var1 = board.b1 & C_MASK_0;
-    C u64 var2 = board.b2 & C_MASK_0;
-    board.b1 = board.b1 & ~C_MASK_0 | (var1 >> 36 | var2 << 18) & C_MASK_0;
-    board.b2 = board.b2 & ~C_MASK_0 | (var2 >> 36 | var1 << 18) & C_MASK_0;
+    var1var2(C_MASK_0)
+    board.b1 = board.b1 & ~C_MASK_0 | (var2 << 18 | var1 >> 36) & C_MASK_0;
+    board.b2 = board.b2 & ~C_MASK_0 | (var1 << 18 | var2 >> 36) & C_MASK_0;
 }
 PERM_MACRO(C_0_3) {
-    C u64 var1 = board.b1 & C_MASK_0;
-    C u64 var2 = board.b2 & C_MASK_0;
+    var1var2(C_MASK_0)
     board.b1 = board.b1 & ~C_MASK_0 | var2;
     board.b2 = board.b2 & ~C_MASK_0 | var1;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_0 | (var2 << 0 | var1 >> 0) & C_MASK_0;
+    // board.b2 = board.b2 & ~C_MASK_0 | (var1 << 0 | var2 >> 0) & C_MASK_0;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_0 | (var1 << 0 | var2 >> 0) & C_MASK_0;
+    // board.b2 = board.b2 & ~C_MASK_0 | (var2 << 0 | var1 >> 0) & C_MASK_0;
+
 }
 PERM_MACRO(C_0_4) {
-    C u64 var1 = board.b1 & C_MASK_0;
-    C u64 var2 = board.b2 & C_MASK_0;
+    var1var2(C_MASK_0)
     board.b1 = board.b1 & ~C_MASK_0 | (var1 << 36 | var2 >> 18) & C_MASK_0;
     board.b2 = board.b2 & ~C_MASK_0 | (var2 << 36 | var1 >> 18) & C_MASK_0;
 }
 PERM_MACRO(C_0_5) {
-    C u64 var1 = board.b1 & C_MASK_0;
-    C u64 var2 = board.b2 & C_MASK_0;
+    var1var2(C_MASK_0)
     board.b1 = board.b1 & ~C_MASK_0 | (var1 << 18 | var2 >> 36) & C_MASK_0;
     board.b2 = board.b2 & ~C_MASK_0 | (var2 << 18 | var1 >> 36) & C_MASK_0;
 }
 
 
 PERM_MACRO(C_1_1) {
-    C u64 var1 = board.b1 & C_MASK_1;
-    C u64 var2 = board.b2 & C_MASK_1;
-    board.b1 = board.b1 & ~C_MASK_1 | (var1 >> 18 | var2 << 36) & C_MASK_1;
-    board.b2 = board.b2 & ~C_MASK_1 | (var2 >> 18 | var1 << 36) & C_MASK_1;
+    var1var2(C_MASK_1)
+    board.b1 = board.b1 & ~C_MASK_1 | (var2 << 36 | var1 >> 18) & C_MASK_1;
+    board.b2 = board.b2 & ~C_MASK_1 | (var1 << 36 | var2 >> 18) & C_MASK_1;
 }
 PERM_MACRO(C_1_2) {
-    C u64 var1 = board.b1 & C_MASK_1;
-    C u64 var2 = board.b2 & C_MASK_1;
-    board.b1 = board.b1 & ~C_MASK_1 | (var1 >> 36 | var2 << 18) & C_MASK_1;
-    board.b2 = board.b2 & ~C_MASK_1 | (var2 >> 36 | var1 << 18) & C_MASK_1;
+    var1var2(C_MASK_1)
+    board.b1 = board.b1 & ~C_MASK_1 | (var2 << 18 | var1 >> 36) & C_MASK_1;
+    board.b2 = board.b2 & ~C_MASK_1 | (var1 << 18 | var2 >> 36) & C_MASK_1;
 }
 PERM_MACRO(C_1_3) {
-    C u64 var1 = board.b1 & C_MASK_1;
-    C u64 var2 = board.b2 & C_MASK_1;
+    var1var2(C_MASK_1)
     board.b1 = board.b1 & ~C_MASK_1 | var2;
     board.b2 = board.b2 & ~C_MASK_1 | var1;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_1 | (var2 << 0 | var1 >> 0) & C_MASK_1;
+    // board.b2 = board.b2 & ~C_MASK_1 | (var1 << 0 | var2 >> 0) & C_MASK_1;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_1 | (var1 << 0 | var2 >> 0) & C_MASK_1;
+    // board.b2 = board.b2 & ~C_MASK_1 | (var2 << 0 | var1 >> 0) & C_MASK_1;
 }
 PERM_MACRO(C_1_4) {
-    C u64 var1 = board.b1 & C_MASK_1;
-    C u64 var2 = board.b2 & C_MASK_1;
+    var1var2(C_MASK_1)
     board.b1 = board.b1 & ~C_MASK_1 | (var1 << 36 | var2 >> 18) & C_MASK_1;
     board.b2 = board.b2 & ~C_MASK_1 | (var2 << 36 | var1 >> 18) & C_MASK_1;
 }
 PERM_MACRO(C_1_5) {
-    C u64 var1 = board.b1 & C_MASK_1;
-    C u64 var2 = board.b2 & C_MASK_1;
+    var1var2(C_MASK_1)
     board.b1 = board.b1 & ~C_MASK_1 | (var1 << 18 | var2 >> 36) & C_MASK_1;
     board.b2 = board.b2 & ~C_MASK_1 | (var2 << 18 | var1 >> 36) & C_MASK_1;
 }
 
 
 PERM_MACRO(C_2_1) {
-    C u64 var1 = board.b1 & C_MASK_2;
-    C u64 var2 = board.b2 & C_MASK_2;
-    board.b1 = board.b1 & ~C_MASK_2 | (var1 >> 18 | var2 << 36) & C_MASK_2;
-    board.b2 = board.b2 & ~C_MASK_2 | (var2 >> 18 | var1 << 36) & C_MASK_2;
+    var1var2(C_MASK_2)
+    board.b1 = board.b1 & ~C_MASK_2 | (var2 << 36 | var1 >> 18) & C_MASK_2;
+    board.b2 = board.b2 & ~C_MASK_2 | (var1 << 36 | var2 >> 18) & C_MASK_2;
 }
 PERM_MACRO(C_2_2) {
-    C u64 var1 = board.b1 & C_MASK_2;
-    C u64 var2 = board.b2 & C_MASK_2;
-    board.b1 = board.b1 & ~C_MASK_2 | (var1 >> 36 | var2 << 18) & C_MASK_2;
-    board.b2 = board.b2 & ~C_MASK_2 | (var2 >> 36 | var1 << 18) & C_MASK_2;
+    var1var2(C_MASK_2)
+    board.b1 = board.b1 & ~C_MASK_2 | (var2 << 18 | var1 >> 36) & C_MASK_2;
+    board.b2 = board.b2 & ~C_MASK_2 | (var1 << 18 | var2 >> 36) & C_MASK_2;
 }
 PERM_MACRO(C_2_3) {
-    C u64 var1 = board.b1 & C_MASK_2;
-    C u64 var2 = board.b2 & C_MASK_2;
+    var1var2(C_MASK_2)
     board.b1 = board.b1 & ~C_MASK_2 | var2;
     board.b2 = board.b2 & ~C_MASK_2 | var1;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_2 | (var2 << 0 | var1 >> 0) & C_MASK_2;
+    // board.b2 = board.b2 & ~C_MASK_2 | (var1 << 0 | var2 >> 0) & C_MASK_2;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_2 | (var1 << 0 | var2 >> 0) & C_MASK_2;
+    // board.b2 = board.b2 & ~C_MASK_2 | (var2 << 0 | var1 >> 0) & C_MASK_2;
+
 }
 PERM_MACRO(C_2_4) {
-    C u64 var1 = board.b1 & C_MASK_2;
-    C u64 var2 = board.b2 & C_MASK_2;
+    var1var2(C_MASK_2)
     board.b1 = board.b1 & ~C_MASK_2 | (var1 << 36 | var2 >> 18) & C_MASK_2;
     board.b2 = board.b2 & ~C_MASK_2 | (var2 << 36 | var1 >> 18) & C_MASK_2;
 }
 PERM_MACRO(C_2_5) {
-    C u64 var1 = board.b1 & C_MASK_2;
-    C u64 var2 = board.b2 & C_MASK_2;
+    var1var2(C_MASK_2)
     board.b1 = board.b1 & ~C_MASK_2 | (var1 << 18 | var2 >> 36) & C_MASK_2;
     board.b2 = board.b2 & ~C_MASK_2 | (var2 << 18 | var1 >> 36) & C_MASK_2;
 }
 
 
 PERM_MACRO(C_3_1) {
-    C u64 var1 = board.b1 & C_MASK_3;
-    C u64 var2 = board.b2 & C_MASK_3;
-    board.b1 = board.b1 & ~C_MASK_3 | (var1 >> 18 | var2 << 36) & C_MASK_3;
-    board.b2 = board.b2 & ~C_MASK_3 | (var2 >> 18 | var1 << 36) & C_MASK_3;
+    var1var2(C_MASK_3)
+    board.b1 = board.b1 & ~C_MASK_3 | (var2 << 36 | var1 >> 18) & C_MASK_3;
+    board.b2 = board.b2 & ~C_MASK_3 | (var1 << 36 | var2 >> 18) & C_MASK_3;
 }
 PERM_MACRO(C_3_2) {
-    C u64 var1 = board.b1 & C_MASK_3;
-    C u64 var2 = board.b2 & C_MASK_3;
-    board.b1 = board.b1 & ~C_MASK_3 | (var1 >> 36 | var2 << 18) & C_MASK_3;
-    board.b2 = board.b2 & ~C_MASK_3 | (var2 >> 36 | var1 << 18) & C_MASK_3;
+    var1var2(C_MASK_3)
+    board.b1 = board.b1 & ~C_MASK_3 | (var2 << 18 | var1 >> 36) & C_MASK_3;
+    board.b2 = board.b2 & ~C_MASK_3 | (var1 << 18 | var2 >> 36) & C_MASK_3;
 }
 PERM_MACRO(C_3_3) {
-    C u64 var1 = board.b1 & C_MASK_3;
-    C u64 var2 = board.b2 & C_MASK_3;
+    var1var2(C_MASK_3)
     board.b1 = board.b1 & ~C_MASK_3 | var2;
     board.b2 = board.b2 & ~C_MASK_3 | var1;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_3 | (var2 << 0 | var1 >> 0) & C_MASK_3;
+    // board.b2 = board.b2 & ~C_MASK_3 | (var1 << 0 | var2 >> 0) & C_MASK_3;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_3 | (var1 << 0 | var2 >> 0) & C_MASK_3;
+    // board.b2 = board.b2 & ~C_MASK_3 | (var2 << 0 | var1 >> 0) & C_MASK_3;
 }
 PERM_MACRO(C_3_4) {
-    C u64 var1 = board.b1 & C_MASK_3;
-    C u64 var2 = board.b2 & C_MASK_3;
+    var1var2(C_MASK_3)
     board.b1 = board.b1 & ~C_MASK_3 | (var1 << 36 | var2 >> 18) & C_MASK_3;
     board.b2 = board.b2 & ~C_MASK_3 | (var2 << 36 | var1 >> 18) & C_MASK_3;
 }
 PERM_MACRO(C_3_5) {
-    C u64 var1 = board.b1 & C_MASK_3;
-    C u64 var2 = board.b2 & C_MASK_3;
+    var1var2(C_MASK_3)
     board.b1 = board.b1 & ~C_MASK_3 | (var1 << 18 | var2 >> 36) & C_MASK_3;
     board.b2 = board.b2 & ~C_MASK_3 | (var2 << 18 | var1 >> 36) & C_MASK_3;
 }
 
 
 PERM_MACRO(C_4_1) {
-    C u64 var1 = board.b1 & C_MASK_4;
-    C u64 var2 = board.b2 & C_MASK_4;
-    board.b1 = board.b1 & ~C_MASK_4 | (var1 >> 18 | var2 << 36) & C_MASK_4;
-    board.b2 = board.b2 & ~C_MASK_4 | (var2 >> 18 | var1 << 36) & C_MASK_4;
+    var1var2(C_MASK_4)
+    board.b1 = board.b1 & ~C_MASK_4 | (var2 << 36 | var1 >> 18) & C_MASK_4;
+    board.b2 = board.b2 & ~C_MASK_4 | (var1 << 36 | var2 >> 18) & C_MASK_4;
 }
 PERM_MACRO(C_4_2) {
-    C u64 var1 = board.b1 & C_MASK_4;
-    C u64 var2 = board.b2 & C_MASK_4;
-    board.b1 = board.b1 & ~C_MASK_4 | (var1 >> 36 | var2 << 18) & C_MASK_4;
-    board.b2 = board.b2 & ~C_MASK_4 | (var2 >> 36 | var1 << 18) & C_MASK_4;
+    var1var2(C_MASK_4)
+    board.b1 = board.b1 & ~C_MASK_4 | (var2 << 18 | var1 >> 36) & C_MASK_4;
+    board.b2 = board.b2 & ~C_MASK_4 | (var1 << 18 | var2 >> 36) & C_MASK_4;
 }
 PERM_MACRO(C_4_3) {
-    C u64 var1 = board.b1 & C_MASK_4;
-    C u64 var2 = board.b2 & C_MASK_4;
+    var1var2(C_MASK_4)
     board.b1 = board.b1 & ~C_MASK_4 | var2;
     board.b2 = board.b2 & ~C_MASK_4 | var1;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_4 | (var2 << 0 | var1 >> 0) & C_MASK_4;
+    // board.b2 = board.b2 & ~C_MASK_4 | (var1 << 0 | var2 >> 0) & C_MASK_4;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_4 | (var1 << 0 | var2 >> 0) & C_MASK_4;
+    // board.b2 = board.b2 & ~C_MASK_4 | (var2 << 0 | var1 >> 0) & C_MASK_4;
 }
 PERM_MACRO(C_4_4) {
-    C u64 var1 = board.b1 & C_MASK_4;
-    C u64 var2 = board.b2 & C_MASK_4;
+    var1var2(C_MASK_4)
     board.b1 = board.b1 & ~C_MASK_4 | (var1 << 36 | var2 >> 18) & C_MASK_4;
     board.b2 = board.b2 & ~C_MASK_4 | (var2 << 36 | var1 >> 18) & C_MASK_4;
 }
 PERM_MACRO(C_4_5) {
-    C u64 var1 = board.b1 & C_MASK_4;
-    C u64 var2 = board.b2 & C_MASK_4;
+    var1var2(C_MASK_4)
     board.b1 = board.b1 & ~C_MASK_4 | (var1 << 18 | var2 >> 36) & C_MASK_4;
     board.b2 = board.b2 & ~C_MASK_4 | (var2 << 18 | var1 >> 36) & C_MASK_4;
 }
 
 
 PERM_MACRO(C_5_1) {
-    C u64 var1 = board.b1 & C_MASK_5;
-    C u64 var2 = board.b2 & C_MASK_5;
+    var1var2(C_MASK_5)
     board.b1 = board.b1 & ~C_MASK_5 | (var1 >> 18 | var2 << 36) & C_MASK_5;
     board.b2 = board.b2 & ~C_MASK_5 | (var2 >> 18 | var1 << 36) & C_MASK_5;
 }
 PERM_MACRO(C_5_2) {
-    C u64 var1 = board.b1 & C_MASK_5;
-    C u64 var2 = board.b2 & C_MASK_5;
+    var1var2(C_MASK_5)
     board.b1 = board.b1 & ~C_MASK_5 | (var1 >> 36 | var2 << 18) & C_MASK_5;
     board.b2 = board.b2 & ~C_MASK_5 | (var2 >> 36 | var1 << 18) & C_MASK_5;
 }
 PERM_MACRO(C_5_3) {
-    C u64 var1 = board.b1 & C_MASK_5;
-    C u64 var2 = board.b2 & C_MASK_5;
+    var1var2(C_MASK_5)
     board.b1 = board.b1 & ~C_MASK_5 | var2;
     board.b2 = board.b2 & ~C_MASK_5 | var1;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_5 | (var2 << 0 | var1 >> 0) & C_MASK_5;
+    // board.b2 = board.b2 & ~C_MASK_5 | (var1 << 0 | var2 >> 0) & C_MASK_5;
+    // or
+    // board.b1 = board.b1 & ~C_MASK_5 | (var1 << 0 | var2 >> 0) & C_MASK_5;
+    // board.b2 = board.b2 & ~C_MASK_5 | (var2 << 0 | var1 >> 0) & C_MASK_5;
 }
 PERM_MACRO(C_5_4) {
-    C u64 var1 = board.b1 & C_MASK_5;
-    C u64 var2 = board.b2 & C_MASK_5;
+    var1var2(C_MASK_5)
     board.b1 = board.b1 & ~C_MASK_5 | (var1 << 36 | var2 >> 18) & C_MASK_5;
     board.b2 = board.b2 & ~C_MASK_5 | (var2 << 36 | var1 >> 18) & C_MASK_5;
 }
 PERM_MACRO(C_5_5) {
-    C u64 var1 = board.b1 & C_MASK_5;
-    C u64 var2 = board.b2 & C_MASK_5;
+    var1var2(C_MASK_5)
     board.b1 = board.b1 & ~C_MASK_5 | (var1 << 18 | var2 >> 36) & C_MASK_5;
     board.b2 = board.b2 & ~C_MASK_5 | (var2 << 18 | var1 >> 36) & C_MASK_5;
 }
+
+
+
+
 
 
 /*
@@ -870,6 +889,7 @@ PERM_MACRO(C_45_5) {
 }
 
 
+
 ActStruct allActStructList[110] = {
         // {action, index, isColNotFat, tillNext, tillLast, name}
         {R_0_1,    0, 2, 5, 0, "R01" }, {R_0_2,    1, 2, 4, 1, "R02" }, {R_0_3,    2, 2, 3, 2, "R03" }, {R_0_4,    3, 2, 2, 3, "R04" }, {R_0_5,    4, 2, 1, 4, "R05" },
@@ -898,6 +918,117 @@ ActStruct allActStructList[110] = {
         {C_34_1, 100, 0, 4, 0, "C341"}, {C_34_2, 101, 0, 3, 1, "C342"}, {C_34_3, 102, 0, 2, 2, "C343"}, {C_34_4, 103, 0, 1, 3, "C344"}, {C_34_5, 104, 0, 0, 4, "C345"},
         {C_45_1, 105, 0, 4, 0, "C451"}, {C_45_2, 106, 0, 3, 1, "C452"}, {C_45_3, 107, 0, 2, 2, "C453"}, {C_45_4, 108, 0, 1, 3, "C454"}, {C_45_5, 109, 0, 0, 4, "C455"},
 };
+
+
+
+
+#ifdef USE_CUDA
+
+namespace my_cuda {
+
+    MU __constant__ u64 CUDA_COL_MASKS[6] = {
+            0'700000'700000'700000,
+            0'070000'070000'070000,
+            0'007000'007000'007000,
+            0'000700'000700'000700,
+            0'000070'000070'000070,
+            0'000007'000007'000007,
+    };
+
+    MU __constant__ u32 CUDA_COL_OFF1[9] = {36, 18,  0, 36, 18, 36, 54, 18, 36};
+
+    MU __constant__ PrecomputedIdx PRECOMPUTED_IDX[30] = {
+            {0, 0}, {0, 1}, {0, 2}, {0, 3}, {0, 4},
+            {1, 0}, {1, 1}, {1, 2}, {1, 3}, {1, 4},
+            {2, 0}, {2, 1}, {2, 2}, {2, 3}, {2, 4},
+            {3, 0}, {3, 1}, {3, 2}, {3, 3}, {3, 4},
+            {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4},
+            {5, 0}, {5, 1}, {5, 2}, {5, 3}, {5, 4},
+    };
+
+    MU __device__ void C_X_X(B1B2 &board, int idx) {
+        C u8 mod5 = PRECOMPUTED_IDX[idx].mod5;
+        C u64 C_MASK_X = CUDA_COL_MASKS[PRECOMPUTED_IDX[idx].div5];
+
+
+        C u64 vars[2] = {board.b1 & C_MASK_X, board.b2 & C_MASK_X};
+
+        C i32 idx1 = (mod5 <= 2) ? 1 : 0;
+        C u64 *ptr1 = &vars[idx1];
+        C u64 *ptr2 = &vars[1 - idx1];
+
+        board.b1 = ((*ptr1 << CUDA_COL_OFF1[mod5] | *ptr2 >>
+                                                            (CUDA_COL_OFF1 + 4)[mod5]) & C_MASK_X) | board.b1 & ~C_MASK_X;
+        board.b2 = ((*ptr2 << CUDA_COL_OFF1[mod5] | *ptr1 >>
+                                                            (CUDA_COL_OFF1 + 4)[mod5]) & C_MASK_X) | board.b2 & ~C_MASK_X;
+    }
+
+    MU __constant__ u64 CUDA_ROW_MASKS[3] = {
+            0'1777'000000'777777'777777,
+            0'1777'777777'000000'777777,
+            0'1777'777777'777777'000000,
+    };
+
+    MU __constant__ R_X_X_data CUDA_RXX_DATA[15] = {
+            {0'0000'777770'000000'000000, 0'0000'000007'000000'000000, 0,  3, 15},
+            {0'0000'777700'000000'000000, 0'0000'000077'000000'000000, 0,  6, 12},
+            {0'0000'777000'000000'000000, 0'0000'000777'000000'000000, 0,  9,  9},
+            {0'0000'770000'000000'000000, 0'0000'007777'000000'000000, 0, 12,  6},
+            {0'0000'700000'000000'000000, 0'0000'077777'000000'000000, 0, 15,  3},
+            {0'0000'000000'777770'000000, 0'0000'000000'000007'000000, 1,  3, 15},
+            {0'0000'000000'777700'000000, 0'0000'000000'000077'000000, 1,  6, 12},
+            {0'0000'000000'777000'000000, 0'0000'000000'000777'000000, 1,  9,  9},
+            {0'0000'000000'770000'000000, 0'0000'000000'007777'000000, 1, 12,  6},
+            {0'0000'000000'700000'000000, 0'0000'000000'077777'000000, 1, 15,  3},
+            {0'0000'000000'000000'777770, 0'0000'000000'000000'000007, 2,  3, 15},
+            {0'0000'000000'000000'777700, 0'0000'000000'000000'000077, 2,  6, 12},
+            {0'0000'000000'000000'777000, 0'0000'000000'000000'000777, 2,  9,  9},
+            {0'0000'000000'000000'770000, 0'0000'000000'000000'007777, 2, 12,  6},
+            {0'0000'000000'000000'700000, 0'0000'000000'000000'077777, 2, 15,  3},
+    };
+
+    MU __device__ void R_X_X(B1B2& board, int idx) {
+
+        C bool is_R3_to_r5 = idx >= 15;
+        R_X_X_data data = CUDA_RXX_DATA[idx - 15 * is_R3_to_r5];
+
+        u64* addr = &board.b1 + is_R3_to_r5;
+        *addr = (*addr & CUDA_ROW_MASKS[data.rowNum])
+                | ((*addr & data.maskRB) >> data.shiftR)
+                | ((*addr & data.maskRS) << data.shiftL);
+    }
+
+    __constant__ ActStructGPU allActStructListGPU[110] = {
+            // {action, index, isColNotFat, tillNext, tillLast}
+            {R_0_1,    0, 2, 5, 0}, {R_0_2,    1, 2, 4, 1}, {R_0_3,    2, 2, 3, 2}, {R_0_4,    3, 2, 2, 3}, {R_0_5,    4, 2, 1, 4},
+            {R_1_1,    5, 2, 5, 0}, {R_1_2,    6, 2, 4, 1}, {R_1_3,    7, 2, 3, 2}, {R_1_4,    8, 2, 2, 3}, {R_1_5,    9, 2, 1, 4},
+            {R_2_1,   10, 2, 5, 0}, {R_2_2,   11, 2, 4, 1}, {R_2_3,   12, 2, 3, 2}, {R_2_4,   13, 2, 2, 3}, {R_2_5,   14, 2, 1, 4},
+            {R_3_1,   15, 2, 5, 0}, {R_3_2,   16, 2, 4, 1}, {R_3_3,   17, 2, 3, 2}, {R_3_4,   18, 2, 2, 3}, {R_3_5,   19, 2, 1, 4},
+            {R_4_1,   20, 2, 5, 0}, {R_4_2,   21, 2, 4, 1}, {R_4_3,   22, 2, 3, 2}, {R_4_4,   23, 2, 2, 3}, {R_4_5,   24, 2, 1, 4},
+            {R_5_1,   25, 2, 5, 0}, {R_5_2,   26, 2, 4, 1}, {R_5_3,   27, 2, 3, 2}, {R_5_4,   28, 2, 2, 3}, {R_5_5,   29, 2, 1, 4},
+
+            {C_0_1,   30, 1, 5, 0}, {C_0_2,   31, 1, 4, 1}, {C_0_3,   32, 1, 3, 2}, {C_0_4,   33, 1, 2, 3}, {C_0_5,   34, 1, 1, 4},
+            {C_1_1,   35, 1, 5, 0}, {C_1_2,   36, 1, 4, 1}, {C_1_3,   37, 1, 3, 2}, {C_1_4,   38, 1, 2, 3}, {C_1_5,   39, 1, 1, 4},
+            {C_2_1,   40, 1, 5, 0}, {C_2_2,   41, 1, 4, 1}, {C_2_3,   42, 1, 3, 2}, {C_2_4,   43, 1, 2, 3}, {C_2_5,   44, 1, 1, 4},
+            {C_3_1,   45, 1, 5, 0}, {C_3_2,   46, 1, 4, 1}, {C_3_3,   47, 1, 3, 2}, {C_3_4,   48, 1, 2, 3}, {C_3_5,   49, 1, 1, 4},
+            {C_4_1,   50, 1, 5, 0}, {C_4_2,   51, 1, 4, 1}, {C_4_3,   52, 1, 3, 2}, {C_4_4,   53, 1, 2, 3}, {C_4_5,   54, 1, 1, 4},
+            {C_5_1,   55, 1, 5, 0}, {C_5_2,   56, 1, 4, 1}, {C_5_3,   57, 1, 3, 2}, {C_5_4,   58, 1, 2, 3}, {C_5_5,   59, 1, 1, 4},
+
+            {R_01_1,  60, 0, 4, 0}, {R_01_2,  61, 0, 3, 1}, {R_01_3,  62, 0, 2, 2}, {R_01_4,  63, 0, 1, 3}, {R_01_5,  64, 0, 0, 4},
+            {R_12_1,  65, 0, 4, 0}, {R_12_2,  66, 0, 3, 1}, {R_12_3,  67, 0, 2, 2}, {R_12_4,  68, 0, 1, 3}, {R_12_5,  69, 0, 0, 4},
+            {R_23_1,  70, 0, 4, 0}, {R_23_2,  71, 0, 3, 1}, {R_23_3,  72, 0, 2, 2}, {R_23_4,  73, 0, 1, 3}, {R_23_5,  74, 0, 0, 4},
+            {R_34_1,  75, 0, 4, 0}, {R_34_2,  76, 0, 3, 1}, {R_34_3,  77, 0, 2, 2}, {R_34_4,  78, 0, 1, 3}, {R_34_5,  79, 0, 0, 4},
+            {R_45_1,  80, 0, 4, 0}, {R_45_2,  81, 0, 3, 1}, {R_45_3,  82, 0, 2, 2}, {R_45_4,  83, 0, 1, 3}, {R_45_5,  84, 0, 0, 4},
+
+            {C_01_1,  85, 0, 4, 0}, {C_01_2,  86, 0, 3, 1}, {C_01_3,  87, 0, 2, 2}, {C_01_4,  88, 0, 1, 3}, {C_01_5,  89, 0, 0, 4},
+            {C_12_1,  90, 0, 4, 0}, {C_12_2,  91, 0, 3, 1}, {C_12_3,  92, 0, 2, 2}, {C_12_4,  93, 0, 1, 3}, {C_12_5,  94, 0, 0, 4},
+            {C_23_1,  95, 0, 4, 0}, {C_23_2,  96, 0, 3, 1}, {C_23_3,  97, 0, 2, 2}, {C_23_4,  98, 0, 1, 3}, {C_23_5,  99, 0, 0, 4},
+            {C_34_1, 100, 0, 4, 0}, {C_34_2, 101, 0, 3, 1}, {C_34_3, 102, 0, 2, 2}, {C_34_4, 103, 0, 1, 3}, {C_34_5, 104, 0, 0, 4},
+            {C_45_1, 105, 0, 4, 0}, {C_45_2, 106, 0, 3, 1}, {C_45_3, 107, 0, 2, 2}, {C_45_4, 108, 0, 1, 3}, {C_45_5, 109, 0, 0, 4},
+    };
+
+}
+#endif
 
 
 u8 fatActionsIndexes[25][48] = {

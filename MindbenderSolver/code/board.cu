@@ -2,16 +2,26 @@
 
 
 #include <string>
-#include <immintrin.h>
+
 
 #include "MindbenderSolver/utils/colors.hpp"
 #include "segments.hpp"
+
+#include "MindbenderSolver/utils/intrinsics/clz.hpp"
+#include "MindbenderSolver/utils/intrinsics/pext_u64.hpp"
+#include "MindbenderSolver/utils/intrinsics/popcount.hpp"
 
 
 int GET_SCORE_3_CALLS = 0;
 
 
 Board::ColorArray_t Board::ColorsDefault = {0, 1, 2, 3, 4, 5, 6, 7};
+
+
+// does not check if input list is of size 36 or not
+Board::Board(C std::initializer_list<u8> values) {
+    setState(values.begin());
+}
 
 
 Board::Board(C u8 values[36]) {
@@ -97,13 +107,6 @@ MU Board::ColorArray_t B1B2::setStateAndRetColors(C u8 values[36]) {
 }
 
 
-
-u32 B1B2::getColorCount() C {
-    C u64 colorCount = b1 >> 56 & 0xF;
-    return colorCount;
-}
-
-
 static constexpr u64 MASK_FAT_POS = 0x1FFF'FFFF'FFFF'FFFF;
 
 /**
@@ -111,71 +114,77 @@ static constexpr u64 MASK_FAT_POS = 0x1FFF'FFFF'FFFF'FFFF;
  * @param x value 0-4
  * @param y value 0-4
  */
-void B1B2::setFatXY(C u64 x, C u64 y) {
+HD void B1B2::setFatXY(C u64 x, C u64 y) {
     b1 = b1 & MASK_FAT_POS | x << 61;
     b2 = b2 & MASK_FAT_POS | y << 61;
     setFatBool(true);
 }
 
 
-MU void B1B2::setFatBool(C bool flag) {
+MU HD void B1B2::setFatBool(C bool flag) {
     static constexpr u64 MASK_FAT_FLAG = 0xEFFF'FFFF'FFFF'FFFF;
     b1 = b1 & MASK_FAT_FLAG | static_cast<u64>(flag) << 60;
 
 }
 
-MU void B1B2::setFatX(C u64 x) {
+MU HD void B1B2::setFatX(C u64 x) {
     b1 = b1 & MASK_FAT_POS | x << 61;
 }
 
 
-MU void B1B2::setFatY(C u64 y) {
+MU HD void B1B2::setFatY(C u64 y) {
     b2 = b2 & MASK_FAT_POS | y << 61;
 }
 
 
-MU void B1B2::addFatX(C u8 x) {
+MU HD void B1B2::addFatX(C u8 x) {
     u64 cur_x = getFatX() + x;
     cur_x -= 6 * (cur_x > 5);
     b1 = b1 & MASK_FAT_POS | cur_x << 61;
 }
 
 
-MU void B1B2::addFatY(C u8 y) {
+MU HD void B1B2::addFatY(C u8 y) {
     u64 cur_y = getFatY() + y;
     cur_y -= 6 * (cur_y > 5);
     b2 = b2 & MASK_FAT_POS | cur_y << 61;
 }
 
 
-u8 B1B2::getFatX() C {
+u8 HD B1B2::getFatX() C {
     return (b1 & ~MASK_FAT_POS) >> 61;
 }
 
 
-u8 B1B2::getFatY() C {
+u8 HD B1B2::getFatY() C {
     return (b2 & ~MASK_FAT_POS) >> 61;
 }
 
 
 /// always returns a value between 0-24.
-u8 B1B2::getFatXY() C {
+u8 HD B1B2::getFatXY() C {
     return (b1 >> 61) * 5 + (b2 >> 61);
 }
 
-MU u8 B1B2::getFatXYFast() C {
+MU HD u8 B1B2::getFatXYFast() C {
     return ((b1 >> 61) << 3) + (b2 >> 61);
 }
 
 
-bool B1B2::getFatBool() C {
+bool HD B1B2::getFatBool() C {
     C bool state = (b1 >> 60 & 1) != 0;
     return state;
 }
 
-MU u8 B1B2::getColor(C u8 x, C u8 y) C {
+MU u8 HD B1B2::getColor(C u8 x, C u8 y) C {
     C i32 shift_amount = 51 - x * 3 - y % 3 * 18;
     return *(&b1 + (y >= 3)) >> shift_amount & 0'7;
+}
+
+
+u32 HD B1B2::getColorCount() C {
+    C u64 colorCount = b1 >> 56 & 0xF;
+    return colorCount;
 }
 
 
@@ -187,7 +196,7 @@ MU u8 B1B2::getColor(C u8 x, C u8 y) C {
  * int m = 1 + action1 % 5;
  * int n = 1 + action2 % 5;
  */
-MU bool Board::doActISColMatch(C u8 x1, C u8 y1, C u8 m, C u8 n) C {
+MU HD bool Board::doActISColMatch(C u8 x1, C u8 y1, C u8 m, C u8 n) C {
     C int y2 = (y1 - n + 6) % 6;
     C int x2 = (x1 - m + 6) % 6;
 
@@ -220,7 +229,7 @@ MU bool Board::doActISColMatch(C u8 x1, C u8 y1, C u8 m, C u8 n) C {
  *          amount: Row (finds true for all of these)
  * @return
  */
-u8 Board::doActISColMatchBatched(C u8 x1, C u8 y1, C u8 m) C {
+u8 HD Board::doActISColMatchBatched(C u8 x1, C u8 y1, C u8 m) C {
     C i32 x2 = (x1 - m + 6) % 6;
     C u64 base = y1 < 3 ? b1 : b2;
     C i32 offset_shared = 51 - y1 % 3 * 18;
@@ -243,7 +252,7 @@ u8 Board::doActISColMatchBatched(C u8 x1, C u8 y1, C u8 m) C {
 }
 
 
-double Board::getDuplicateEstimateAtDepth(MU u32 depth) {
+double HD Board::getDuplicateEstimateAtDepth(MU u32 depth) {
     return 1.0;
 }
 
@@ -256,7 +265,7 @@ double Board::getDuplicateEstimateAtDepth(MU u32 depth) {
  * @param sect2 b1/b2 of 2nd board
  * @return
  */
-inline u64 getSimilar54(C u64& sect1, C u64& sect2) {
+inline HD u64 getSimilar54(C u64& sect1, C u64& sect2) {
     C u64 s = sect1 ^ sect2;
     return ~(s | s >> 1 | s >> 2) & 0'111111'111111'111111;
 }
@@ -265,91 +274,66 @@ inline u64 getSimilar54(C u64& sect1, C u64& sect2) {
 
 
 
-MU u64 B1B2::getScore1(C B1B2 &other) C {
-    return __builtin_popcountll(getSimilar54(b1, other.b1))
-           + __builtin_popcountll(getSimilar54(b2, other.b2));
+MU HD u64 B1B2::getScore1(C B1B2 &other) C {
+    return my_popcount(getSimilar54(b1, other.b1))
+           + my_popcount(getSimilar54(b2, other.b2));
 }
 
 
 
 
-inline u64 getAntiSimilar54(C u64& sect1, C u64& sect2) {
+inline HD u64 getAntiSimilar54(C u64& sect1, C u64& sect2) {
     C u64 s = sect1 ^ sect2;
     return (s | s >> 1 | s >> 2) & 0'111111'111111'111111;
 }
 
 
-/*
-void simd_popcount_avx512(C uint64_t full, uint8_t* uncRows) {
-    // Define masks for each row
-    static constexpr uint64_t masks[8] = {
-        0x770000000000, 0x007700000000,
-        0x000077000000, 0x000000770000,
-        0x000000007700, 0x000000000077,
-        0, 0  // Two extra zeroes for alignment
-    };
+MUND HD int B1B2::getScore3(C B1B2 theOther) C {
+    // ++GET_SCORE_3_CALLS;
 
-    // Load the masks into a 512-bit register (each lane holds one mask)
-    C __m512i mask_vec = _mm512_loadu_si512(masks);
-    // Broadcast `full` across all eight 64-bit lanes in a 512-bit register
-    C __m512i full_vec = _mm512_set1_epi64(full);
-    // Perform bitwise AND across each lane
-    C __m512i and_result = _mm512_and_si512(full_vec, mask_vec);
-    // Use AVX-512 popcount to count set bits in each 64-bit lane
-    C __m512i popcount_result = _mm512_popcnt_epi64(and_result);
-    // Store the result back to uncRows (only need the first 6 elements)
-    _mm512_storeu_si512(reinterpret_cast<__m512i*>(uncRows), popcount_result);
-}
-*/
-
-
-MUND int B1B2::getScore3(C B1B2 theOther) C {
-    ++GET_SCORE_3_CALLS;
-
-    // Find all differing cells and update the counts in uncoveredRows and uncoveredCols
+    // Find all differing cells and update the counts in uncRows and uncCols
     static constexpr u64 PENIS_MASK = 0'111'111'111'111'111'111;
-    C u64 full = _pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
-                 | _pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
+    C u64 full = my_pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
+                 | my_pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
 
-    u8 differingCells   = __builtin_popcountll(full);
+    uint8_t differingCells = my_popcount(full);
 
     alignas(u64) u8 uncRows[8] = {};
-    uncRows[0] = __builtin_popcountll(full & 0'770000000000);
-    uncRows[1] = __builtin_popcountll(full & 0'007700000000);
-    uncRows[2] = __builtin_popcountll(full & 0'000077000000);
-    uncRows[3] = __builtin_popcountll(full & 0'000000770000);
-    uncRows[4] = __builtin_popcountll(full & 0'000000007700);
-    uncRows[5] = __builtin_popcountll(full & 0'000000000077);
+    uncRows[0] = my_popcount(full & 0'770000000000);
+    uncRows[1] = my_popcount(full & 0'007700000000);
+    uncRows[2] = my_popcount(full & 0'000077000000);
+    uncRows[3] = my_popcount(full & 0'000000770000);
+    uncRows[4] = my_popcount(full & 0'000000007700);
+    uncRows[5] = my_popcount(full & 0'000000000077);
 
     alignas(u64) u8 uncCols[8] = {};
-    uncCols[0] = __builtin_popcountll(full & 0'404040404040);
-    uncCols[1] = __builtin_popcountll(full & 0'202020202020);
-    uncCols[2] = __builtin_popcountll(full & 0'101010101010);
-    uncCols[3] = __builtin_popcountll(full & 0'040404040404);
-    uncCols[4] = __builtin_popcountll(full & 0'020202020202);
-    uncCols[5] = __builtin_popcountll(full & 0'010101010101);
+    uncCols[0] = my_popcount(full & 0'404040404040);
+    uncCols[1] = my_popcount(full & 0'202020202020);
+    uncCols[2] = my_popcount(full & 0'101010101010);
+    uncCols[3] = my_popcount(full & 0'040404040404);
+    uncCols[4] = my_popcount(full & 0'020202020202);
+    uncCols[5] = my_popcount(full & 0'010101010101);
 
 
     u8 lanes = 0;
     // While there are still uncovered differing cells (at most 6 loops)
     while (differingCells > 0) {
 
-
-
         // Find the row or column that covers the most uncovered differing cells
         // in C++, can probably reinterpret the bytes to see if either can be skipped,
         // base which level of checking I am doing off of getScore1?
         // can be recoded to find the index and value of the max in both?
 
-        C u64 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
-                             | 1 << uncRows[2] | 1 << uncRows[3]
-                             | 1 << uncRows[4] | 1 << uncRows[5];
-        C u8 highestRow = 31 - __builtin_clz(promoteRowMask);
+        // IMPORTANT changed u64 to i32?
+        C i32 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
+                               | 1 << uncRows[2] | 1 << uncRows[3]
+                               | 1 << uncRows[4] | 1 << uncRows[5];
+        C u8 highestRow = 31 - my_clz(static_cast<i32>(promoteRowMask));
 
-        C u64 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
-                             | 1 << uncCols[2] | 1 << uncCols[3]
-                             | 1 << uncCols[4] | 1 << uncCols[5];
-        C u8 highestCol = 31 - __builtin_clz(promoteColMask);
+        C i32 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
+                               | 1 << uncCols[2] | 1 << uncCols[3]
+                               | 1 << uncCols[4] | 1 << uncCols[5];
+        C u8 highestCol = 31 - my_clz(static_cast<i32>(promoteColMask));
 
 
         if (highestRow == 0 && highestCol == 0) {
@@ -359,10 +343,10 @@ MUND int B1B2::getScore3(C B1B2 theOther) C {
 
         if (highestRow >= highestCol) {
             C int index = (uncRows[0] == highestRow) ? 0 :
-                    (uncRows[1] == highestRow) ? 1 :
-                    (uncRows[2] == highestRow) ? 2 :
-                    (uncRows[3] == highestRow) ? 3 :
-                    (uncRows[4] == highestRow) ? 4 : 5;
+                          (uncRows[1] == highestRow) ? 1 :
+                          (uncRows[2] == highestRow) ? 2 :
+                          (uncRows[3] == highestRow) ? 3 :
+                          (uncRows[4] == highestRow) ? 4 : 5;
 
             // Cover the chosen row and update the counts in uncCols
             differingCells -= uncRows[index];
@@ -375,10 +359,10 @@ MUND int B1B2::getScore3(C B1B2 theOther) C {
 
         } else {
             C int index = (uncCols[0] == highestCol) ? 0 :
-                    (uncCols[1] == highestCol) ? 1 :
-                    (uncCols[2] == highestCol) ? 2 :
-                    (uncCols[3] == highestCol) ? 3 :
-                    (uncCols[4] == highestCol) ? 4 : 5;
+                          (uncCols[1] == highestCol) ? 1 :
+                          (uncCols[2] == highestCol) ? 2 :
+                          (uncCols[3] == highestCol) ? 3 :
+                          (uncCols[4] == highestCol) ? 4 : 5;
 
             // Cover the chosen col and update the counts in uncRows
             differingCells -= uncCols[index];
@@ -408,32 +392,32 @@ MUND int B1B2::getScore3(C B1B2 theOther) C {
 
 
 template<i32 MAX_DEPTH>
-bool B1B2::getScore3Till(C B1B2 theOther) C {
-    ++GET_SCORE_3_CALLS;
+HD bool B1B2::getScore3Till(C B1B2 theOther) C {
+    // ++GET_SCORE_3_CALLS;
 
-    // Find all differing cells and update the counts in uncoveredRows and uncoveredCols
+    // Find all differing cells and update the counts in uncRows and uncCols
     static constexpr u64 PENIS_MASK = 0'111'111'111'111'111'111;
-    C u64 full = _pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
-                 | _pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
+    C u64 full = my_pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
+                 | my_pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
 
-    u8 diffCells = __builtin_popcountll(full);
+
+    u8 diffCells = my_popcount(full);
 
     alignas(u64) u8 uncRows[8] = {};
-    uncRows[0] = __builtin_popcountll(full & 0'770000000000); // this is base-8 LOL
-    uncRows[1] = __builtin_popcountll(full & 0'007700000000);
-    uncRows[2] = __builtin_popcountll(full & 0'000077000000);
-    uncRows[3] = __builtin_popcountll(full & 0'000000770000);
-    uncRows[4] = __builtin_popcountll(full & 0'000000007700);
-    uncRows[5] = __builtin_popcountll(full & 0'000000000077);
+    uncRows[0] = my_popcount(full & 0'770000000000);
+    uncRows[1] = my_popcount(full & 0'007700000000);
+    uncRows[2] = my_popcount(full & 0'000077000000);
+    uncRows[3] = my_popcount(full & 0'000000770000);
+    uncRows[4] = my_popcount(full & 0'000000007700);
+    uncRows[5] = my_popcount(full & 0'000000000077);
 
     alignas(u64) u8 uncCols[8] = {};
-    uncCols[0] = __builtin_popcountll(full & 0'404040404040);
-    uncCols[1] = __builtin_popcountll(full & 0'202020202020);
-    uncCols[2] = __builtin_popcountll(full & 0'101010101010);
-    uncCols[3] = __builtin_popcountll(full & 0'040404040404);
-    uncCols[4] = __builtin_popcountll(full & 0'020202020202);
-    uncCols[5] = __builtin_popcountll(full & 0'010101010101);
-
+    uncCols[0] = my_popcount(full & 0'404040404040);
+    uncCols[1] = my_popcount(full & 0'202020202020);
+    uncCols[2] = my_popcount(full & 0'101010101010);
+    uncCols[3] = my_popcount(full & 0'040404040404);
+    uncCols[4] = my_popcount(full & 0'020202020202);
+    uncCols[5] = my_popcount(full & 0'010101010101);
 
     // could break early if there are more total rows or more total columns than MAX_DEPTH
     // but how to implement that in a fast way
@@ -441,33 +425,29 @@ bool B1B2::getScore3Till(C B1B2 theOther) C {
     /*
     if constexpr (MAX_DEPTH < 5) {
         C u64 rd = *reinterpret_cast<u64*>(uncRows);
-        C u64 rowsMask = __builtin_popcountll(
+        C u64 rowsMask = my_popcount_(
             (rd | rd >> 1 | rd >> 2) & 0x01'01'01'01'01'01'01'01);
         C u64 cd = *reinterpret_cast<u64*>(uncCols);
-        C u64 colsMask = __builtin_popcountll(
+        C u64 colsMask = my_popcount_(
             (cd | cd >> 1 | cd >> 2) & 0x01'01'01'01'01'01'01'01);
         if (std::min(rowsMask, colsMask) > MAX_DEPTH) {
             return true;
         }
     }*/
 
-
-
-
-
-
     // While there are still uncovered differing cells (at most 6 loops)
     for (i32 depth = 0; depth < MAX_DEPTH; depth++) {
 
-        C u64 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
-                             | 1 << uncRows[2] | 1 << uncRows[3]
-                             | 1 << uncRows[4] | 1 << uncRows[5];
-        C u8 highestRow = 31 - __builtin_clz(promoteRowMask);
+        // IMPORTANT changed u64 to i32?
+        C i32 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
+                               | 1 << uncRows[2] | 1 << uncRows[3]
+                               | 1 << uncRows[4] | 1 << uncRows[5];
+        C u8 highestRow = 31 - my_clz(promoteRowMask);
 
-        C u64 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
-                             | 1 << uncCols[2] | 1 << uncCols[3]
-                             | 1 << uncCols[4] | 1 << uncCols[5];
-        C u8 highestCol = 31 - __builtin_clz(promoteColMask);
+        C i32 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
+                               | 1 << uncCols[2] | 1 << uncCols[3]
+                               | 1 << uncCols[4] | 1 << uncCols[5];
+        C u8 highestCol = 31 - my_clz(promoteColMask);
 
 
         if (highestRow == 0 && highestCol == 0) {
@@ -476,10 +456,10 @@ bool B1B2::getScore3Till(C B1B2 theOther) C {
 
         if (highestRow >= highestCol) {
             C i32 index = (uncRows[0] == highestRow) ? 0 :
-                    (uncRows[1] == highestRow) ? 1 :
-                    (uncRows[2] == highestRow) ? 2 :
-                    (uncRows[3] == highestRow) ? 3 :
-                    (uncRows[4] == highestRow) ? 4 : 5;
+                          (uncRows[1] == highestRow) ? 1 :
+                          (uncRows[2] == highestRow) ? 2 :
+                          (uncRows[3] == highestRow) ? 3 :
+                          (uncRows[4] == highestRow) ? 4 : 5;
 
             // Cover the chosen row and update the counts in uncCols
             diffCells -= uncRows[index];
@@ -492,10 +472,10 @@ bool B1B2::getScore3Till(C B1B2 theOther) C {
 
         } else {
             C i32 index = (uncCols[0] == highestCol) ? 0 :
-                    (uncCols[1] == highestCol) ? 1 :
-                    (uncCols[2] == highestCol) ? 2 :
-                    (uncCols[3] == highestCol) ? 3 :
-                    (uncCols[4] == highestCol) ? 4 : 5;
+                          (uncCols[1] == highestCol) ? 1 :
+                          (uncCols[2] == highestCol) ? 2 :
+                          (uncCols[3] == highestCol) ? 3 :
+                          (uncCols[4] == highestCol) ? 4 : 5;
 
             // Cover the chosen col and update the counts in uncRows
             diffCells -= uncCols[index];
@@ -524,39 +504,39 @@ bool B1B2::getScore3Till(C B1B2 theOther) C {
 
 
 
-template bool B1B2::getScore3Till<1>(B1B2 theOther) C;
-template bool B1B2::getScore3Till<2>(B1B2 theOther) C;
-template bool B1B2::getScore3Till<3>(B1B2 theOther) C;
-template bool B1B2::getScore3Till<4>(B1B2 theOther) C;
-template bool B1B2::getScore3Till<5>(B1B2 theOther) C;
+template HD bool B1B2::getScore3Till<1>(B1B2 theOther) C;
+template HD bool B1B2::getScore3Till<2>(B1B2 theOther) C;
+template HD bool B1B2::getScore3Till<3>(B1B2 theOther) C;
+template HD bool B1B2::getScore3Till<4>(B1B2 theOther) C;
+template HD bool B1B2::getScore3Till<5>(B1B2 theOther) C;
 
 
 
-MUND bool B1B2::canBeSolvedIn1Move(C B1B2 theOther) C {
+MUND HD bool B1B2::canBeSolvedIn1Move(C B1B2 theOther) C {
     static constexpr u64 PENIS_MASK = 0'111'111'111'111'111'111;
-    C u64 full = _pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
-                 | _pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
+    C u64 full = my_pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
+                 | my_pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
 
-    if EXPECT_FALSE(__builtin_popcountll(full) == 0) {
+    if EXPECT_FALSE(my_popcount(full) == 0) {
         return true;
     }
 
     alignas(u64) u8 uncRows[8] = {};
-    uncRows[0] = __builtin_popcountll(full & 0'770000000000); // this is base-8 LOL
-    uncRows[1] = __builtin_popcountll(full & 0'007700000000);
-    uncRows[2] = __builtin_popcountll(full & 0'000077000000);
-    uncRows[3] = __builtin_popcountll(full & 0'000000770000);
-    uncRows[4] = __builtin_popcountll(full & 0'000000007700);
-    uncRows[5] = __builtin_popcountll(full & 0'000000000077);
+    uncRows[0] = my_popcount(full & 0'770000000000); // this is base-8 LOL
+    uncRows[1] = my_popcount(full & 0'007700000000);
+    uncRows[2] = my_popcount(full & 0'000077000000);
+    uncRows[3] = my_popcount(full & 0'000000770000);
+    uncRows[4] = my_popcount(full & 0'000000007700);
+    uncRows[5] = my_popcount(full & 0'000000000077);
 
 
     alignas(u64) u8 uncCols[8] = {};
-    uncCols[0] = __builtin_popcountll(full & 0'404040404040);
-    uncCols[1] = __builtin_popcountll(full & 0'202020202020);
-    uncCols[2] = __builtin_popcountll(full & 0'101010101010);
-    uncCols[3] = __builtin_popcountll(full & 0'040404040404);
-    uncCols[4] = __builtin_popcountll(full & 0'020202020202);
-    uncCols[5] = __builtin_popcountll(full & 0'010101010101);
+    uncCols[0] = my_popcount(full & 0'404040404040);
+    uncCols[1] = my_popcount(full & 0'202020202020);
+    uncCols[2] = my_popcount(full & 0'101010101010);
+    uncCols[3] = my_popcount(full & 0'040404040404);
+    uncCols[4] = my_popcount(full & 0'020202020202);
+    uncCols[5] = my_popcount(full & 0'010101010101);
 
     C u32 countRow = countmore(*reinterpret_cast<u64*>(uncRows));
     C u32 countCol = countmore(*reinterpret_cast<u64*>(uncCols));
@@ -570,7 +550,7 @@ MUND bool B1B2::canBeSolvedIn1Move(C B1B2 theOther) C {
 
 
 
-MU u64 Board::getRowColIntersections(C u32 x, C u32 y) C {
+MU HD u64 Board::getRowColIntersections(C u32 x, C u32 y) C {
     static constexpr u64 C_MAIN_MASK = 0'000007'000007'000007;
     static constexpr u32 C_CNTR_MASKS[8] = {
             0x00000000, 0x02108421, 0x04210842, 0x06318C63,
@@ -593,7 +573,7 @@ MU u64 Board::getRowColIntersections(C u32 x, C u32 y) C {
     // find row_x5
     C u32 s_ps = row ^ (cntr_p1_r * 0'111111);
 
-    // TODO: could this use _pext_u64?
+    // TODO: could this use my_pext_u64?
     C u32 sim_r = ~(s_ps | s_ps >> 1 | s_ps >> 2) & 0'111111;
     C u32 p1_r = (sim_r & 0'101010) >> 2 | sim_r & 0'10101;
     C u32 row_t1 = (p1_r >> 8 | p1_r >> 4 | p1_r) & 0'77;
@@ -604,26 +584,26 @@ MU u64 Board::getRowColIntersections(C u32 x, C u32 y) C {
 }
 
 
-void Board::precomputeHash2() {
+HD void Board::precomputeHash2() {
     C u64 above = getSegment2bits(b1);
     C u64 below = getSegment2bits(b2);
     memory.setHash(above << 18 | below);
 }
 
 
-void Board::precomputeHash3() {
+HD void Board::precomputeHash4() {
+    memory.setHash(prime_func1(b2, b1));
+}
+
+
+void HD Board::precomputeHash3() {
     C u64 above = getSegment3bits(b1);
     C u64 below = getSegment3bits(b2);
     memory.setHash(above << 30 | below);
 }
 
 
-void Board::precomputeHash4() {
-    memory.setHash(prime_func1(b2, b1));
-}
-
-
-MU Board::HasherPtr Board::getHashFunc() C {
+MU HD Board::HasherPtr Board::getHashFunc() C {
     C u64 colorCount = getColorCount();
     if (getFatBool() || colorCount > 3) {
         return &Board::precomputeHash4;

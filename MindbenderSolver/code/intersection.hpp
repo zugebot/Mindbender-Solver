@@ -10,8 +10,11 @@
 #include "MindbenderSolver/utils/jvec.hpp"
 #include "MindbenderSolver/utils/hasGetHash.hpp"
 
-
+#ifdef USE_CUDA
+template<typename T>
+#else
 template<HasGetHash T>
+#endif
 void process_chunk(
         C JVec<T> &boards1,
         C JVec<T> &boards2,
@@ -20,6 +23,9 @@ void process_chunk(
         std::vector<std::pair<C T *, C T *>> &results) {
     auto it1 = boards1.begin() + static_cast<i64>(start1);
     C auto it1_end = boards1.begin() + static_cast<i64>(end1);
+
+    static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
+
 
     // Get min and max hash values in this chunk
     C u64 min_hash = it1->getHash();
@@ -66,11 +72,17 @@ void process_chunk(
 }
 
 
+#ifdef USE_CUDA
+template<typename T>
+#else
 template<HasGetHash T>
+#endif
 std::vector<std::pair<C T*, C T*>> intersection_threaded(
         C JVec<T>& boards1,
         C JVec<T>& boards2,
         size_t num_threads = std::thread::hardware_concurrency()) {
+    static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
+
     if (num_threads == 0) num_threads = 1;
     C size_t total_size = boards1.size();
     C size_t chunk_size = (total_size + num_threads - 1) / num_threads; // Round up
@@ -118,9 +130,15 @@ std::vector<std::pair<C T*, C T*>> intersection_threaded(
 }
 
 
+#ifdef USE_CUDA
+template<typename T>
+#else
 template<HasGetHash T>
+#endif
 std::vector<std::pair<C T *, C T *>> intersection(JVec<T>& boards1,
                                               JVec<T>& boards2) {
+    static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
+
     std::vector<std::pair<C T *, C T *>> results;
     auto it1 = boards1.begin();
     auto it2 = boards2.begin();
