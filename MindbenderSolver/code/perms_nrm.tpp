@@ -30,8 +30,7 @@ void make_perm_list_inner(C Board &board_in, JVec<T> &boards_out,
         }
         boards_out.resize(1);
 
-
-        // Base case: process and store the final board
+    // Base case: process and store the final board
     } else if constexpr (CUR_DEPTH == MAX_DEPTH) {
 
         if constexpr (std::is_same_v<T, Memory>) {
@@ -126,7 +125,7 @@ void make_perm_list_outer(C Board &board_in,
 
                 for (int sect = sect_start; sect < SECT_END; ++sect) {
                     ref.sect_seq[CUR_DEPTH] = sect;
-                    ref.base_seq[CUR_DEPTH] = dir * 30 + sect * 5;
+                    ref.base_seq[CUR_DEPTH] = (dir << 5) + sect * 5;
 
                     // Determine do_RC_check
                     if constexpr (CUR_DEPTH > 0) {
@@ -154,7 +153,7 @@ void make_perm_list_outer(C Board &board_in,
 
                 for (int sect = sect_start; sect >= SECT_END; --sect) {
                     ref.sect_seq[CUR_DEPTH] = sect;
-                    ref.base_seq[CUR_DEPTH] = dir * 30 + sect * 5;
+                    ref.base_seq[CUR_DEPTH] = (dir << 5) + sect * 5;
 
                     // Determine do_RC_check
                     if constexpr (CUR_DEPTH > 0) {

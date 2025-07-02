@@ -42,6 +42,12 @@ HD void recursive_helper(
 
 
 
+
+
+
+
+
+
 #ifdef __CUDA_ARCH__
 #define FUNC_DEF auto func = my_cuda::allActStructListGPU[actIndex]
 #else
@@ -49,14 +55,17 @@ HD void recursive_helper(
 #endif
 
 #define LOOP_DEF(ROW_TRUE_BOOL) \
-FUNC_DEF; \
-nextBoard = theBoard; \
-func.action(nextBoard); \
-if (nextBoard == theBoard) { continue; } \
-if constexpr (DIFF_DEPTH > 0 && DIFF_DEPTH < 6) { \
-    if (nextBoard.getScore3Till<DIFF_DEPTH>(theState.end)) { continue; } } \
-recursive_helper<CUR_DEPTH + 1, MAX_DEPTH, ROW_TRUE_BOOL>( \
-        theState, nextBoard, func.index + func.tillNext)
+    FUNC_DEF; \
+    nextBoard = theBoard; \
+    func.action(nextBoard); \
+                                \
+    if (nextBoard == theBoard) { continue; } \
+                                \
+    if constexpr (DIFF_DEPTH > 0 && DIFF_DEPTH < 6) { \
+        if (nextBoard.getScore3Till<DIFF_DEPTH>(theState.end)) { continue; } } \
+                                \
+    recursive_helper<CUR_DEPTH + 1, MAX_DEPTH, ROW_TRUE_BOOL>( \
+            theState, nextBoard, func.index + func.tillNext)
 
 
 
@@ -69,12 +78,14 @@ HD void recursive_helper(RefState<MAX_DEPTH>& theState, C B1B2 theBoard, C int t
     if constexpr (CUR_DEPTH < MAX_DEPTH) {
         static constexpr int DIFF_DEPTH = MAX_DEPTH - CUR_DEPTH;
 
-        C i32 startRow = ROW_TRUE ? theNext : 0; // row boundary
-        C i32 startCol = ROW_TRUE ? 30 : theNext; // col boundary
 
         B1B2 nextBoard;
-        for (int actIndex = startRow; actIndex < 30; ++actIndex) { LOOP_DEF(true); }
-        for (int actIndex = startCol; actIndex < 60; ++actIndex) { LOOP_DEF(false); }
+
+        for (int actIndex = ROW_TRUE ? theNext : 0;
+             actIndex < 30; ++actIndex) { LOOP_DEF(true); }
+
+        for (int actIndex = ROW_TRUE ? 32 : theNext;
+             actIndex < 62; ++actIndex) { LOOP_DEF(false); }
 
 
     } else if constexpr (CUR_DEPTH == MAX_DEPTH) {
@@ -186,20 +197,19 @@ int main() {
 
 
     std::cout << "starting" << std::endl;
-
-    C Board board = BoardLookup::getBoardPair("13-1")->getStartState();
+    // 13-1
+    C Board board = BoardLookup::getBoardPair("4-4")->getStartState();
     Board solve = board;
 
-    R_4_1(solve); // 0
-    C_5_5(solve); // 1
-    R_2_2(solve); // 2
-    R_1_5(solve); // 3
-    C_3_4(solve); // 4
-    R_2_2(solve); // 5
-    R_4_4(solve); // 6
+    solve.doMoves({R_4_1, C_5_5, R_2_2, R_1_5, C_3_4, R_2_2, R_4_4,});
+
+    Memory mem({20, 61, 11, 9, 50, 11, 23});
+    std::cout << mem.asmStringForwards() << "\n";
+
+
 
     constexpr int DEPTH = 7;
-    constexpr int NUM_THREADS = 64 * 22;
+    constexpr int NUM_THREADS = 64 * 1;
     constexpr int BLOCK_SIZE = 64;
     constexpr int GRID_SIZE = (NUM_THREADS + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
@@ -209,7 +219,15 @@ int main() {
     cpu_state.start = static_cast<B1B2>(solve);
     cpu_state.end = static_cast<B1B2>(board);
     recursive_helper<0, DEPTH, true>(cpu_state, cpu_state.start, 0);
-    std::cout << "cpu only time: " << cpu_only.getSeconds() << "\n\n";
+    std::cout << "cpu only time: " << cpu_only.getSeconds() << "\n";
+    std::cout << "Solves: " << cpu_state.count << std::endl;
+    std::cout << "Traversed: " << cpu_state.states_traversed << std::endl;
+    for (int i = 0; i < DEPTH + 1; ++i) {
+        std::cout << cpu_state.DEPTHS_COUNT[i];
+        if (i != DEPTH) {  std::cout << ", "; }
+    }
+    std::cout << "\n";
+
 
     std::cout << "Total Threads: " << NUM_THREADS << std::endl;
     // Host-side setup
@@ -235,11 +253,11 @@ int main() {
     // Launch kernel
     cudaRecursiveKernel<DEPTH><<<GRID_SIZE, BLOCK_SIZE>>>(d_states, NUM_THREADS);
 
-    CUDA_CHECK(cudaGetLastError()); // Check for kernel launch errors
+    CUDA_CHECK(cudaGetLastError());
 
 
     C Timer syncT;
-    CUDA_CHECK(cudaDeviceSynchronize()); // Synchronize and check for errors
+    CUDA_CHECK(cudaDeviceSynchronize());
     std::cout << "Synchronize: " << syncT.getSeconds() << std::endl;
 
     // Copy states back to host
@@ -248,7 +266,7 @@ int main() {
 
 
 
-
+    std::cout << "Time: " << syncT.getSeconds() << std::endl;
     std::cout << "Solves: " << h_states[0].count << std::endl;
     std::cout << "Traversed: " << h_states[0].states_traversed << std::endl;
     for (int i = 0; i < DEPTH + 1; ++i) {
@@ -259,7 +277,6 @@ int main() {
     // Cleanup
     delete[] h_states;
     CUDA_CHECK(cudaFree(d_states));
-
 
     return 0;
 }

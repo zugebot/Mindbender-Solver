@@ -1,12 +1,10 @@
 #include "board.hpp"
 
-
 #include <string>
 
-
-#include "MindbenderSolver/utils/colors.hpp"
 #include "segments.hpp"
 
+#include "MindbenderSolver/utils/colors.hpp"
 #include "MindbenderSolver/utils/intrinsics/clz.hpp"
 #include "MindbenderSolver/utils/intrinsics/pext_u64.hpp"
 #include "MindbenderSolver/utils/intrinsics/popcount.hpp"
@@ -35,8 +33,21 @@ Board::Board(C u8 values[36], C u8 x, C u8 y) {
 }
 
 
+static void setAllColors(B1B2 *b1b2, C u8 adjustedValues[36]) {
+    b1b2->b1 = 0;
+    for (int i = 0; i < 18; i++) {
+        b1b2->b1 = b1b2->b1 << 3 | adjustedValues[i] & 0'7;
+    }
+    b1b2->b2 = 0;
+    for (int i = 18; i < 36; i++) {
+        b1b2->b2 = b1b2->b2 << 3 | adjustedValues[i] & 0'7;
+    }
+}
+
+
 void B1B2::setState(C u8 values[36]) {
-    std::array<i8, 8> colors = {8, 8, 8, 8, 8, 8, 8, 8};
+    ColorArray_t colors = {8, 8, 8, 8, 8, 8, 8, 8};
+
     for (int i = 0; i < 36; i++) {
         C int val = values[i] & 0'7;
         colors[val] = 1;
@@ -53,17 +64,8 @@ void B1B2::setState(C u8 values[36]) {
         adjusted_values[i] = colors[values[i]];
     }
 
-    b1 = 0;
-    for (int i = 0; i < 18; i++) {
-        b1 = b1 << 3 | adjusted_values[i] & 0'7;
-    }
-    b2 = 0;
-    for (int i = 18; i < 36; i++) {
-        b2 = b2 << 3 | adjusted_values[i] & 0'7;
-    }
-
-    static constexpr u64 EVERYTHING_BUT_COLOR = 0xF0FF'FFFF'FFFF'FFFF;
-    b1 = b1 & EVERYTHING_BUT_COLOR | colorCount << 56;
+    setAllColors(this, adjusted_values);
+    setColorCount(colorCount);
 }
 
 
@@ -90,105 +92,138 @@ MU Board::ColorArray_t B1B2::setStateAndRetColors(C u8 values[36]) {
         adjusted_values[i] = colors[values[i]];
     }
 
-    b1 = 0;
-    for (int i = 0; i < 18; i++) {
-        b1 = b1 << 3 | adjusted_values[i] & 0'7;
-    }
-    b2 = 0;
-    for (int i = 18; i < 36; i++) {
-        b2 = b2 << 3 | adjusted_values[i] & 0'7;
-    }
-
-
-    static constexpr u64 EVERYTHING_BUT_COLOR = 0xF0FF'FFFF'FFFF'FFFF;
-    b1 = b1 & EVERYTHING_BUT_COLOR | colorCount << 56;
-
+    setAllColors(this, adjusted_values);
+    setColorCount(colorCount);
     return trueColors;
 }
 
 
-static constexpr u64 MASK_FAT_POS = 0x1FFF'FFFF'FFFF'FFFF;
+constexpr u64 MAKE_MASK(C u64 offset, C u64 bits) {
+    return ~(static_cast<u64>((1 << bits) - 1) << offset);
+}
 
-/**
- *
- * @param x value 0-4
- * @param y value 0-4
- */
-HD void B1B2::setFatXY(C u64 x, C u64 y) {
-    b1 = b1 & MASK_FAT_POS | x << 61;
-    b2 = b2 & MASK_FAT_POS | y << 61;
-    setFatBool(true);
+
+
+
+static constexpr u64 COLOR_COUNT_OFFSET = 54; // 54, 55, 56
+static constexpr u64 COLOR_COUNT_BITS = 3;
+static constexpr u64 COLOR_COUNT_MASK = MAKE_MASK(COLOR_COUNT_OFFSET, COLOR_COUNT_BITS);
+
+static constexpr u64 FAT_BOOL_OFFSET = 57; // 57
+static constexpr u64 FAT_BOOL_BITS = 1;
+static constexpr u64 FAT_BOOL_MASK = MAKE_MASK(FAT_BOOL_OFFSET, FAT_BOOL_BITS);
+
+static constexpr u64 FAT_Y_OFFSET = 58; // 58, 59, 60
+static constexpr u64 FAT_Y_BITS = 3;
+static constexpr u64 FAT_Y_MASK = MAKE_MASK(FAT_Y_OFFSET, FAT_Y_BITS);
+
+static constexpr u64 FAT_X_OFFSET = 61; // 61, 62, 63
+static constexpr u64 FAT_X_BITS = 3;
+static constexpr u64 FAT_X_MASK = MAKE_MASK(FAT_X_OFFSET, FAT_X_BITS);
+
+
+/// range: (0-7). Anything outside that will overflow data.
+MU HD void B1B2::setColorCount(u64 colorCount) {
+    b1 = (b1 & COLOR_COUNT_MASK) | ((colorCount - 1) << COLOR_COUNT_OFFSET);
+}
+u32 HD B1B2::getColorCount() C {
+    C u64 colorCount = (b1 & ~COLOR_COUNT_MASK) >> (COLOR_COUNT_OFFSET);
+    return colorCount + 1;
 }
 
 
 MU HD void B1B2::setFatBool(C bool flag) {
-    static constexpr u64 MASK_FAT_FLAG = 0xEFFF'FFFF'FFFF'FFFF;
-    b1 = b1 & MASK_FAT_FLAG | static_cast<u64>(flag) << 60;
-
+    b1 = (b1 & FAT_BOOL_MASK) | (static_cast<u64>(flag) << FAT_BOOL_OFFSET);
+}
+bool HD B1B2::getFatBool() C {
+    C bool state = (b1 >> FAT_BOOL_OFFSET) & 1;
+    return state;
 }
 
+
 MU HD void B1B2::setFatX(C u64 x) {
-    b1 = b1 & MASK_FAT_POS | x << 61;
+    b1 = (b1 & FAT_X_MASK) | x << FAT_X_OFFSET;
 }
 
 
 MU HD void B1B2::setFatY(C u64 y) {
-    b2 = b2 & MASK_FAT_POS | y << 61;
+    b1 = (b1 & FAT_Y_MASK) | y << FAT_Y_OFFSET;
 }
-
-
-MU HD void B1B2::addFatX(C u8 x) {
-    u64 cur_x = getFatX() + x;
-    cur_x -= 6 * (cur_x > 5);
-    b1 = b1 & MASK_FAT_POS | cur_x << 61;
-}
-
-
-MU HD void B1B2::addFatY(C u8 y) {
-    u64 cur_y = getFatY() + y;
-    cur_y -= 6 * (cur_y > 5);
-    b2 = b2 & MASK_FAT_POS | cur_y << 61;
-}
-
 
 u8 HD B1B2::getFatX() C {
-    return (b1 & ~MASK_FAT_POS) >> 61;
+    return (b1 & ~FAT_X_MASK) >> FAT_X_OFFSET;
 }
-
 
 u8 HD B1B2::getFatY() C {
-    return (b2 & ~MASK_FAT_POS) >> 61;
+    return (b1 & ~FAT_Y_MASK) >> FAT_Y_OFFSET;
 }
 
+
+
+
+
+/// 0b10001101000100010110001101000100
+static constexpr u64 ADD_FAT_MAGIC = 0x8D116344;
+
+// TODO: if fats don't work, it might be because of this!
+MU HD void B1B2::addFatX(C u64 x) {
+    b1 = (b1 & FAT_X_MASK)
+         | ( ((ADD_FAT_MAGIC >> (3 * (getFatX() + x) - 1)) & 0b111)
+            << FAT_X_OFFSET );
+}
+
+// TODO: if fats don't work, it might be because of this!
+MU HD void B1B2::addFatY(C u64 y) {
+    b1 = (b1 & FAT_Y_MASK)
+        | ( ((ADD_FAT_MAGIC >> (3 * (getFatY() + y) - 1)) & 0b111)
+            << FAT_Y_OFFSET );
+}
+
+
+
+
+
+
+/**
+ * @param x value 0-4
+ * @param y value 0-4
+ */
+HD void B1B2::setFatXY(C u64 x, C u64 y) {
+    setFatX(x);
+    setFatY(y);
+    setFatBool(true);
+}
 
 /// always returns a value between 0-24.
 u8 HD B1B2::getFatXY() C {
-    return (b1 >> 61) * 5 + (b2 >> 61);
+    return getFatX() * 5 + getFatY();
 }
 
 MU HD u8 B1B2::getFatXYFast() C {
-    return ((b1 >> 61) << 3) + (b2 >> 61);
+    return (getFatX() << 3) + getFatY();
 }
 
 
-bool HD B1B2::getFatBool() C {
-    C bool state = (b1 >> 60 & 1) != 0;
-    return state;
-}
 
+
+
+
+// TODO: shift amount can probably be cached for FAR better performance
+// TODO: specifically the ``% 3 * 18`` part
 MU u8 HD B1B2::getColor(C u8 x, C u8 y) C {
-    C i32 shift_amount = 51 - x * 3 - y % 3 * 18;
-    return *(&b1 + (y >= 3)) >> shift_amount & 0'7;
+    // C i32 shift_amount = 51 - x * 3 - y % 3 * 18;
+    static constexpr u64 MAGIC = 0x33210F33210F;
+    C u64 shift_amount = (MAGIC >> (y * 8)) - (x * 3);
+    return (*(&b1 + (y >= 3)) >> shift_amount) & 0'7;
 }
 
-
-u32 HD B1B2::getColorCount() C {
-    C u64 colorCount = b1 >> 56 & 0xF;
-    return colorCount;
-}
-
-
-
+/*
+ I need only 3 bits for each value
+ [  2,    1,    0,    2,    1,    0  ]
+  1'010 1'001 1'000 0'010 0'001 0'000
+  var = NUM >> (4 * y)
+  &b1 + var
+*/
 
 /**
  * int x = (action1 % 30) / 5;
@@ -278,6 +313,29 @@ MU HD u64 B1B2::getScore1(C B1B2 &other) C {
     return my_popcount(getSimilar54(b1, other.b1))
            + my_popcount(getSimilar54(b2, other.b2));
 }
+
+
+// 0'111;
+// 0'001;
+//   xor
+// 0'110;
+// 0'001;
+
+// 001'001'001
+// 000'000'001
+// xor
+
+
+
+
+
+// 001'010'100
+// 011'010'110
+// xor
+// 010'000'010
+// 001'000'001
+// 000'100'000
+
 
 
 
@@ -392,7 +450,7 @@ MUND HD int B1B2::getScore3(C B1B2 theOther) C {
 
 
 template<i32 MAX_DEPTH>
-HD bool B1B2::getScore3Till(C B1B2 theOther) C {
+[[maybe_unused]] HD bool B1B2::getScore3Till(C B1B2 theOther) C {
     // ++GET_SCORE_3_CALLS;
 
     // Find all differing cells and update the counts in uncRows and uncCols
@@ -503,7 +561,6 @@ HD bool B1B2::getScore3Till(C B1B2 theOther) C {
 }
 
 
-
 template HD bool B1B2::getScore3Till<1>(B1B2 theOther) C;
 template HD bool B1B2::getScore3Till<2>(B1B2 theOther) C;
 template HD bool B1B2::getScore3Till<3>(B1B2 theOther) C;
@@ -545,9 +602,10 @@ MUND HD bool B1B2::canBeSolvedIn1Move(C B1B2 theOther) C {
 }
 
 
-
-
-
+MU __host__ void B1B2::doMoves(
+        std::initializer_list<void (*)(B1B2 &)> theInitList) {
+    for (auto* func : theInitList) { func(*this); }
+}
 
 
 MU HD u64 Board::getRowColIntersections(C u32 x, C u32 y) C {
@@ -558,7 +616,6 @@ MU HD u64 Board::getRowColIntersections(C u32 x, C u32 y) C {
     C u32 left = 15 - x * 3;
     C u32 row = *(&b1 + (y >= 3)) >> (2 - y - 3 * (y >= 3)) * 18 & 0'777777;
     C u32 cntr_p1_r = row >> left & 0'7;
-
     // find col_x5
     C u64 col_mask = C_MAIN_MASK << left;
     C u64 b1_c = (b1 & col_mask) >> left;
@@ -569,10 +626,8 @@ MU HD u64 Board::getRowColIntersections(C u32 x, C u32 y) C {
     C u32 sim = ((~(s | s >> 1 | s >> 2)) & C_CNTR_MASKS[1]) * 31;
     C u32 col_x5 = (sim & (0x3FFFFFFF << (5 * (6 - y)))) >> 5
                    | sim & (0x1FFFFFF >> 5 * y);
-
     // find row_x5
     C u32 s_ps = row ^ (cntr_p1_r * 0'111111);
-
     // TODO: could this use my_pext_u64?
     C u32 sim_r = ~(s_ps | s_ps >> 1 | s_ps >> 2) & 0'111111;
     C u32 p1_r = (sim_r & 0'101010) >> 2 | sim_r & 0'10101;
@@ -582,6 +637,65 @@ MU HD u64 Board::getRowColIntersections(C u32 x, C u32 y) C {
 
     return col_x5 & row_x5;
 }
+
+
+/// only works for normal boards
+/// returns how many possible children boards
+/// can be made given previous moves (row only)
+MUND HD u32 Board::getRowCC() C {
+    if EXPECT_FALSE (memory.getMoveCount() == 0) { return 30; }
+
+    C u8 lastMove = memory.getLastMove();
+    if (lastMove < 32) {
+        return 25 - (lastMove & 0b11111) / 5 * 5;
+    } else {
+        return 30;
+    }
+}
+
+/// only works for normal boards
+/// returns how many possible children boards
+/// can be made given previous moves (col only)
+MUND HD u32 Board::getColCC() C {
+    if EXPECT_FALSE (memory.getMoveCount() == 0) { return 30; }
+
+    C u8 lastMove = memory.getLastMove();
+    if (lastMove < 32) {
+        return 30;
+    } else {
+        return 25 - (lastMove & 0b11111) / 5 * 5;
+    }
+}
+
+
+namespace my_cuda {
+    MU __constant__ u8 ROW_COL_OFFSETS[30] = {
+            25, 25, 25, 25, 25,
+            20, 20, 20, 20, 20,
+            15, 15, 15, 15, 15,
+            10, 10, 10, 10, 10,
+            5, 5, 5, 5, 5,
+            0, 0, 0, 0, 0
+    };
+}
+
+MU __device__ void Board::setRowColCC(u32* ptr) C {
+    C u8 lastMove = memory.getLastMove();
+    if (lastMove < 32) {
+        ptr[0] = my_cuda::ROW_COL_OFFSETS[lastMove & 0b11111];
+        ptr[1] = 30;
+    } else {
+        ptr[0] = 30;
+        ptr[1] = my_cuda::ROW_COL_OFFSETS[lastMove & 0b11111];
+    }
+
+}
+
+
+
+
+
+
 
 
 HD void Board::precomputeHash2() {

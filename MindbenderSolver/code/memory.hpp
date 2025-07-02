@@ -19,25 +19,20 @@ class Memory {
     static HD u8 getShift(C u32 moveCount) {
         return MEMORY_MOVE_DATA_BITSIZE + moveCount * MEMORY_MOVE_TYPE_BITSIZE; }
 
-    /**
-     * Todo: actually probably don't do this so 16+ moves don't require a re-write?
-     * make it so that
-     * 1-bit. - isSolved
-     * 1-bit. - has Fat
-     * 3-bits - fat X
-     * 3-bits - fat Y
-     * 3/4bit - color count
-     * this would leave mem to having a max of 8 moves.
-     */
-    u64 hash;
-    u64 mem;
+
+     u64 hash;
+     u64 mem{};
 public:
 
     /***
      * first 4 bits: move count
      * next 10 * 6 bits: moves
      */
-    HD Memory() : hash(0), mem(0) {}
+    HD Memory() {
+        hash = 0;
+        mem = 0;
+    }
+    HD Memory(MU std::initializer_list<u64> moveValues);
 
     // ############################################################
     // #                       u64 hash                           #
@@ -69,6 +64,7 @@ public:
     MUND HD u8 getLastMove() C;
 
     template<int COUNT> HD void setNextNMove(u64 moveValue);
+    MU HD void setNextMoves(std::initializer_list<u64> moveValues);
 
     // ############################################################
     // #            To String -Similar- Functions                 #

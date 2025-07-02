@@ -12,7 +12,7 @@
 #ifdef USE_CUDA
 template <int NUM_THREADS, typename T>
 #else
-template <int NUM_THREADS, HasGetHash T>
+template <int NUM_THREADS, HasGetHash_v T>
 #endif
 MU void parallel_sort(JVec<T>& data) {
  static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");

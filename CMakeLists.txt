@@ -1,8 +1,18 @@
 cmake_minimum_required(VERSION 3.24)
 
-
 set(CMAKE_CXX_STANDARD 23)
-option(USE_CUDA "Enable CUDA support" ON) # "ON" or "OFF"
+
+
+unset(USE_CUDA CACHE)
+option(USE_CUDA "Enable CUDA support" OFF) # "ON" or "OFF"
+
+
+unset(USE_TRIMMED_ROTATIONS CACHE)
+option(USE_TRIMMED_ROTATIONS "Smaller memory for rotation functions" ON)
+if (USE_TRIMMED_ROTATIONS)
+    add_compile_definitions(-DUSE_TRIMMED_ROTATIONS)
+endif()
+
 
 
 # project decl
@@ -12,6 +22,20 @@ if (USE_CUDA)
     enable_language(CUDA)
     message(STATUS "CUDA support enabled")
 
+    # set files to be interpreted as .cu
+    set_source_files_properties(
+            "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/rotations.cpp"
+            PROPERTIES LANGUAGE CUDA
+    )
+    set_source_files_properties(
+            "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/board.cpp"
+            PROPERTIES LANGUAGE CUDA
+    )
+    set_source_files_properties(
+            "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/memory.cpp"
+            PROPERTIES LANGUAGE CUDA
+    )
+
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED True)
     find_package(CUDAToolkit REQUIRED)
@@ -19,6 +43,11 @@ if (USE_CUDA)
 else()
     project(MindbenderSolver LANGUAGES C CXX)
     message(STATUS "CUDA support disabled")
+endif()
+
+
+if (USE_BOARD_HASH)
+    add_compile_definitions(-DUSE_BOARD_HASH)
 endif()
 
 
@@ -60,8 +89,18 @@ file(GLOB_RECURSE MINDBENDER_SOLVER_SOURCES
 file(GLOB_RECURSE INCLUDE_SOURCES
         "${CMAKE_SOURCE_DIR}/include/*.*pp"
 )
-set(MAIN_FILE "${CMAKE_SOURCE_DIR}/MindbenderSolver/programs/testDFS.cpp")
-set_source_files_properties(${MAIN_FILE} PROPERTIES LANGUAGE CUDA)
+set(PROGRAM_FOLDER "${CMAKE_SOURCE_DIR}/MindbenderSolver/programs")
+
+# set(MAIN_FILE "${PROGRAM_FOLDER}/testLayeredDFS.cpp")
+set(MAIN_FILE "${PROGRAM_FOLDER}/testKnownSolutions.cpp")
+# set(MAIN_FILE "${PROGRAM_FOLDER}/testPuzzlesValid.cpp")
+
+
+if (USE_CUDA)
+    set_source_files_properties(${MAIN_FILE} PROPERTIES LANGUAGE CUDA)
+endif()
+
+
 add_executable(MindbenderSolver
         ${MAIN_FILE}
         ${MINDBENDER_SOLVER_SOURCES}
@@ -78,23 +117,24 @@ endif()
 # compiler-specific options
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(MindbenderSolver PRIVATE
-            $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -flto -funroll-loops -fstrict-aliasing -fomit-frame-pointer>
+            $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -funroll-loops -fstrict-aliasing -fomit-frame-pointer>
             $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O3,-Xcompiler=-march=native,-Xcompiler=-flto,-Xcompiler=-funroll-loops,-Xcompiler=-fstrict-aliasing,-Xcompiler=-fomit-frame-pointer>
     )
-    target_link_options(MindbenderSolver PRIVATE -flto)
+
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
         target_compile_options(MindbenderSolver PRIVATE
-                $<$<COMPILE_LANGUAGE:CXX>:/O2 /GL>
-                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/O2>
+                $<$<COMPILE_LANGUAGE:CXX>:/O2 /GL /FA>
+                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler="/O2 /GL">
         )
     else()
-        # For Debug builds, add only necessary flags without conflicting optimizations
+        # Debug mode
         target_compile_options(MindbenderSolver PRIVATE
-                $<$<COMPILE_LANGUAGE:CXX>:/Zi>
-                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zi>
+                $<$<COMPILE_LANGUAGE:CXX>:/Zi /FA>
+                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler="/Zi">
         )
     endif()
+
 endif()
 
 

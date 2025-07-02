@@ -68,7 +68,15 @@ int main() {
 
         clear_cmd();
         std::cout << "\n";
-        std::cout << boardPair->getName() << "\n\n";
+        std::cout << "Name  : " << boardPair->getName() << "\n";
+        std::cout << "Colors: " << boardPair->getStartState().getColorCount() << "\n";
+        std::cout << "Fat   : ";
+        if (boardPair->getStartState().getFatBool()) {
+            std::cout << "True\n";
+        } else {
+            std::cout << "False\n";
+        }
+        std::cout << "\n";
         std::cout << boardPair->toStringReversed() << "\n";
         std::cout << std::flush;
     }

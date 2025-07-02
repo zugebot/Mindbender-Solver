@@ -9,6 +9,9 @@
 
 // extern int GET_SCORE_3_CALLS;
 
+class B1B2;
+typedef void (*Action)(B1B2 &);
+
 
 /**
  * Holds the chuzzle colors and other information.
@@ -18,16 +21,17 @@ struct B1B2 {
 
     /**
      *  3 bits: fat x position
+     *  3 bits: fat y position
      *  1 bit : 1 if has a fat, otherwise 0
-     *  4 bits: (# of colors - 1)
-     *  2 bits: unused
-     * 54 bits: holds upper 3x6 cell grid (3 bits each)
+     *  3 bits: (# of colors - 1)
+     * 54 bits: holds upper 3x6 cell grid (3 bits each, 18 total)
      */
     u64 b1 = 0;
     /**
-     *  3 bits: fat y position
-     *  7 bits: unused
-     * 54 bits: holds lower 3x6 cell grid (3 bits each)
+     * >>>  6 bits: last move
+     * >>>  4 bits: total moves
+     * 10 bits: unused
+     * 54 bits: holds lower 3x6 cell grid (3 bits each, 18 total)
      */
     u64 b2 = 0;
 
@@ -35,34 +39,43 @@ struct B1B2 {
     HD B1B2(u64 theB1, u64 theB2) : b1(theB1), b2(theB2) {}
 
     MU void setState(C u8 values[36]);
-    MU std::array<i8, 8> setStateAndRetColors(C u8 values[36]);
+    MU ColorArray_t setStateAndRetColors(C u8 values[36]);
+
+
+    MU HD void setColorCount(u64 colorCount);
+    MUND HD u32 getColorCount() C;
+
+
+    MU HD void setFatBool(bool flag);
+    MUND HD bool getFatBool() C;
+
+
+    MU HD void setFatX(u64 x);
+    MU HD void addFatX(u64 x);
+    MUND HD u8 getFatX() C;
+
+
+    MU HD void setFatY(u64 y);
+    MU HD void addFatY(u64 y);
+    MUND HD u8 getFatY() C;
+
 
     MU HD void setFatXY(u64 x, u64 y);
     MUND HD u8 getFatXY() C;
     MUND HD u8 getFatXYFast() C;
 
-    MU HD void setFatBool(bool flag);
-    MUND HD bool getFatBool() C;
 
-    MU HD void setFatX(u64 x);
-    MU HD void addFatX(u8 x);
-    MUND HD u8 getFatX() C;
-
-    MU HD void setFatY(u64 y);
-    MU HD void addFatY(u8 y);
-    MUND HD u8 getFatY() C;
 
     MUND HD u8 getColor(u8 x, u8 y) C;
-    MUND HD u32 getColorCount() C;
 
     MUND HD u64 getScore1(C B1B2& other) C;
     MUND HD int getScore3(B1B2 theOther) C;
 
     template<int MAX_DEPTH>
     MUND HD bool getScore3Till(B1B2 theOther) C;
-
     MUND HD bool canBeSolvedIn1Move(B1B2 theOther) C;
 
+    MU __host__ void doMoves(std::initializer_list<Action> theInitList);
 
     __forceinline HD bool operator==(C B1B2& other) C {
         return b1 == other.b1 && b2 == other.b2; }
@@ -85,7 +98,7 @@ public:
     Memory memory;
 
     explicit Board() = default;
-    explicit Board(C std::initializer_list<u8> values);
+    Board(C std::initializer_list<u8> values);
     explicit Board(C u8 values[36]);
     explicit Board(C u8 values[36], u8 x, u8 y);
 
@@ -101,6 +114,10 @@ public:
     MUND HD static double getDuplicateEstimateAtDepth(u32 depth);
     MUND HD u64 getRowColIntersections(u32 x, u32 y) C;
 
+    MUND HD u32 getRowCC() C;
+    MUND HD u32 getColCC() C;
+
+    MU __device__ void setRowColCC(u32* ptr) C;
 
 
     MU HD void precomputeHash2();
@@ -135,4 +152,8 @@ extern template HD bool B1B2::getScore3Till<4>(C B1B2 theOther) C;
 extern template HD bool B1B2::getScore3Till<5>(C B1B2 theOther) C;
 
 
-
+#ifdef USE_CUDA
+namespace my_cuda {
+    MU __constant__ extern u8 ROW_COL_OFFSETS[30];
+}
+#endif

@@ -18,6 +18,6 @@ constexpr bool HasGetHash_v = HasGetHash<T>::value;
 #else
 #include <concepts>
 template<typename T>
-concept HasGetHash = requires(T a) { { a.getHash() } -> std::same_as<u64>; };
+concept HasGetHash_v = requires(T a) { { a.getHash() } -> std::same_as<u64>; };
 
 #endif

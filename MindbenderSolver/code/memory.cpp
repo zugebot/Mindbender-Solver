@@ -8,6 +8,14 @@
 #include <sstream>
 
 
+HD Memory::Memory(MU std::initializer_list<u64> moveValues) {
+    hash = 0;
+    mem = 0;
+    for (C auto& moveValue : moveValues) {
+        setNextNMove<1>(moveValue);
+    }
+}
+
 
 // ############################################################
 // #                       u64 hash                           #
@@ -42,6 +50,13 @@ MU HD Memory::HasherPtr Memory::getHashFunc(C Board& board) {
         return &Memory::precomputeHash2;
     }
     return &Memory::precomputeHash3;
+}
+
+
+MU HD void Memory::setNextMoves(std::initializer_list<u64> moveValues) {
+    for (C auto& moveValue : moveValues) {
+        setNextNMove<1>(moveValue);
+    }
 }
 
 
@@ -186,7 +201,8 @@ std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
 
     for (u32 i = 0; i < count; i++) {
         char temp[5] = {};
-        memcpy(temp, allActStructList[fatActionsIndexes[x * 5 + y][getMove(i)]].name.data(), 4);
+        memcpy(temp, allActStructList[
+            fatActionsIndexes[x * 5 + y][getMove(i)]].name.data(), 4);
         C u32 back = 2 + (temp[3] != '\0');
 
         if (back == 3) { // if it is a fat move
@@ -195,7 +211,7 @@ std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
                     x += temp[back] - '0'; // amount
                     x -= 6 * (x > 5);
                 }
-            } else if EXPECT_FALSE(temp[0] == 'C') {
+            } else if EXPECT_TRUE(temp[0] == 'C') {
                 if (temp[1] - '0' == x) { // axisNum
                     y += temp[back] - '0'; // amount
                     y -= 6 * (y > 5);
@@ -218,6 +234,7 @@ std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
 
     return moves_str;
 }
+
 
 MU std::string Memory::toString() C {
     std::string str = "Move[";
@@ -244,13 +261,13 @@ std::vector<u8> parseMoveStringTemplated(C std::string& input) {
     while (iss >> seg) {
         if (seg.length() == 3) {
             // getActionFromName(seg);
-            C u8 baseValue = seg[0] == 'R' ? 0 : 30;  // R=0, C=30
+            C u8 baseValue = seg[0] == 'R' ? 0 : 32;  // R=0, C=32
             C u32 value = baseValue + (seg[1] - '0') * 5 + (seg[2] - '0') - 1;
             result.push_back(value);
 
         } else if (seg.length() == 4) {
             // getActionFromName(seg);
-            C u8 baseValue = seg[0] == 'R' ? 60 : 85;  // R=60, C=85
+            C u8 baseValue = seg[0] == 'R' ? 64 : 89;  // R=64, C=89
             C u32 value = baseValue + (seg[1] - '0') * 5 + (seg[3] - '0') - 1;
             result.push_back(value);
         }

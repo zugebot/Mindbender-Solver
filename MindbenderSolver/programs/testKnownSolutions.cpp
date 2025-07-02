@@ -79,7 +79,15 @@ std::vector<std::string> readFileLines(const std::string& filename) {
 
 
 int main() {
-    // std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
+
+    u32 x = 0x1;
+    i32 shift;
+    std::cin >> shift;
+    volatile u32 result = x << shift;
+
+    std::cout << result << std::endl;
+
+    // std::string outDirectory = R"(C:\Users\%USERNAME%\CLionProjects\Mindbender-Solver)";
     std::string folder = "levels";
     std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver\)" + folder + "\\";
 
@@ -89,6 +97,7 @@ int main() {
     for (const auto& file : files) {
         auto [X, Y, M, N] = parseFileName(file);
 
+        if (X == 6 && Y < 5) { continue; }
         std::string levelName = std::to_string(X) + "-" + std::to_string(Y);
         if (levelName.size() >= 5) {
             std::cout << "[" << std::setw(4) << levelName
@@ -106,8 +115,8 @@ int main() {
         }
 
 
-        Board startingBoard = pair->getInitialState();
-        Board realSolutionBoard = pair->getSolutionState();
+        Board startingBoard = pair->getStartState();
+        Board realSolutionBoard = pair->getEndState();
 
         // std::cout << realSolutionBoard.toString(startingBoard) << std::endl;
 

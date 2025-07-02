@@ -13,7 +13,7 @@
 #ifdef USE_CUDA
 template<typename T>
 #else
-template<HasGetHash T>
+template<HasGetHash_v T>
 #endif
 void process_chunk(
         C JVec<T> &boards1,
@@ -75,7 +75,7 @@ void process_chunk(
 #ifdef USE_CUDA
 template<typename T>
 #else
-template<HasGetHash T>
+template<HasGetHash_v T>
 #endif
 std::vector<std::pair<C T*, C T*>> intersection_threaded(
         C JVec<T>& boards1,
@@ -133,7 +133,7 @@ std::vector<std::pair<C T*, C T*>> intersection_threaded(
 #ifdef USE_CUDA
 template<typename T>
 #else
-template<HasGetHash T>
+template<HasGetHash_v T>
 #endif
 std::vector<std::pair<C T *, C T *>> intersection(JVec<T>& boards1,
                                               JVec<T>& boards2) {

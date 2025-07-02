@@ -40,7 +40,7 @@
 #ifdef USE_CUDA
 template<int NUM_PASSES, int NUM_BITS_PER_PASS, typename T, bool DEBUG=false>
 #else
-template<int NUM_PASSES, int NUM_BITS_PER_PASS, HasGetHash T, bool DEBUG=false>
+template<int NUM_PASSES, int NUM_BITS_PER_PASS, HasGetHash_v T, bool DEBUG=false>
 #endif
 void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
     static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");

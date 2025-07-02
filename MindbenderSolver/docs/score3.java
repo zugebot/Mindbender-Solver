@@ -35,7 +35,7 @@
 
         // Find all differing cells and update the counts in uncoveredRows
         // and uncoveredColumns
-        // for C++, I can instantly sum the rows, but idk about the columns
+        // for C++, I can instantly sum the rows, but setAllColors about the columns
         for (int i = 0; i < BOARD_SIZE; i++) {
             for (int j = 0; j < BOARD_SIZE; j++) {
                 if (this.myBoard[i][j] != theOther.myBoard[i][j]) {

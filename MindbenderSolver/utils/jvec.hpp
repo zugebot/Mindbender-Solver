@@ -1,5 +1,7 @@
 #pragma once
 
+#include <initializer_list>
+
 void _JVEC_HIDDEN_PRINTF(const char* str, unsigned long long num);
 void _JVEC_HIDDEN_MEMCPY(void *dst, const void *src, unsigned long long size);
 
@@ -16,6 +18,7 @@ class [[maybe_unused]] JVec {
 public:
     [[maybe_unused]] explicit JVec();
     [[maybe_unused]] explicit JVec(unsigned long long theCapacity);
+    [[maybe_unused]] JVec(std::initializer_list<T> theInitList);
     ~JVec();
 
     JVec(const JVec& other);
@@ -61,9 +64,23 @@ template<class T>
 [[maybe_unused]] JVec<T>::JVec(const unsigned long long theCapacity) {
     mySize = 0;
     myCapacity = theCapacity;
-    myRawMemory = operator new[](theCapacity * sizeof(T));
+    myRawMemory = operator new[](myCapacity * sizeof(T));
     if (!myRawMemory) {
-        _JVEC_HIDDEN_PRINTF("failed to allocate jVec with size %llu", theCapacity);
+        _JVEC_HIDDEN_PRINTF("failed to allocate jVec with size %llu", myCapacity);
+    }
+}
+
+
+template<class T>
+[[maybe_unused]] JVec<T>::JVec(std::initializer_list<T> theInitList) {
+    mySize = theInitList.size();
+    myCapacity = theInitList.size();
+    myRawMemory = operator new[](myCapacity * sizeof(T));
+    T* memoryPtr = reinterpret_cast<T*>(myRawMemory);
+
+    auto it = theInitList.begin();
+    for (unsigned long long i = 0; i < myCapacity; ++i, ++it) {
+        new (memoryPtr + i) T(*it);
     }
 }
 
