@@ -24,15 +24,15 @@ if (USE_CUDA)
 
     # set files to be interpreted as .cu
     set_source_files_properties(
-            "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/rotations.cpp"
+            "${CMAKE_SOURCE_DIR}/code/rotations.cpp"
             PROPERTIES LANGUAGE CUDA
     )
     set_source_files_properties(
-            "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/board.cpp"
+            "${CMAKE_SOURCE_DIR}/code/board.cpp"
             PROPERTIES LANGUAGE CUDA
     )
     set_source_files_properties(
-            "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/memory.cpp"
+            "${CMAKE_SOURCE_DIR}/code/memory.cpp"
             PROPERTIES LANGUAGE CUDA
     )
 
@@ -81,15 +81,15 @@ endif()
 
 # file structure of project
 file(GLOB_RECURSE MINDBENDER_SOLVER_SOURCES
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/*.*pp"
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/code/*.*cu"
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/utils/*.*pp"
-        "${CMAKE_SOURCE_DIR}/MindbenderSolver/include.hpp"
+        "${CMAKE_SOURCE_DIR}/code/*.*pp"
+        "${CMAKE_SOURCE_DIR}/code/*.*cu"
+        "${CMAKE_SOURCE_DIR}/utils/*.*pp"
+        "${CMAKE_SOURCE_DIR}/include.hpp"
 )
 file(GLOB_RECURSE INCLUDE_SOURCES
         "${CMAKE_SOURCE_DIR}/include/*.*pp"
 )
-set(PROGRAM_FOLDER "${CMAKE_SOURCE_DIR}/MindbenderSolver/programs")
+set(PROGRAM_FOLDER "${CMAKE_SOURCE_DIR}/programs")
 
 # set(MAIN_FILE "${PROGRAM_FOLDER}/testLayeredDFS.cpp")
 set(MAIN_FILE "${PROGRAM_FOLDER}/testKnownSolutions.cpp")
