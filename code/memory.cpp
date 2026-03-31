@@ -7,6 +7,11 @@
 
 #include <sstream>
 
+namespace {
+    Memory::HashMode gHashModeOverride = Memory::HashMode::Auto;
+    Memory::CustomHashFunc gCustomHashFunc = nullptr;
+}
+
 
 // ############################################################
 // #                       u64 hash                           #
@@ -32,7 +37,49 @@ HD void Memory::precomputeHash4(C u64 b1, C u64 b2) {
 }
 
 
+HD void Memory::precomputeHashCustom(C u64 b1, C u64 b2) {
+    if (gCustomHashFunc != nullptr) {
+        setHash(gCustomHashFunc(b1, b2));
+        return;
+    }
+    // Safe fallback keeps behavior stable if Custom mode is selected without a callback.
+    precomputeHash4(b1, b2);
+}
+
+
+void Memory::setHashModeOverride(C HashMode mode) {
+    gHashModeOverride = mode;
+}
+
+
+Memory::HashMode Memory::getHashModeOverride() {
+    return gHashModeOverride;
+}
+
+
+void Memory::setCustomHashFunc(C CustomHashFunc func) {
+    gCustomHashFunc = func;
+}
+
+
+Memory::CustomHashFunc Memory::getCustomHashFunc() {
+    return gCustomHashFunc;
+}
+
+
 MU HD Memory::HasherPtr Memory::getHashFunc(C Board& board) {
+    switch (gHashModeOverride) {
+        case HashMode::Hash2: return &Memory::precomputeHash2;
+        case HashMode::Hash3: return &Memory::precomputeHash3;
+        case HashMode::Hash4: return &Memory::precomputeHash4;
+        case HashMode::Custom:
+            if (gCustomHashFunc != nullptr) {
+                return &Memory::precomputeHashCustom;
+            }
+            break;
+        case HashMode::Auto: break;
+    }
+
     C u64 colorCount = board.getColorCount();
     if (board.getFatBool() || colorCount > 3) {
         return &Memory::precomputeHash4;

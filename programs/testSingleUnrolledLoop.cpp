@@ -1,16 +1,15 @@
 #include "code/include.hpp"
+#include "code/right_cache_index.hpp"
 
-struct HashRange {
-    u64 hash;
-    size_t begin;
-    size_t end;
-};
+constexpr u32 RIGHT_PREFIX_BITS = 20;
+constexpr Memory::HashMode HASH_MODE = Memory::HashMode::Auto;
 
 struct RightCache {
     JVec<Board> rightFrontier;
-    std::vector<HashRange> rightHashRanges;
+    right_cache_idx::PrefixIndex rightPrefixIndex;
     double rightBuildTime = 0.0;
     double rightSortTime = 0.0;
+    double rightIndexTime = 0.0;
 };
 
 struct TrialTimings {
@@ -107,54 +106,31 @@ static RightCache buildRightCache(C Board& start, C Board& goal, C u32 rightDept
 #endif
     cache.rightSortTime = timerRightSort.getSeconds();
 
-    std::cout << "[RC] Caching..." << std::endl;
-    cache.rightHashRanges.reserve(cache.rightFrontier.size());
-    for (size_t i = 0; i < cache.rightFrontier.size();) {
-        C u64 hash = cache.rightFrontier[i].getHash();
-        size_t j = i + 1;
-        while (j < cache.rightFrontier.size() && cache.rightFrontier[j].getHash() == hash) {
-            ++j;
-        }
-        cache.rightHashRanges.push_back({hash, i, j});
-        i = j;
-    }
+    std::cout << "[RC] Indexing..." << std::endl;
+    C Timer timerRightIndex;
+    cache.rightPrefixIndex.build(cache.rightFrontier, {RIGHT_PREFIX_BITS});
+    cache.rightIndexTime = timerRightIndex.getSeconds();
 
-    C size_t boardCount = cache.rightFrontier.size();
-    C size_t bucketCount = cache.rightHashRanges.size();
-    size_t maxBucketSize = 0;
-    size_t singleBucketCount = 0;
-    size_t multiBucketCount = 0;
-    size_t collisionBoards = 0;
-
-    for (C HashRange& range : cache.rightHashRanges) {
-        C size_t bucketSize = range.end - range.begin;
-        if (bucketSize > maxBucketSize) {
-            maxBucketSize = bucketSize;
-        }
-        if (bucketSize == 1) {
-            ++singleBucketCount;
-        } else {
-            ++multiBucketCount;
-            collisionBoards += bucketSize - 1;
-        }
-    }
-
-    C double avgBoardsPerBucket = bucketCount == 0
+    C auto& stats = cache.rightPrefixIndex.stats;
+    C double singlePct = stats.nonEmptyBuckets == 0
             ? 0.0
-            : static_cast<double>(boardCount) / static_cast<double>(bucketCount);
-    C double singletonPct = bucketCount == 0
+            : (100.0 * static_cast<double>(stats.singleBucketCount) / static_cast<double>(stats.nonEmptyBuckets));
+    C double multiPct = stats.nonEmptyBuckets == 0
             ? 0.0
-            : (100.0 * static_cast<double>(singleBucketCount) / static_cast<double>(bucketCount));
-    C double multiBucketPct = bucketCount == 0
-            ? 0.0
-            : (100.0 * static_cast<double>(multiBucketCount) / static_cast<double>(bucketCount));
+            : (100.0 * static_cast<double>(stats.multiBucketCount) / static_cast<double>(stats.nonEmptyBuckets));
 
-    std::cout << "[RC] Bucket count: " << bucketCount << std::endl;
-    std::cout << "[RC] Avg boards/bucket: " << avgBoardsPerBucket << std::endl;
-    std::cout << "[RC] Max bucket size: " << maxBucketSize << std::endl;
-    std::cout << "[RC] Single-board buckets: " << singleBucketCount << " (" << singletonPct << "%)" << std::endl;
-    std::cout << "[RC] Multi-board buckets: " << multiBucketCount << " (" << multiBucketPct << "%)" << std::endl;
-    std::cout << "[RC] Collision boards (non-first entries): " << collisionBoards << std::endl;
+    std::cout << "[RC] Prefix bits: " << cache.rightPrefixIndex.getPrefixBits() << std::endl;
+    std::cout << "[RC] Total prefix buckets: " << cache.rightPrefixIndex.getBucketCount() << std::endl;
+    std::cout << "[RC] Non-empty prefix buckets: " << stats.nonEmptyBuckets
+              << " (" << stats.occupancyPct << "%)" << std::endl;
+    std::cout << "[RC] Avg boards/bucket (all): " << stats.avgBoardsPerBucket << std::endl;
+    std::cout << "[RC] Avg boards/bucket (non-empty): " << stats.avgBoardsPerNonEmptyBucket << std::endl;
+    std::cout << "[RC] Max bucket size: " << stats.maxBucketSize << std::endl;
+    std::cout << "[RC] Single-board non-empty buckets: " << stats.singleBucketCount
+              << " (" << singlePct << "%)" << std::endl;
+    std::cout << "[RC] Multi-board non-empty buckets: " << stats.multiBucketCount
+              << " (" << multiPct << "%)" << std::endl;
+    std::cout << "[RC] Collision boards (non-first entries): " << stats.collisionBoards << std::endl;
 
 
     return cache;
@@ -167,19 +143,26 @@ static bool tryMeet(C Board& leftRoot,
                     C Memory*& rightOut) {
     for (size_t li = 0; li < left.size(); ++li) {
         C u64 leftHash = left[li].getHash();
-        C auto it = std::lower_bound(
-                cache.rightHashRanges.begin(), cache.rightHashRanges.end(), leftHash,
-                [](C HashRange& range, u64 value) { return range.hash < value; });
-        if (it == cache.rightHashRanges.end() || it->hash != leftHash) {
+        C auto [rangeBegin, rangeEnd] = cache.rightPrefixIndex.getRange(leftHash);
+        if (rangeBegin == rangeEnd) {
+            continue;
+        }
+
+        C Board* first = cache.rightFrontier.begin() + rangeBegin;
+        C Board* last = cache.rightFrontier.begin() + rangeEnd;
+        C auto it = std::lower_bound(first, last, leftHash,
+                                     [](C Board& board, C u64 value) {
+                                         return board.getHash() < value;
+                                     });
+        if (it == last || it->getHash() != leftHash) {
             continue;
         }
 
         C Board leftMid = makeBoardWithMoves(leftRoot, left[li]);
-        for (size_t rj = it->begin; rj < it->end; ++rj) {
-            C Board& rightMid = cache.rightFrontier[rj];
-            if (leftMid == rightMid) {
+        for (C Board* jt = it; jt != last && jt->getHash() == leftHash; ++jt) {
+            if (leftMid == *jt) {
                 leftOut = &left[li];
-                rightOut = &cache.rightFrontier[rj].getMemory();
+                rightOut = &jt->getMemory();
                 return true;
             }
         }
@@ -292,7 +275,9 @@ int main() {
     constexpr u32 LEFT_LOOP = 0;
     constexpr u32 LEFT_DEPTH = 2;
     constexpr u32 RIGHT_DEPTH = 5;
-    constexpr u32 RUN_COUNT = 1;
+    constexpr u32 RUN_COUNT = 20;
+
+    Memory::setHashModeOverride(HASH_MODE);
 
     C std::string levelName = "5-3";
     C auto pair = BoardLookup::getBoardPair(levelName);
@@ -310,7 +295,7 @@ int main() {
     std::cout << "Right size (depth " << RIGHT_DEPTH << "): " << result.rightCache.rightFrontier.size() << std::endl;
     std::cout << "Right build time (one-time): " << result.rightCache.rightBuildTime << std::endl;
     std::cout << "Right sort time (one-time): " << result.rightCache.rightSortTime << std::endl;
-    std::cout << "Right mid cache time (one-time): 0" << std::endl;
+    std::cout << "Right index time (one-time): " << result.rightCache.rightIndexTime << std::endl;
     std::cout << "Avg left build time: " << result.avgLeftBuildTime << std::endl;
     std::cout << "Avg left sort time: 0" << std::endl;
     std::cout << "Avg meet time: " << result.avgMeetTime << std::endl;

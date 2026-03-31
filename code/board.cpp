@@ -711,6 +711,15 @@ void HD Board::precomputeHash3() {
 
 
 MU HD Board::HasherPtr Board::getHashFunc() C {
+#ifndef __CUDA_ARCH__
+    switch (Memory::getHashModeOverride()) {
+        case Memory::HashMode::Hash2: return &Board::precomputeHash2;
+        case Memory::HashMode::Hash3: return &Board::precomputeHash3;
+        case Memory::HashMode::Hash4: return &Board::precomputeHash4;
+        case Memory::HashMode::Auto: break;
+    }
+#endif
+
     C u64 colorCount = getColorCount();
     if (getFatBool() || colorCount > 3) {
         return &Board::precomputeHash4;

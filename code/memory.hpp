@@ -22,6 +22,12 @@ class Memory {
      u64 hash;
      u64 mem;
 public:
+    enum class HashMode : u8 {
+        Auto = 0,
+        Hash2,
+        Hash3,
+        Hash4,
+    };
 
     /***
      * first 4 bits: move count
@@ -49,6 +55,8 @@ public:
     MU HD void precomputeHash2(u64 b1, u64 b2);
     MU HD void precomputeHash3(u64 b1, u64 b2);
     MU HD void precomputeHash4(u64 b1, u64 b2);
+    MU static void setHashModeOverride(HashMode mode);
+    MUND static HashMode getHashModeOverride();
     MUND HD static HasherPtr getHashFunc(C Board& board);
 
     __forceinline HD bool operator==(C Memory& other) C { return hash == other.hash; }

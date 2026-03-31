@@ -126,6 +126,7 @@ public:
     MU HD void precomputeHash2();
     MU HD void precomputeHash3();
     MU HD void precomputeHash4();
+    MU HD void precomputeHashCustom();
     MUND HD HasherPtr getHashFunc() C;
 
 
