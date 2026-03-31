@@ -3,8 +3,8 @@
 #include "board.hpp"
 
 
-#define PERM_MACRO(name) __host__ __device__ void name(B1B2 &board)
 
+#define PERM_MACRO(name) __host__ __device__ void name(B1B2 &board)
 
 // permutations that are for rows
 /**  0*/ PERM_MACRO(R01); /**  1*/ PERM_MACRO(R02); /**  2*/ PERM_MACRO(R03); /**  3*/ PERM_MACRO(R04); /**  4*/ PERM_MACRO(R05);
@@ -35,6 +35,8 @@ PERM_MACRO(C121); PERM_MACRO(C122); PERM_MACRO(C123); PERM_MACRO(C124); PERM_MAC
 PERM_MACRO(C231); PERM_MACRO(C232); PERM_MACRO(C233); PERM_MACRO(C234); PERM_MACRO(C235);
 PERM_MACRO(C341); PERM_MACRO(C342); PERM_MACRO(C343); PERM_MACRO(C344); PERM_MACRO(C345);
 PERM_MACRO(C451); PERM_MACRO(C452); PERM_MACRO(C453); PERM_MACRO(C454); PERM_MACRO(C455);
+
+#undef PERM_MACRO
 
 
 struct ActStruct {

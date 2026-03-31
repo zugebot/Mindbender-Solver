@@ -13,9 +13,12 @@ static constexpr u64 C_MASK_3 = 0'000700'000700'000700;
 static constexpr u64 C_MASK_4 = 0'000070'000070'000070;
 static constexpr u64 C_MASK_5 = 0'000007'000007'000007;
 
+#define PERM_MACRO(name) __host__ __device__ void name(B1B2 &board)
+
 #define var1var2(mask)              \
     C u64 var1 = board.b1 & (mask); \
     C u64 var2 = board.b2 & (mask)
+
 
 PERM_MACRO(C01) {
     var1var2(C_MASK_0);
@@ -544,3 +547,6 @@ PERM_MACRO(C455) {
     C55(board);
     board.addFatY(5);
 }
+
+#undef PERM_MACRO
+#undef var1var2

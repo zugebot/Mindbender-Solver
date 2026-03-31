@@ -148,7 +148,14 @@ void Perms<T>::getDepthFunc(C Board& board_in, JVec<T> &boards_out,
     if (shouldResize) { reserveForDepth(board_in, boards_out, depth); }
 
     boards_out.resize(boards_out.capacity());
-    C typename T::HasherPtr hasher = T::getHashFunc(board_in);
+    typename T::HasherPtr hasher;
+    if constexpr (std::is_same_v<T, Memory>) {
+        hasher = Memory::getHashFunc(board_in);
+    } else if constexpr (std::is_same_v<T, Board>) {
+        hasher = board_in.getHashFunc();
+    } else {
+        static_assert(AllowedPermsType<T>, "Unsupported permutation type");
+    }
 
     if (board_in.getFatBool()) {
         constexpr auto FUNC_DIR =

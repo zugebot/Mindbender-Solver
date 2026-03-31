@@ -8,15 +8,6 @@
 #include <sstream>
 
 
-HD Memory::Memory(MU std::initializer_list<u64> moveValues) {
-    hash = 0;
-    mem = 0;
-    for (C auto& moveValue : moveValues) {
-        setNextNMove<1>(moveValue);
-    }
-}
-
-
 // ############################################################
 // #                       u64 hash                           #
 // ############################################################
@@ -53,32 +44,11 @@ MU HD Memory::HasherPtr Memory::getHashFunc(C Board& board) {
 }
 
 
-MU HD void Memory::setNextMoves(std::initializer_list<u64> moveValues) {
+MU HD void Memory::setNextMoves(const std::initializer_list<u64> moveValues) {
     for (C auto& moveValue : moveValues) {
         setNextNMove<1>(moveValue);
     }
 }
-
-
-// ############################################################
-// #                       u64 moves                          #
-// ############################################################
-
-
-MUND HD u8 Memory::getMoveCount() C {
-    return mem & MEMORY_MOVE_DATA_MASK;
-}
-
-
-HD u8 Memory::getMove(C u8 index) C {
-    return mem >> getShift(index) & MEMORY_MOVE_TYPE_MASK;
-}
-
-
-HD u8 Memory::getLastMove() C {
-    return mem >> getShift(getMoveCount() - 1) & MEMORY_MOVE_TYPE_MASK;
-}
-
 
 // ############################################################
 // #            To String -Similar- Functions                 #
@@ -147,9 +117,9 @@ std::string Memory::asmStringBackwards() C {
 
 
 std::string Memory::asmFatString(C u8 fatPos, C Memory* other, C u8 fatPosOther) C {
-    std::string start = asmFatStringForwards(fatPos);
+    C std::string start = asmFatStringForwards(fatPos);
     if (other == nullptr) { return start; }
-    std::string end = other->asmFatStringBackwards(fatPosOther);
+    C std::string end = other->asmFatStringBackwards(fatPosOther);
     if (start.empty()) { return end; }
     if (end.empty()) { return start; }
     return start + " " + end;

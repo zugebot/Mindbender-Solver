@@ -126,6 +126,12 @@ static constexpr u8 RXXX_MASKS[RXXX_PER * 25] = {
         4, 48, 15,
 };
 
+#define PERM_MACRO(name) __host__ __device__ void name(B1B2 &board)
+
+#define var1var2(mask)              \
+    C u64 var1 = board.b1 & (mask); \
+    C u64 var2 = board.b2 & (mask)
+
 
 PERM_MACRO(R01) { funcB1(board, &RXXX_MASKS[RXXX_PER *  0]); } //  0
 PERM_MACRO(R02) { funcB1(board, &RXXX_MASKS[RXXX_PER *  1]); } //  1
@@ -338,4 +344,5 @@ PERM_MACRO(R455) {
 
 #endif
 
-
+#undef PERM_MACRO
+#undef var1var2

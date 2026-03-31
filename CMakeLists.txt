@@ -92,8 +92,9 @@ file(GLOB_RECURSE INCLUDE_SOURCES
 set(PROGRAM_FOLDER "${CMAKE_SOURCE_DIR}/programs")
 
 # set(MAIN_FILE "${PROGRAM_FOLDER}/testLayeredDFS.cpp")
-set(MAIN_FILE "${PROGRAM_FOLDER}/testKnownSolutions.cpp")
+# set(MAIN_FILE "${PROGRAM_FOLDER}/testKnownSolutions.cpp")
 # set(MAIN_FILE "${PROGRAM_FOLDER}/testPuzzlesValid.cpp")
+set(MAIN_FILE "${PROGRAM_FOLDER}/testSingleUnrolledLoop.cpp")
 
 
 if (USE_CUDA)
@@ -116,10 +117,17 @@ endif()
 
 # compiler-specific options
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(MindbenderSolver PRIVATE
-            $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -funroll-loops -fstrict-aliasing -fomit-frame-pointer>
-            $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O3,-Xcompiler=-march=native,-Xcompiler=-flto,-Xcompiler=-funroll-loops,-Xcompiler=-fstrict-aliasing,-Xcompiler=-fomit-frame-pointer>
-    )
+    if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+        target_compile_options(MindbenderSolver PRIVATE
+                $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -mbmi2 -funroll-loops -fstrict-aliasing -fomit-frame-pointer>
+                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O3,-Xcompiler=-march=native,-Xcompiler=-mbmi2,-Xcompiler=-flto,-Xcompiler=-funroll-loops,-Xcompiler=-fstrict-aliasing,-Xcompiler=-fomit-frame-pointer>
+        )
+    else()
+        target_compile_options(MindbenderSolver PRIVATE
+                $<$<COMPILE_LANGUAGE:CXX>:-O0 -g -mbmi2>
+                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O0,-Xcompiler=-g,-Xcompiler=-mbmi2>
+        )
+    endif()
 
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
@@ -128,13 +136,11 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
                 $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler="/O2 /GL">
         )
     else()
-        # Debug mode
         target_compile_options(MindbenderSolver PRIVATE
                 $<$<COMPILE_LANGUAGE:CXX>:/Zi /FA>
                 $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler="/Zi">
         )
     endif()
-
 endif()
 
 

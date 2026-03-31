@@ -158,7 +158,7 @@ JVec<T>& JVec<T>::operator=(JVec&& other)  noexcept {
 
 template<class T>
 void JVec<T>::resize(const unsigned long long theSize) {
-    if (theSize < myCapacity) {
+    if (theSize <= myCapacity) {
         mySize = theSize;
     } else {
         void* newPtr = operator new[](theSize * sizeof(T));

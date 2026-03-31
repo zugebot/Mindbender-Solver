@@ -16,17 +16,6 @@ int GET_SCORE_3_CALLS = 0;
 Board::ColorArray_t Board::ColorsDefault = {0, 1, 2, 3, 4, 5, 6, 7};
 
 
-// does not check if input list is of size 36 or not
-Board::Board(C std::initializer_list<u8> values) {
-    setState(values.begin());
-}
-
-
-Board::Board(C u8 values[36]) {
-    setState(values);
-}
-
-
 Board::Board(C u8 values[36], C u8 x, C u8 y) {
     setState(values);
     setFatXY(x, y);
@@ -123,7 +112,7 @@ static constexpr u64 FAT_X_MASK = MAKE_MASK(FAT_X_OFFSET, FAT_X_BITS);
 
 
 /// range: (0-7). Anything outside that will overflow data.
-MU HD void B1B2::setColorCount(u64 colorCount) {
+MU HD void B1B2::setColorCount(C u64 colorCount) {
     b1 = (b1 & COLOR_COUNT_MASK) | ((colorCount - 1) << COLOR_COUNT_OFFSET);
 }
 u32 HD B1B2::getColorCount() C {
@@ -205,15 +194,19 @@ MU HD u8 B1B2::getFatXYFast() C {
 
 
 
-
-
-
-// TODO: shift amount can probably be cached for FAR better performance
-// TODO: specifically the ``% 3 * 18`` part
-MU u8 HD B1B2::getColor(C u8 x, C u8 y) C {
-    // C i32 shift_amount = 51 - x * 3 - y % 3 * 18;
+/*
+ * ``C i32 shift_amount = 51 - x * 3 - y % 3 * 18;``
+ * Magic math that returns ``shift_amount``
+ */
+template <typename T1, typename T2>
+__forceinline u64 getShiftAmount(C T1 x, C T2 y) {
     static constexpr u64 MAGIC = 0x33210F33210F;
-    C u64 shift_amount = (MAGIC >> (y * 8)) - (x * 3);
+    return (MAGIC >> (y * 8)) - (x * 3);
+}
+
+
+MU u8 HD B1B2::getColor(C u8 x, C u8 y) C {
+    C u64 shift_amount = getShiftAmount<u8, u8>(x, y);
     return (*(&b1 + (y >= 3)) >> shift_amount) & 0'7;
 }
 
@@ -235,9 +228,8 @@ MU HD bool Board::doActISColMatch(C u8 x1, C u8 y1, C u8 m, C u8 n) C {
     C int y2 = (y1 - n + 6) % 6;
     C int x2 = (x1 - m + 6) % 6;
 
-    C u8 x1_3 = x1 * 3;
     C int offset_shared = 51 - (y1 % 3) * 18;
-    C int shift_amount1 = x1_3 + offset_shared;
+    C int shift_amount1 = x1 * 3 + offset_shared;
     C int shift_amount3 = x2 * 3 + offset_shared;
 
     C u64 base = y1 < 3 ? b1 : b2;
@@ -248,7 +240,8 @@ MU HD bool Board::doActISColMatch(C u8 x1, C u8 y1, C u8 m, C u8 n) C {
     if ((color1 ^ color3) & 0'7) {
         return false;
     }
-    C int shift_amount2 = 51 - x1_3 - y2 % 3 * 18;
+
+    C u64 shift_amount2 = getShiftAmount<u8, i32>(x1, y2);
     C u64 base2 = y2 < 3 ? b1 : b2;
     C u8 color2 = base2 >> shift_amount2;
 
@@ -386,12 +379,12 @@ MUND HD int B1B2::getScore3(C B1B2 theOther) C {
         C i32 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
                                | 1 << uncRows[2] | 1 << uncRows[3]
                                | 1 << uncRows[4] | 1 << uncRows[5];
-        C u8 highestRow = 31 - my_clz(static_cast<i32>(promoteRowMask));
+        C u8 highestRow = 31 - my_clz(promoteRowMask);
 
         C i32 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
                                | 1 << uncCols[2] | 1 << uncCols[3]
                                | 1 << uncCols[4] | 1 << uncCols[5];
-        C u8 highestCol = 31 - my_clz(static_cast<i32>(promoteColMask));
+        C u8 highestCol = 31 - my_clz(promoteColMask);
 
 
         if (highestRow == 0 && highestCol == 0) {
@@ -400,7 +393,7 @@ MUND HD int B1B2::getScore3(C B1B2 theOther) C {
 
 
         if (highestRow >= highestCol) {
-            C int index = (uncRows[0] == highestRow) ? 0 :
+            C i32 index = (uncRows[0] == highestRow) ? 0 :
                           (uncRows[1] == highestRow) ? 1 :
                           (uncRows[2] == highestRow) ? 2 :
                           (uncRows[3] == highestRow) ? 3 :
@@ -450,7 +443,7 @@ MUND HD int B1B2::getScore3(C B1B2 theOther) C {
 
 
 template<i32 MAX_DEPTH>
-[[maybe_unused]] HD bool B1B2::getScore3Till(C B1B2 theOther) C {
+MU HD bool B1B2::getScore3Till(C B1B2 theOther) C {
     // ++GET_SCORE_3_CALLS;
 
     // Find all differing cells and update the counts in uncRows and uncCols
@@ -603,7 +596,7 @@ MUND HD bool B1B2::canBeSolvedIn1Move(C B1B2 theOther) C {
 
 
 MU __host__ void B1B2::doMoves(
-        std::initializer_list<void (*)(B1B2 &)> theInitList) {
+        const std::initializer_list<void (*)(B1B2 &)> theInitList) {
     for (auto* func : theInitList) { func(*this); }
 }
 

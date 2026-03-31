@@ -19,20 +19,20 @@ class Memory {
     static HD u8 getShift(C u32 moveCount) {
         return MEMORY_MOVE_DATA_BITSIZE + moveCount * MEMORY_MOVE_TYPE_BITSIZE; }
 
-
      u64 hash;
-     u64 mem{};
+     u64 mem;
 public:
 
     /***
      * first 4 bits: move count
      * next 10 * 6 bits: moves
      */
-    HD Memory() {
-        hash = 0;
-        mem = 0;
+    HD Memory() : hash(0), mem(0) {}
+    HD Memory(MU C std::initializer_list<u64> moveValues) : hash(0), mem(0) {
+        for (C auto& moveValue : moveValues) {
+            setNextNMove<1>(moveValue);
+        }
     }
-    HD Memory(MU std::initializer_list<u64> moveValues);
 
     // ############################################################
     // #                       u64 hash                           #
@@ -52,16 +52,16 @@ public:
     MUND HD static HasherPtr getHashFunc(C Board& board);
 
     __forceinline HD bool operator==(C Memory& other) C { return hash == other.hash; }
-    __forceinline HD bool operator<(C Memory& other) C { return hash < other.hash; }
-    __forceinline HD bool operator>(C Memory& other) C { return hash > other.hash; }
+    __forceinline HD bool operator< (C Memory& other) C { return hash < other.hash; }
+    __forceinline HD bool operator> (C Memory& other) C { return hash > other.hash; }
 
     // ############################################################
     // #                       u64 moves                          #
     // ############################################################
 
-    MUND HD u8 getMoveCount() C;
-    MUND HD u8 getMove(u8 index) C;
-    MUND HD u8 getLastMove() C;
+    MUND __forceinline HD u8 getMoveCount() C { return mem & MEMORY_MOVE_DATA_MASK; }
+    MUND __forceinline HD u8 getMove(C u8 index) C { return mem >> getShift(index) & MEMORY_MOVE_TYPE_MASK; }
+    MUND __forceinline HD u8 getLastMove() C { return mem >> getShift(getMoveCount() - 1) & MEMORY_MOVE_TYPE_MASK; }
 
     template<int COUNT> HD void setNextNMove(u64 moveValue);
     MU HD void setNextMoves(std::initializer_list<u64> moveValues);

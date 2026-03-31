@@ -16,7 +16,8 @@ typedef void (*Action)(B1B2 &);
 /**
  * Holds the chuzzle colors and other information.
  */
-struct B1B2 {
+class B1B2 {
+public:
     typedef std::array<i8, 8> ColorArray_t;
 
     /**
@@ -36,7 +37,7 @@ struct B1B2 {
     u64 b2 = 0;
 
     B1B2() = default;
-    HD B1B2(u64 theB1, u64 theB2) : b1(theB1), b2(theB2) {}
+    HD B1B2(C u64 theB1, C u64 theB2) : b1(theB1), b2(theB2) {}
 
     MU void setState(C u8 values[36]);
     MU ColorArray_t setStateAndRetColors(C u8 values[36]);
@@ -98,8 +99,10 @@ public:
     Memory memory;
 
     explicit Board() = default;
-    Board(C std::initializer_list<u8> values);
-    explicit Board(C u8 values[36]);
+
+    // does not check if input list is of size 36 or not
+    Board(C std::initializer_list<u8> values) { setState(values.begin()); }
+    explicit Board(C u8 values[36]) {  setState(values); }
     explicit Board(C u8 values[36], u8 x, u8 y);
 
     MU HD B1B2 asB1B2() { return {b1, b2}; }
@@ -145,11 +148,11 @@ public:
 };
 
 
-extern template HD bool B1B2::getScore3Till<1>(C B1B2 theOther) C;
-extern template HD bool B1B2::getScore3Till<2>(C B1B2 theOther) C;
-extern template HD bool B1B2::getScore3Till<3>(C B1B2 theOther) C;
-extern template HD bool B1B2::getScore3Till<4>(C B1B2 theOther) C;
-extern template HD bool B1B2::getScore3Till<5>(C B1B2 theOther) C;
+extern template HD bool B1B2::getScore3Till<1>(B1B2 theOther) C;
+extern template HD bool B1B2::getScore3Till<2>(B1B2 theOther) C;
+extern template HD bool B1B2::getScore3Till<3>(B1B2 theOther) C;
+extern template HD bool B1B2::getScore3Till<4>(B1B2 theOther) C;
+extern template HD bool B1B2::getScore3Till<5>(B1B2 theOther) C;
 
 
 #ifdef USE_CUDA
