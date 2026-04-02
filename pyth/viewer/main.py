@@ -3,8 +3,7 @@ import os
 import tkinter as tk
 from tkinter import ttk
 from collections import defaultdict
-from permutations import get_permutations
-from functools import partial
+from pyth.scripts.permutations import get_permutations
 
 from sim import *
 
@@ -584,7 +583,7 @@ class UI:
 
 
 def main():
-    folder = "../levels"
+    folder = "../../levels"
 
     ui: UI = UI(folder)
     ui.load_files()
