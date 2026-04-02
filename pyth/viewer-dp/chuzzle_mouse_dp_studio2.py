@@ -13,8 +13,7 @@ from chuzzle_mouse_dp2 import (
     DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
     DEFAULT_LOCK_THRESHOLD,
     DEFAULT_NEXT_PUZZLE_TARGETS,
-    DpMouseSolver2,
-    FileScoreResult,
+    solve_sequence,
     GRID_SIZE,
     ScoredSolution,
 )
@@ -220,7 +219,6 @@ def format_point(point: tuple[float, float] | None) -> str:
 class StudioApp:
     def __init__(self, folder: str = DEFAULT_FOLDER):
         self.folder = folder
-        self.solver = DpMouseSolver2()
         self.current_result: FileScoreResult | None = None
         self.current_solution_index = 0
         self.current_step_index: int | None = None
@@ -700,6 +698,7 @@ class StudioApp:
             lock_threshold = self._resolve_lock_threshold()
             free_drag_min_disp = self._resolve_free_drag_min_disp()
 
+            # TODO: solve_sequence
             self.current_result = self.solver.score_file(
                 full_path,
                 dedupe=self.dedupe_var.get(),

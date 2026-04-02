@@ -3,38 +3,17 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
 from typing import Iterable, Sequence
 
 GRID_SIZE = 6
 DEFAULT_LOCK_THRESHOLD = 1.0 / 1.0
 DEFAULT_FREE_DRAG_MIN_DISPLACEMENT = 2
-
 DEFAULT_NEXT_PUZZLE_TARGETS: tuple[tuple[float, float], ...] = (
     (1.0, 3.0),
     (2.0, 3.0),
     (3.0, 3.0),
     (4.0, 3.0),
 )
-
-
-def normalize_point(point: Sequence[float] | None) -> tuple[float, float] | None:
-    if point is None:
-        return None
-    if len(point) != 2:
-        raise ValueError(f"Point must have exactly 2 coordinates, got: {point!r}")
-    return float(point[0]), float(point[1])
-
-
-def normalize_points(points: Iterable[Sequence[float]] | None) -> tuple[tuple[float, float], ...]:
-    if points is None:
-        return ()
-    out: list[tuple[float, float]] = []
-    for point in points:
-        if len(point) != 2:
-            raise ValueError(f"Point must have exactly 2 coordinates, got: {point!r}")
-        out.append((float(point[0]), float(point[1])))
-    return tuple(out)
 
 
 def normalize_move_sequence(move_string: str | Sequence[str]) -> list[str]:
@@ -124,12 +103,6 @@ class ScoredSolution:
     inter_move_distance: float = 0.0
     final_mouse_target: tuple[float, float] | None = None
     final_move_distance: float = 0.0
-
-
-@dataclass
-class FileScoreResult:
-    path: Path
-    solutions: list[ScoredSolution]
 
 
 @lru_cache(maxsize=None)
@@ -367,198 +340,81 @@ def best_terminal_choice(
     return best_choice
 
 
-class DpMouseSolver2:
-    """
-    Dynamic-programming solver with a two-phase drag model.
 
-    Model:
-    1. Click-down begins on a legal cell in a row/column.
-    2. If abs(displacement) < free_drag_min_displacement, the move behaves like the old solver.
-    3. If abs(displacement) >= free_drag_min_displacement, the drag "locks" after lock_threshold
-       along the primary axis.
-    4. After lock, the mouse may end anywhere on the final target line:
-         - row drag    -> any y on x = target_x
-         - column drag -> any x on y = target_y
-    5. The optimal release point depends on the next click target, so edge costs include:
-         drag for previous move + reposition to next move's click-down.
-    """
+"""
+Dynamic-programming solver with a two-phase drag model.
 
-    @staticmethod
-    def solve_sequence(
-        move_string: str | Sequence[str],
-        *,
-        start_mouse_position: Sequence[float] | None = None,
-        end_positions: Iterable[Sequence[float]] | None = None,
-        end_next_puzzle: bool = False,
-        lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
-        free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
-    ) -> ScoredSolution:
-        tokens = normalize_move_sequence(move_string)
-        if not tokens:
-            raise ValueError("Cannot solve an empty move sequence")
+Model:
+1. Click-down begins on a legal cell in a row/column.
+2. If abs(displacement) < free_drag_min_displacement, the move behaves like the old solver.
+3. If abs(displacement) >= free_drag_min_displacement, the drag "locks" after lock_threshold
+   along the primary axis.
+4. After lock, the mouse may end anywhere on the final target line:
+     - row drag    -> any y on x = target_x
+     - column drag -> any x on y = target_y
+5. The optimal release point depends on the next click target, so edge costs include:
+     drag for previous move + reposition to next move's click-down.
+"""
 
-        start_pos = normalize_point(start_mouse_position)
-        if end_next_puzzle:
-            final_targets = DEFAULT_NEXT_PUZZLE_TARGETS
-        else:
-            final_targets = normalize_points(end_positions)
+def solve_sequence(
+    move_string: str | Sequence[str],
+    *,
+    start_mouse_position: Sequence[float] | None = None,
+    end_positions: Iterable[Sequence[float]] | None = None,
+    end_next_puzzle: bool = False,
+    lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
+    free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
+) -> ScoredSolution:
+    tokens = normalize_move_sequence(move_string)
+    if not tokens:
+        raise ValueError("Cannot solve an empty move sequence")
 
-        candidate_layers = [
-            enumerate_candidates(token, lock_threshold, free_drag_min_displacement)
-            for token in tokens
-        ]
+    start_pos = start_mouse_position
+    if end_next_puzzle:
+        final_targets = DEFAULT_NEXT_PUZZLE_TARGETS
+    else:
+        final_targets = end_positions
 
-        if len(tokens) == 1:
-            terminal_choices = [best_terminal_choice(candidate, final_targets) for candidate in candidate_layers[0]]
-            best_index = min(
-                range(len(candidate_layers[0])),
-                key=lambda i: (0.0 if start_pos is None else euclidean_distance(start_pos, candidate_layers[0][i].click_down))
-                + terminal_choices[i].total_cost,
-            )
+    candidate_layers = [
+        enumerate_candidates(token, lock_threshold, free_drag_min_displacement)
+        for token in tokens
+    ]
 
-            candidate = candidate_layers[0][best_index]
-            terminal = terminal_choices[best_index]
-            initial_move_distance = 0.0 if start_pos is None else euclidean_distance(start_pos, candidate.click_down)
-            total_drag = terminal.drag_distance
-            inter_move_distance = 0.0
-            final_move_distance = terminal.final_move_distance
-            total_move = initial_move_distance + inter_move_distance + final_move_distance
-
-            move_data = [
-                ScoredMove(
-                    move=candidate.token,
-                    click_down=[candidate.click_down[0], candidate.click_down[1]],
-                    lock_point=[candidate.lock_point[0], candidate.lock_point[1]],
-                    release=[terminal.release[0], terminal.release[1]],
-                    path_points=[
-                        [candidate.click_down[0], candidate.click_down[1]],
-                        [candidate.lock_point[0], candidate.lock_point[1]],
-                        [terminal.release[0], terminal.release[1]],
-                    ],
-                    selected_line=candidate.selected_line,
-                    displacement=candidate.displacement,
-                    free_drag=candidate.free_drag,
-                    drag_distance=terminal.drag_distance,
-                    move_distance=initial_move_distance,
-                    total_distance_to_here=initial_move_distance + total_drag,
-                )
-            ]
-
-            return ScoredSolution(
-                move_string=" ".join(tokens),
-                total_drag=total_drag,
-                total_move=total_move,
-                total_cost=total_drag + total_move,
-                move_data=move_data,
-                initial_mouse_position=start_pos,
-                initial_move_distance=initial_move_distance,
-                inter_move_distance=inter_move_distance,
-                final_mouse_target=terminal.target,
-                final_move_distance=final_move_distance,
-            )
-
-        dp_costs: list[list[float]] = [[] for _ in tokens]
-        parents: list[list[int]] = [[-1] * len(candidate_layers[0])] + [[] for _ in tokens[1:]]
-
-        dp_costs[0] = [
-            0.0 if start_pos is None else euclidean_distance(start_pos, candidate.click_down)
-            for candidate in candidate_layers[0]
-        ]
-
-        for move_index in range(1, len(tokens)):
-            prev_token = tokens[move_index - 1]
-            current_token = tokens[move_index]
-            prev_candidates = candidate_layers[move_index - 1]
-            current_candidates = candidate_layers[move_index]
-            trans = transition_plan(prev_token, current_token, lock_threshold, free_drag_min_displacement)
-
-            next_costs = [math.inf] * len(current_candidates)
-            next_parents = [-1] * len(current_candidates)
-
-            for curr_idx in range(len(current_candidates)):
-                best_cost = math.inf
-                best_parent = -1
-                for prev_idx in range(len(prev_candidates)):
-                    edge = trans[prev_idx][curr_idx]
-                    cost = dp_costs[move_index - 1][prev_idx] + edge.total_cost
-                    if cost < best_cost:
-                        best_cost = cost
-                        best_parent = prev_idx
-                next_costs[curr_idx] = best_cost
-                next_parents[curr_idx] = best_parent
-
-            dp_costs[move_index] = next_costs
-            parents[move_index] = next_parents
-
-        final_layer = candidate_layers[-1]
-        terminal_choices = [best_terminal_choice(candidate, final_targets) for candidate in final_layer]
-
-        best_final_index = min(
-            range(len(final_layer)),
-            key=lambda idx: dp_costs[-1][idx] + terminal_choices[idx].total_cost,
+    if len(tokens) == 1:
+        terminal_choices = [best_terminal_choice(candidate, final_targets) for candidate in candidate_layers[0]]
+        best_index = min(
+            range(len(candidate_layers[0])),
+            key=lambda i: (0.0 if start_pos is None else euclidean_distance(start_pos, candidate_layers[0][i].click_down))
+            + terminal_choices[i].total_cost,
         )
 
-        chosen_indices = [0] * len(tokens)
-        chosen_indices[-1] = best_final_index
-        for move_index in range(len(tokens) - 1, 0, -1):
-            chosen_indices[move_index - 1] = parents[move_index][chosen_indices[move_index]]
-
-        chosen_candidates = [candidate_layers[i][chosen_indices[i]] for i in range(len(tokens))]
-
-        chosen_releases: list[tuple[float, float]] = []
-        chosen_drags: list[float] = []
-        chosen_moves_between: list[float] = []
-
-        for move_index in range(len(tokens) - 1):
-            prev_candidate = chosen_candidates[move_index]
-            next_candidate = chosen_candidates[move_index + 1]
-            edge = optimize_release_to_point(prev_candidate, next_candidate.click_down)
-            chosen_releases.append(edge.release)
-            chosen_drags.append(edge.drag_distance)
-            chosen_moves_between.append(edge.move_to_next_distance)
-
-        terminal = best_terminal_choice(chosen_candidates[-1], final_targets)
-        chosen_releases.append(terminal.release)
-        chosen_drags.append(terminal.drag_distance)
-
-        move_data: list[ScoredMove] = []
-        total_drag = 0.0
-        initial_move_distance = 0.0 if start_pos is None else euclidean_distance(start_pos, chosen_candidates[0].click_down)
+        candidate = candidate_layers[0][best_index]
+        terminal = terminal_choices[best_index]
+        initial_move_distance = 0.0 if start_pos is None else euclidean_distance(start_pos, candidate.click_down)
+        total_drag = terminal.drag_distance
         inter_move_distance = 0.0
-
-        for move_index, candidate in enumerate(chosen_candidates):
-            if move_index == 0:
-                move_distance = initial_move_distance
-            else:
-                move_distance = chosen_moves_between[move_index - 1]
-                inter_move_distance += move_distance
-
-            total_drag += chosen_drags[move_index]
-            total_cost_to_here = initial_move_distance + inter_move_distance + total_drag
-            release = chosen_releases[move_index]
-
-            move_data.append(
-                ScoredMove(
-                    move=candidate.token,
-                    click_down=[candidate.click_down[0], candidate.click_down[1]],
-                    lock_point=[candidate.lock_point[0], candidate.lock_point[1]],
-                    release=[release[0], release[1]],
-                    path_points=[
-                        [candidate.click_down[0], candidate.click_down[1]],
-                        [candidate.lock_point[0], candidate.lock_point[1]],
-                        [release[0], release[1]],
-                    ],
-                    selected_line=candidate.selected_line,
-                    displacement=candidate.displacement,
-                    free_drag=candidate.free_drag,
-                    drag_distance=chosen_drags[move_index],
-                    move_distance=move_distance,
-                    total_distance_to_here=total_cost_to_here,
-                )
-            )
-
         final_move_distance = terminal.final_move_distance
         total_move = initial_move_distance + inter_move_distance + final_move_distance
+
+        move_data = [
+            ScoredMove(
+                move=candidate.token,
+                click_down=[candidate.click_down[0], candidate.click_down[1]],
+                lock_point=[candidate.lock_point[0], candidate.lock_point[1]],
+                release=[terminal.release[0], terminal.release[1]],
+                path_points=[
+                    [candidate.click_down[0], candidate.click_down[1]],
+                    [candidate.lock_point[0], candidate.lock_point[1]],
+                    [terminal.release[0], terminal.release[1]],
+                ],
+                selected_line=candidate.selected_line,
+                displacement=candidate.displacement,
+                free_drag=candidate.free_drag,
+                drag_distance=terminal.drag_distance,
+                move_distance=initial_move_distance,
+                total_distance_to_here=initial_move_distance + total_drag,
+            )
+        ]
 
         return ScoredSolution(
             move_string=" ".join(tokens),
@@ -573,125 +429,120 @@ class DpMouseSolver2:
             final_move_distance=final_move_distance,
         )
 
-    @staticmethod
-    def score_file(
-        path: str | Path,
-        dedupe: bool = False,
-        *,
-        start_mouse_position: Sequence[float] | None = None,
-        end_positions: Iterable[Sequence[float]] | None = None,
-        end_next_puzzle: bool = False,
-        lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
-        free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
-    ) -> FileScoreResult:
-        path = Path(path)
-        raw_lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-        if dedupe:
-            raw_lines = list(dict.fromkeys(raw_lines))
+    dp_costs: list[list[float]] = [[] for _ in tokens]
+    parents: list[list[int]] = [[-1] * len(candidate_layers[0])] + [[] for _ in tokens[1:]]
 
-        scored = [
-            DpMouseSolver2.solve_sequence(
-                line,
-                start_mouse_position=start_mouse_position,
-                end_positions=end_positions,
-                end_next_puzzle=end_next_puzzle,
-                lock_threshold=lock_threshold,
-                free_drag_min_displacement=free_drag_min_displacement,
+    dp_costs[0] = [
+        0.0 if start_pos is None else euclidean_distance(start_pos, candidate.click_down)
+        for candidate in candidate_layers[0]
+    ]
+
+    for move_index in range(1, len(tokens)):
+        prev_token = tokens[move_index - 1]
+        current_token = tokens[move_index]
+        prev_candidates = candidate_layers[move_index - 1]
+        current_candidates = candidate_layers[move_index]
+        trans = transition_plan(prev_token, current_token, lock_threshold, free_drag_min_displacement)
+
+        next_costs = [math.inf] * len(current_candidates)
+        next_parents = [-1] * len(current_candidates)
+
+        for curr_idx in range(len(current_candidates)):
+            best_cost = math.inf
+            best_parent = -1
+            for prev_idx in range(len(prev_candidates)):
+                edge = trans[prev_idx][curr_idx]
+                cost = dp_costs[move_index - 1][prev_idx] + edge.total_cost
+                if cost < best_cost:
+                    best_cost = cost
+                    best_parent = prev_idx
+            next_costs[curr_idx] = best_cost
+            next_parents[curr_idx] = best_parent
+
+        dp_costs[move_index] = next_costs
+        parents[move_index] = next_parents
+
+    final_layer = candidate_layers[-1]
+    terminal_choices = [best_terminal_choice(candidate, final_targets) for candidate in final_layer]
+
+    best_final_index = min(
+        range(len(final_layer)),
+        key=lambda idx: dp_costs[-1][idx] + terminal_choices[idx].total_cost,
+    )
+
+    chosen_indices = [0] * len(tokens)
+    chosen_indices[-1] = best_final_index
+    for move_index in range(len(tokens) - 1, 0, -1):
+        chosen_indices[move_index - 1] = parents[move_index][chosen_indices[move_index]]
+
+    chosen_candidates = [candidate_layers[i][chosen_indices[i]] for i in range(len(tokens))]
+
+    chosen_releases: list[tuple[float, float]] = []
+    chosen_drags: list[float] = []
+    chosen_moves_between: list[float] = []
+
+    for move_index in range(len(tokens) - 1):
+        prev_candidate = chosen_candidates[move_index]
+        next_candidate = chosen_candidates[move_index + 1]
+        edge = optimize_release_to_point(prev_candidate, next_candidate.click_down)
+        chosen_releases.append(edge.release)
+        chosen_drags.append(edge.drag_distance)
+        chosen_moves_between.append(edge.move_to_next_distance)
+
+    terminal = best_terminal_choice(chosen_candidates[-1], final_targets)
+    chosen_releases.append(terminal.release)
+    chosen_drags.append(terminal.drag_distance)
+
+    move_data: list[ScoredMove] = []
+    total_drag = 0.0
+    initial_move_distance = 0.0 if start_pos is None else euclidean_distance(start_pos, chosen_candidates[0].click_down)
+    inter_move_distance = 0.0
+
+    for move_index, candidate in enumerate(chosen_candidates):
+        if move_index == 0:
+            move_distance = initial_move_distance
+        else:
+            move_distance = chosen_moves_between[move_index - 1]
+            inter_move_distance += move_distance
+
+        total_drag += chosen_drags[move_index]
+        total_cost_to_here = initial_move_distance + inter_move_distance + total_drag
+        release = chosen_releases[move_index]
+
+        move_data.append(
+            ScoredMove(
+                move=candidate.token,
+                click_down=[candidate.click_down[0], candidate.click_down[1]],
+                lock_point=[candidate.lock_point[0], candidate.lock_point[1]],
+                release=[release[0], release[1]],
+                path_points=[
+                    [candidate.click_down[0], candidate.click_down[1]],
+                    [candidate.lock_point[0], candidate.lock_point[1]],
+                    [release[0], release[1]],
+                ],
+                selected_line=candidate.selected_line,
+                displacement=candidate.displacement,
+                free_drag=candidate.free_drag,
+                drag_distance=chosen_drags[move_index],
+                move_distance=move_distance,
+                total_distance_to_here=total_cost_to_here,
             )
-            for line in raw_lines
-        ]
-        scored.sort(key=lambda s: (s.total_cost, s.total_move, s.total_drag, s.move_string))
-        return FileScoreResult(path=path, solutions=scored)
+        )
 
+    final_move_distance = terminal.final_move_distance
+    total_move = initial_move_distance + inter_move_distance + final_move_distance
 
-def format_solution_summary(solution: ScoredSolution) -> str:
-    return (
-        f"{solution.move_string}\n"
-        f"  total={solution.total_cost:.3f}  drag={solution.total_drag:.3f}  move={solution.total_move:.3f}"
+    return ScoredSolution(
+        move_string=" ".join(tokens),
+        total_drag=total_drag,
+        total_move=total_move,
+        total_cost=total_drag + total_move,
+        move_data=move_data,
+        initial_mouse_position=start_pos,
+        initial_move_distance=initial_move_distance,
+        inter_move_distance=inter_move_distance,
+        final_mouse_target=terminal.target,
+        final_move_distance=final_move_distance,
     )
 
 
-def preview_ranked_solutions(
-    path: str | Path,
-    limit: int = 10,
-    dedupe: bool = False,
-    *,
-    start_mouse_position: Sequence[float] | None = None,
-    end_positions: Iterable[Sequence[float]] | None = None,
-    end_next_puzzle: bool = False,
-    lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
-    free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
-) -> list[str]:
-    result = DpMouseSolver2.score_file(
-        path,
-        dedupe=dedupe,
-        start_mouse_position=start_mouse_position,
-        end_positions=end_positions,
-        end_next_puzzle=end_next_puzzle,
-        lock_threshold=lock_threshold,
-        free_drag_min_displacement=free_drag_min_displacement,
-    )
-    return [format_solution_summary(solution) for solution in result.solutions[:limit]]
-
-
-def _main() -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Rank Chuzzle solution strings by DP mouse cost with lock-and-slant drag modeling."
-    )
-    parser.add_argument("path", help="Path to a text file containing one solution sequence per line.")
-    parser.add_argument("--top", type=int, default=10, help="How many ranked solutions to print.")
-    parser.add_argument("--dedupe", action="store_true", help="Drop duplicate lines before scoring.")
-    parser.add_argument(
-        "--start",
-        nargs=2,
-        type=float,
-        metavar=("X", "Y"),
-        help="Optional initial mouse position, for example: --start -1 5",
-    )
-    parser.add_argument(
-        "--end",
-        nargs=2,
-        type=float,
-        action="append",
-        metavar=("X", "Y"),
-        help="Allowed final mouse position. Can be provided multiple times.",
-    )
-    parser.add_argument(
-        "--end-next-puzzle",
-        "--use-next-puzzle-targets",
-        dest="end_next_puzzle",
-        action="store_true",
-        help="Use the default next-puzzle banner targets. Overrides --end.",
-    )
-    parser.add_argument(
-        "--lock-threshold",
-        type=float,
-        default=DEFAULT_LOCK_THRESHOLD,
-        help="Primary-axis distance needed before orthogonal drift becomes legal.",
-    )
-    parser.add_argument(
-        "--free-drag-min-displacement",
-        type=int,
-        default=DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
-        help="Minimum absolute displacement before orthogonal drift is allowed.",
-    )
-
-    args = parser.parse_args()
-
-    for line in preview_ranked_solutions(
-        args.path,
-        limit=args.top,
-        dedupe=args.dedupe,
-        start_mouse_position=args.start,
-        end_positions=args.end,
-        end_next_puzzle=args.end_next_puzzle,
-        lock_threshold=args.lock_threshold,
-        free_drag_min_displacement=args.free_drag_min_displacement,
-    ):
-        print(line)
-
-
-if __name__ == "__main__":
-    _main()
