@@ -13,7 +13,7 @@ THIS_DIR = Path(__file__).resolve().parent
 if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
 
-from chuzzle_mouse_dp import DpMouseSolver, GRID_SIZE, ScoredSolution, FileScoreResult
+from pyth.old.chuzzle_mouse_dp import DpMouseSolver, GRID_SIZE, ScoredSolution, FileScoreResult
 
 SCALE = 0.75
 CELL_SIZE = int(SCALE * 60)

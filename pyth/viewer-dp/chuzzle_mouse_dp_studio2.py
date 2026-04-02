@@ -9,11 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from tkinter import ttk
 
-from chuzzle_mouse_dp2 import (
+from chuzzle_mouse_adapter import (
     DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
     DEFAULT_LOCK_THRESHOLD,
     DEFAULT_NEXT_PUZZLE_TARGETS,
-    solve_sequence,
+    DpMouseSolver,
+    FileScoreResult,
     GRID_SIZE,
     ScoredSolution,
 )
@@ -219,6 +220,7 @@ def format_point(point: tuple[float, float] | None) -> str:
 class StudioApp:
     def __init__(self, folder: str = DEFAULT_FOLDER):
         self.folder = folder
+        self.solver = DpMouseSolver()
         self.current_result: FileScoreResult | None = None
         self.current_solution_index = 0
         self.current_step_index: int | None = None
@@ -489,7 +491,7 @@ class StudioApp:
             f"Move numbers: {'on' if self.show_numbers_var.get() else 'off'}\n"
             f"Cursor gaps: {'on' if self.show_travel_var.get() else 'off'}\n"
             f"Color mode: {self.color_mode_var.get()}\n"
-            f"Solver: dp2"
+            f"Solver: {self.solver.backend_name()}"
         )
         self.active_options_var.set(text)
 
@@ -549,7 +551,7 @@ class StudioApp:
             text=(
                 "Custom point format: x,y\n"
                 "Multiple end points: x,y; x,y; x,y\n"
-                "DP2 uses click -> lock -> release geometry."
+                "Adapter routes to the active solver backend."
             ),
             justify=tk.LEFT,
         ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
@@ -698,7 +700,6 @@ class StudioApp:
             lock_threshold = self._resolve_lock_threshold()
             free_drag_min_disp = self._resolve_free_drag_min_disp()
 
-            # TODO: solve_sequence
             self.current_result = self.solver.score_file(
                 full_path,
                 dedupe=self.dedupe_var.get(),
@@ -957,7 +958,7 @@ class StudioApp:
             text="Solid colored polylines = click -> lock -> release",
             font=("Segoe UI", 9),
             fill="#4b5563",
-        )
+            )
         self.canvas.create_text(
             left,
             bottom + 38,
@@ -965,7 +966,7 @@ class StudioApp:
             text="Dashed gray lines = cursor reposition between drags",
             font=("Segoe UI", 9),
             fill="#4b5563",
-        )
+            )
 
     def _draw_header_metrics(self, solution: ScoredSolution) -> None:
         left = (BOARD_GRID_X + BOARD_GRID_W) * BOARD_CELL_SIZE + 36

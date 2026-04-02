@@ -352,21 +352,6 @@ def optimize_release_to_point(candidate: MoveCandidate, point: Point) -> Transit
     )
 
 
-def build_transition_matrix(
-        prev_candidates: list[MoveCandidate],
-        next_candidates: list[MoveCandidate],
-) -> list[list[TransitionChoice]]:
-    matrix: list[list[TransitionChoice]] = []
-
-    for prev_candidate in prev_candidates:
-        row: list[TransitionChoice] = []
-        for next_candidate in next_candidates:
-            row.append(optimize_release_to_point(prev_candidate, next_candidate.click_down))
-        matrix.append(row)
-
-    return matrix
-
-
 def best_terminal_choice(
         candidate: MoveCandidate,
         end_targets: Sequence[Point],
@@ -536,44 +521,38 @@ def solve_sequence_core(
             final_move_distance=final_move_distance,
         )
 
-    transition_matrices: list[list[list[TransitionChoice]]] = []
-    for move_index in range(sequence_len - 1):
-        transition_matrices.append(
-            build_transition_matrix(
-                candidate_layers[move_index],
-                candidate_layers[move_index + 1],
-            )
-        )
-
-    dp_costs: list[list[float]] = []
-    parents: list[list[int]] = []
-
     first_layer = candidate_layers[0]
-    first_costs = [0.0] * len(first_layer)
+    prev_costs = [0.0] * len(first_layer)
     for candidate_index in range(len(first_layer)):
         if start_pos is None:
-            first_costs[candidate_index] = 0.0
+            prev_costs[candidate_index] = 0.0
         else:
-            first_costs[candidate_index] = euclidean_distance(start_pos, first_layer[candidate_index].click_down)
+            prev_costs[candidate_index] = euclidean_distance(
+                start_pos,
+                first_layer[candidate_index].click_down,
+            )
 
-    dp_costs.append(first_costs)
+    parents: list[list[int]] = []
     parents.append([-1] * len(first_layer))
 
     for move_index in range(1, sequence_len):
         prev_candidates = candidate_layers[move_index - 1]
         curr_candidates = candidate_layers[move_index]
-        transitions = transition_matrices[move_index - 1]
 
         curr_costs = [math.inf] * len(curr_candidates)
         curr_parents = [-1] * len(curr_candidates)
 
         for curr_index in range(len(curr_candidates)):
+            curr_candidate = curr_candidates[curr_index]
+
             best_cost = math.inf
             best_parent = -1
 
             for prev_index in range(len(prev_candidates)):
-                edge = transitions[prev_index][curr_index]
-                candidate_cost = dp_costs[move_index - 1][prev_index] + edge.total_cost
+                prev_candidate = prev_candidates[prev_index]
+                edge = optimize_release_to_point(prev_candidate, curr_candidate.click_down)
+                candidate_cost = prev_costs[prev_index] + edge.total_cost
+
                 if candidate_cost < best_cost:
                     best_cost = candidate_cost
                     best_parent = prev_index
@@ -581,8 +560,8 @@ def solve_sequence_core(
             curr_costs[curr_index] = best_cost
             curr_parents[curr_index] = best_parent
 
-        dp_costs.append(curr_costs)
         parents.append(curr_parents)
+        prev_costs = curr_costs
 
     final_layer = candidate_layers[-1]
     terminal_choices: list[TerminalChoice] = []
@@ -593,7 +572,7 @@ def solve_sequence_core(
     best_final_total = math.inf
 
     for final_index in range(len(final_layer)):
-        total_cost = dp_costs[-1][final_index] + terminal_choices[final_index].total_cost
+        total_cost = prev_costs[final_index] + terminal_choices[final_index].total_cost
         if total_cost < best_final_total:
             best_final_total = total_cost
             best_final_index = final_index
@@ -616,7 +595,10 @@ def solve_sequence_core(
     chosen_moves_between: list[float] = []
 
     for move_index in range(sequence_len - 1):
-        transition = transition_matrices[move_index][chosen_indices[move_index]][chosen_indices[move_index + 1]]
+        prev_candidate = chosen_candidates[move_index]
+        next_candidate = chosen_candidates[move_index + 1]
+        transition = optimize_release_to_point(prev_candidate, next_candidate.click_down)
+
         chosen_releases.append(transition.release)
         chosen_drags.append(transition.drag_distance)
         chosen_moves_between.append(transition.move_to_next_distance)
