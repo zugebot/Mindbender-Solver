@@ -18,8 +18,9 @@ std::string bytesFormatted(const uint64_t bytes) {
 
     const std::string baseStrs[6] = {"B", "KB", "MB", "GB", "TB", "?B"};
     if (bases > 5) bases = 5;
-
-    const std::string floatStr = std::to_string(static_cast<float>(leftover) / static_cast<float>(BASE));
+    
+    const float floatVal = static_cast<float>(leftover) / static_cast<float>(BASE);
+    const std::string floatStr = std::to_string(floatVal);
 
 
     std::string ret;

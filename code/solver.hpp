@@ -182,8 +182,8 @@ public:
             // verify the results
             // this filters out board states with identical hashes
             if (hasFat) {
-                C int xy1 = board1.getFatXY();
-                C int xy2 = board2.getFatXY();
+                C i32 xy1 = board1.getFatXY();
+                C i32 xy2 = board2.getFatXY();
                 for (C auto &[fst, snd]: results) {
                     C Board temp1 = makeBoardWithFatMoves(board1, *fst);
                     C Board temp2 = makeBoardWithFatMoves(board2, *snd);
@@ -215,7 +215,7 @@ public:
         C Timer totalTime;
         while (currentDepth <= depthTotalMax) {
             auto permutationsFromDepth = Perms<Memory>::depthMap.at(currentDepth);
-            int permCount = 0;
+            i32 permCount = 0;
 
             // if depth == 9, pre-calculate (4, 4) ex.
             if (currentDepth > 1 && currentDepth % 2 == 1) {

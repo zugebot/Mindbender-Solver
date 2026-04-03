@@ -1,4 +1,4 @@
-#include "code/perms_gen.hpp"
+#include "code/memory_perm_gen.hpp"
 
 #include "utils/processor.hpp"
 
@@ -12,7 +12,7 @@ int main() {
         {6, 2}, // index 6, length 2
     };
 
-    PermGen<u8> gen;
+    PermGen gen;
     // this function creates a list of all permutations
     // given a pair (index, length) of an input list
     // and permutations of all perms passed

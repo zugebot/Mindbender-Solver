@@ -135,8 +135,7 @@ template<typename T>
 #else
 template<HasGetHash_v T>
 #endif
-std::vector<std::pair<C T *, C T *>> intersection(JVec<T>& boards1,
-                                              JVec<T>& boards2) {
+std::vector<std::pair<C T *, C T *>> intersection(JVec<T>& boards1, JVec<T>& boards2) {
     static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
 
     std::vector<std::pair<C T *, C T *>> results;

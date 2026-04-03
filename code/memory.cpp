@@ -1,15 +1,13 @@
 #include "memory.hpp"
+#include "board_hash_segments.hpp"
+#include "rotations.hpp"
 
 #include <vector>
-
-#include "rotations.hpp"
-#include "segments.hpp"
-
 #include <sstream>
+
 
 namespace {
     Memory::HashMode gHashModeOverride = Memory::HashMode::Auto;
-    Memory::CustomHashFunc gCustomHashFunc = nullptr;
 }
 
 
@@ -37,16 +35,6 @@ HD void Memory::precomputeHash4(C u64 b1, C u64 b2) {
 }
 
 
-HD void Memory::precomputeHashCustom(C u64 b1, C u64 b2) {
-    if (gCustomHashFunc != nullptr) {
-        setHash(gCustomHashFunc(b1, b2));
-        return;
-    }
-    // Safe fallback keeps behavior stable if Custom mode is selected without a callback.
-    precomputeHash4(b1, b2);
-}
-
-
 void Memory::setHashModeOverride(C HashMode mode) {
     gHashModeOverride = mode;
 }
@@ -57,26 +45,11 @@ Memory::HashMode Memory::getHashModeOverride() {
 }
 
 
-void Memory::setCustomHashFunc(C CustomHashFunc func) {
-    gCustomHashFunc = func;
-}
-
-
-Memory::CustomHashFunc Memory::getCustomHashFunc() {
-    return gCustomHashFunc;
-}
-
-
 MU HD Memory::HasherPtr Memory::getHashFunc(C Board& board) {
     switch (gHashModeOverride) {
         case HashMode::Hash2: return &Memory::precomputeHash2;
         case HashMode::Hash3: return &Memory::precomputeHash3;
         case HashMode::Hash4: return &Memory::precomputeHash4;
-        case HashMode::Custom:
-            if (gCustomHashFunc != nullptr) {
-                return &Memory::precomputeHashCustom;
-            }
-            break;
         case HashMode::Auto: break;
     }
 
@@ -164,9 +137,9 @@ std::string Memory::asmStringBackwards() C {
 
 
 std::string Memory::asmFatString(C u8 fatPos, C Memory* other, C u8 fatPosOther) C {
-    C std::string start = asmFatStringForwards(fatPos);
+    std::string start = asmFatStringForwards(fatPos);
     if (other == nullptr) { return start; }
-    C std::string end = other->asmFatStringBackwards(fatPosOther);
+    std::string end = other->asmFatStringBackwards(fatPosOther);
     if (start.empty()) { return end; }
     if (end.empty()) { return start; }
     return start + " " + end;
@@ -176,8 +149,8 @@ std::string Memory::asmFatString(C u8 fatPos, C Memory* other, C u8 fatPosOther)
 std::string Memory::asmFatStringForwards(C u8 fatPos) C {
     std::string moves_str;
     C u32 count = getMoveCount();
-    int x = fatPos / 5;
-    int y = fatPos % 5;
+    i32 x = fatPos / 5;
+    i32 y = fatPos % 5;
 
     for (u32 i = 0; i < count; i++) {
         char temp[5] = {};
@@ -213,8 +186,8 @@ std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
     std::vector<std::string> moves_vec;
     moves_vec.resize(count);
 
-    int x = fatPos / 5;
-    int y = fatPos % 5;
+    i32 x = fatPos / 5;
+    i32 y = fatPos % 5;
 
     for (u32 i = 0; i < count; i++) {
         char temp[5] = {};
@@ -242,7 +215,7 @@ std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
 
     std::string moves_str;
 
-    for (int i = static_cast<int>(moves_vec.size()) - 1; i >= 0; i--) {
+    for (i32 i = static_cast<i32>(moves_vec.size()) - 1; i >= 0; i--) {
         moves_str.append(moves_vec[i]);
         if (i != 0) {
             moves_str += " ";
@@ -256,8 +229,8 @@ std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
 MU std::string Memory::toString() C {
     std::string str = "Move[";
 
-    C int moveCount = getMoveCount();
-    for (int i = 0; i < moveCount; i++) {
+    C i32 moveCount = getMoveCount();
+    for (i32 i = 0; i < moveCount; i++) {
         str.append(std::to_string(getMove(i)));
         if (i != moveCount - 1) {
             str.append(", ");

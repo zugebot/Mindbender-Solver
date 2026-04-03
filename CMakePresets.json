@@ -1,0 +1,90 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/cmake-build-${presetName}",
+      "cacheVariables": {
+        "CMAKE_CXX_STANDARD": "23",
+        "USE_CUDA": "OFF",
+        "USE_SIMT_ROTATIONS": "OFF",
+        "USE_BOARD_HASH": "OFF"
+      }
+    },
+
+    {
+      "name": "mingw-base",
+      "hidden": true,
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "C:/msys64/mingw64/bin/gcc.exe",
+        "CMAKE_CXX_COMPILER": "C:/msys64/mingw64/bin/g++.exe"
+      }
+    },
+
+    {
+      "name": "msvc-base",
+      "hidden": true,
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe",
+        "CMAKE_CXX_COMPILER": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe"
+      }
+    },
+
+    {
+      "name": "mingw-debug",
+      "inherits": "mingw-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "mingw-release",
+      "inherits": "mingw-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+
+    {
+      "name": "msvc-debug",
+      "inherits": "msvc-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "msvc-release",
+      "inherits": "msvc-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+
+    {
+      "name": "msvc-debug-cuda",
+      "inherits": "msvc-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "USE_CUDA": "ON"
+      }
+    },
+    {
+      "name": "msvc-release-cuda",
+      "inherits": "msvc-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "USE_CUDA": "ON"
+      }
+    }
+  ]
+}

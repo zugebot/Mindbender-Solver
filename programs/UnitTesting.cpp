@@ -171,12 +171,15 @@ int main() {
     static constexpr uint64_t MASK = 0x003F'FFFF'FFFF'FFFF;
     static constexpr uint64_t VAL = 0xAA80'0000'0000'0000;
 
-    auto level = LevelBoardPair::p5_3;
+    const BoardPair* level = BoardLookup::getBoardPair("5-3");
+    if (level == nullptr) {
+        throw std::runtime_error("Level 5-3 not found");
+    }
 
     Board board, check, solve;
-    board = level.getInitialState();
-    check = level.getInitialState();
-    solve = level.getSolutionState();
+    board = level->getStartState();
+    check = level->getStartState();
+    solve = level->getEndState();
 
     (board.*board.getHashFunc())();
 
@@ -226,13 +229,13 @@ int main() {
 
 
     Board solved5_3 = level.getInitialState();
-    R_1_2(solved5_3);
-    R_2_3(solved5_3);
-    C_0_2(solved5_3);
-    C_4_2(solved5_3);
-    C_2_4(solved5_3);
-    C_3_2(solved5_3);
-    R_2_4(solved5_3);
+    R12(solved5_3);
+    R23(solved5_3);
+    C02(solved5_3);
+    C42(solved5_3);
+    C24(solved5_3);
+    C32(solved5_3);
+    R24(solved5_3);
     if (solve.b1 != solved5_3.b1 || solve.b2 != solved5_3.b2) {
         std::cout << "The permutations of a solution performed on the initial board state did not solve it.\n";
         std::cout << "The board in question:\n";
@@ -256,10 +259,10 @@ int main() {
 
     // R12 R23 C02 C42
     Board board_left = level.getInitialState();
-    R_1_2(board_left);
-    R_2_3(board_left);
-    C_0_2(board_left);
-    C_4_2(board_left);
+    R12(board_left);
+    R23(board_left);
+    C02(board_left);
+    C42(board_left);
     board_left.precomputeHash();
 
     // C24 C32 R24

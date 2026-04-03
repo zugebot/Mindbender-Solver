@@ -1,152 +1,179 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(CMAKE_CXX_STANDARD 23)
+# ------------------------------------------------------------
+# Project options
+# ------------------------------------------------------------
+option(USE_CUDA "Enable CUDA support" OFF)
+option(USE_SIMT_ROTATIONS "Use a SIMT-friendly rotation implementation with smaller GPU code size" ON)
+option(USE_BOARD_HASH "Enable board hashing" OFF)
 
-
-unset(USE_CUDA CACHE)
-option(USE_CUDA "Enable CUDA support" OFF) # "ON" or "OFF"
-
-
-unset(USE_TRIMMED_ROTATIONS CACHE)
-option(USE_TRIMMED_ROTATIONS "Smaller memory for rotation functions" ON)
-if (USE_TRIMMED_ROTATIONS)
-    add_compile_definitions(-DUSE_TRIMMED_ROTATIONS)
-endif()
-
-
-
-# project decl
+# ------------------------------------------------------------
+# Project declaration
+# ------------------------------------------------------------
 if (USE_CUDA)
     project(MindbenderSolver LANGUAGES C CXX CUDA)
-    add_compile_definitions(-DUSE_CUDA)
     enable_language(CUDA)
+
     message(STATUS "CUDA support enabled")
 
-    # set files to be interpreted as .cu
-    set_source_files_properties(
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+    add_compile_definitions(USE_CUDA)
+
+    find_package(CUDAToolkit REQUIRED)
+
+    # Only mark the shared implementation files that actually need nvcc
+    set(CUDA_SOURCE_FILES
             "${CMAKE_SOURCE_DIR}/code/rotations.cpp"
-            PROPERTIES LANGUAGE CUDA
-    )
-    set_source_files_properties(
             "${CMAKE_SOURCE_DIR}/code/board.cpp"
-            PROPERTIES LANGUAGE CUDA
-    )
-    set_source_files_properties(
             "${CMAKE_SOURCE_DIR}/code/memory.cpp"
-            PROPERTIES LANGUAGE CUDA
     )
 
-    set(CMAKE_CUDA_STANDARD 17)
-    set(CMAKE_CUDA_STANDARD_REQUIRED True)
-    find_package(CUDAToolkit REQUIRED)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
+    set_source_files_properties(${CUDA_SOURCE_FILES} PROPERTIES LANGUAGE CUDA)
+
+    string(APPEND CMAKE_CUDA_FLAGS " --expt-relaxed-constexpr")
 else()
     project(MindbenderSolver LANGUAGES C CXX)
     message(STATUS "CUDA support disabled")
 endif()
 
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if (USE_BOARD_HASH)
-    add_compile_definitions(-DUSE_BOARD_HASH)
+# ------------------------------------------------------------
+# Compile definitions
+# ------------------------------------------------------------
+if (USE_SIMT_ROTATIONS)
+    add_compile_definitions(USE_SIMT_ROTATIONS)
 endif()
 
+if (USE_BOARD_HASH)
+    add_compile_definitions(USE_BOARD_HASH)
+endif()
 
-# find Boost
-find_library(BOOST_FOUND Boost)
-if (BOOST_FOUND)
+# ------------------------------------------------------------
+# Dependencies
+# ------------------------------------------------------------
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    message(STATUS "Skipping TBB lookup for MSVC")
+else()
+    find_package(TBB QUIET)
+    if (TBB_FOUND)
+        message(STATUS "TBB found")
+        add_compile_definitions(TBB_FOUND)
+    else()
+        message(STATUS "TBB not found")
+    endif()
+endif()
+
+find_library(BOOST_LIBRARY NAMES Boost boost)
+if (BOOST_LIBRARY)
     message(STATUS "Boost found")
     add_compile_definitions(BOOST_FOUND)
 else()
     message(STATUS "Boost not found")
 endif()
 
+# ------------------------------------------------------------
+# Include directories
+# ------------------------------------------------------------
+include_directories("${CMAKE_SOURCE_DIR}")
 
-# find TBB
-find_library(TBB_FOUND TBB)
-if (TBB_FOUND)
-    message(STATUS "TBB found")
-    add_compile_definitions(TBB_FOUND)
-    find_package(TBB REQUIRED)
-else()
-    message(STATUS "TBB not found")
-endif()
-
-
-# include dirs
-include_directories(${CMAKE_SOURCE_DIR})
 if (USE_CUDA)
     include_directories(${CUDAToolkit_INCLUDE_DIRS})
+    message(STATUS "CUDA Toolkit Include Directories: ${CUDAToolkit_INCLUDE_DIRS}")
 endif()
 
-
-# file structure of project
-file(GLOB_RECURSE MINDBENDER_SOLVER_SOURCES
+# ------------------------------------------------------------
+# Source discovery
+# ------------------------------------------------------------
+file(GLOB_RECURSE COMMON_SOURCES
         "${CMAKE_SOURCE_DIR}/code/*.*pp"
         "${CMAKE_SOURCE_DIR}/code/*.*cu"
         "${CMAKE_SOURCE_DIR}/utils/*.*pp"
         "${CMAKE_SOURCE_DIR}/include.hpp"
 )
+
 file(GLOB_RECURSE INCLUDE_SOURCES
         "${CMAKE_SOURCE_DIR}/include/*.*pp"
 )
-set(PROGRAM_FOLDER "${CMAKE_SOURCE_DIR}/programs")
 
-# set(MAIN_FILE "${PROGRAM_FOLDER}/testLayeredDFS.cpp")
-# set(MAIN_FILE "${PROGRAM_FOLDER}/testKnownSolutions.cpp")
-# set(MAIN_FILE "${PROGRAM_FOLDER}/testPuzzlesValid.cpp")
-set(MAIN_FILE "${PROGRAM_FOLDER}/testSingleUnrolledLoop.cpp")
-
-
-if (USE_CUDA)
-    set_source_files_properties(${MAIN_FILE} PROPERTIES LANGUAGE CUDA)
-endif()
-
-
-add_executable(MindbenderSolver
-        ${MAIN_FILE}
-        ${MINDBENDER_SOLVER_SOURCES}
+set(SHARED_SOURCES
+        ${COMMON_SOURCES}
         ${INCLUDE_SOURCES}
 )
 
+# ------------------------------------------------------------
+# Helper to create one executable per program
+# ------------------------------------------------------------
+function(add_solver_program target_name main_file)
+    add_executable(${target_name}
+            "${main_file}"
+            ${SHARED_SOURCES}
+    )
 
-# link TBB if found
-if (TBB_FOUND)
-    target_link_libraries(MindbenderSolver PRIVATE TBB::tbb)
-endif()
-
-
-# compiler-specific options
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-        target_compile_options(MindbenderSolver PRIVATE
-                $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -mbmi2 -funroll-loops -fstrict-aliasing -fomit-frame-pointer>
-                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O3,-Xcompiler=-march=native,-Xcompiler=-mbmi2,-Xcompiler=-flto,-Xcompiler=-funroll-loops,-Xcompiler=-fstrict-aliasing,-Xcompiler=-fomit-frame-pointer>
-        )
-    else()
-        target_compile_options(MindbenderSolver PRIVATE
-                $<$<COMPILE_LANGUAGE:CXX>:-O0 -g -mbmi2>
-                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O0,-Xcompiler=-g,-Xcompiler=-mbmi2>
-        )
+    if (TBB_FOUND)
+        target_link_libraries(${target_name} PRIVATE TBB::tbb)
     endif()
 
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-        target_compile_options(MindbenderSolver PRIVATE
-                $<$<COMPILE_LANGUAGE:CXX>:/O2 /GL /FA>
-                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler="/O2 /GL">
-        )
-    else()
-        target_compile_options(MindbenderSolver PRIVATE
-                $<$<COMPILE_LANGUAGE:CXX>:/Zi /FA>
-                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler="/Zi">
-        )
+    if (MSVC)
+        if (USE_CUDA)
+            if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+                target_compile_options(${target_name} PRIVATE
+                        $<$<COMPILE_LANGUAGE:CXX>:/O2 /GL /FA>
+                        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/O2,-Xcompiler=/GL>
+                )
+            else()
+                target_compile_options(${target_name} PRIVATE
+                        $<$<COMPILE_LANGUAGE:CXX>:/Zi /FA>
+                        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zi>
+                )
+            endif()
+        else()
+            if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+                target_compile_options(${target_name} PRIVATE /O2 /GL /FA)
+            else()
+                target_compile_options(${target_name} PRIVATE /Zi /FA)
+            endif()
+        endif()
+
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        if (USE_CUDA)
+            if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+                target_compile_options(${target_name} PRIVATE
+                        $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -mbmi2 -funroll-loops -fstrict-aliasing -fomit-frame-pointer>
+                        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O3,-Xcompiler=-march=native,-Xcompiler=-mbmi2,-Xcompiler=-funroll-loops,-Xcompiler=-fstrict-aliasing,-Xcompiler=-fomit-frame-pointer>
+                )
+            else()
+                target_compile_options(${target_name} PRIVATE
+                        $<$<COMPILE_LANGUAGE:CXX>:-O0 -g -mbmi2>
+                        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O0,-Xcompiler=-g,-Xcompiler=-mbmi2>
+                )
+            endif()
+        else()
+            if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+                target_compile_options(${target_name} PRIVATE
+                        -O3 -march=native -mbmi2 -funroll-loops -fstrict-aliasing -fomit-frame-pointer
+                )
+            else()
+                target_compile_options(${target_name} PRIVATE
+                        -O0 -g -mbmi2
+                )
+            endif()
+        endif()
     endif()
-endif()
 
+    if (USE_CUDA)
+        set_target_properties(${target_name} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+    endif()
+endfunction()
 
-# CUDA being dumb
-if (USE_CUDA)
-    set_target_properties(MindbenderSolver PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-    set_source_files_properties(${MINDBENDER_SOLVER_SOURCES} PROPERTIES LANGUAGE CUDA)
-    message(STATUS "CUDA Toolkit Include Directories: ${CUDAToolkit_INCLUDE_DIRS}")
-endif()
+# ------------------------------------------------------------
+# Programs
+# ------------------------------------------------------------
+add_solver_program(testLayeredDFS         "${CMAKE_SOURCE_DIR}/programs/testLayeredDFS.cpp")
+add_solver_program(testKnownSolutions     "${CMAKE_SOURCE_DIR}/programs/testKnownSolutions.cpp")
+add_solver_program(testPuzzlesValid       "${CMAKE_SOURCE_DIR}/programs/testPuzzlesValid.cpp")
+add_solver_program(testLeftGenRightCache  "${CMAKE_SOURCE_DIR}/programs/testLeftGenRightCache.cpp")
+add_solver_program(testRotations          "${CMAKE_SOURCE_DIR}/programs/testRotations.cpp")

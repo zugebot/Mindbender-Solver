@@ -1,4 +1,5 @@
 #pragma once
+// code/perms_gen.hpp
 
 #include <iomanip>
 #include <iostream>
@@ -8,13 +9,13 @@
 #include "include.hpp"
 
 
-struct PermGenPair {
+struct MemoryPermGenPair {
     u32 start;
     u32 end;
 
-    explicit PermGenPair() : start(0), end(0) {}
+    explicit MemoryPermGenPair() : start(0), end(0) {}
 
-    PermGenPair(C u32 theStart, C u32 theLength) {
+    MemoryPermGenPair(C u32 theStart, C u32 theLength) {
         start = theStart;
         end = theStart + theLength;
     }
@@ -22,8 +23,8 @@ struct PermGenPair {
 
 
 
-class PermGen {
-    std::vector<PermGenPair> myPairs;
+class MemoryPermGen {
+    std::vector<MemoryPermGenPair> myPairs;
     std::vector<u8> myToBePermuted;
 
 public:
@@ -31,7 +32,7 @@ public:
 
     void allPermutations(
        C std::vector<u8>& toBePermuted,
-       C std::vector<PermGenPair>& thePairs) {
+       C std::vector<MemoryPermGenPair>& thePairs) {
         myToBePermuted = toBePermuted;
         myPairs = thePairs;
         myOutput.clear();
@@ -41,10 +42,10 @@ public:
     MU void printVectors() {
         std::cout << "\n";
 
-        for (int index = 0; index < myOutput.size(); ++index) {
+        for (i32 index = 0; index < myOutput.size(); ++index) {
             std::vector<u8>& theVector = myOutput[index];
 
-            int i = 0;
+            i32 i = 0;
             std::cout << std::setw(3) << index + 1 << ": { ";
             for (; i < theVector.size(); i++) {
                 if (theVector[i] == 0) {
@@ -89,7 +90,7 @@ private:
 MU static std::vector<std::vector<u8>> createMemoryPermutations(
     C std::vector<u8>& theMemory) {
     u32 index = 0, length = 1;
-    std::vector<PermGenPair> pairs;
+    std::vector<MemoryPermGenPair> pairs;
 
     char isRow = allActStructList[0].name[0];
 
@@ -109,7 +110,7 @@ MU static std::vector<std::vector<u8>> createMemoryPermutations(
         i++;
     }
 
-    PermGen gen;
+    MemoryPermGen gen;
     gen.allPermutations(theMemory, pairs);
 
     return gen.myOutput;

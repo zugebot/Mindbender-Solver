@@ -1,5 +1,5 @@
+#include "code/include.hpp"
 #include <cmath>
-#include "include.hpp"
 
 #ifdef USE_CUDA
 #include <cuda_runtime.h>

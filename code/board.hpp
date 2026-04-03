@@ -1,16 +1,15 @@
 #pragma once
+// code/board.hpp
 
 #include "utils/processor.hpp"
-
 #include "memory.hpp"
 
 #include <string>
 #include <array>
 
-// extern int GET_SCORE_3_CALLS;
 
 class B1B2;
-typedef void (*Action)(B1B2 &);
+using Action = void (*)(B1B2&);
 
 
 /**
@@ -18,7 +17,7 @@ typedef void (*Action)(B1B2 &);
  */
 class B1B2 {
 public:
-    typedef std::array<i8, 8> ColorArray_t;
+    using ColorArray_t = std::array<i8, 8>;
 
     /**
      *  3 bits: fat x position
@@ -70,22 +69,23 @@ public:
     MUND HD u8 getColor(u8 x, u8 y) C;
 
     MUND HD u64 getScore1(C B1B2& other) C;
-    MUND HD int getScore3(B1B2 theOther) C;
+    MUND HD i32 getScore3(B1B2 theOther) C;
 
-    template<int MAX_DEPTH>
+    template<i32 MAX_DEPTH>
     MUND HD bool getScore3Till(B1B2 theOther) C;
     MUND HD bool canBeSolvedIn1Move(B1B2 theOther) C;
 
     MU __host__ void doMoves(std::initializer_list<Action> theInitList);
 
-    __forceinline HD bool operator==(C B1B2& other) C {
-        return b1 == other.b1 && b2 == other.b2; }
+    FORCEINLINE HD bool operator==(C B1B2& other) C {
+        return b1 == other.b1 && b2 == other.b2; 
+    }
 };
 
 
 class Board : public B1B2 {
 public:
-    typedef void (Board::*HasherPtr)();
+    using HasherPtr = void (Board::*)();
 
     static ColorArray_t ColorsDefault;
     struct PrintSettings {
@@ -98,14 +98,14 @@ public:
 
     Memory memory;
 
-    explicit Board() = default;
+    Board() = default;
 
     // does not check if input list is of size 36 or not
     Board(C std::initializer_list<u8> values) { setState(values.begin()); }
     explicit Board(C u8 values[36]) {  setState(values); }
     explicit Board(C u8 values[36], u8 x, u8 y);
 
-    MU HD B1B2 asB1B2() { return {b1, b2}; }
+    MUND HD B1B2 asB1B2() C { return {b1, b2}; }
 
     MUND HD u64 getHash() C { return memory.getHash(); }
     MUND HD Memory& getMemory() { return memory; }
@@ -126,25 +126,27 @@ public:
     MU HD void precomputeHash2();
     MU HD void precomputeHash3();
     MU HD void precomputeHash4();
-    MU HD void precomputeHashCustom();
     MUND HD HasherPtr getHashFunc() C;
 
 
-    MU static void appendBoardToString(std::string &str, C Board *board, i32 curY, PrintSettings theSettings = {});
+    MU static void appendBoardToString(std::string& str, C Board* board, i32 curY, PrintSettings theSettings = {});
     MUND std::string toString(C Board& other, PrintSettings theSettings = {}) C;
     MUND std::string toString(C Board* other, PrintSettings theSettings = {}) C;
     MUND std::string toStringSingle(PrintSettings theSettings) C;
     MUND std::string toBlandString() C;
 
 
-    __forceinline HD bool operator==(C Board& other) C {
-        return b1 == other.b1 && b2 == other.b2; }
+    FORCEINLINE HD bool operator==(C Board& other) C {
+        return b1 == other.b1 && b2 == other.b2; 
+    }
 
-    __forceinline HD bool operator<(C Board& other) C {
-        return this->getHash() < other.getHash(); }
+    FORCEINLINE HD bool operator<(C Board& other) C {
+        return this->getHash() < other.getHash(); 
+    }
 
-    __forceinline HD bool operator>(C Board& other) C {
-        return this->getHash() > other.getHash(); }
+    FORCEINLINE HD bool operator>(C Board& other) C {
+        return this->getHash() > other.getHash(); 
+    }
 
 };
 

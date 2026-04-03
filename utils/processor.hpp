@@ -8,7 +8,7 @@
 ///                      Compiler and Platform Features
 ///=============================================================================
 
-#if __GNUC__
+#if defined(__GNUC__) || defined(__clang__)
     #define PREFETCH(PTR, RW, LOC) __builtin_prefetch(PTR, RW, LOC)
     #define EXPECT_FALSE(COND) (__builtin_expect((COND), 0)) // [unlikely]
     #define EXPECT_TRUE(COND) (__builtin_expect((COND), 1))  // [likely]
@@ -26,7 +26,19 @@
 #endif
 
 
-#ifndef USE_CUDA
+#if defined(_MSC_VER)
+#define FORCEINLINE __forceinline
+#define NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#define FORCEINLINE inline __attribute__((always_inline))
+#define NOINLINE __attribute__((noinline))
+#else
+#define FORCEINLINE inline
+#define NOINLINE
+#endif
+
+
+#ifndef __CUDACC__
     #ifndef __host__
         #define __host__
     #endif
@@ -47,15 +59,15 @@
 
 #define C const
 
-#define i8 int8_t
-#define i16 int16_t
-#define i32 int32_t
-#define i64 int64_t
+using i8  = std::int8_t;
+using i16 = std::int16_t;
+using i32 = std::int32_t;
+using i64 = std::int64_t;
 
-#define u8 uint8_t
-#define u16 uint16_t
-#define u32 uint32_t
-#define u64 uint64_t
+using u8  = std::uint8_t;
+using u16 = std::uint16_t;
+using u32 = std::uint32_t;
+using u64 = std::uint64_t;
 
 template <typename T>
 constexpr auto always_false = false;

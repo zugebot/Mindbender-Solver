@@ -1,4 +1,4 @@
-#include "include.hpp"
+#include "code/include.hpp"
 #include "utils/timer.hpp"
 #include <fstream>
 #include <iostream>
@@ -73,7 +73,7 @@ struct SearchNode {
     int gCost{}; // Cost from start to current node
     int hCost{}; // Heuristic cost estimate to goal
     int fCost{}; // Total estimated cost (gCost + hCost)
-    std::vector<ActStruct> actionsTaken; // Sequence of actions leading to this node
+    std::vector<Action> actionsTaken; // Sequence of actions leading to this node
 
     bool operator>(C SearchNode& other) C {
         return fCost > other.fCost; // Min-heap based on fCost
@@ -155,8 +155,8 @@ int main() {
 
 
     auto pair = BoardLookup::getBoardPair("8-5");
-    Board board1 = pair->getInitialState(); // pair->getInitialState();
-    Board board2 = pair->getSolutionState();
+    Board board1 = pair->getStartState(); // pair->getInitialState();
+    Board board2 = pair->getEndState();
 
     // actions[15](board2);
     // actions[37](board2);

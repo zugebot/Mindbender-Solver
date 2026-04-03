@@ -1,8 +1,9 @@
+// code/board.cpp
 #include "board.hpp"
 
 #include <string>
 
-#include "segments.hpp"
+#include "board_hash_segments.hpp"
 
 #include "utils/colors.hpp"
 #include "utils/intrinsics/clz.hpp"
@@ -10,7 +11,61 @@
 #include "utils/intrinsics/popcount.hpp"
 
 
-int GET_SCORE_3_CALLS = 0;
+static void setAllColors(B1B2 *b1b2, C u8 adjustedValues[36]) {
+    b1b2->b1 = 0;
+    for (i32 i = 0; i < 18; i++) {
+        b1b2->b1 = b1b2->b1 << 3 | adjustedValues[i] & 0'7;
+    }
+    b1b2->b2 = 0;
+    for (i32 i = 18; i < 36; i++) {
+        b1b2->b2 = b1b2->b2 << 3 | adjustedValues[i] & 0'7;
+    }
+}
+
+
+constexpr u64 MAKE_MASK(C u64 offset, C u64 bits) {
+    return ~(((1ULL << bits) - 1ULL) << offset);
+}
+
+
+/*
+ * Encodes the row base shift values for y = 0..5 as bytes:
+ * [51, 33, 15, 51, 33, 15]
+ *
+ * Equivalent to:
+ *     51 - x * 3 - (y % 3) * 18
+ *
+ * but avoids the modulo/multiply path in the hot loop.
+ */
+template <typename T1, typename T2>
+FORCEINLINE u64 getShiftAmount(C T1 x, C T2 y) {
+    static constexpr u64 MAGIC = 0x33210F33210F;
+    return (MAGIC >> (y * 8)) - (x * 3);
+}
+
+
+/**
+ * For each 3-bit cell lane in the two 54-bit packed sections:
+ *   - returns 0b001 if the cell values are equal
+ *   - returns 0b000 if the cell values differ
+ *
+ * The result is therefore a 54-bit mask with one set bit per matching cell,
+ * positioned at the low bit of each 3-bit lane.
+ * @param sect1 b1/b2 of 1st board
+ * @param sect2 b1/b2 of 2nd board
+ * @return
+ */
+FORCEINLINE HD u64 getSimilar54(C u64& sect1, C u64& sect2) {
+    C u64 s = sect1 ^ sect2;
+    return ~(s | s >> 1 | s >> 2) & 0'111111'111111'111111;
+}
+
+
+FORCEINLINE HD u64 getAntiSimilar54(C u64& sect1, C u64& sect2) {
+    C u64 s = sect1 ^ sect2;
+    return (s | s >> 1 | s >> 2) & 0'111111'111111'111111;
+}
+
 
 
 Board::ColorArray_t Board::ColorsDefault = {0, 1, 2, 3, 4, 5, 6, 7};
@@ -22,23 +77,11 @@ Board::Board(C u8 values[36], C u8 x, C u8 y) {
 }
 
 
-static void setAllColors(B1B2 *b1b2, C u8 adjustedValues[36]) {
-    b1b2->b1 = 0;
-    for (int i = 0; i < 18; i++) {
-        b1b2->b1 = b1b2->b1 << 3 | adjustedValues[i] & 0'7;
-    }
-    b1b2->b2 = 0;
-    for (int i = 18; i < 36; i++) {
-        b1b2->b2 = b1b2->b2 << 3 | adjustedValues[i] & 0'7;
-    }
-}
-
-
 void B1B2::setState(C u8 values[36]) {
     ColorArray_t colors = {8, 8, 8, 8, 8, 8, 8, 8};
 
-    for (int i = 0; i < 36; i++) {
-        C int val = values[i] & 0'7;
+    for (i32 i = 0; i < 36; i++) {
+        C i32 val = values[i] & 0'7;
         colors[val] = 1;
     }
     u64 colorCount = 0;
@@ -49,7 +92,7 @@ void B1B2::setState(C u8 values[36]) {
         }
     }
     u8 adjusted_values[36] = {};
-    for (int i = 0; i < 36; i++) {
+    for (i32 i = 0; i < 36; i++) {
         adjusted_values[i] = colors[values[i]];
     }
 
@@ -62,8 +105,8 @@ MU Board::ColorArray_t B1B2::setStateAndRetColors(C u8 values[36]) {
     ColorArray_t colors = {8, 8, 8, 8, 8, 8, 8, 8};
     ColorArray_t trueColors = {8, 8, 8, 8, 8, 8, 8, 8};
 
-    for (int i = 0; i < 36; i++) {
-        C int val = values[i] & 0'7;
+    for (i32 i = 0; i < 36; i++) {
+        C i32 val = values[i] & 0'7;
         colors[val] = 1;
     }
     u64 colorCount = 0;
@@ -77,7 +120,7 @@ MU Board::ColorArray_t B1B2::setStateAndRetColors(C u8 values[36]) {
         index++;
     }
     u8 adjusted_values[36] = {};
-    for (int i = 0; i < 36; i++) {
+    for (i32 i = 0; i < 36; i++) {
         adjusted_values[i] = colors[values[i]];
     }
 
@@ -87,27 +130,25 @@ MU Board::ColorArray_t B1B2::setStateAndRetColors(C u8 values[36]) {
 }
 
 
-constexpr u64 MAKE_MASK(C u64 offset, C u64 bits) {
-    return ~(static_cast<u64>((1 << bits) - 1) << offset);
-}
 
 
 
 
-static constexpr u64 COLOR_COUNT_OFFSET = 54; // 54, 55, 56
-static constexpr u64 COLOR_COUNT_BITS = 3;
+
+static constexpr u64 COLOR_COUNT_OFFSET = 54ULL; // 54, 55, 56
+static constexpr u64 COLOR_COUNT_BITS = 3ULL;
 static constexpr u64 COLOR_COUNT_MASK = MAKE_MASK(COLOR_COUNT_OFFSET, COLOR_COUNT_BITS);
 
-static constexpr u64 FAT_BOOL_OFFSET = 57; // 57
-static constexpr u64 FAT_BOOL_BITS = 1;
+static constexpr u64 FAT_BOOL_OFFSET = 57ULL; // 57
+static constexpr u64 FAT_BOOL_BITS = 1ULL;
 static constexpr u64 FAT_BOOL_MASK = MAKE_MASK(FAT_BOOL_OFFSET, FAT_BOOL_BITS);
 
-static constexpr u64 FAT_Y_OFFSET = 58; // 58, 59, 60
-static constexpr u64 FAT_Y_BITS = 3;
+static constexpr u64 FAT_Y_OFFSET = 58ULL; // 58, 59, 60
+static constexpr u64 FAT_Y_BITS = 3ULL;
 static constexpr u64 FAT_Y_MASK = MAKE_MASK(FAT_Y_OFFSET, FAT_Y_BITS);
 
-static constexpr u64 FAT_X_OFFSET = 61; // 61, 62, 63
-static constexpr u64 FAT_X_BITS = 3;
+static constexpr u64 FAT_X_OFFSET = 61ULL; // 61, 62, 63
+static constexpr u64 FAT_X_BITS = 3ULL;
 static constexpr u64 FAT_X_MASK = MAKE_MASK(FAT_X_OFFSET, FAT_X_BITS);
 
 
@@ -194,15 +235,6 @@ MU HD u8 B1B2::getFatXYFast() C {
 
 
 
-/*
- * ``C i32 shift_amount = 51 - x * 3 - y % 3 * 18;``
- * Magic math that returns ``shift_amount``
- */
-template <typename T1, typename T2>
-__forceinline u64 getShiftAmount(C T1 x, C T2 y) {
-    static constexpr u64 MAGIC = 0x33210F33210F;
-    return (MAGIC >> (y * 8)) - (x * 3);
-}
 
 
 MU u8 HD B1B2::getColor(C u8 x, C u8 y) C {
@@ -219,18 +251,18 @@ MU u8 HD B1B2::getColor(C u8 x, C u8 y) C {
 */
 
 /**
- * int x = (action1 % 30) / 5;
- * int y = (action2 % 30) / 5;
- * int m = 1 + action1 % 5;
- * int n = 1 + action2 % 5;
+ * i32 x = (action1 % 30) / 5;
+ * i32 y = (action2 % 30) / 5;
+ * i32 m = 1 + action1 % 5;
+ * i32 n = 1 + action2 % 5;
  */
 MU HD bool Board::doActISColMatch(C u8 x1, C u8 y1, C u8 m, C u8 n) C {
-    C int y2 = (y1 - n + 6) % 6;
-    C int x2 = (x1 - m + 6) % 6;
+    C i32 y2 = (y1 - n + 6) % 6;
+    C i32 x2 = (x1 - m + 6) % 6;
 
-    C int offset_shared = 51 - (y1 % 3) * 18;
-    C int shift_amount1 = x1 * 3 + offset_shared;
-    C int shift_amount3 = x2 * 3 + offset_shared;
+    C i32 offset_shared = 51 - (y1 % 3) * 18;
+    C i32 shift_amount1 = x1 * 3 + offset_shared;
+    C i32 shift_amount3 = x2 * 3 + offset_shared;
 
     C u64 base = y1 < 3 ? b1 : b2;
 
@@ -285,23 +317,6 @@ double HD Board::getDuplicateEstimateAtDepth(MU u32 depth) {
 }
 
 
-/**
- * returns the ..100.000.100.000... of board1 compared to board2
- * ..001.. if cells are similar in value
- * ..000.. if cells differ in value
- * @param sect1 b1/b2 of 1st board
- * @param sect2 b1/b2 of 2nd board
- * @return
- */
-inline HD u64 getSimilar54(C u64& sect1, C u64& sect2) {
-    C u64 s = sect1 ^ sect2;
-    return ~(s | s >> 1 | s >> 2) & 0'111111'111111'111111;
-}
-
-
-
-
-
 MU HD u64 B1B2::getScore1(C B1B2 &other) C {
     return my_popcount(getSimilar54(b1, other.b1))
            + my_popcount(getSimilar54(b2, other.b2));
@@ -332,42 +347,48 @@ MU HD u64 B1B2::getScore1(C B1B2 &other) C {
 
 
 
+namespace {
+    
+    static constexpr u64 DIFF_CELL_MASK = 0'111'111'111'111'111'111;
 
-inline HD u64 getAntiSimilar54(C u64& sect1, C u64& sect2) {
-    C u64 s = sect1 ^ sect2;
-    return (s | s >> 1 | s >> 2) & 0'111111'111111'111111;
+    FORCEINLINE HD u64 buildDiffFull(C B1B2& lhs, C B1B2& rhs) {
+        return (my_pext_u64(getAntiSimilar54(lhs.b1, rhs.b1), DIFF_CELL_MASK) << 18)
+               |  my_pext_u64(getAntiSimilar54(lhs.b2, rhs.b2), DIFF_CELL_MASK);
+    }
+
+    FORCEINLINE HD void buildUncoveredCounts(
+            C u64 full,
+            u8 (&uncRows)[8],
+            u8 (&uncCols)[8]) {
+        uncRows[0] = my_popcount(full & 0'770000000000);
+        uncRows[1] = my_popcount(full & 0'007700000000);
+        uncRows[2] = my_popcount(full & 0'000077000000);
+        uncRows[3] = my_popcount(full & 0'000000770000);
+        uncRows[4] = my_popcount(full & 0'000000007700);
+        uncRows[5] = my_popcount(full & 0'000000000077);
+
+        uncCols[0] = my_popcount(full & 0'404040404040);
+        uncCols[1] = my_popcount(full & 0'202020202020);
+        uncCols[2] = my_popcount(full & 0'101010101010);
+        uncCols[3] = my_popcount(full & 0'040404040404);
+        uncCols[4] = my_popcount(full & 0'020202020202);
+        uncCols[5] = my_popcount(full & 0'010101010101);
+    }
+
 }
 
 
-MUND HD int B1B2::getScore3(C B1B2 theOther) C {
-    // ++GET_SCORE_3_CALLS;
 
-    // Find all differing cells and update the counts in uncRows and uncCols
-    static constexpr u64 PENIS_MASK = 0'111'111'111'111'111'111;
-    C u64 full = my_pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
-                 | my_pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
-
-    uint8_t differingCells = my_popcount(full);
-
+MUND HD i32 B1B2::getScore3(C B1B2 theOther) C {
+    C u64 full = buildDiffFull(*this, theOther);
+    u8 differingCells = my_popcount(full);
+    
     alignas(u64) u8 uncRows[8] = {};
-    uncRows[0] = my_popcount(full & 0'770000000000);
-    uncRows[1] = my_popcount(full & 0'007700000000);
-    uncRows[2] = my_popcount(full & 0'000077000000);
-    uncRows[3] = my_popcount(full & 0'000000770000);
-    uncRows[4] = my_popcount(full & 0'000000007700);
-    uncRows[5] = my_popcount(full & 0'000000000077);
-
     alignas(u64) u8 uncCols[8] = {};
-    uncCols[0] = my_popcount(full & 0'404040404040);
-    uncCols[1] = my_popcount(full & 0'202020202020);
-    uncCols[2] = my_popcount(full & 0'101010101010);
-    uncCols[3] = my_popcount(full & 0'040404040404);
-    uncCols[4] = my_popcount(full & 0'020202020202);
-    uncCols[5] = my_popcount(full & 0'010101010101);
+    buildUncoveredCounts(full, uncRows, uncCols);
 
 
     u8 lanes = 0;
-    // While there are still uncovered differing cells (at most 6 loops)
     while (differingCells > 0) {
 
         // Find the row or column that covers the most uncovered differing cells
@@ -375,15 +396,14 @@ MUND HD int B1B2::getScore3(C B1B2 theOther) C {
         // base which level of checking I am doing off of getScore1?
         // can be recoded to find the index and value of the max in both?
 
-        // IMPORTANT changed u64 to i32?
-        C i32 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
-                               | 1 << uncRows[2] | 1 << uncRows[3]
-                               | 1 << uncRows[4] | 1 << uncRows[5];
+        C i32 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1] | 
+                               1 << uncRows[2] | 1 << uncRows[3] | 
+                               1 << uncRows[4] | 1 << uncRows[5];
         C u8 highestRow = 31 - my_clz(promoteRowMask);
 
-        C i32 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
-                               | 1 << uncCols[2] | 1 << uncCols[3]
-                               | 1 << uncCols[4] | 1 << uncCols[5];
+        C i32 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1] | 
+                               1 << uncCols[2] | 1 << uncCols[3] | 
+                               1 << uncCols[4] | 1 << uncCols[5];
         C u8 highestCol = 31 - my_clz(promoteColMask);
 
 
@@ -402,14 +422,14 @@ MUND HD int B1B2::getScore3(C B1B2 theOther) C {
             // Cover the chosen row and update the counts in uncCols
             differingCells -= uncRows[index];
             uncRows[index] = 0;
-            for (int j = 0; j < 6; j++) {
+            for (i32 j = 0; j < 6; j++) {
                 if (getColor(j, index) != theOther.getColor(j, index) && uncCols[j] > 0) {
                     uncCols[j]--;
                 }
             }
 
         } else {
-            C int index = (uncCols[0] == highestCol) ? 0 :
+            C i32 index = (uncCols[0] == highestCol) ? 0 :
                           (uncCols[1] == highestCol) ? 1 :
                           (uncCols[2] == highestCol) ? 2 :
                           (uncCols[3] == highestCol) ? 3 :
@@ -418,7 +438,7 @@ MUND HD int B1B2::getScore3(C B1B2 theOther) C {
             // Cover the chosen col and update the counts in uncRows
             differingCells -= uncCols[index];
             uncCols[index] = 0;
-            for (int j = 0; j < 6; j++) {
+            for (i32 j = 0; j < 6; j++) {
                 if (getColor(index, j) != theOther.getColor(index, j) && uncRows[j] > 0) {
                     uncRows[j]--;
                 }
@@ -436,39 +456,19 @@ MUND HD int B1B2::getScore3(C B1B2 theOther) C {
 
 
 
-#define countmore(x) \
-(((((x)&~0UL/255*127)+~0UL/255*(127)|(x))&~0UL/255*128)/128%255)
+
 
 
 
 
 template<i32 MAX_DEPTH>
 MU HD bool B1B2::getScore3Till(C B1B2 theOther) C {
-    // ++GET_SCORE_3_CALLS;
-
-    // Find all differing cells and update the counts in uncRows and uncCols
-    static constexpr u64 PENIS_MASK = 0'111'111'111'111'111'111;
-    C u64 full = my_pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
-                 | my_pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
-
-
+    C u64 full = buildDiffFull(*this, theOther);
     u8 diffCells = my_popcount(full);
-
+    
     alignas(u64) u8 uncRows[8] = {};
-    uncRows[0] = my_popcount(full & 0'770000000000);
-    uncRows[1] = my_popcount(full & 0'007700000000);
-    uncRows[2] = my_popcount(full & 0'000077000000);
-    uncRows[3] = my_popcount(full & 0'000000770000);
-    uncRows[4] = my_popcount(full & 0'000000007700);
-    uncRows[5] = my_popcount(full & 0'000000000077);
-
     alignas(u64) u8 uncCols[8] = {};
-    uncCols[0] = my_popcount(full & 0'404040404040);
-    uncCols[1] = my_popcount(full & 0'202020202020);
-    uncCols[2] = my_popcount(full & 0'101010101010);
-    uncCols[3] = my_popcount(full & 0'040404040404);
-    uncCols[4] = my_popcount(full & 0'020202020202);
-    uncCols[5] = my_popcount(full & 0'010101010101);
+    buildUncoveredCounts(full, uncRows, uncCols);
 
     // could break early if there are more total rows or more total columns than MAX_DEPTH
     // but how to implement that in a fast way
@@ -489,15 +489,14 @@ MU HD bool B1B2::getScore3Till(C B1B2 theOther) C {
     // While there are still uncovered differing cells (at most 6 loops)
     for (i32 depth = 0; depth < MAX_DEPTH; depth++) {
 
-        // IMPORTANT changed u64 to i32?
-        C i32 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1]
-                               | 1 << uncRows[2] | 1 << uncRows[3]
-                               | 1 << uncRows[4] | 1 << uncRows[5];
+        C i32 promoteRowMask = 1 << uncRows[0] | 1 << uncRows[1] | 
+                               1 << uncRows[2] | 1 << uncRows[3] | 
+                               1 << uncRows[4] | 1 << uncRows[5];
         C u8 highestRow = 31 - my_clz(promoteRowMask);
-
-        C i32 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1]
-                               | 1 << uncCols[2] | 1 << uncCols[3]
-                               | 1 << uncCols[4] | 1 << uncCols[5];
+        
+        C i32 promoteColMask = 1 << uncCols[0] | 1 << uncCols[1] | 
+                               1 << uncCols[2] | 1 << uncCols[3] | 
+                               1 << uncCols[4] | 1 << uncCols[5];
         C u8 highestCol = 31 - my_clz(promoteColMask);
 
 
@@ -562,42 +561,33 @@ template HD bool B1B2::getScore3Till<5>(B1B2 theOther) C;
 
 
 
+#define countNonZeroBytes(x) \
+(((((x)&~0ULL/255*127)+~0ULL/255*(127)|(x))&~0ULL/255*128)/128%255)
+
 MUND HD bool B1B2::canBeSolvedIn1Move(C B1B2 theOther) C {
-    static constexpr u64 PENIS_MASK = 0'111'111'111'111'111'111;
-    C u64 full = my_pext_u64(getAntiSimilar54(b1, theOther.b1), PENIS_MASK) << 18
-                 | my_pext_u64(getAntiSimilar54(b2, theOther.b2), PENIS_MASK);
+    C u64 full = buildDiffFull(*this, theOther);
 
     if EXPECT_FALSE(my_popcount(full) == 0) {
         return true;
     }
 
     alignas(u64) u8 uncRows[8] = {};
-    uncRows[0] = my_popcount(full & 0'770000000000); // this is base-8 LOL
-    uncRows[1] = my_popcount(full & 0'007700000000);
-    uncRows[2] = my_popcount(full & 0'000077000000);
-    uncRows[3] = my_popcount(full & 0'000000770000);
-    uncRows[4] = my_popcount(full & 0'000000007700);
-    uncRows[5] = my_popcount(full & 0'000000000077);
-
-
     alignas(u64) u8 uncCols[8] = {};
-    uncCols[0] = my_popcount(full & 0'404040404040);
-    uncCols[1] = my_popcount(full & 0'202020202020);
-    uncCols[2] = my_popcount(full & 0'101010101010);
-    uncCols[3] = my_popcount(full & 0'040404040404);
-    uncCols[4] = my_popcount(full & 0'020202020202);
-    uncCols[5] = my_popcount(full & 0'010101010101);
+    buildUncoveredCounts(full, uncRows, uncCols);
 
-    C u32 countRow = countmore(*reinterpret_cast<u64*>(uncRows));
-    C u32 countCol = countmore(*reinterpret_cast<u64*>(uncCols));
+    C u32 countRow = countNonZeroBytes(*reinterpret_cast<u64*>(uncRows));
+    C u32 countCol = countNonZeroBytes(*reinterpret_cast<u64*>(uncCols));
     C u32 minimum = std::min(countRow, countCol);
     return minimum < 2;
 }
+#undef countNonZeroBytes
 
 
 MU __host__ void B1B2::doMoves(
-        const std::initializer_list<void (*)(B1B2 &)> theInitList) {
-    for (auto* func : theInitList) { func(*this); }
+        C std::initializer_list<Action> theInitList) {
+    for (Action func : theInitList) { 
+        func(*this); 
+    }
 }
 
 
@@ -746,7 +736,7 @@ void Board::appendBoardToString(std::string &str, C Board *board, C i32 curY, C 
         return;
     }
 
-    for (int x = 0; x < 18; x += 3) {
+    for (i32 x = 0; x < 18; x += 3) {
         C u8 value = theSettings.trueColors[board_b >> (51 - x - (curY % 3) * 18) & 0'7];
         if (isFat) {
             C u32 curX = x / 3;
@@ -781,7 +771,7 @@ MUND std::string Board::toBlandString() C {
 
 MUND std::string Board::toString(C Board& other, C PrintSettings theSettings) C {
     std::string str;
-    for (int i = 0; i < 6; i++) {
+    for (i32 i = 0; i < 6; i++) {
         appendBoardToString(str, this, i, theSettings);
         str.append("   ");
         appendBoardToString(str, &other, i, theSettings);
@@ -793,7 +783,7 @@ MUND std::string Board::toString(C Board& other, C PrintSettings theSettings) C 
 
 MUND std::string Board::toString(C Board* other, C PrintSettings theSettings) C {
     std::string str;
-    for (int i = 0; i < 6; i++) {
+    for (i32 i = 0; i < 6; i++) {
         appendBoardToString(str, this, i, theSettings);
         str.append("   ");
         appendBoardToString(str, other, i, theSettings);
@@ -805,7 +795,7 @@ MUND std::string Board::toString(C Board* other, C PrintSettings theSettings) C 
 
 std::string Board::toStringSingle(C PrintSettings theSettings) C {
     std::string str;
-    for (int i = 0; i < 6; i++) {
+    for (i32 i = 0; i < 6; i++) {
         appendBoardToString(str, this, i, theSettings);
         str.append("\n");
     }

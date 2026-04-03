@@ -7,8 +7,8 @@
 
 
 #include "code/board.hpp"
-#include "unused/sorter.hpp"
-#include "unused/th_parallel_sort.hpp"
+#include "code/sorter.hpp"
+#include "utils/th_parallel_sort.hpp"
 #include "utils/timer.hpp"
 
 #include <boost/sort/sort.hpp>
@@ -34,8 +34,8 @@ int main() {
 
     for (u64 index = 0; index < size; index++) {
         uint64_t value = dist(gen);
-        data1[index].hashMem.setHash(value);
-        data2[index].hashMem.setHash(value);
+        data1[index].memory.setHash(value);
+        data2[index].memory.setHash(value);
     }
 
 

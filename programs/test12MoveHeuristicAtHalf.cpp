@@ -1,12 +1,7 @@
-#include "MindbenderSolver/include.hpp"
+#include "code/include.hpp"
 
 #include <cmath>
 #include <set>
-
-
-
-
-
 
 
 // 9-2 at depth=5 should be 168896630

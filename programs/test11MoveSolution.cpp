@@ -1,4 +1,4 @@
-#include "include.hpp"
+#include "code/include.hpp"
 
 
 #include <iostream>
@@ -40,7 +40,7 @@ static constexpr u64 BUFFER_SIZE = 33'554'432;
 
 template<bool SECT_ASCENDING = true>
 std::vector<Board> create5Depth(Board board) {
-    vecBoard_t boards_initial_side_5;
+    std::vector<Board> boards_initial_side_5;
     Perms::reserveForDepth(board, boards_initial_side_5, 5);
     Perms::getDepthFunc<SECT_ASCENDING>(board, boards_initial_side_5, 5, true);
     std::vector<Board> aux_buffer(boards_initial_side_5.size());
@@ -49,7 +49,7 @@ std::vector<Board> create5Depth(Board board) {
 }
 
 
-void create6Depth(const Board& board, vecBoard_t& boards_buffer, const std::string& path) {
+void create6Depth(const Board& board, std::vector<Board>& boards_buffer, const std::string& path) {
     auto boards5 = create5Depth(board);
 
     Timer timer;
@@ -66,13 +66,13 @@ int main() {
     const auto pair = BoardLookup::getBoardPair("7-1");
 
     std::cout << pair->toString() << std::endl;
-    Board board = pair->getInitialState();
-    Board solve = pair->getSolutionState();
+    Board board = pair->getStartState();
+    Board solve = pair->getEndState();
 
 
-    vecBoard_t boards_buffer(BUFFER_SIZE);
-    c_u32 board_depth = 6;
-    c_u32 solve_depth = 5;
+    std::vector<Board> boards_buffer(BUFFER_SIZE);
+    C u32 board_depth = 6;
+    C u32 solve_depth = 5;
 
     const std::string path = "E:\\" + pair->getName() + "_b\\";
     if (fs::create_directory(path)) {
@@ -85,7 +85,7 @@ int main() {
 
 
     std::set<std::string> resultSet;
-    vecBoard_t boards6(BUFFER_SIZE);
+    std::vector<Board> boards6(BUFFER_SIZE);
 
     auto files = getFilesInDir(path);
 

@@ -1,4 +1,4 @@
-#include "include.hpp"
+#include "code/include.hpp"
 
 #include <iostream>
 
@@ -6,6 +6,10 @@
 
 
 int main() {
+    
+    int MAKE_FAT_PERM_LIST_HELPER_CALLS = 0;
+    int MAKE_FAT_PERM_LIST_HELPER_LESS_THAN_CHECKS = 0;
+    int MAKE_FAT_PERM_LIST_HELPER_FOUND_SIMILAR = 0;
 
     static constexpr u32 GB_NEEDED = 8;
     if (!hasAtLeastGBMemoryTotal(GB_NEEDED)) {

@@ -59,19 +59,25 @@ public:
     MUND static HashMode getHashModeOverride();
     MUND HD static HasherPtr getHashFunc(C Board& board);
 
-    __forceinline HD bool operator==(C Memory& other) C { return hash == other.hash; }
-    __forceinline HD bool operator< (C Memory& other) C { return hash < other.hash; }
-    __forceinline HD bool operator> (C Memory& other) C { return hash > other.hash; }
+    FORCEINLINE HD bool operator==(C Memory& other) C { return hash == other.hash; }
+    FORCEINLINE HD bool operator< (C Memory& other) C { return hash <  other.hash; }
+    FORCEINLINE HD bool operator> (C Memory& other) C { return hash >  other.hash; }
 
     // ############################################################
     // #                       u64 moves                          #
     // ############################################################
 
-    MUND __forceinline HD u8 getMoveCount() C { return mem & MEMORY_MOVE_DATA_MASK; }
-    MUND __forceinline HD u8 getMove(C u8 index) C { return mem >> getShift(index) & MEMORY_MOVE_TYPE_MASK; }
-    MUND __forceinline HD u8 getLastMove() C { return mem >> getShift(getMoveCount() - 1) & MEMORY_MOVE_TYPE_MASK; }
+    MUND FORCEINLINE HD u8 getMoveCount() C { 
+        return mem & MEMORY_MOVE_DATA_MASK; 
+    }
+    MUND FORCEINLINE HD u8 getMove(C u8 index) C { 
+        return mem >> getShift(index) & MEMORY_MOVE_TYPE_MASK; 
+    }
+    MUND FORCEINLINE HD u8 getLastMove() C { 
+        return mem >> getShift(getMoveCount() - 1) & MEMORY_MOVE_TYPE_MASK; 
+    }
 
-    template<int COUNT> HD void setNextNMove(u64 moveValue);
+    template<i32 COUNT> HD void setNextNMove(u64 moveValue);
     MU HD void setNextMoves(std::initializer_list<u64> moveValues);
 
     // ############################################################
@@ -95,7 +101,7 @@ public:
 };
 
 
-template<int COUNT>
+template<i32 COUNT>
 HD void Memory::setNextNMove(C u64 moveValue) {
     static_assert(COUNT >= 1 && COUNT <= 5, "Template argument must be in range 1-5");
 
