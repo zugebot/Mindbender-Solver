@@ -1,0 +1,2 @@
+cd pyth/viewer-dp
+gcc -std=c11 -O3 -shared -o chuzzle_mouse_native.dll chuzzle_mouse_native.c -lm
