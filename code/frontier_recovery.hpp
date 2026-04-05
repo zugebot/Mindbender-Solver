@@ -248,7 +248,7 @@ public:
     MU void collectMatches(C JVec<B1B2>& leftStates,
                            JVec<B1B2>& outUniqueMatches) C {
         outUniqueMatches.clear();
-        
+
         if (leftStates.empty() || states_.empty()) {
             return;
         }
@@ -256,13 +256,13 @@ public:
         outUniqueMatches.resize(leftStates.size());
         std::size_t writeIndex = 0;
 
-        for (const B1B2& lhs : leftStates) {
-            const auto it = buckets_.find(lhs.getHash());
+        for (C B1B2& lhs : leftStates) {
+            C auto it = buckets_.find(lhs.getHash());
             if (it == buckets_.end()) {
                 continue;
             }
 
-            for (const B1B2* rhs : it->second) {
+            for (C B1B2* rhs : it->second) {
                 if (lhs == *rhs) {
                     outUniqueMatches[writeIndex] = lhs;
                     ++writeIndex;

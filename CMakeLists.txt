@@ -195,6 +195,6 @@ add_solver_program(testLeftGenRightCache  "${CMAKE_SOURCE_DIR}/programs/testLeft
 add_solver_program(testRotations          "${CMAKE_SOURCE_DIR}/programs/testRotations.cpp")
 add_solver_program(testDepth4Direct       "${CMAKE_SOURCE_DIR}/programs/testDepth4Direct.cpp")
 add_solver_program(testDepth4DirectFat    "${CMAKE_SOURCE_DIR}/programs/testDepth4DirectFat.cpp")
-add_solver_program(findSolution           "${CMAKE_SOURCE_DIR}/programs/findSolution.cpp")
+add_solver_program(findSolutions           "${CMAKE_SOURCE_DIR}/programs/findSolutions.cpp")
 add_solver_program(CFCC                   "${CMAKE_SOURCE_DIR}/programs/CFCC.cpp")
 add_solver_program(expandAllLevels        "${CMAKE_SOURCE_DIR}/programs/expandAllLevels.cpp")

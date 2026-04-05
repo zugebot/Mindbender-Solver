@@ -24,6 +24,7 @@
 #include "intersection.hpp"
 #include "levels.hpp"
 #include "perms.hpp"
+#include "perm_stream.hpp"
 #include "memory_perm_gen.hpp"
 #include "sorter.hpp"
 #include "frontier_recovery.hpp"
@@ -35,6 +36,7 @@
 class MU BoardSolver {
 public:
     static constexpr u32 MAX_DEPTH = 5;
+    static constexpr u32 LEFT_STREAM_CHUNK_SIZE = 1u << 20;
 
     std::vector<JVec<Memory>> board1Table;
     std::vector<JVec<Memory>> board2Table;
@@ -65,8 +67,7 @@ private:
         JVec<Board> states;
         BoardSorter<Board> sorter;
     };
-    
-    
+
     RightFrontierIndexB1B2 rightFrontierIndex_;
     RecoveryBoardFrontierCache prefixLeftCache_;
     RecoveryBoardFrontierCache goalRightCache_;
@@ -463,6 +464,59 @@ private:
         }
     }
 
+    MU static void appendStates(JVec<B1B2>& dst,
+                                C JVec<B1B2>& src) {
+        if (src.empty()) {
+            return;
+        }
+
+        C std::size_t oldSize = dst.size();
+        dst.resize(oldSize + src.size());
+        for (std::size_t i = 0; i < src.size(); ++i) {
+            dst[oldSize + i] = src[i];
+        }
+    }
+
+    template<int LEFT_FRONTIER_DEPTH>
+    MU void collectLeftFrontierMiddleMatchesStreamed(C Board& seedBoard,
+                                                     JVec<B1B2>& outMiddleMatches) {
+        outMiddleMatches.clear();
+
+        struct Sink {
+            C RightFrontierIndexB1B2& rightIndex;
+            JVec<B1B2>& allMatches;
+
+            MU void operator()(JVec<B1B2>& chunk, u32 count) {
+                if (count == 0) {
+                    return;
+                }
+
+                JVec<B1B2> chunkView;
+                chunkView.resize(count);
+                for (u32 i = 0; i < count; ++i) {
+                    chunkView[i] = chunk[i];
+                }
+
+                JVec<B1B2> chunkMatches;
+                rightIndex.collectMatches(chunkView, chunkMatches);
+                appendStates(allMatches, chunkMatches);
+            }
+        };
+
+        Sink sink{rightFrontierIndex_, outMiddleMatches};
+
+        PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, LEFT_FRONTIER_DEPTH>(
+                seedBoard,
+                sink,
+                LEFT_STREAM_CHUNK_SIZE
+        );
+
+        if (!outMiddleMatches.empty()) {
+            sortStatesByHash(outMiddleMatches);
+            compactUniqueSortedStatesInPlace(outMiddleMatches);
+        }
+    }
+
 public:
     template<bool debug = true>
     void findSolutionsAtDepth(C u32 index, C u32 depth1, C u32 depth2, C bool searchResults = true) {
@@ -610,7 +664,7 @@ public:
     template<int SEED_DEPTH = 1, int LEFT_FRONTIER_DEPTH = 5, int RIGHT_FRONTIER_DEPTH = 5, bool debug = true>
     MU void findSolutionsFrontier() {
         static constexpr int TOTAL_DEPTH = SEED_DEPTH + LEFT_FRONTIER_DEPTH + RIGHT_FRONTIER_DEPTH;
-        
+
         static constexpr u32 PREFIX_LEFT_DEPTH  = SEED_DEPTH / 2;
         static constexpr u32 PREFIX_RIGHT_DEPTH = SEED_DEPTH - PREFIX_LEFT_DEPTH;
 
@@ -646,7 +700,6 @@ public:
         rightFrontierIndex_.buildFromUniqueStates(std::move(rightFrontierStates));
         tcout << "right frontier buckets built for " << rightFrontierIndex_.size() << " states\n";
 
-        JVec<B1B2> leftFrontierStates;
         JVec<B1B2> middleMatches;
 
         RecoveryBoardFrontierCache seedLeftCache;
@@ -659,23 +712,16 @@ public:
 
         for (std::size_t i = 0; i < leftSeeds.size(); ++i) {
             tcout << "[seed " << (i + 1) << "/" << leftSeeds.size()
-                  << "] generating left frontier +" << LEFT_FRONTIER_DEPTH
+                  << "] streaming left frontier +" << LEFT_FRONTIER_DEPTH
                   << " from seed(" << SEED_DEPTH << ")\n" << std::flush;
 
             Board seedBoard = makeBoardFromState(leftSeeds[i]);
 
-            leftFrontierStates.clear();
-            Perms<B1B2>::getDepthFunc<eSequenceDir::ASCENDING>(
-                    seedBoard,
-                    leftFrontierStates,
-                    LEFT_FRONTIER_DEPTH,
-                    true
-            );
+            Timer streamTimer;
+            collectLeftFrontierMiddleMatchesStreamed<LEFT_FRONTIER_DEPTH>(seedBoard, middleMatches);
 
-            tcout << "    produced left frontier states: " << leftFrontierStates.size() << '\n';
-
-            rightFrontierIndex_.collectMatches(leftFrontierStates, middleMatches);
             tcout << "    middle matches: " << middleMatches.size() << '\n';
+            tcout << "    stream+probe time: " << streamTimer.getSeconds() << '\n';
 
             if (middleMatches.empty()) {
                 tcout << "    unique raw solutions so far: " << resultSet.size() << '\n';
@@ -758,7 +804,7 @@ public:
     template<int SEED_DEPTH = 1, int LEFT_FRONTIER_DEPTH = 5, int RIGHT_FRONTIER_DEPTH = 5, bool debug = true>
     MU void findSolutionsFrontierThreaded() {
         static constexpr int TOTAL_DEPTH = SEED_DEPTH + LEFT_FRONTIER_DEPTH + RIGHT_FRONTIER_DEPTH;
-        
+
         static constexpr u32 PREFIX_LEFT_DEPTH  = SEED_DEPTH / 2;
         static constexpr u32 PREFIX_RIGHT_DEPTH = SEED_DEPTH - PREFIX_LEFT_DEPTH;
 
@@ -803,10 +849,9 @@ public:
         std::mutex printMutex;
         std::mutex resultMutex;
 
-        static constexpr std::size_t WORKER_COUNT = 2;
+        static constexpr std::size_t WORKER_COUNT = 6;
 
         auto worker = [&](const std::size_t workerId) {
-            JVec<B1B2> leftFrontierStates;
             JVec<B1B2> middleMatches;
 
             RecoveryBoardFrontierCache seedLeftCache;
@@ -829,32 +874,21 @@ public:
                     std::lock_guard<std::mutex> lock(printMutex);
                     tcout << "[worker " << workerId
                           << "] [seed " << (i + 1) << "/" << leftSeeds.size()
-                          << "] generating left frontier +" << LEFT_FRONTIER_DEPTH
+                          << "] streaming left frontier +" << LEFT_FRONTIER_DEPTH
                           << " from seed(" << SEED_DEPTH << ")\n" << std::flush;
                 }
 
                 Board seedBoard = makeBoardFromState(leftSeeds[i]);
 
-                leftFrontierStates.clear();
-                Perms<B1B2>::getDepthFunc<eSequenceDir::ASCENDING>(
-                        seedBoard,
-                        leftFrontierStates,
-                        LEFT_FRONTIER_DEPTH,
-                        true
-                );
-
-                {
-                    std::lock_guard<std::mutex> lock(printMutex);
-                    tcout << "    [worker " << workerId
-                          << "] produced left frontier states: " << leftFrontierStates.size() << '\n';
-                }
-
-                rightFrontierIndex_.collectMatches(leftFrontierStates, middleMatches);
+                Timer streamTimer;
+                collectLeftFrontierMiddleMatchesStreamed<LEFT_FRONTIER_DEPTH>(seedBoard, middleMatches);
 
                 {
                     std::lock_guard<std::mutex> lock(printMutex);
                     tcout << "    [worker " << workerId
                           << "] middle matches: " << middleMatches.size() << '\n';
+                    tcout << "    [worker " << workerId
+                          << "] stream+probe time: " << streamTimer.getSeconds() << '\n';
                 }
 
                 if (middleMatches.empty()) {
