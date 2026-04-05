@@ -1,7 +1,7 @@
 // main2.cpp
 #include "BHeuristic.hpp"
 #include "LHeuristic.hpp"
-#include "MindbenderSolver/include.hpp"
+#include "code/include.hpp"
 
 #include <algorithm>
 #include <array>
@@ -63,8 +63,8 @@ static inline void apply_move_fn(MoveFn fn, Board& b) {
 }
 
 static void print_rule(std::size_t n) {
-    for (std::size_t i = 0; i < n; ++i) std::cout << '-';
-    std::cout << "\n";
+    for (std::size_t i = 0; i < n; ++i) tcout << '-';
+    tcout << "\n";
 }
 
 struct BenchResult {
@@ -84,7 +84,7 @@ static BenchResult bench(const std::string& name, const Board& goal, EvalCallabl
     const Timer t0;
     long long sum = 0;
     for (int i = 0; i < ATTEMPTS<>; ++i) {
-        C_1_1(temp);
+        C11(temp);
         sum += static_cast<long long>(eval_func(temp));
     }
     const double seconds = t0.getSeconds();
@@ -129,7 +129,7 @@ int main(const int argc, char** argv) {
     /* ========================================================
        Baseline-subtracted benchmarks
        ======================================================== */
-    std::cout << "\n=== Heuristic Benchmarks (net of baseline) ===\n";
+    tcout << "\n=== Heuristic Benchmarks (net of baseline) ===\n";
 
     // 1) Measure baseline ONCE (same loop, same C_1_1, same call overhead, no-op eval)
     const auto base = bench("Baseline (loop + call, no-op eval)", goal,
@@ -141,7 +141,7 @@ int main(const int argc, char** argv) {
         if (net_seconds < 1e-9) net_seconds = 1e-9; // guard
         const double net_per_sec = ATTEMPTS<double> / net_seconds;
 
-        std::cout
+        tcout
             << std::left  << std::setw(20) << r.name
             << " | Net/s: " << std::right << std::setw(10) << with_commas(static_cast<int>(net_per_sec))
             << " | sum: "   << std::right << std::setw(10) << with_commas(r.sum)
@@ -164,46 +164,46 @@ int main(const int argc, char** argv) {
 
     // Define a static list of moves as {name, function-pointer}
     static constexpr std::array<std::pair<const char*, MoveFn>, 11> test_moves = {{
-        {"C_0_3", C_0_3},
-        {"C_1_4", C_1_4},
-        {"C_5_1", C_5_1},
-        {"R_4_5", R_4_5},
-        {"C_2_3", C_2_3},
-        {"R_4_3", R_4_3},
-        {"C_0_2", C_0_2},
-        {"R_3_3", R_3_3},
-        {"R_5_5", R_5_5},
-        {"C_3_5", C_3_5},
-        {"C_4_3", C_4_3},
+        {"C03", C03},
+        {"C14", C14},
+        {"C51", C51},
+        {"R45", R45},
+        {"C23", C23},
+        {"R43", R43},
+        {"C02", C02},
+        {"R33", R33},
+        {"R55", R55},
+        {"C35", C35},
+        {"C43", C43},
     }};
 
     const int move_w = 8;
     const int col_w  = 5;
 
-    std::cout << "\n=== Step-by-Step Eval Table ===\n";
-    std::cout << std::left << std::setw(move_w) << "Move";
+    tcout << "\n=== Step-by-Step Eval Table ===\n";
+    tcout << std::left << std::setw(move_w) << "Move";
     for (const auto& e : evals) {
-        if (e.printable) std::cout << " | " << std::setw(col_w) << e.label;
+        if (e.printable) tcout << " | " << std::setw(col_w) << e.label;
     }
-    std::cout << "\n";
+    tcout << "\n";
     print_rule(move_w + static_cast<int>(evals.size()) * (3 + col_w));
 
     for (const auto& [name, fn] : test_moves) {
         apply_move_fn(fn, start);
-        std::cout << std::left << std::setw(move_w) << name;
+        tcout << std::left << std::setw(move_w) << name;
         for (const auto& e : evals) {
             if (e.printable) {
-                std::cout << " | " << std::setw(col_w) << e.func(start);
+                tcout << " | " << std::setw(col_w) << e.func(start);
             }
         }
-        std::cout << "\n";
+        tcout << "\n";
     }
 
     // Final board readout
-    std::cout << "\nFinal State (vs goal):\n" << start.toString(goal) << "\n";
+    tcout << "\nFinal State (vs goal):\n" << start.toString(goal) << "\n";
 
     // Tail metrics
-    std::cout << "New Calls: " << new_calls << "\n";
-    std::cout << "Total Time: " << total_timer.getSeconds() << "s\n";
+    tcout << "New Calls: " << new_calls << "\n";
+    tcout << "Total Time: " << total_timer.getSeconds() << "s\n";
     return 0;
 }

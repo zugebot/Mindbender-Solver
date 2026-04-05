@@ -97,18 +97,18 @@ int main() {
     C Board board = BoardLookup::getBoardPair("9-2")->getStartState();
     C Board solve = BoardLookup::getBoardPair("9-2")->getEndState();
 
-    std::cout << BoardLookup::getBoardPair("9-2")->toString() << std::endl;
+    tcout << BoardLookup::getBoardPair("9-2")->toString() << std::endl;
 
     static constexpr u32 DEPTH = 5;
     BoardDFS<DEPTH> dfs(board, solve);
     C double time = dfs.recursive();
 
-    std::cout << "Time: " << time << std::endl;
-    std::cout << "Depth: " << DEPTH << std::endl;
-    std::cout << "Solves: " << dfs.myCount << std::endl;
-    std::cout << "Traversed: " << dfs.myStatesTraversed << std::endl;
-    std::cout << "Total States: " << pow(60, DEPTH) << std::endl;
-    std::cout << "GetScore3: " << GET_SCORE_3_CALLS << std::endl;
+    tcout << "Time: " << time << std::endl;
+    tcout << "Depth: " << DEPTH << std::endl;
+    tcout << "Solves: " << dfs.myCount << std::endl;
+    tcout << "Traversed: " << dfs.myStatesTraversed << std::endl;
+    tcout << "Total States: " << pow(60, DEPTH) << std::endl;
+    tcout << "GetScore3: " << GET_SCORE_3_CALLS << std::endl;
 
 
 
@@ -134,12 +134,12 @@ int main() {
 
 
 
-    std::cout << "Depths: [";
+    tcout << "Depths: [";
     for (int i = 0; i < DEPTH + 1; ++i) {
-        std::cout << dfs.myDepthsCount[i];
-        if (i != DEPTH) {  std::cout << ", "; }
+        tcout << dfs.myDepthsCount[i];
+        if (i != DEPTH) {  tcout << ", "; }
     }
-    std::cout << "]\n";
+    tcout << "]\n";
 
     return 0;
 }

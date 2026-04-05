@@ -3,13 +3,10 @@
 #include <map>
 #include <vector>
 #include <array>
-
-#include "MindbenderSolver/code/board.hpp"
-#include "MindbenderSolver/code/levels.hpp"
-#include "MindbenderSolver/code/perms.hpp"
-#include "MindbenderSolver/code/rotations.hpp"
-
 #include <cmath>
+
+#include "code/include.hpp"
+
 
 // -------------------------------------------------------------
 // 1. Dihedral symmetry (8)
@@ -39,9 +36,8 @@ static inline void boardToArray(const Board &b, uint8_t cells[36]) {
 
 static inline Board arrayToBoard(const uint8_t cells[36]) {
     Board nb;
-    for (int y = 0; y < 6; ++y)
-        for (int x = 0; x < 6; ++x)
-            nb.setColor((uint8_t)x, (uint8_t)y, cells[y * 6 + x]);
+    // TODO: this COULD be in the wrong order, I swapped a double for loop for this function
+    nb.setState(cells);
     return nb;
 }
 
@@ -251,36 +247,36 @@ int main(int argc, char** argv) {
     genColorPermutations(count, colorPerms);
 
     // print perm stats
-    std::cout << "Puzzle: " << id << "\n";
-    std::cout << "MaxDepth = " << maxDepth << "\n\n";
+    tcout << "Puzzle: " << id << "\n";
+    tcout << "MaxDepth = " << maxDepth << "\n\n";
 
-    std::cout << "Color multiplicities:\n";
+    tcout << "Color multiplicities:\n";
     for (int i = 0; i < 8; i++)
         if (count[i] > 0)
-            std::cout << "  Color " << i << ": " << count[i] << "\n";
+            tcout << "  Color " << i << ": " << count[i] << "\n";
 
-    std::cout << "\nNumber of color permutations: " << colorPerms.size() << "\n\n";
+    tcout << "\nNumber of color permutations: " << colorPerms.size() << "\n\n";
 
-    std::cout << "Permutations:\n";
+    tcout << "Permutations:\n";
     for (size_t i = 0; i < colorPerms.size(); i++) {
         const auto &p = colorPerms[i];
-        std::cout << "  Perm " << i << ":  ";
+        tcout << "  Perm " << i << ":  ";
         for (int c = 0; c < 8; c++)
-            std::cout << (int)p[c] << " ";
-        std::cout << "\n";
+            tcout << (int)p[c] << " ";
+        tcout << "\n";
     }
-    std::cout << "\n";
+    tcout << "\n";
 
     // ---------------------------------------------------------
     // TABLE HEADER
     // ---------------------------------------------------------
-    std::cout << std::setw(6) << "Depth"
+    tcout << std::setw(6) << "Depth"
               << " | " << std::setw(12) << "BFS Raw"
               << " | " << std::setw(12) << "MyPruning"
               << " | " << std::setw(18) << "MyPruning+Canon"
               << "\n";
 
-    std::cout << "--------------------------------------------------------------\n";
+    tcout << "--------------------------------------------------------------\n";
 
     // ---------------------------------------------------------
     // DEPTH LOOP
@@ -302,7 +298,7 @@ int main(int argc, char** argv) {
 
         uint64_t canonCount = localSet.size();
 
-        std::cout << std::setw(6) << depth
+        tcout << std::setw(6) << depth
                   << " | " << std::setw(12) << rawCount
                   << " | " << std::setw(12) << prunedCount
                   << " | " << std::setw(18) << canonCount

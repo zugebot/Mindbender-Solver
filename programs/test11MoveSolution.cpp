@@ -38,11 +38,11 @@ std::vector<std::string> getFilesInDir(const std::string& path) {
 static constexpr u64 BUFFER_SIZE = 33'554'432;
 
 
-template<bool SECT_ASCENDING = true>
+template<eSequenceDir SECT_DIR>
 std::vector<Board> create5Depth(Board board) {
     std::vector<Board> boards_initial_side_5;
-    Perms::reserveForDepth(board, boards_initial_side_5, 5);
-    Perms::getDepthFunc<SECT_ASCENDING>(board, boards_initial_side_5, 5, true);
+    Perms<Board>::reserveForDepth<SECT_DIR>(board, boards_initial_side_5, 5);
+    Perms<Board>::getDepthFunc<SECT_DIR>(board, boards_initial_side_5, 5, true);
     std::vector<Board> aux_buffer(boards_initial_side_5.size());
     radix_sort<5, 12>(boards_initial_side_5, aux_buffer);
     return boards_initial_side_5;
@@ -53,8 +53,8 @@ void create6Depth(const Board& board, std::vector<Board>& boards_buffer, const s
     auto boards5 = create5Depth(board);
 
     Timer timer;
-    Perms::getDepthPlus1BufferedFunc(path, boards5, boards_buffer, 5);
-    std::cout << timer.getSeconds() << std::endl;
+    Perms<Board>::getDepthPlus1BufferedFunc(path, boards5, boards_buffer, 5);
+    tcout << timer.getSeconds() << std::endl;
 }
 
 
@@ -65,7 +65,7 @@ int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     const auto pair = BoardLookup::getBoardPair("7-1");
 
-    std::cout << pair->toString() << std::endl;
+    tcout << pair->toString() << std::endl;
     Board board = pair->getStartState();
     Board solve = pair->getEndState();
 
@@ -76,10 +76,10 @@ int main() {
 
     const std::string path = "E:\\" + pair->getName() + "_b\\";
     if (fs::create_directory(path)) {
-        std::cout << "Created directory: " << path << std::endl;
+        tcout << "Created directory: " << path << std::endl;
         create6Depth(board, boards_buffer, path);
     } else {
-        std::cout << "Failed to create directory or it already exists." << std::endl;
+        tcout << "Failed to create directory or it already exists." << std::endl;
     }
     auto boards5 = create5Depth(solve);
 
@@ -93,27 +93,27 @@ int main() {
     Timer timer;
     for (const auto& file_path : files) {
 
-        std::cout << "Opening: \"" << file_path << "\"";
+        tcout << "Opening: \"" << file_path << "\"";
         std::ifstream file(file_path, std::ios::binary | std::ios::ate);
         std::streamsize fileSize = file.tellg();
         file.seekg(0, std::ios::beg);
 
-        std::cout << " | Reading";
+        tcout << " | Reading";
         boards6.resize(fileSize / 32);
         file.read(reinterpret_cast<char *>(boards6.data()), fileSize);
         file.close();
 
-        std::cout << " | Sorting";
+        tcout << " | Sorting";
         radix_sort<5, 12>(boards6, boards_buffer);
 
-        std::cout << " | Intersect";
+        tcout << " | Intersect";
         auto results = intersection(boards6, boards5);
 
         for (const auto [fst, snd]: results) {
             std::string moveset = fst->hashMem.getMemory().asmString(&snd->hashMem.getMemory());
             resultSet.insert(moveset);
         }
-        std::cout << " | Results: " << results.size() << "\n";
+        tcout << " | Results: " << results.size() << "\n";
 
         index++;
     }
@@ -126,16 +126,16 @@ int main() {
                                      + "_" + std::to_string(board_depth)
                                      + "_" + std::to_string(solve_depth)
                                      + ".txt";
-        std::cout << "Saving results to '" << filename << "'.\n";
+        tcout << "Saving results to '" << filename << "'.\n";
         std::ofstream outfile(outDirectory + "\\levels\\" + filename);
         for (const auto& str: resultSet) {
             outfile << str << std::endl;
         }
         outfile.close();
     } else {
-        std::cout << "No solutions found...\n";
+        tcout << "No solutions found...\n";
     }
-    std::cout << "Total Time: " << timer.getSeconds() << std::endl;
+    tcout << "Total Time: " << timer.getSeconds() << std::endl;
 
 
 
@@ -149,14 +149,14 @@ int main() {
     solver.setDepthParams(6, 10, 11);
     solver.preAllocateMemory(6);
 
-    std::cout << pair->toString() << std::endl;
+    tcout << pair->toString() << std::endl;
     solver.findSolutions<true>();
     return 0;
     */
 
 
     /*
-    std::cout << board1.toString() << std::endl;
+    tcout << board1.toString() << std::endl;
 
     bool intersection[5];
 
@@ -168,10 +168,10 @@ int main() {
 
     for (int i = 0; i < 5; i++) {
         std::string valStr = intersection[i] ? "true" : "false";
-        std::cout << "3 Colors at [" << i << "]: " << valStr << "\n";
+        tcout << "3 Colors at [" << i << "]: " << valStr << "\n";
     }
 
-    std::cout << "\n";
+    tcout << "\n";
 
     auto intersection2 = doActISColMatchBatched(board1, 4, 3, 1);
 
@@ -179,7 +179,7 @@ int main() {
         u8 mask = 1 << i;
         bool val = intersection2 & mask;
         std::string valStr = val ? "true" : "false";
-        std::cout << "3 Colors at [" << i << "]: " << valStr << std::endl;
+        tcout << "3 Colors at [" << i << "]: " << valStr << std::endl;
     }
 
 
@@ -222,21 +222,21 @@ int main() {
 
 
 
-    std::cout << "Size New: " << boards1.size() << "\n";
-    std::cout << "Size Old: " << boards2.size() << "\n";
-    std::cout << "\n";
-    // std::cout << "Uniq New: " << boardMap1.size() << "\n";
-    // std::cout << "Uniq Old: " << boardMap2.size() << "\n";
-    // std::cout << "\n";
-    std::cout << "__b1 New: " << board1_B1.size() << "\n";
-    std::cout << "__b2 New: " << board1_B2.size() << "\n";
-    std::cout << "\n";
-    std::cout << "__b1 Old: " << board2_B1.size() << "\n";
-    std::cout << "__b2 Old: " << board2_B2.size() << "\n";
-    std::cout << "\n";
-    std::cout << "Time New: " << time1 << "\n";
-    std::cout << "Time Old: " << time2 << "\n";
-    std::cout << std::flush;
+    tcout << "Size New: " << boards1.size() << "\n";
+    tcout << "Size Old: " << boards2.size() << "\n";
+    tcout << "\n";
+    // tcout << "Uniq New: " << boardMap1.size() << "\n";
+    // tcout << "Uniq Old: " << boardMap2.size() << "\n";
+    // tcout << "\n";
+    tcout << "__b1 New: " << board1_B1.size() << "\n";
+    tcout << "__b2 New: " << board1_B2.size() << "\n";
+    tcout << "\n";
+    tcout << "__b1 Old: " << board2_B1.size() << "\n";
+    tcout << "__b2 Old: " << board2_B2.size() << "\n";
+    tcout << "\n";
+    tcout << "Time New: " << time1 << "\n";
+    tcout << "Time Old: " << time2 << "\n";
+    tcout << std::flush;
 
 
 
@@ -256,9 +256,9 @@ int main() {
     Permutations::getDepthPlus1Func(boards1, boards2, false);
     auto end = timer.getSeconds();
 
-    std::cout << "Time: " << end << "\n";
-    std::cout << "siz4: " << boards1.size() << "\n";
-    std::cout << "siz5: " << boards2.size() << "\n";
+    tcout << "Time: " << end << "\n";
+    tcout << "siz4: " << boards1.size() << "\n";
+    tcout << "siz5: " << boards2.size() << "\n";
 
     return 0;
      */

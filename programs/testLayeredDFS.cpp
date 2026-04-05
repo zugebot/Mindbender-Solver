@@ -27,7 +27,7 @@
     (((array_size) + (block_size) - 1) / (block_size)), (block_size)
 #define CUDA_LAST_ERROR_TIME_SYNC(message) { \
     CUDA_LAST_ERR(); C Timer sync; CUDA_DEV_SYNC(); \
-    std::cout << (message) << sync.getSeconds() << "\n"; }
+    tcout << (message) << sync.getSeconds() << "\n"; }
 
 
 
@@ -113,7 +113,7 @@ __global__ void kernelGenBoardsFromOffsets(
 
 
 int main() {
-    std::cout << "entered 'main()'.\n";
+    tcout << "entered 'main()'.\n";
     // 13-1
     C Board board = BoardLookup::getBoardPair("4-4")->getStartState();
     Board solve = board;
@@ -147,7 +147,7 @@ int main() {
         h_boards_in[i] = solve;
         /*
         if constexpr (PRINT_ARRAYS) {
-            std::cout << i << ": " << h_boards_in[i].memory.asmStringForwards() << "\n";
+            tcout << i << ": " << h_boards_in[i].memory.asmStringForwards() << "\n";
         }
          */
     }
@@ -168,7 +168,7 @@ int main() {
     CUDA_D_TO_H(u32, &h_last_scan_offset, &d_scan_offsets[2 * ARRAY_SIZE - 1], 1);
     MU u32 FINAL_OUTPUT_SIZE = h_last_scan_offset + h_boards_in[ARRAY_SIZE - 1].getColCC();
     //if constexpr (PRINT_ARRAYS) {
-    // std::cout << "Output Board Size: " << FINAL_OUTPUT_SIZE << "\n"; //}
+    // tcout << "Output Board Size: " << FINAL_OUTPUT_SIZE << "\n"; //}
 
     // call kernel #2 to create children in output board
     kernelGenBoardsFromOffsets<<<CUDA_KERNEL_OPT(64 * ARRAY_SIZE, 128)>>>
@@ -183,20 +183,20 @@ int main() {
         auto* h_boards_out = new Board[MAX_SIZE];
         CUDA_D_TO_H(Board, h_boards_out, d_boards_out, MAX_SIZE);
         for (int i = 0; i < MAX_SIZE; i++) {
-            std::cout << i << ": " << h_boards_out[i].memory.asmStringForwards() << "\n";
+            tcout << i << ": " << h_boards_out[i].memory.asmStringForwards() << "\n";
         }
-        std::cout << std::flush;
+        tcout << std::flush;
 
 /*
-        std::cout << "GPU Offsets: [";
+        tcout << "GPU Offsets: [";
         u32* h_scan_offsets = new u32[2 * ARRAY_SIZE];
         CUDA_D_TO_H(u32, h_scan_offsets, d_scan_offsets, 2 * ARRAY_SIZE);
         for (int i = 0; i < 2 * ARRAY_SIZE; i++) {
-            std::cout << h_scan_offsets[i];
-            if (i != 2 * ARRAY_SIZE - 1) std::cout << ", ";
-            if (i % 10 == 9 && i != 2 * ARRAY_SIZE - 1) { std::cout << "\n              "; }
+            tcout << h_scan_offsets[i];
+            if (i != 2 * ARRAY_SIZE - 1) tcout << ", ";
+            if (i % 10 == 9 && i != 2 * ARRAY_SIZE - 1) { tcout << "\n              "; }
         }
-        std::cout << "]" << std::endl;
+        tcout << "]" << std::endl;
         delete[] h_boards_out;
     */
     //}

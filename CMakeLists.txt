@@ -23,7 +23,6 @@ if (USE_CUDA)
 
     find_package(CUDAToolkit REQUIRED)
 
-    # Only mark the shared implementation files that actually need nvcc
     set(CUDA_SOURCE_FILES
             "${CMAKE_SOURCE_DIR}/code/rotations.cpp"
             "${CMAKE_SOURCE_DIR}/code/board.cpp"
@@ -40,6 +39,11 @@ endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# ------------------------------------------------------------
+# Subprojects
+# ------------------------------------------------------------
+add_subdirectory(mouse)
 
 # ------------------------------------------------------------
 # Compile definitions
@@ -75,6 +79,12 @@ else()
     message(STATUS "Boost not found")
 endif()
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+set(CHUZZLE_VIEWER_DIR "${CMAKE_SOURCE_DIR}/pyth/viewer-dp")
+set(CHUZZLE_STUDIO_FILE "${CHUZZLE_VIEWER_DIR}/chuzzle_mouse_dp_studio.py")
+set(CHUZZLE_VIEWER_PYTHON "${CMAKE_SOURCE_DIR}/venv/Scripts/python.exe")
+
 # ------------------------------------------------------------
 # Include directories
 # ------------------------------------------------------------
@@ -88,27 +98,33 @@ endif()
 # ------------------------------------------------------------
 # Source discovery
 # ------------------------------------------------------------
-file(GLOB_RECURSE COMMON_SOURCES
-        "${CMAKE_SOURCE_DIR}/code/*.*pp"
-        "${CMAKE_SOURCE_DIR}/code/*.*cu"
-        "${CMAKE_SOURCE_DIR}/utils/*.*pp"
-        "${CMAKE_SOURCE_DIR}/include.hpp"
+set(COMMON_SOURCES
+        "${CMAKE_SOURCE_DIR}/code/board.cpp"
+        "${CMAKE_SOURCE_DIR}/code/memory.cpp"
+        "${CMAKE_SOURCE_DIR}/code/perms.cpp"
+        "${CMAKE_SOURCE_DIR}/code/rotations.cpp"
+        "${CMAKE_SOURCE_DIR}/code/rotations_col.cpp"
+        "${CMAKE_SOURCE_DIR}/code/rotations_row.cpp"
+
+        "${CMAKE_SOURCE_DIR}/utils/jvec.cpp"
 )
 
-file(GLOB_RECURSE INCLUDE_SOURCES
-        "${CMAKE_SOURCE_DIR}/include/*.*pp"
-)
+if (USE_CUDA)
+    file(GLOB_RECURSE CUDA_SOURCES
+            "${CMAKE_SOURCE_DIR}/code/*.cu"
+    )
+    list(APPEND COMMON_SOURCES ${CUDA_SOURCES})
+endif()
 
 set(SHARED_SOURCES
         ${COMMON_SOURCES}
-        ${INCLUDE_SOURCES}
 )
 
 # ------------------------------------------------------------
 # Helper to create one executable per program
 # ------------------------------------------------------------
 function(add_solver_program target_name main_file)
-    add_executable(${target_name}
+    add_executable(${target_name} EXCLUDE_FROM_ALL
             "${main_file}"
             ${SHARED_SOURCES}
     )
@@ -177,3 +193,8 @@ add_solver_program(testKnownSolutions     "${CMAKE_SOURCE_DIR}/programs/testKnow
 add_solver_program(testPuzzlesValid       "${CMAKE_SOURCE_DIR}/programs/testPuzzlesValid.cpp")
 add_solver_program(testLeftGenRightCache  "${CMAKE_SOURCE_DIR}/programs/testLeftGenRightCache.cpp")
 add_solver_program(testRotations          "${CMAKE_SOURCE_DIR}/programs/testRotations.cpp")
+add_solver_program(testDepth4Direct       "${CMAKE_SOURCE_DIR}/programs/testDepth4Direct.cpp")
+add_solver_program(testDepth4DirectFat    "${CMAKE_SOURCE_DIR}/programs/testDepth4DirectFat.cpp")
+add_solver_program(findSolution           "${CMAKE_SOURCE_DIR}/programs/findSolution.cpp")
+add_solver_program(CFCC                   "${CMAKE_SOURCE_DIR}/programs/CFCC.cpp")
+add_solver_program(expandAllLevels        "${CMAKE_SOURCE_DIR}/programs/expandAllLevels.cpp")

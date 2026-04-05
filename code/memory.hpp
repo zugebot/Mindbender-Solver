@@ -1,14 +1,12 @@
 #pragma once
+// code/memory.hpp
 
 #include "utils/processor.hpp"
-
 
 #include <string>
 #include <vector>
 
-
 class Board;
-
 
 MU static constexpr u32 MEMORY_MOVE_TYPE_BITSIZE = 6;
 MU static constexpr u64 MEMORY_MOVE_TYPE_MASK = 0'77;
@@ -17,23 +15,17 @@ MU static constexpr u64 MEMORY_MOVE_DATA_MASK = 0xF;
 
 class Memory {
     static HD u8 getShift(C u32 moveCount) {
-        return MEMORY_MOVE_DATA_BITSIZE + moveCount * MEMORY_MOVE_TYPE_BITSIZE; }
+        return MEMORY_MOVE_DATA_BITSIZE + moveCount * MEMORY_MOVE_TYPE_BITSIZE;
+    }
 
-     u64 hash;
-     u64 mem;
+    u64 hash;
+    u64 mem;
+
 public:
-    enum class HashMode : u8 {
-        Auto = 0,
-        Hash2,
-        Hash3,
-        Hash4,
-    };
+    using HasherPtr = void (Memory::*)(u64, u64);
 
-    /***
-     * first 4 bits: move count
-     * next 10 * 6 bits: moves
-     */
     HD Memory() : hash(0), mem(0) {}
+
     HD Memory(MU C std::initializer_list<u64> moveValues) : hash(0), mem(0) {
         for (C auto& moveValue : moveValues) {
             setNextNMove<1>(moveValue);
@@ -44,8 +36,6 @@ public:
     // #                       u64 hash                           #
     // ############################################################
 
-    typedef void (Memory::*HasherPtr)(u64, u64);
-
     MUND HD u64 getMem() C { return mem; }
     MU HD void setMem(C u64 value) { mem = value; }
 
@@ -55,9 +45,9 @@ public:
     MU HD void precomputeHash2(u64 b1, u64 b2);
     MU HD void precomputeHash3(u64 b1, u64 b2);
     MU HD void precomputeHash4(u64 b1, u64 b2);
-    MU static void setHashModeOverride(HashMode mode);
-    MUND static HashMode getHashModeOverride();
-    MUND HD static HasherPtr getHashFunc(C Board& board);
+
+    MU static void refreshHashFunc(C Board& board);
+    MUND HD static HasherPtr getHashFunc();
 
     FORCEINLINE HD bool operator==(C Memory& other) C { return hash == other.hash; }
     FORCEINLINE HD bool operator< (C Memory& other) C { return hash <  other.hash; }
@@ -67,17 +57,21 @@ public:
     // #                       u64 moves                          #
     // ############################################################
 
-    MUND FORCEINLINE HD u8 getMoveCount() C { 
-        return mem & MEMORY_MOVE_DATA_MASK; 
-    }
-    MUND FORCEINLINE HD u8 getMove(C u8 index) C { 
-        return mem >> getShift(index) & MEMORY_MOVE_TYPE_MASK; 
-    }
-    MUND FORCEINLINE HD u8 getLastMove() C { 
-        return mem >> getShift(getMoveCount() - 1) & MEMORY_MOVE_TYPE_MASK; 
+    MUND FORCEINLINE HD u8 getMoveCount() C {
+        return mem & MEMORY_MOVE_DATA_MASK;
     }
 
-    template<i32 COUNT> HD void setNextNMove(u64 moveValue);
+    MUND FORCEINLINE HD u8 getMove(C u8 index) C {
+        return mem >> getShift(index) & MEMORY_MOVE_TYPE_MASK;
+    }
+
+    MUND FORCEINLINE HD u8 getLastMove() C {
+        return mem >> getShift(getMoveCount() - 1) & MEMORY_MOVE_TYPE_MASK;
+    }
+
+    template<i32 COUNT>
+    HD void setNextNMove(u64 moveValue);
+
     MU HD void setNextMoves(std::initializer_list<u64> moveValues);
 
     // ############################################################
@@ -86,7 +80,7 @@ public:
 
     MUND std::string toString() C;
 
-    MUND static std::string formatMoveString(u8 move, bool isForwards) ;
+    MUND static std::string formatMoveString(u8 move, bool isForwards);
 
     MUND std::string asmString(C Memory* other) C;
     MUND std::string asmStringForwards() C;
@@ -100,21 +94,17 @@ public:
     MUND static std::vector<u8> parseFatMoveString(C std::string& input);
 };
 
-
 template<i32 COUNT>
 HD void Memory::setNextNMove(C u64 moveValue) {
     static_assert(COUNT >= 1 && COUNT <= 5, "Template argument must be in range 1-5");
 
-    constexpr u64 MOVE_SET_SHIFT = (5 - COUNT) * MEMORY_MOVE_TYPE_BITSIZE; // 6
-    constexpr u64 MOVE_SET_MASK = 0'77'77'77'77'77 >> MOVE_SET_SHIFT; // 6
+    constexpr u64 MOVE_SET_SHIFT = (5 - COUNT) * MEMORY_MOVE_TYPE_BITSIZE;
+    constexpr u64 MOVE_SET_MASK = 0'77'77'77'77'77 >> MOVE_SET_SHIFT;
 
     C u32 moveCount = mem & MEMORY_MOVE_DATA_MASK;
     C u8 shiftAmount = getShift(moveCount);
 
-    mem = (mem & ~((MOVE_SET_MASK << shiftAmount) | MEMORY_MOVE_DATA_MASK)) // p1
-          |
-          (moveValue << shiftAmount) // p2
-          |
-          ((moveCount + COUNT) & MEMORY_MOVE_DATA_MASK) // p3
-            ;
+    mem = (mem & ~((MOVE_SET_MASK << shiftAmount) | MEMORY_MOVE_DATA_MASK))
+          | (moveValue << shiftAmount)
+          | ((moveCount + COUNT) & MEMORY_MOVE_DATA_MASK);
 }

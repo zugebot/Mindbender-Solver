@@ -31,7 +31,7 @@ int main() {
     const BoardPair* boardPair = nullptr;
     while (true) {
         std::string input;
-        std::cout << "puzzle: ";
+        tcout << "puzzle: ";
         std::cin >> input;
 
         if (input == "exit") {
@@ -67,18 +67,18 @@ int main() {
         }
 
         clear_cmd();
-        std::cout << "\n";
-        std::cout << "Name  : " << boardPair->getName() << "\n";
-        std::cout << "Colors: " << boardPair->getStartState().getColorCount() << "\n";
-        std::cout << "Fat   : ";
+        tcout << "\n";
+        tcout << "Name  : " << boardPair->getName() << "\n";
+        tcout << "Colors: " << boardPair->getStartState().getColorCount() << "\n";
+        tcout << "Fat   : ";
         if (boardPair->getStartState().getFatBool()) {
-            std::cout << "True\n";
+            tcout << "True\n";
         } else {
-            std::cout << "False\n";
+            tcout << "False\n";
         }
-        std::cout << "\n";
-        std::cout << boardPair->toStringReversed() << "\n";
-        std::cout << std::flush;
+        tcout << "\n";
+        tcout << boardPair->toStringReversed() << "\n";
+        tcout << std::flush;
     }
 
     return 0;

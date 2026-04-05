@@ -1,5 +1,5 @@
 // main_bench_intersections.cpp
-#include "MindbenderSolver/include.hpp"
+#include "code/include.hpp"
 
 #include <bitset>
 #include <x86gprintrin.h>
@@ -156,7 +156,7 @@ static void bench(const char* name, const Board& b, F&& f,
         const double calls = static_cast<double>(iters) * CALLS_PER_ITER;
         const double ops_per_sec = calls / s;
 
-        std::cout << std::left << std::setw(28) << name
+        tcout << std::left << std::setw(28) << name
                   << " | round " << r
                   << " | time " << std::fixed << std::setprecision(3) << s << " s"
                   << " | calls " << static_cast<u64>(calls)
@@ -168,7 +168,7 @@ static void bench(const char* name, const Board& b, F&& f,
     }
 
     const double best_ops = (static_cast<double>(iters) * CALLS_PER_ITER) / best_s;
-    std::cout << std::left << std::setw(28) << name
+    tcout << std::left << std::setw(28) << name
               << " | BEST   "
               << " | time " << std::fixed << std::setprecision(3) << best_s << " s"
               << " | ops/s " << static_cast<u64>(best_ops)
@@ -177,7 +177,7 @@ static void bench(const char* name, const Board& b, F&& f,
 }
 
 int main(const int argc, char** argv) {
-    std::cout.setf(std::ios::unitbuf);
+    tcout.setf(std::ios::unitbuf);
 
     const char* id = (argc >= 2 ? argv[1] : "7-1");
     const auto pair  = BoardLookup::getBoardPair(id);
@@ -185,7 +185,7 @@ int main(const int argc, char** argv) {
     const Board goal  = pair->getEndState();
 
     // Optional: show the pair
-    std::cout << pair->toString() << "\n";
+    tcout << pair->toString() << "\n";
 
     // Correctness check (all 36 positions)
     for (int x = 0; x < 6; ++x) {
@@ -193,22 +193,22 @@ int main(const int argc, char** argv) {
             const u64 a = start.getRowColIntersections(x, y);
             const u64 b = getRowColIntersections(start, x, y);
             if (a != b) {
-                std::cout << "HEURISTIC1 and HEURISTIC2 do not match!\n";
-                std::cout << "[Offenders] x=" << x << " y=" << y << "\n";
-                std::cout << "Original: " << std::bitset<64>(a) << "\n";
-                std::cout << "Modified: " << std::bitset<64>(b) << "\n";
+                tcout << "HEURISTIC1 and HEURISTIC2 do not match!\n";
+                tcout << "[Offenders] x=" << x << " y=" << y << "\n";
+                tcout << "Original: " << std::bitset<64>(a) << "\n";
+                tcout << "Modified: " << std::bitset<64>(b) << "\n";
                 return -1;
             }
         }
     }
-    std::cout << "Equality check: OK (all 36 positions)\n";
+    tcout << "Equality check: OK (all 36 positions)\n";
 
     // ---------- Benchmarks ----------
     // Tweak these to taste; each "iter" calls the function 36 times (all x,y).
     constexpr int ITERS  = 1'000'000; // total calls = ITERS * 36
     constexpr int ROUNDS = 10;
 
-    std::cout << "\n=== Bench getRowColIntersections ===\n";
+    tcout << "\n=== Bench getRowColIntersections ===\n";
 
     bench("Optimized (free)", start,
           [](const Board& b, u32 x, u32 y) -> u64 {

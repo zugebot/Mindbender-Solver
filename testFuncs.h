@@ -1,6 +1,6 @@
 #pragma once
 // solver_finish.cpp
-#include "MindbenderSolver/include.hpp"
+#include "code/include.hpp"
 
 #include <algorithm>
 #include <array>
@@ -56,7 +56,7 @@ static inline int inverseIdx(const int idx) {
 }
 
 static inline void applyMove(Board& b, int idx) {
-    applyMove(reinterpret_cast<B1B2&>(b), idx);
+    applyMove(b, idx);
     // allActStructList[idx]. action(reinterpret_cast<B1B2&>(b));
 }
 template <class Seq>
@@ -73,11 +73,11 @@ static inline std::string moveName(const int idx) {
     return s;
 }
 static void print_path(const std::vector<int>& path) {
-    std::cout << "Moves (" << path.size() << "):";
+    tcout << "Moves (" << path.size() << "):";
     for (size_t i = 0; i < path.size(); ++i) {
-        std::cout << (i ? " " : " ") << moveName(path[i]);
+        tcout << (i ? " " : " ") << moveName(path[i]);
     }
-    std::cout << "\n";
+    tcout << "\n";
 }
 
 // ========================= Inline path (no heap) =========================
@@ -139,7 +139,7 @@ struct BeamResult {
 };
 
 static BeamResult run_beam(const Board& start, const Board& goal, const BeamCfg& cfg) {
-    std::cout.setf(std::ios::unitbuf);
+    tcout.setf(std::ios::unitbuf);
 
     BeamNode root;
     root.b = start;
@@ -181,7 +181,7 @@ static BeamResult run_beam(const Board& start, const Board& goal, const BeamCfg&
                     R.bestPath.insert(R.bestPath.end(), ch.path.data, ch.path.data + ch.path.len);
                 }
                 if EXPECT_FALSE(ch.matches == 36) {
-                    std::cout << "[beam] depth " << d
+                    tcout << "[beam] depth " << d
                               << " | beam=? | topMatches=36 | bestEver=36 | elapsed="
                               << t0.getSeconds() << "s\n";
                     R.solved = true;
@@ -207,7 +207,7 @@ static BeamResult run_beam(const Board& start, const Board& goal, const BeamCfg&
         if ((int)next.size() > cfg.WIDTH) next.resize(cfg.WIDTH);
 
         const int top = next.empty() ? -1 : next.front().matches;
-        std::cout << "[beam] depth " << d
+        tcout << "[beam] depth " << d
                   << " | beam=" << (int)next.size()
                   << " | topMatches=" << top
                   << " | bestEver=" << globalBest
@@ -356,7 +356,7 @@ struct MicroRes {
 };
 
 static MicroRes run_micro_beam_active(const Board& start, const Board& goal, const MicroBeamCfg& cfg) {
-    std::cout.setf(std::ios::unitbuf);
+    tcout.setf(std::ios::unitbuf);
 
     struct N {
         Board  b;
@@ -387,7 +387,7 @@ static MicroRes run_micro_beam_active(const Board& start, const Board& goal, con
             if (an == 0) {
                 R.solved = true; R.board = nd.b;
                 R.path.assign(nd.path.data, nd.path.data + nd.path.len);
-                std::cout << "[micro] depth " << (depth-1) << " solved\n";
+                tcout << "[micro] depth " << (depth-1) << " solved\n";
                 return R;
             }
 
@@ -413,7 +413,7 @@ static MicroRes run_micro_beam_active(const Board& start, const Board& goal, con
                 if (ch.matches == 36) {
                     R.solved = true; R.board = ch.b;
                     R.path.assign(ch.path.data, ch.path.data + ch.path.len);
-                    std::cout << "[micro] depth " << depth
+                    tcout << "[micro] depth " << depth
                               << " | beam=? | topMatches=36 | bestEver=36 | elapsed="
                               << t0.getSeconds() << "s\n";
                     return R;
@@ -436,7 +436,7 @@ static MicroRes run_micro_beam_active(const Board& start, const Board& goal, con
         if ((int)next.size() > cfg.WIDTH) next.resize(cfg.WIDTH);
 
         int top = next.empty() ? -1 : next.front().matches;
-        std::cout << "[micro] depth " << depth
+        tcout << "[micro] depth " << depth
                   << " | beam=" << (int)next.size()
                   << " | topMatches=" << top
                   << " | bestEver=" << globalBest
@@ -462,7 +462,7 @@ static bool finish_32_exact(Board& cur, const Board& goal, std::vector<int>& out
         if (c.matches == 36) {
             applyMoves(cur, c.seq, c.len);
             outMoves.insert(outMoves.end(), c.seq, c.seq + c.len);
-            std::cout << "[t32] 1 commutator\n";
+            tcout << "[t32] 1 commutator\n";
             return true;
         }
     }
@@ -475,7 +475,7 @@ static bool finish_32_exact(Board& cur, const Board& goal, std::vector<int>& out
                 for (int i = 0; i < c2.len; ++i) seq[n++] = c2.seq[i];
                 applyMoves(cur, seq, n);
                 outMoves.insert(outMoves.end(), seq, seq + n);
-                std::cout << "[t32] 2 commutators\n";
+                tcout << "[t32] 2 commutators\n";
                 return true;
             }
         }
@@ -493,7 +493,7 @@ static bool finish_33_exact(Board& cur, const Board& goal, std::vector<int>& out
         if (c.matches == 36) {
             applyMoves(cur, c.seq, c.len);
             outMoves.insert(outMoves.end(), c.seq, c.seq + c.len);
-            std::cout << "[t33] 1 commutator\n";
+            tcout << "[t33] 1 commutator\n";
             return true;
         }
     }
@@ -506,7 +506,7 @@ static bool finish_33_exact(Board& cur, const Board& goal, std::vector<int>& out
                 for (int i = 0; i < c2.len; ++i) seq[n++] = c2.seq[i];
                 applyMoves(cur, seq, n);
                 outMoves.insert(outMoves.end(), seq, seq + n);
-                std::cout << "[t33] 2 commutators\n";
+                tcout << "[t33] 2 commutators\n";
                 return true;
             }
         }
@@ -562,7 +562,7 @@ struct FNode {
 
 static bool finish_local_beam(const Board& start, const Board& goal,
                               const FinishCfg& cfg, std::vector<int>& outMoves) {
-    std::cout.setf(std::ios::unitbuf);
+    tcout.setf(std::ios::unitbuf);
     if (isSolved(start, goal)) return true;
 
     std::vector<FNode> beam; beam.reserve(cfg.WIDTH);
@@ -580,7 +580,7 @@ static bool finish_local_beam(const Board& start, const Board& goal,
             bool any = false; for (int i = 0; i < 6; ++i) any |= aRow[i] | aCol[i];
             if (!any) {
                 nd.path.append_to(outMoves);
-                std::cout << "[finish] depth=" << depth-1 << " solved\n";
+                tcout << "[finish] depth=" << depth-1 << " solved\n";
                 return true;
             }
 
@@ -603,7 +603,7 @@ static bool finish_local_beam(const Board& start, const Board& goal,
                 if (ch.matches > globalBest) globalBest = ch.matches;
                 if (ch.matches == 36) {
                     ch.path.append_to(outMoves);
-                    std::cout << "[finish] depth=" << depth << " solved\n";
+                    tcout << "[finish] depth=" << depth << " solved\n";
                     return true;
                 }
                 next.push_back(std::move(ch)); // move
@@ -624,19 +624,19 @@ static bool finish_local_beam(const Board& start, const Board& goal,
         if ((int)next.size() > cfg.WIDTH) next.resize(cfg.WIDTH);
 
         int top = next.empty() ? -1 : next.front().matches;
-        std::cout << "[finish] depth " << depth
+        tcout << "[finish] depth " << depth
                   << " | beam=" << (int)next.size()
                   << " | topMatches=" << top
                   << " | bestEver=" << globalBest
                   << " | elapsed=" << t0.getSeconds() << "s\n";
 
         if (next.empty()) {
-            std::cout << "[finish] frontier empty\n";
+            tcout << "[finish] frontier empty\n";
             return false;
         }
         beam.swap(next);
     }
-    std::cout << "[finish] depth cap hit\n";
+    tcout << "[finish] depth cap hit\n";
     return false;
 }
 
@@ -654,14 +654,14 @@ static bool finish_with_comm_then_beam(Board& cur, const Board& goal,
             if (mr.solved) {
                 applyMoves(cur, mr.path, (int)mr.path.size());
                 outMoves.insert(outMoves.end(), mr.path.begin(), mr.path.end());
-                std::cout << "[polish] micro-beam solved from " << mNow << "/36\n";
+                tcout << "[polish] micro-beam solved from " << mNow << "/36\n";
                 return true;
             }
             int before = matchCount(cur, goal);
             if (matchCount(mr.board, goal) > before) {
                 applyMoves(cur, mr.path, (int)mr.path.size());
                 outMoves.insert(outMoves.end(), mr.path.begin(), mr.path.end());
-                std::cout << "[polish] micro-beam improved " << before << " -> "
+                tcout << "[polish] micro-beam improved " << before << " -> "
                           << matchCount(cur, goal) << "\n";
                 if (matchCount(cur, goal) == 36) return true;
             }
@@ -681,7 +681,7 @@ static bool finish_with_comm_then_beam(Board& cur, const Board& goal,
         int before = matchCount(cur, goal);
         if (!improve_by_one_comm(cur, goal, outMoves)) break;
         int after = matchCount(cur, goal);
-        std::cout << "[comm] iter " << it+1 << " " << before << " -> " << after << "\n";
+        tcout << "[comm] iter " << it+1 << " " << before << " -> " << after << "\n";
         if (after == 36) return true;
         if (after <= before) break;
         if (try_micro(after)) return true;
@@ -700,25 +700,25 @@ static bool finish_with_comm_then_beam(Board& cur, const Board& goal,
 // ========================= Main =========================
 
 static inline void end_report() {
-    std::cout << "New Calls : " << new_calls << "\n";
-    std::cout << "Time Sort : " << sort_time << "\n";
-    std::cout << "Time Total: " << total_time << "\n";
+    tcout << "New Calls : " << new_calls << "\n";
+    tcout << "Time Sort : " << sort_time << "\n";
+    tcout << "Time Total: " << total_time << "\n";
 }
 
 int mainTestFuncs(int argc, char** argv) {
-    std::cout.setf(std::ios::unitbuf);
+    tcout.setf(std::ios::unitbuf);
     const char* id = (argc >= 2 ? argv[1] : "10-3");
     const Timer total_timer;
 
     const auto pair = BoardLookup::getBoardPair(id);
-    std::cout << pair->toString() << std::endl;
+    tcout << pair->toString() << std::endl;
     Board start = pair->getStartState();
     const Board goal  = pair->getEndState();
 
     std::vector<int> totalPath;
     const int best = matchCount(start, goal);
-    std::cout << "[init] puzzle=" << id << " matches=" << best << "/36\n";
-    if (best == 36) { std::cout << "Already solved.\n"; end_report(); return 0; }
+    tcout << "[init] puzzle=" << id << " matches=" << best << "/36\n";
+    if (best == 36) { tcout << "Already solved.\n"; end_report(); return 0; }
 
     // Phase B: main beam
     BeamResult br;
@@ -732,12 +732,12 @@ int mainTestFuncs(int argc, char** argv) {
         if (br.solved) {
             for (int m : br.bestPath) { applyMove(start, m); totalPath.push_back(m); }
             total_time = total_timer.getSeconds();
-            std::cout << "Solved in beam.\n";
+            tcout << "Solved in beam.\n";
             print_path(totalPath);
             return 0;
         }
         for (int m : br.bestPath) { applyMove(start, m); totalPath.push_back(m); }
-        std::cout << "[handoff] matches=" << matchCount(start, goal) << "/36\n";
+        tcout << "[handoff] matches=" << matchCount(start, goal) << "/36\n";
     }
 
     // Phase C: finisher
@@ -747,13 +747,13 @@ int mainTestFuncs(int argc, char** argv) {
         if (finish_with_comm_then_beam(start, goal, fcfg, tidy)) {
             for (int m : tidy) { applyMove(start, m); totalPath.push_back(m); }
             total_time = total_timer.getSeconds();
-            std::cout << "Solved in finisher.\n";
+            tcout << "Solved in finisher.\n";
             print_path(totalPath);
             end_report();
             return 0;
         } else {
             total_time = total_timer.getSeconds();
-            std::cout << "No exact solution within tidy-up budget.\n";
+            tcout << "No exact solution within tidy-up budget.\n";
             print_path(totalPath);
             end_report();
             return 1;
@@ -761,7 +761,7 @@ int mainTestFuncs(int argc, char** argv) {
     }
 
     total_time = total_timer.getSeconds();
-    std::cout << "Reached end of main.\n";
+    tcout << "Reached end of main.\n";
     print_path(totalPath);
     end_report();
     return 0;

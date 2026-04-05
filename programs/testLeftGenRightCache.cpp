@@ -2,6 +2,8 @@
 #include "code/board_hash_segments.hpp"
 #include "code/right_cache_index.hpp"
 
+#include "utils/get_free_memory.hpp"
+
 #include <algorithm>
 
 constexpr u32 RIGHT_PREFIX_BITS = 20;
@@ -72,7 +74,7 @@ static void buildPrefixFrontier(C Board& start, JVec<Board>& out, C u32 depth) {
         return;
     }
 
-    Perms<Board>::getDepthFunc<true>(start, out, depth, false);
+    Perms<Board>::getDepthFunc<eSequenceDir::NONE>(start, out, depth, false);
 }
 
 MUND static u8 getInverseMove(C u8 move) {
@@ -132,8 +134,8 @@ struct LeftLoopScratch {
     JVec<MeetState> leftFrontier;
 
     void init(C Board& start, C u32 leftLoopDepth, C u32 leftDepth) {
-        Perms<Board>::reserveForDepth(start, leftPrefixes, leftLoopDepth);
-        Perms<Board>::reserveForDepth(start, generatedBoards, leftDepth);
+        Perms<Board>::reserveForDepth<eSequenceDir::NONE>(start, leftPrefixes, leftLoopDepth);
+        Perms<Board>::reserveForDepth<eSequenceDir::ASCENDING>(start, generatedBoards, leftDepth);
     }
 };
 
@@ -141,24 +143,24 @@ static RightCache buildRightCache(C Board& start, C Board& goal, C u32 rightDept
     RightCache cache;
     JVec<Board> generatedBoards;
 
-    std::cout << "[RC] Generating..." << std::endl;
+    tcout << "[RC] Generating..." << std::endl;
     C Timer timerRightBuild;
-    Perms<Board>::getDepthFunc<true>(goal, generatedBoards, rightDepth, true);
+    Perms<Board>::getDepthFunc<eSequenceDir::DESCENDING>(goal, generatedBoards, rightDepth, true);
     cache.rightBuildTime = timerRightBuild.getSeconds();
 
-    std::cout << "[RC] Size: " << generatedBoards.size() << std::endl;
+    tcout << "[RC] Size: " << generatedBoards.size() << std::endl;
 
-    std::cout << "[RC] Compressing..." << std::endl;
+    tcout << "[RC] Compressing..." << std::endl;
     C Timer timerRightCompress;
     compressBoardsToMeetStates(generatedBoards, cache.rightFrontier);
     cache.rightCompressTime = timerRightCompress.getSeconds();
 
-    std::cout << "[RC] Sorting..." << std::endl;
+    tcout << "[RC] Sorting..." << std::endl;
     C Timer timerRightSort;
     std::sort(cache.rightFrontier.begin(), cache.rightFrontier.end());
     cache.rightSortTime = timerRightSort.getSeconds();
 
-    std::cout << "[RC] Indexing..." << std::endl;
+    tcout << "[RC] Indexing..." << std::endl;
     C Timer timerRightIndex;
     cache.rightPrefixIndex.build(cache.rightFrontier, {RIGHT_PREFIX_BITS});
     cache.rightIndexTime = timerRightIndex.getSeconds();
@@ -173,18 +175,18 @@ static RightCache buildRightCache(C Board& start, C Board& goal, C u32 rightDept
                                 : (100.0 * static_cast<double>(stats.multiBucketCount)
                                    / static_cast<double>(stats.nonEmptyBuckets));
 
-    std::cout << "[RC] Prefix bits: " << cache.rightPrefixIndex.getPrefixBits() << std::endl;
-    std::cout << "[RC] Total prefix buckets: " << cache.rightPrefixIndex.getBucketCount() << std::endl;
-    std::cout << "[RC] Non-empty prefix buckets: " << stats.nonEmptyBuckets
+    tcout << "[RC] Prefix bits: " << cache.rightPrefixIndex.getPrefixBits() << std::endl;
+    tcout << "[RC] Total prefix buckets: " << cache.rightPrefixIndex.getBucketCount() << std::endl;
+    tcout << "[RC] Non-empty prefix buckets: " << stats.nonEmptyBuckets
               << " (" << stats.occupancyPct << "%)" << std::endl;
-    std::cout << "[RC] Avg boards/bucket (all): " << stats.avgBoardsPerBucket << std::endl;
-    std::cout << "[RC] Avg boards/bucket (non-empty): " << stats.avgBoardsPerNonEmptyBucket << std::endl;
-    std::cout << "[RC] Max bucket size: " << stats.maxBucketSize << std::endl;
-    std::cout << "[RC] Single-board non-empty buckets: " << stats.singleBucketCount
+    tcout << "[RC] Avg boards/bucket (all): " << stats.avgBoardsPerBucket << std::endl;
+    tcout << "[RC] Avg boards/bucket (non-empty): " << stats.avgBoardsPerNonEmptyBucket << std::endl;
+    tcout << "[RC] Max bucket size: " << stats.maxBucketSize << std::endl;
+    tcout << "[RC] Single-board non-empty buckets: " << stats.singleBucketCount
               << " (" << singlePct << "%)" << std::endl;
-    std::cout << "[RC] Multi-board non-empty buckets: " << stats.multiBucketCount
+    tcout << "[RC] Multi-board non-empty buckets: " << stats.multiBucketCount
               << " (" << multiPct << "%)" << std::endl;
-    std::cout << "[RC] Collision boards (non-first entries): " << stats.collisionBoards << std::endl;
+    tcout << "[RC] Collision boards (non-first entries): " << stats.collisionBoards << std::endl;
 
     return cache;
 }
@@ -224,8 +226,14 @@ static bool findPathToMiddle(C Board& root,
                              C bool reverseSide,
                              Memory& out) {
     JVec<Memory> frontier;
-    Perms<Memory>::reserveForDepth(root, frontier, depth);
-    Perms<Memory>::getDepthFunc<true>(root, frontier, depth, reverseSide);
+    
+    if (reverseSide) {
+        Perms<Memory>::reserveForDepth<eSequenceDir::DESCENDING>(root, frontier, depth);
+        Perms<Memory>::getDepthFunc<eSequenceDir::DESCENDING>(root, frontier, depth, true);
+    } else {
+        Perms<Memory>::reserveForDepth<eSequenceDir::ASCENDING>(root, frontier, depth);
+        Perms<Memory>::getDepthFunc<eSequenceDir::ASCENDING>(root, frontier, depth, false);
+    }
 
     Board targetBoard;
     targetBoard.b1 = target.b1;
@@ -280,10 +288,10 @@ static TrialTimings runSingleTrial(C Board& start,
 
         scratch.generatedBoards.clear();
         C Timer timerLeftBuild;
-        Perms<Board>::getDepthFunc<true>(scratch.leftPrefixes[prefixIdx],
-                                         scratch.generatedBoards,
-                                         leftDepth,
-                                         false);
+        Perms<Board>::getDepthFunc<eSequenceDir::ASCENDING>(scratch.leftPrefixes[prefixIdx],
+                                                            scratch.generatedBoards,
+                                                            leftDepth,
+                                                            false);
         out.leftBuildTime += timerLeftBuild.getSeconds();
 
         C Timer timerLeftCompress;
@@ -371,33 +379,33 @@ int main() {
     C std::string levelName = "5-5";
     C auto pair = BoardLookup::getBoardPair(levelName);
     if (pair == nullptr) {
-        std::cout << "Level not found: " << levelName << std::endl;
+        tcout << "Level not found: " << levelName << std::endl;
         return -2;
     }
 
     C BenchmarkResult result = runBenchmark(levelName, LEFT_LOOP, LEFT_DEPTH, RIGHT_DEPTH_LOCAL, RUN_COUNT);
 
-    std::cout << "Runs: " << RUN_COUNT << std::endl;
-    std::cout << "Left loop depth: " << LEFT_LOOP << std::endl;
-    std::cout << "Avg attempts: " << result.avgAttempts << std::endl;
-    std::cout << "Left size (depth " << LEFT_DEPTH << "): " << result.leftSize << std::endl;
-    std::cout << "Right size (depth " << RIGHT_DEPTH_LOCAL << "): " << result.rightCache.rightFrontier.size() << std::endl;
-    std::cout << "Right build time (one-time): " << result.rightCache.rightBuildTime << std::endl;
-    std::cout << "Right sort time (one-time): " << result.rightCache.rightSortTime << std::endl;
-    std::cout << "Right compress time (one-time): " << result.rightCache.rightCompressTime << std::endl;
-    std::cout << "Right index time (one-time): " << result.rightCache.rightIndexTime << std::endl;
-    std::cout << "Avg left build time: " << result.avgLeftBuildTime << std::endl;
-    std::cout << "Avg left compress time: " << result.avgLeftCompressTime << std::endl;
-    std::cout << "Avg meet time: " << result.avgMeetTime << std::endl;
-    std::cout << "Avg total time: " << result.avgTotalTime << std::endl;
+    tcout << "Runs: " << RUN_COUNT << std::endl;
+    tcout << "Left loop depth: " << LEFT_LOOP << std::endl;
+    tcout << "Avg attempts: " << result.avgAttempts << std::endl;
+    tcout << "Left size (depth " << LEFT_DEPTH << "): " << result.leftSize << std::endl;
+    tcout << "Right size (depth " << RIGHT_DEPTH_LOCAL << "): " << result.rightCache.rightFrontier.size() << std::endl;
+    tcout << "Right build time (one-time): " << result.rightCache.rightBuildTime << std::endl;
+    tcout << "Right sort time (one-time): " << result.rightCache.rightSortTime << std::endl;
+    tcout << "Right compress time (one-time): " << result.rightCache.rightCompressTime << std::endl;
+    tcout << "Right index time (one-time): " << result.rightCache.rightIndexTime << std::endl;
+    tcout << "Avg left build time: " << result.avgLeftBuildTime << std::endl;
+    tcout << "Avg left compress time: " << result.avgLeftCompressTime << std::endl;
+    tcout << "Avg meet time: " << result.avgMeetTime << std::endl;
+    tcout << "Avg total time: " << result.avgTotalTime << std::endl;
 
     if (result.solvedTrials > 0) {
-        std::cout << "Solved runs: " << result.solvedTrials << "/" << RUN_COUNT << std::endl;
-        std::cout << "Sample moves: " << result.sampleMoves << std::endl;
-        std::cout << "Found Sol: 0" << std::endl;
+        tcout << "Solved runs: " << result.solvedTrials << "/" << RUN_COUNT << std::endl;
+        tcout << "Sample moves: " << result.sampleMoves << std::endl;
+        tcout << "Found Sol: 0" << std::endl;
         return 0;
     }
 
-    std::cout << "Found Sol: -1" << std::endl;
+    tcout << "Found Sol: -1" << std::endl;
     return -1;
 }

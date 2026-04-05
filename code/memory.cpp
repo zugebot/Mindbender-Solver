@@ -1,70 +1,57 @@
+// code/memory.cpp
 #include "memory.hpp"
+
+#include "board.hpp"
 #include "board_hash_segments.hpp"
 #include "rotations.hpp"
 
-#include <vector>
 #include <sstream>
-
+#include <vector>
 
 namespace {
-    Memory::HashMode gHashModeOverride = Memory::HashMode::Auto;
+    Memory::HasherPtr gMemoryHashFunc = &Memory::precomputeHash4;
 }
-
 
 // ############################################################
 // #                       u64 hash                           #
 // ############################################################
 
-
 HD void Memory::precomputeHash2(C u64 b1, C u64 b2) {
     C u64 above = getSegment2bits(b1);
     C u64 below = getSegment2bits(b2);
-    setHash(above << 18 | below);
+    setHash((above << 18) | below);
 }
-
 
 HD void Memory::precomputeHash3(C u64 b1, C u64 b2) {
     C u64 above = getSegment3bits(b1);
     C u64 below = getSegment3bits(b2);
-    setHash(above << 30 | below);
+    setHash((above << 30) | below);
 }
-
 
 HD void Memory::precomputeHash4(C u64 b1, C u64 b2) {
     setHash(prime_func1(b2, b1));
 }
 
-
-void Memory::setHashModeOverride(C HashMode mode) {
-    gHashModeOverride = mode;
+void Memory::refreshHashFunc(C Board& board) {
+    switch (B1B2::chooseHashKind(board)) {
+        case B1B2::HashKind::Hash2:
+            gMemoryHashFunc = &Memory::precomputeHash2;
+            break;
+        case B1B2::HashKind::Hash3:
+            gMemoryHashFunc = &Memory::precomputeHash3;
+            break;
+        case B1B2::HashKind::Hash4:
+        default:
+            gMemoryHashFunc = &Memory::precomputeHash4;
+            break;
+    }
 }
 
-
-Memory::HashMode Memory::getHashModeOverride() {
-    return gHashModeOverride;
+HD Memory::HasherPtr Memory::getHashFunc() {
+    return gMemoryHashFunc;
 }
 
-
-MU HD Memory::HasherPtr Memory::getHashFunc(C Board& board) {
-    switch (gHashModeOverride) {
-        case HashMode::Hash2: return &Memory::precomputeHash2;
-        case HashMode::Hash3: return &Memory::precomputeHash3;
-        case HashMode::Hash4: return &Memory::precomputeHash4;
-        case HashMode::Auto: break;
-    }
-
-    C u64 colorCount = board.getColorCount();
-    if (board.getFatBool() || colorCount > 3) {
-        return &Memory::precomputeHash4;
-    }
-    if (colorCount == 1 || colorCount == 2) {
-        return &Memory::precomputeHash2;
-    }
-    return &Memory::precomputeHash3;
-}
-
-
-MU HD void Memory::setNextMoves(const std::initializer_list<u64> moveValues) {
+MU HD void Memory::setNextMoves(C std::initializer_list<u64> moveValues) {
     for (C auto& moveValue : moveValues) {
         setNextNMove<1>(moveValue);
     }
@@ -74,22 +61,20 @@ MU HD void Memory::setNextMoves(const std::initializer_list<u64> moveValues) {
 // #            To String -Similar- Functions                 #
 // ############################################################
 
-
-std::string removeTrailingSpace(std::string& str) {
-    if (!str.empty() && str.back() == ' ') {
-        str.pop_back();
+namespace {
+    std::string removeTrailingSpace(std::string& str) {
+        if (!str.empty() && str.back() == ' ') {
+            str.pop_back();
+        }
+        return str;
     }
-    return str;
 }
-
 
 std::string Memory::asmString(C Memory* other) C {
     std::string start = asmStringForwards();
     std::string end = other->asmStringBackwards();
     return start.empty() ? end : end.empty() ? start : start + " " + end;
-
 }
-
 
 std::string Memory::formatMoveString(C u8 move, C bool isForwards) {
     char temp[5] = {};
@@ -102,7 +87,6 @@ std::string Memory::formatMoveString(C u8 move, C bool isForwards) {
     return temp;
 }
 
-
 std::string Memory::asmStringForwards() C {
     C u32 count = getMoveCount();
 
@@ -113,11 +97,10 @@ std::string Memory::asmStringForwards() C {
         C u8 move = getMove(i);
         moves_str += formatMoveString(move, true) + " ";
     }
-    removeTrailingSpace(moves_str);
 
+    removeTrailingSpace(moves_str);
     return moves_str;
 }
-
 
 std::string Memory::asmStringBackwards() C {
     C u32 count = getMoveCount();
@@ -134,17 +117,21 @@ std::string Memory::asmStringBackwards() C {
     return moves_str;
 }
 
-
-
 std::string Memory::asmFatString(C u8 fatPos, C Memory* other, C u8 fatPosOther) C {
     std::string start = asmFatStringForwards(fatPos);
-    if (other == nullptr) { return start; }
+    if (other == nullptr) {
+        return start;
+    }
+
     std::string end = other->asmFatStringBackwards(fatPosOther);
-    if (start.empty()) { return end; }
-    if (end.empty()) { return start; }
+    if (start.empty()) {
+        return end;
+    }
+    if (end.empty()) {
+        return start;
+    }
     return start + " " + end;
 }
-
 
 std::string Memory::asmFatStringForwards(C u8 fatPos) C {
     std::string moves_str;
@@ -155,30 +142,32 @@ std::string Memory::asmFatStringForwards(C u8 fatPos) C {
     for (u32 i = 0; i < count; i++) {
         char temp[5] = {};
         memcpy(temp, allActStructList[
-            fatActionsIndexes[x * 5 + y][getMove(i)]].name.data(), 4);
+                             fatActionsIndexes[x * 5 + y][getMove(i)]].name.data(), 4);
+
         C u32 back = 2 + (temp[3] != '\0');
         moves_str += temp;
 
         if (back == 3) { // if it is a fat move
             if (temp[0] == 'R') {
-                if (temp[1] - '0' == y) { // axisNum
-                    x += temp[back] - '0'; // amount
+                if (temp[1] - '0' == y) {
+                    x += temp[back] - '0';
                     x -= 6 * (x > 5);
                 }
-            } else if EXPECT_TRUE (temp[0] == 'C') {
-                if (temp[1] - '0' == x) { // axisNum
-                    y += temp[back] - '0'; // amount
+            } else if EXPECT_TRUE(temp[0] == 'C') {
+                if (temp[1] - '0' == x) {
+                    y += temp[back] - '0';
                     y -= 6 * (y > 5);
                 }
             }
         }
+
         if (i != count - 1) {
             moves_str += " ";
         }
     }
+
     return moves_str;
 }
-
 
 std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
     C u32 count = getMoveCount();
@@ -192,18 +181,19 @@ std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
     for (u32 i = 0; i < count; i++) {
         char temp[5] = {};
         memcpy(temp, allActStructList[
-            fatActionsIndexes[x * 5 + y][getMove(i)]].name.data(), 4);
+                             fatActionsIndexes[x * 5 + y][getMove(i)]].name.data(), 4);
+
         C u32 back = 2 + (temp[3] != '\0');
 
         if (back == 3) { // if it is a fat move
             if (temp[0] == 'R') {
-                if (temp[1] - '0' == y) { // axisNum
-                    x += temp[back] - '0'; // amount
+                if (temp[1] - '0' == y) {
+                    x += temp[back] - '0';
                     x -= 6 * (x > 5);
                 }
             } else if EXPECT_TRUE(temp[0] == 'C') {
-                if (temp[1] - '0' == x) { // axisNum
-                    y += temp[back] - '0'; // amount
+                if (temp[1] - '0' == x) {
+                    y += temp[back] - '0';
                     y -= 6 * (y > 5);
                 }
             }
@@ -214,7 +204,6 @@ std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
     }
 
     std::string moves_str;
-
     for (i32 i = static_cast<i32>(moves_vec.size()) - 1; i >= 0; i--) {
         moves_str.append(moves_vec[i]);
         if (i != 0) {
@@ -224,7 +213,6 @@ std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
 
     return moves_str;
 }
-
 
 MU std::string Memory::toString() C {
     std::string str = "Move[";
@@ -236,42 +224,37 @@ MU std::string Memory::toString() C {
             str.append(", ");
         }
     }
+
     str.append("]");
     return str;
 }
 
-
 template<bool HAS_FAT>
-std::vector<u8> parseMoveStringTemplated(C std::string& input) {
+static std::vector<u8> parseMoveStringTemplated(C std::string& input) {
+    (void)HAS_FAT;
+
     std::vector<u8> result;
     std::istringstream iss(input);
     std::string seg;
 
-    // Iterate through the string, splitting by spaces
     while (iss >> seg) {
         if (seg.length() == 3) {
-            // getActionFromName(seg);
-            C u8 baseValue = seg[0] == 'R' ? 0 : 32;  // R=0, C=32
+            C u8 baseValue = seg[0] == 'R' ? 0 : 32;
             C u32 value = baseValue + (seg[1] - '0') * 5 + (seg[2] - '0') - 1;
             result.push_back(value);
-
         } else if (seg.length() == 4) {
-            // getActionFromName(seg);
-            C u8 baseValue = seg[0] == 'R' ? 64 : 89;  // R=64, C=89
+            C u8 baseValue = seg[0] == 'R' ? 64 : 89;
             C u32 value = baseValue + (seg[1] - '0') * 5 + (seg[3] - '0') - 1;
             result.push_back(value);
         }
-
     }
 
     return result;
 }
 
-
 MU std::vector<u8> Memory::parseNormMoveString(C std::string& input) {
     return parseMoveStringTemplated<false>(input);
 }
-
 
 MU std::vector<u8> Memory::parseFatMoveString(C std::string& input) {
     return parseMoveStringTemplated<true>(input);

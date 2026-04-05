@@ -1,31 +1,22 @@
-#include "code/board.hpp"
-#include "code/levels.hpp"
-#include "code/memory.hpp"
-#include "code/perms.hpp"
-#include "code/rotations.hpp"
-#include "utils/timer.hpp"
+#include "code/include.hpp"
 
-#include <filesystem>
 #include <cmath>
 #include <fstream>
-#include <sstream>
 #include <set>
 
 #include <vector>
 #include <iostream>
 #include <string>
-#include <thread>
 #include <algorithm>
 #include <regex>
 
-namespace fs = std::filesystem;
-
 
 // Function to split the filename and extract X, Y, N, M
-std::tuple<int, int, int, int> parseFileName(const std::string& filename) {
+std::tuple<int, int, int, int> parseFileName(const fs::path&filepath) {
     std::regex pattern(R"((\d+)\-(\d+)\_c(\d+)\_(\d+)\.txt)");
     std::smatch match;
-
+    
+    const std::string filename = filepath.filename().string();
     if (std::regex_match(filename, match, pattern)) {
         int X = std::stoi(match[1].str());
         int Y = std::stoi(match[2].str());
@@ -40,9 +31,9 @@ std::tuple<int, int, int, int> parseFileName(const std::string& filename) {
 }
 
 // Comparator for sorting the files
-bool compareFiles(const std::string& file1, const std::string& file2) {
-    auto [X1, Y1, N1, M1] = parseFileName(file1);
-    auto [X2, Y2, N2, M2] = parseFileName(file2);
+bool compareFiles(const fs::path& file1, const fs::path& file2) {
+    auto [X1, Y1, N1, M1] = parseFileName(file1.filename().string());
+    auto [X2, Y2, N2, M2] = parseFileName(file2.filename().string());
 
     if (X1 != X2) return X1 < X2;
     if (Y1 != Y2) return Y1 < Y2;
@@ -51,13 +42,13 @@ bool compareFiles(const std::string& file1, const std::string& file2) {
 }
 
 
-std::vector<std::string> getTxtFiles(const std::string& directory) {
-    std::vector<std::string> txtFiles;
+std::vector<fs::path> getTxtFiles(const fs::path& directory) {
+    std::vector<fs::path> txtFiles;
 
     // Iterate through all files in the directory
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (entry.is_regular_file() && entry.path().extension() == ".txt") {
-            txtFiles.push_back(entry.path().filename().string());
+            txtFiles.push_back(entry.path());
         }
     }
 
@@ -65,9 +56,9 @@ std::vector<std::string> getTxtFiles(const std::string& directory) {
 }
 
 
-std::vector<std::string> readFileLines(const std::string& filename) {
+std::vector<std::string> readFileLines(const fs::path&filepath) {
     std::vector<std::string> lines;
-    std::ifstream file(filename);
+    std::ifstream file(filepath);
     std::string line;
 
     while (std::getline(file, line)) {
@@ -79,19 +70,9 @@ std::vector<std::string> readFileLines(const std::string& filename) {
 
 
 int main() {
-
-    u32 x = 0x1;
-    i32 shift;
-    std::cin >> shift;
-    volatile u32 result = x << shift;
-
-    std::cout << result << std::endl;
-
-    // std::string outDirectory = R"(C:\Users\%USERNAME%\CLionProjects\Mindbender-Solver)";
-    std::string folder = "levels";
-    std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\MindbenderSolver\)" + folder + "\\";
-
-
+    
+    fs::path outDirectory = fs::path(R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels)");
+    
     auto files = getTxtFiles(outDirectory);
     std::sort(files.begin(), files.end(), compareFiles);
     for (const auto& file : files) {
@@ -100,7 +81,7 @@ int main() {
         if (X == 6 && Y < 5) { continue; }
         std::string levelName = std::to_string(X) + "-" + std::to_string(Y);
         if (levelName.size() >= 5) {
-            std::cout << "[" << std::setw(4) << levelName
+            tcout << "[" << std::setw(4) << levelName
                       << ", " << std::setw(3) << "c" + std::to_string(M)
                       << "] (invalid) skipping" << "...\n";
             continue;
@@ -108,7 +89,7 @@ int main() {
 
         BoardPair const* pair = BoardLookup::getBoardPair(levelName);
         if (pair == nullptr) {
-            std::cout << "[" << std::setw(4) << levelName
+            tcout << "[" << std::setw(4) << levelName
                       << ", " << std::setw(3) << "c" + std::to_string(M)
                       << "] (nullptr) skipping" << "...\n";
             continue;
@@ -118,11 +99,11 @@ int main() {
         Board startingBoard = pair->getStartState();
         Board realSolutionBoard = pair->getEndState();
 
-        // std::cout << realSolutionBoard.toString(startingBoard) << std::endl;
+        // tcout << realSolutionBoard.toString(startingBoard) << std::endl;
 
 
 
-        auto solutions = readFileLines(outDirectory + file);
+        auto solutions = readFileLines(file);
 
         size_t realSolutionCount = 0;
         size_t totalSolutionCount = solutions.size();
@@ -138,9 +119,9 @@ int main() {
                 }
             }
 
-            std::cout << "--- [" << std::setw(4) << levelName << " / "
+            tcout << "--- [" << std::setw(4) << levelName << " / "
                       << std::setw(3) << "c" + std::to_string(M) << "]: ";
-            std::cout << realSolutionCount << "/" << totalSolutionCount << "\n";
+            tcout << realSolutionCount << "/" << totalSolutionCount << "\n";
 
         } else {
             for (const auto& solution : solutions) {
@@ -155,9 +136,9 @@ int main() {
                 }
             }
 
-            std::cout << "FAT [" << std::setw(4) << levelName << " / "
+            tcout << "FAT [" << std::setw(4) << levelName << " / "
                       << std::setw(3) << "c" + std::to_string(M) << "]: ";
-            std::cout << realSolutionCount << "/" << totalSolutionCount << "\n";
+            tcout << realSolutionCount << "/" << totalSolutionCount << "\n";
         }
 
 

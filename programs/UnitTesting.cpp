@@ -108,12 +108,12 @@ std::string b1moves = board1.mem.assembleFatMoveStringBackwards(_xy1);
 std::string b2moves = board2.mem.assembleFatMoveStringForwards(_xy5);
 // std::string moveStr = board2.mem.assembleFatMoveString(_xy5, &board1.mem, _xy1);
 
-std::cout << board1.toString() << std::endl;
+tcout << board1.toString() << std::endl;
 
-std::cout << b1moves << " " << b2moves << std::endl;
+tcout << b1moves << " " << b2moves << std::endl;
 
 
-std::cout << board2.toString() << std::endl;
+tcout << board2.toString() << std::endl;
 
 */
 
@@ -133,27 +133,27 @@ int xy2 = board2.getFatXY();
 std::vector<Board> boards1 = makeFatPermutationListFuncs[4](board1, 4);
 std::vector<Board> boards2 = makeFatPermutationListFuncs[4](board2, 4);
 
-std::cout << "did perms" << std::endl;
+tcout << "did perms" << std::endl;
 
 std::sort(boards1.begin(), boards1.end(), [](C Board &a, C Board &b) { return a.getHash() < b.getHash(); });
 std::sort(boards2.begin(), boards2.end(), [](C Board &a, C Board &b) { return a.getHash() < b.getHash(); });
 
-std::cout << "did sorting" << std::endl;
+tcout << "did sorting" << std::endl;
 
 auto results = intersection(boards1, boards2);
 
-std::cout << "did intersection" << std::endl;
+tcout << "did intersection" << std::endl;
 
-std::cout << "solution count: " << results.size() << std::endl;
+tcout << "solution count: " << results.size() << std::endl;
 
 if (!results.empty()) {
-    std::cout << board1.toString() << std::endl;
-    std::cout << results[0].first->mem.assembleFatMoveStringForwards(xy1) << std::endl;
-    std::cout << results[0].first->toString() << std::endl;
-    // std::cout << results[0].second->mem.assembleFatMoveStringBackwards(results[0].second->getFatXY()) << std::endl;
-    std::cout << results[0].second->mem.assembleFatMoveStringBackwards(xy2) << std::endl;
+    tcout << board1.toString() << std::endl;
+    tcout << results[0].first->mem.assembleFatMoveStringForwards(xy1) << std::endl;
+    tcout << results[0].first->toString() << std::endl;
+    // tcout << results[0].second->mem.assembleFatMoveStringBackwards(results[0].second->getFatXY()) << std::endl;
+    tcout << results[0].second->mem.assembleFatMoveStringBackwards(xy2) << std::endl;
 
-    std::cout << board2.toString() << std::endl;
+    tcout << board2.toString() << std::endl;
 }
 
 volatile int _ = 0;
@@ -194,7 +194,7 @@ int main() {
     check.precomputeHash();
 
     if (hash1 != hash2 || hash2 != board.getHash() || board.getHash() != check.getHash()) {
-        std::cout << "hashes aren't lining up for the same board state...\n";
+        tcout << "hashes aren't lining up for the same board state...\n";
         return -1;
     }
 
@@ -202,19 +202,19 @@ int main() {
         for (int i = 0; i < 6; i++) {
             allActStructList[action].action(board);
             if ((board.b1 & ~MASK) != VAL) {
-                std::cout << "upper 10 bits changed... ("
+                tcout << "upper 10 bits changed... ("
                           << action << ")" << std::endl;
             }
         }
         board.precomputeHash();
         uint64_t hash_to_check = board.getHash();
         if (hash_to_check != hash1) {
-            std::cout << "hashes aren't lining up for the same board state...\n";
+            tcout << "hashes aren't lining up for the same board state...\n";
             return -1;
         }
 
         if (board.b1 != check.b1 || board.b2 != check.b2) {
-            std::cout << "Action #" << action << " failed.\n";
+            tcout << "Action #" << action << " failed.\n";
             return -1;
         }
     }
@@ -224,7 +224,7 @@ int main() {
     check.b1 &= 0x3FFFFFFFFFFFFF;
     check.b2 &= 0x3FFFFFFFFFFFFF;
 
-    std::cout << "All actions work.\n";
+    tcout << "All actions work.\n";
 
 
 
@@ -237,18 +237,18 @@ int main() {
     C32(solved5_3);
     R24(solved5_3);
     if (solve.b1 != solved5_3.b1 || solve.b2 != solved5_3.b2) {
-        std::cout << "The permutations of a solution performed on the initial board state did not solve it.\n";
-        std::cout << "The board in question:\n";
-        std::cout << solved5_3.toString() << std::endl;
+        tcout << "The permutations of a solution performed on the initial board state did not solve it.\n";
+        tcout << "The board in question:\n";
+        tcout << solved5_3.toString() << std::endl;
 
         uint64_t var1 = solve.b1;
         uint64_t var2 = solved5_3.b1;
         uint64_t var3 = solve.b2;
         uint64_t var4 = solved5_3.b2;
-        std::cout << (var1 >> 54) << std::endl;
-        std::cout << (var2 >> 54) << std::endl;
-        std::cout << (var3 >> 54) << std::endl;
-        std::cout << (var4 >> 54) << std::endl;
+        tcout << (var1 >> 54) << std::endl;
+        tcout << (var2 >> 54) << std::endl;
+        tcout << (var3 >> 54) << std::endl;
+        tcout << (var4 >> 54) << std::endl;
         return -1;
     }
 
@@ -275,26 +275,26 @@ int main() {
     board_right.precomputeHash();
 
     if (board_left.b1 != board_right.b1 || board_left.b2 != board_right.b2) {
-        std::cout << "left and right should be the same but they aren't.";
-        std::cout << "The boards in question:\n";
-        std::cout << board_left.toString() << std::endl;
-        std::cout << board_right.toString() << "\n\n";
+        tcout << "left and right should be the same but they aren't.";
+        tcout << "The boards in question:\n";
+        tcout << board_left.toString() << std::endl;
+        tcout << board_right.toString() << "\n\n";
 
         uint64_t var1 = board_left.b1;
         uint64_t var2 = board_right.b1;
         uint64_t var3 = board_left.b2;
         uint64_t var4 = board_right.b2;
-        std::cout << (var1 >> 54) << std::endl;
-        std::cout << (var2 >> 54) << std::endl;
-        std::cout << (var3 >> 54) << std::endl;
-        std::cout << (var4 >> 54) << std::endl;
+        tcout << (var1 >> 54) << std::endl;
+        tcout << (var2 >> 54) << std::endl;
+        tcout << (var3 >> 54) << std::endl;
+        tcout << (var4 >> 54) << std::endl;
         return -1;
     }
 
     if (board_left.getHash() != board_right.getHash()) {
-        std::cout << "even if the boards are the same, the hashes do not match\n";
-        std::cout << "left:  " << board_left.getHash() << std::endl;
-        std::cout << "right: " << board_right.getHash() << std::endl;
+        tcout << "even if the boards are the same, the hashes do not match\n";
+        tcout << "left:  " << board_left.getHash() << std::endl;
+        tcout << "right: " << board_right.getHash() << std::endl;
     }
 
 
@@ -313,7 +313,7 @@ int main() {
         }
     }
     if (!found1) {
-        std::cout << "(boards) makePermListFuncs[4] isn't correct???\n";
+        tcout << "(boards) makePermListFuncs[4] isn't correct???\n";
         return -1;
     }
     std::sort(boards_depth_1.begin(), boards_depth_1.end(), BOARD_SORTER);
@@ -338,7 +338,7 @@ int main() {
         }
     }
     if (!found2) {
-        std::cout << "(solves) makePermListFuncs[3] isn't correct???\n";
+        tcout << "(solves) makePermListFuncs[3] isn't correct???\n";
         return -1;
     }
     std::sort(solves_depth_1.begin(), solves_depth_1.end(), BOARD_SORTER);
@@ -351,9 +351,9 @@ int main() {
     auto results2 = intersection(boards_depth_3, solves_depth_4);
     auto results3 = intersection(boards_depth_4, solves_depth_3);
 
-    std::cout << "solutions [4, 4]: " << results1.size() << "\n";
-    std::cout << "solutions [3, 4]: " << results2.size() << "\n";
-    std::cout << "solutions [4, 3]: " << results3.size() << "\n";
+    tcout << "solutions [4, 4]: " << results1.size() << "\n";
+    tcout << "solutions [3, 4]: " << results2.size() << "\n";
+    tcout << "solutions [4, 3]: " << results3.size() << "\n";
 
     volatile int x = 0;
 
