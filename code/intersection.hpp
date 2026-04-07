@@ -189,6 +189,7 @@ std::vector<std::pair<C T*, C T*>> intersection_threaded(
 }
 
 
+// TODO: garbage bad code
 #ifdef USE_CUDA
 template<typename T>
 #else
@@ -286,3 +287,284 @@ std::vector<std::pair<const T*, const T*>> intersection_all_pairs(
 
     return results;
 }
+
+
+
+
+
+
+
+
+#pragma once
+
+#include "board.hpp"
+
+#include <algorithm>
+#include <cstdint>
+#include <stdexcept>
+#include <thread>
+#include <utility>
+#include <vector>
+
+#include "utils/jvec.hpp"
+
+template<typename T>
+MU static void append_equal_state_pairs_in_bucket(
+        C JVec<T>& boards1,
+        C JVec<T>& boards2,
+        C size_t begin1,
+        C size_t end1,
+        C size_t begin2,
+        C size_t end2,
+        std::vector<std::pair<C T*, C T*>>& results) {
+    size_t i1 = begin1;
+    size_t i2 = begin2;
+
+    while (i1 < end1 && i2 < end2) {
+        if (boards1[i1] < boards2[i2]) {
+            ++i1;
+            continue;
+        }
+        if (boards2[i2] < boards1[i1]) {
+            ++i2;
+            continue;
+        }
+
+        size_t i1_end = i1 + 1;
+        while (i1_end < end1 && boards1[i1_end] == boards1[i1]) {
+            ++i1_end;
+        }
+
+        size_t i2_end = i2 + 1;
+        while (i2_end < end2 && boards2[i2_end] == boards2[i2]) {
+            ++i2_end;
+        }
+
+        for (size_t a = i1; a < i1_end; ++a) {
+            for (size_t b = i2; b < i2_end; ++b) {
+                results.emplace_back(&boards1[a], &boards2[b]);
+            }
+        }
+
+        i1 = i1_end;
+        i2 = i2_end;
+    }
+}
+
+template<typename T>
+MU static void process_chunk(
+        C JVec<T>& boards1,
+        C JVec<u64>& hashes1,
+        C JVec<T>& boards2,
+        C JVec<u64>& hashes2,
+        C size_t start1,
+        C size_t end1,
+        std::vector<std::pair<C T*, C T*>>& results) {
+    C size_t size1 = boards1.size();
+    C size_t size2 = boards2.size();
+
+    if (size1 != hashes1.size()) {
+        throw std::runtime_error("process_chunk: boards1/hashes1 size mismatch");
+    }
+    if (size2 != hashes2.size()) {
+        throw std::runtime_error("process_chunk: boards2/hashes2 size mismatch");
+    }
+
+    if (size1 == 0 || size2 == 0) {
+        return;
+    }
+    if (start1 >= end1) {
+        return;
+    }
+    if (start1 >= size1) {
+        return;
+    }
+    if (end1 > size1) {
+        return;
+    }
+
+    C u64 min_hash = hashes1[start1];
+    C u64 max_hash = hashes1[end1 - 1];
+
+    auto it2_begin = std::lower_bound(hashes2.begin(), hashes2.end(), min_hash);
+    auto it2_end_it = std::upper_bound(hashes2.begin(), hashes2.end(), max_hash);
+
+    C size_t start2 = static_cast<size_t>(it2_begin - hashes2.begin());
+    C size_t end2 = static_cast<size_t>(it2_end_it - hashes2.begin());
+
+    if (start2 >= end2) {
+        return;
+    }
+    if (start2 >= size2 || end2 > size2) {
+        return;
+    }
+
+    size_t i1 = start1;
+    size_t i2 = start2;
+
+    while (i1 < end1 && i2 < end2) {
+        C u64 hash1 = hashes1[i1];
+        C u64 hash2 = hashes2[i2];
+
+        if (hash1 < hash2) {
+            ++i1;
+            continue;
+        }
+        if (hash2 < hash1) {
+            ++i2;
+            continue;
+        }
+
+        size_t i1_end = i1 + 1;
+        while (i1_end < end1 && hashes1[i1_end] == hash1) {
+            ++i1_end;
+        }
+
+        size_t i2_end = i2 + 1;
+        while (i2_end < end2 && hashes2[i2_end] == hash2) {
+            ++i2_end;
+        }
+
+        append_equal_state_pairs_in_bucket(
+                boards1, boards2,
+                i1, i1_end,
+                i2, i2_end,
+                results
+        );
+
+        i1 = i1_end;
+        i2 = i2_end;
+    }
+}
+
+template<typename T>
+MU std::vector<std::pair<C T*, C T*>> intersection_threaded(
+        C JVec<T>& boards1,
+        C JVec<u64>& hashes1,
+        C JVec<T>& boards2,
+        C JVec<u64>& hashes2,
+        size_t num_threads = std::thread::hardware_concurrency()) {
+    if (boards1.size() != hashes1.size()) {
+        throw std::runtime_error("intersection_threaded: boards1/hashes1 size mismatch");
+    }
+    if (boards2.size() != hashes2.size()) {
+        throw std::runtime_error("intersection_threaded: boards2/hashes2 size mismatch");
+    }
+
+    C size_t total_size = boards1.size();
+    if (total_size == 0 || boards2.empty()) {
+        return {};
+    }
+
+    if (num_threads == 0) {
+        num_threads = 1;
+    }
+    num_threads = std::min(num_threads, total_size);
+
+    std::vector<std::pair<size_t, size_t>> ranges;
+    ranges.reserve(num_threads);
+
+    {
+        C size_t base_chunk = total_size / num_threads;
+        C size_t remainder = total_size % num_threads;
+
+        size_t start = 0;
+        for (size_t i = 0; i < num_threads && start < total_size; ++i) {
+            size_t chunk_len = base_chunk + (i < remainder ? 1 : 0);
+            size_t end = start + chunk_len;
+
+            if (end < total_size) {
+                C u64 boundary_hash = hashes1[end - 1];
+                while (end < total_size && hashes1[end] == boundary_hash) {
+                    ++end;
+                }
+            }
+
+            ranges.emplace_back(start, end);
+            start = end;
+        }
+    }
+
+    std::vector<std::thread> threads;
+    threads.reserve(ranges.size());
+
+    std::vector<std::vector<std::pair<C T*, C T*>>> partial_results(ranges.size());
+
+    for (size_t i = 0; i < ranges.size(); ++i) {
+        C auto [start1, end1] = ranges[i];
+
+        threads.emplace_back([&, start1, end1, i]() {
+            process_chunk(
+                    boards1, hashes1,
+                    boards2, hashes2,
+                    start1, end1,
+                    partial_results[i]
+            );
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    std::vector<std::pair<C T*, C T*>> results;
+    size_t total_pairs = 0;
+    for (C auto& partial : partial_results) {
+        total_pairs += partial.size();
+    }
+    results.reserve(total_pairs);
+
+    for (auto& partial : partial_results) {
+        results.insert(results.end(), partial.begin(), partial.end());
+    }
+
+    return results;
+}
+
+template<typename T>
+MU std::vector<std::pair<C T*, C T*>> intersection(
+        C JVec<T>& boards1,
+        C JVec<u64>& hashes1,
+        C JVec<T>& boards2,
+        C JVec<u64>& hashes2) {
+    if (boards1.size() != hashes1.size()) {
+        throw std::runtime_error("intersection: boards1/hashes1 size mismatch");
+    }
+    if (boards2.size() != hashes2.size()) {
+        throw std::runtime_error("intersection: boards2/hashes2 size mismatch");
+    }
+
+    std::vector<std::pair<C T*, C T*>> results;
+    if (boards1.empty() || boards2.empty()) {
+        return results;
+    }
+
+    process_chunk(
+            boards1, hashes1,
+            boards2, hashes2,
+            0, boards1.size(),
+            results
+    );
+
+    return results;
+}
+
+template<typename T>
+MU std::vector<std::pair<C T*, C T*>> intersection_all_pairs(
+        C JVec<T>& boards1,
+        C JVec<u64>& hashes1,
+        C JVec<T>& boards2,
+        C JVec<u64>& hashes2) {
+    return intersection(boards1, hashes1, boards2, hashes2);
+}
+
+
+
+
+
+
+
+
+
+
+

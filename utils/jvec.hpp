@@ -50,7 +50,7 @@ class [[maybe_unused]] JVec {
     }
 
 public:
-    [[maybe_unused]] explicit JVec();
+    [[maybe_unused]] JVec();
     [[maybe_unused]] explicit JVec(unsigned long long theCapacity);
     [[maybe_unused]] JVec(std::initializer_list<T> theInitList);
     ~JVec();
@@ -123,7 +123,7 @@ template<class T>
 template<class T>
 JVec<T>::JVec(const JVec& other) {
     mySize = other.mySize;
-    myCapacity = other.myCapacity;
+    myCapacity = other.mySize;
     myRawMemory = alloc_bytes(myCapacity);
 
     if (mySize != 0) {
@@ -134,7 +134,7 @@ JVec<T>::JVec(const JVec& other) {
 template<class T>
 JVec<T>& JVec<T>::operator=(const JVec& other) {
     if (this != &other) {
-        void* newMemory = alloc_bytes(other.myCapacity);
+        void* newMemory = alloc_bytes(other.mySize);
 
         if (other.mySize != 0) {
             _JVEC_HIDDEN_MEMCPY(newMemory, other.myRawMemory, other.mySize * sizeof(T));
@@ -143,7 +143,7 @@ JVec<T>& JVec<T>::operator=(const JVec& other) {
         std::free(myRawMemory);
         myRawMemory = newMemory;
         mySize = other.mySize;
-        myCapacity = other.myCapacity;
+        myCapacity = other.mySize;
     }
     return *this;
 }

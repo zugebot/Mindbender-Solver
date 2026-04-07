@@ -1,52 +1,58 @@
 // code/board.cpp
 #include "board.hpp"
 
+
+#include <sstream>
+#include <vector>
 #include <string>
 
-#include "board_hash_segments.hpp"
+#include "utils/processor.hpp"
 #include "utils/colors.hpp"
 #include "utils/intrinsics/clz.hpp"
 #include "utils/intrinsics/pext_u64.hpp"
 #include "utils/intrinsics/popcount.hpp"
+#include "rotations.hpp"
 
-static void setAllColors(B1B2* b1b2, C u8 adjustedValues[36]) {
-    b1b2->b1 = 0;
-    for (i32 i = 0; i < 18; i++) {
-        b1b2->b1 = (b1b2->b1 << 3) | (adjustedValues[i] & 0'7);
+
+
+
+namespace {
+    static void setAllColors(B1B2 *b1b2, C u8 adjustedValues[36]) {
+        b1b2->b1 = 0;
+        for (i32 i = 0; i < 18; i++) {
+            b1b2->b1 = (b1b2->b1 << 3) | (adjustedValues[i] & 0'7);
+        }
+
+        b1b2->b2 = 0;
+        for (i32 i = 18; i < 36; i++) {
+            b1b2->b2 = (b1b2->b2 << 3) | (adjustedValues[i] & 0'7);
+        }
     }
 
-    b1b2->b2 = 0;
-    for (i32 i = 18; i < 36; i++) {
-        b1b2->b2 = (b1b2->b2 << 3) | (adjustedValues[i] & 0'7);
+    constexpr u64 MAKE_MASK(C u64 offset, C u64 bits) {
+        return ~(((1ULL << bits) - 1ULL) << offset);
     }
-}
 
-constexpr u64 MAKE_MASK(C u64 offset, C u64 bits) {
-    return ~(((1ULL << bits) - 1ULL) << offset);
-}
+    template<typename T1, typename T2>
+    FORCEINLINE u64 getShiftAmount(C T1 x, C T2 y) {
+        static constexpr u64 MAGIC = 0x33210F33210F;
+        return (MAGIC >> (y * 8)) - (x * 3);
+    }
 
-template<typename T1, typename T2>
-FORCEINLINE u64 getShiftAmount(C T1 x, C T2 y) {
-    static constexpr u64 MAGIC = 0x33210F33210F;
-    return (MAGIC >> (y * 8)) - (x * 3);
-}
+    FORCEINLINE HD u64 getSimilar54(C u64 &sect1, C u64 &sect2) {
+        C u64 s = sect1 ^ sect2;
+        return ~(s | s >> 1 | s >> 2) & 0'111111'111111'111111;
+    }
 
-FORCEINLINE HD u64 getSimilar54(C u64& sect1, C u64& sect2) {
-    C u64 s = sect1 ^ sect2;
-    return ~(s | s >> 1 | s >> 2) & 0'111111'111111'111111;
-}
+    FORCEINLINE HD u64 getAntiSimilar54(C u64 &sect1, C u64 &sect2) {
+        C u64 s = sect1 ^ sect2;
+        return (s | s >> 1 | s >> 2) & 0'111111'111111'111111;
+    }
+} // misc
 
-FORCEINLINE HD u64 getAntiSimilar54(C u64& sect1, C u64& sect2) {
-    C u64 s = sect1 ^ sect2;
-    return (s | s >> 1 | s >> 2) & 0'111111'111111'111111;
-}
 
 Board::ColorArray_t Board::ColorsDefault = {0, 1, 2, 3, 4, 5, 6, 7};
 
-namespace {
-    B1B2::HasherPtr gB1B2HashFunc = &B1B2::computeHash4;
-    Board::HasherPtr gBoardHashFunc = &Board::precomputeHash4;
-}
 
 Board::Board(C u8 values[36], C u8 x, C u8 y) {
     setState(values);
@@ -78,7 +84,7 @@ void B1B2::setState(C u8 values[36]) {
     setColorCount(colorCount);
 }
 
-MU Board::ColorArray_t B1B2::setStateAndRetColors(C u8 values[36]) {
+MU B1B2::ColorArray_t B1B2::setStateAndRetColors(C u8 values[36]) {
     ColorArray_t colors = {8, 8, 8, 8, 8, 8, 8, 8};
     ColorArray_t trueColors = {8, 8, 8, 8, 8, 8, 8, 8};
 
@@ -108,91 +114,14 @@ MU Board::ColorArray_t B1B2::setStateAndRetColors(C u8 values[36]) {
     return trueColors;
 }
 
-// ============================================================
-// Hashing
-// ============================================================
 
-HD u64 B1B2::computeHash2() C {
-    C u64 above = getSegment2bits(b1);
-    C u64 below = getSegment2bits(b2);
-    return (above << 18) | below;
-}
 
-HD u64 B1B2::computeHash3() C {
-    C u64 above = getSegment3bits(b1);
-    C u64 below = getSegment3bits(b2);
-    return (above << 30) | below;
-}
 
-HD u64 B1B2::computeHash4() C {
-    return prime_func1(b2, b1);
-}
 
-HD B1B2::HashKind B1B2::chooseHashKind(C B1B2& state) {
-    C u64 colorCount = state.getColorCount();
-    if (state.getFatBool() || colorCount > 3) {
-        return HashKind::Hash4;
-    }
-    if (colorCount == 1 || colorCount == 2) {
-        return HashKind::Hash2;
-    }
-    return HashKind::Hash3;
-}
+// ############################################################
+// #                        Board                            #
+// ############################################################
 
-HD B1B2::HasherPtr B1B2::getHashFunc() {
-    return gB1B2HashFunc;
-}
-
-void B1B2::refreshHashFunc(C B1B2& state) {
-    switch (chooseHashKind(state)) {
-        case HashKind::Hash2:
-            gB1B2HashFunc = &B1B2::computeHash2;
-            break;
-        case HashKind::Hash3:
-            gB1B2HashFunc = &B1B2::computeHash3;
-            break;
-        case HashKind::Hash4:
-        default:
-            gB1B2HashFunc = &B1B2::computeHash4;
-            break;
-    }
-}
-
-HD u64 B1B2::getHash() C {
-    return (this->*gB1B2HashFunc)();
-}
-
-HD Board::HasherPtr Board::getHashFunc() {
-    return gBoardHashFunc;
-}
-
-void Board::refreshHashFunc(C Board& board) {
-    B1B2::refreshHashFunc(board);
-    switch (B1B2::chooseHashKind(board)) {
-        case B1B2::HashKind::Hash2:
-            gBoardHashFunc = &Board::precomputeHash2;
-            break;
-        case B1B2::HashKind::Hash3:
-            gBoardHashFunc = &Board::precomputeHash3;
-            break;
-        case B1B2::HashKind::Hash4:
-        default:
-            gBoardHashFunc = &Board::precomputeHash4;
-            break;
-    }
-}
-
-HD void Board::precomputeHash2() {
-    memory.setHash(computeHash2());
-}
-
-HD void Board::precomputeHash3() {
-    memory.setHash(computeHash3());
-}
-
-HD void Board::precomputeHash4() {
-    memory.setHash(computeHash4());
-}
 
 // ============================================================
 // Packed-state metadata
@@ -265,14 +194,6 @@ HD void B1B2::setFatXY(C u64 x, C u64 y) {
     setFatBool(true);
 }
 
-u8 HD B1B2::getFatXY() C {
-    return getFatX() * 5 + getFatY();
-}
-
-MU HD u8 B1B2::getFatXYFast() C {
-    return (getFatX() << 3) + getFatY();
-}
-
 MU u8 HD B1B2::getColor(C u8 x, C u8 y) C {
     C u64 shift_amount = getShiftAmount<u8, u8>(x, y);
     return (*(&b1 + (y >= 3)) >> shift_amount) & 0'7;
@@ -340,9 +261,137 @@ MU HD u64 B1B2::getScore1(C B1B2& other) C {
            + my_popcount(getSimilar54(b2, other.b2));
 }
 
-namespace {
-    static constexpr u64 DIFF_CELL_MASK = 0'111'111'111'111'111'111;
 
+
+namespace {
+    constexpr u64 ROW_DIFF_PEXT_MASK = 0'111111;
+    
+    FORCEINLINE HD u32 extractPackedRow18(C u64 half, C u8 rowInHalf) {
+        return static_cast<u32>((half >> ((2u - rowInHalf) * 18u)) & 0x3FFFFu);
+    }
+
+    FORCEINLINE HD u8 buildPackedRowDiffMask(C u32 lhsRow, C u32 rhsRow) {
+        C u64 s = static_cast<u64>(lhsRow ^ rhsRow);
+        C u64 diffBits = (s | (s >> 1) | (s >> 2)) & ROW_DIFF_PEXT_MASK;
+        return static_cast<u8>(my_pext_u64(diffBits, ROW_DIFF_PEXT_MASK));
+    }
+
+    FORCEINLINE HD void buildRowDifferenceMasksFast(C B1B2& lhs,
+                                                    C B1B2& rhs,
+                                                    u8 (&rowMasks)[6]) {
+        C u32 lhsRow0 = extractPackedRow18(lhs.b1, 0);
+        C u32 lhsRow1 = extractPackedRow18(lhs.b1, 1);
+        C u32 lhsRow2 = extractPackedRow18(lhs.b1, 2);
+        C u32 lhsRow3 = extractPackedRow18(lhs.b2, 0);
+        C u32 lhsRow4 = extractPackedRow18(lhs.b2, 1);
+        C u32 lhsRow5 = extractPackedRow18(lhs.b2, 2);
+
+        C u32 rhsRow0 = extractPackedRow18(rhs.b1, 0);
+        C u32 rhsRow1 = extractPackedRow18(rhs.b1, 1);
+        C u32 rhsRow2 = extractPackedRow18(rhs.b1, 2);
+        C u32 rhsRow3 = extractPackedRow18(rhs.b2, 0);
+        C u32 rhsRow4 = extractPackedRow18(rhs.b2, 1);
+        C u32 rhsRow5 = extractPackedRow18(rhs.b2, 2);
+
+        rowMasks[0] = buildPackedRowDiffMask(lhsRow0, rhsRow0);
+        rowMasks[1] = buildPackedRowDiffMask(lhsRow1, rhsRow1);
+        rowMasks[2] = buildPackedRowDiffMask(lhsRow2, rhsRow2);
+        rowMasks[3] = buildPackedRowDiffMask(lhsRow3, rhsRow3);
+        rowMasks[4] = buildPackedRowDiffMask(lhsRow4, rhsRow4);
+        rowMasks[5] = buildPackedRowDiffMask(lhsRow5, rhsRow5);
+    }
+
+    FORCEINLINE HD i32 popcount6(C u8 v) {
+        return static_cast<i32>(my_popcount(static_cast<u32>(v)));
+    }
+
+    FORCEINLINE HD u8 computeUncoveredCols(C u8 rowsChosen, C u8 (&rowMasks)[6]) {
+        u8 uncoveredCols = 0;
+
+        if ((rowsChosen & (1u << 0)) == 0) { uncoveredCols |= rowMasks[0]; }
+        if ((rowsChosen & (1u << 1)) == 0) { uncoveredCols |= rowMasks[1]; }
+        if ((rowsChosen & (1u << 2)) == 0) { uncoveredCols |= rowMasks[2]; }
+        if ((rowsChosen & (1u << 3)) == 0) { uncoveredCols |= rowMasks[3]; }
+        if ((rowsChosen & (1u << 4)) == 0) { uncoveredCols |= rowMasks[4]; }
+        if ((rowsChosen & (1u << 5)) == 0) { uncoveredCols |= rowMasks[5]; }
+
+        return uncoveredCols;
+    }
+
+    FORCEINLINE HD i32 exactMinRowColCoverFromMasks(C u8 (&rowMasks)[6]) {
+        i32 best = 6;
+
+        for (u8 rowsChosen = 0; rowsChosen < 64; ++rowsChosen) {
+            C i32 rowCost = popcount6(rowsChosen);
+            if (rowCost >= best) {
+                continue;
+            }
+
+            C u8 uncoveredCols = computeUncoveredCols(rowsChosen, rowMasks);
+            C i32 coverCost = rowCost + popcount6(uncoveredCols);
+
+            if (coverCost < best) {
+                best = coverCost;
+                if (best == 0) {
+                    break;
+                }
+            }
+        }
+
+        return best;
+    }
+
+    template<i32 MAX_DEPTH>
+    FORCEINLINE HD bool exactMinRowColCoverExceedsFromMasks(C u8 (&rowMasks)[6]) {
+        for (u8 rowsChosen = 0; rowsChosen < 64; ++rowsChosen) {
+            C i32 rowCost = popcount6(rowsChosen);
+            if (rowCost > MAX_DEPTH) {
+                continue;
+            }
+
+            C u8 uncoveredCols = computeUncoveredCols(rowsChosen, rowMasks);
+            C i32 coverCost = rowCost + popcount6(uncoveredCols);
+
+            if (coverCost <= MAX_DEPTH) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
+
+MUND HD i32 B1B2::getExactRowColLowerBound(C B1B2& other) C {
+    u8 rowMasks[6];
+    buildRowDifferenceMasksFast(*this, other, rowMasks);
+    return exactMinRowColCoverFromMasks(rowMasks);
+}
+
+template<i32 MAX_DEPTH>
+MUND HD bool B1B2::getExactRowColLowerBoundTill(C B1B2& other) C {
+    u8 rowMasks[6];
+    buildRowDifferenceMasksFast(*this, other, rowMasks);
+    return exactMinRowColCoverExceedsFromMasks<MAX_DEPTH>(rowMasks);
+}
+
+template HD bool B1B2::getExactRowColLowerBoundTill<1>(C B1B2& other) C;
+template HD bool B1B2::getExactRowColLowerBoundTill<2>(C B1B2& other) C;
+template HD bool B1B2::getExactRowColLowerBoundTill<3>(C B1B2& other) C;
+template HD bool B1B2::getExactRowColLowerBoundTill<4>(C B1B2& other) C;
+template HD bool B1B2::getExactRowColLowerBoundTill<5>(C B1B2& other) C;
+
+
+
+
+
+
+
+
+
+
+namespace {
+    constexpr u64 DIFF_CELL_MASK = 0'111'111'111'111'111'111;
+    
     FORCEINLINE HD u64 buildDiffFull(C B1B2& lhs, C B1B2& rhs) {
         return (my_pext_u64(getAntiSimilar54(lhs.b1, rhs.b1), DIFF_CELL_MASK) << 18)
                | my_pext_u64(getAntiSimilar54(lhs.b2, rhs.b2), DIFF_CELL_MASK);
@@ -365,138 +414,15 @@ namespace {
     }
 }
 
-MUND HD i32 B1B2::getScore3(C B1B2 theOther) C {
-    C u64 full = buildDiffFull(*this, theOther);
-    u8 differingCells = my_popcount(full);
-
-    alignas(u64) u8 uncRows[8] = {};
-    alignas(u64) u8 uncCols[8] = {};
-    buildUncoveredCounts(full, uncRows, uncCols);
-
-    u8 lanes = 0;
-    while (differingCells > 0) {
-        C i32 promoteRowMask = (1 << uncRows[0]) | (1 << uncRows[1]) | (1 << uncRows[2])
-                               | (1 << uncRows[3]) | (1 << uncRows[4]) | (1 << uncRows[5]);
-        C u8 highestRow = 31 - my_clz(promoteRowMask);
-
-        C i32 promoteColMask = (1 << uncCols[0]) | (1 << uncCols[1]) | (1 << uncCols[2])
-                               | (1 << uncCols[3]) | (1 << uncCols[4]) | (1 << uncCols[5]);
-        C u8 highestCol = 31 - my_clz(promoteColMask);
-
-        if (highestRow == 0 && highestCol == 0) {
-            break;
-        }
-
-        if (highestRow >= highestCol) {
-            C i32 index = (uncRows[0] == highestRow) ? 0 :
-                          (uncRows[1] == highestRow) ? 1 :
-                          (uncRows[2] == highestRow) ? 2 :
-                          (uncRows[3] == highestRow) ? 3 :
-                          (uncRows[4] == highestRow) ? 4 : 5;
-
-            differingCells -= uncRows[index];
-            uncRows[index] = 0;
-
-            for (i32 j = 0; j < 6; j++) {
-                if (getColor(j, index) != theOther.getColor(j, index) && uncCols[j] > 0) {
-                    uncCols[j]--;
-                }
-            }
-        } else {
-            C i32 index = (uncCols[0] == highestCol) ? 0 :
-                          (uncCols[1] == highestCol) ? 1 :
-                          (uncCols[2] == highestCol) ? 2 :
-                          (uncCols[3] == highestCol) ? 3 :
-                          (uncCols[4] == highestCol) ? 4 : 5;
-
-            differingCells -= uncCols[index];
-            uncCols[index] = 0;
-
-            for (i32 j = 0; j < 6; j++) {
-                if (getColor(index, j) != theOther.getColor(index, j) && uncRows[j] > 0) {
-                    uncRows[j]--;
-                }
-            }
-        }
-
-        lanes++;
-    }
-
-    return lanes;
-}
-
-template<i32 MAX_DEPTH>
-MU HD bool B1B2::getScore3Till(C B1B2 theOther) C {
-    C u64 full = buildDiffFull(*this, theOther);
-    u8 diffCells = my_popcount(full);
-
-    alignas(u64) u8 uncRows[8] = {};
-    alignas(u64) u8 uncCols[8] = {};
-    buildUncoveredCounts(full, uncRows, uncCols);
-
-    for (i32 depth = 0; depth < MAX_DEPTH; depth++) {
-        C i32 promoteRowMask = (1 << uncRows[0]) | (1 << uncRows[1]) | (1 << uncRows[2])
-                               | (1 << uncRows[3]) | (1 << uncRows[4]) | (1 << uncRows[5]);
-        C u8 highestRow = 31 - my_clz(promoteRowMask);
-
-        C i32 promoteColMask = (1 << uncCols[0]) | (1 << uncCols[1]) | (1 << uncCols[2])
-                               | (1 << uncCols[3]) | (1 << uncCols[4]) | (1 << uncCols[5]);
-        C u8 highestCol = 31 - my_clz(promoteColMask);
-
-        if (highestRow == 0 && highestCol == 0) {
-            return false;
-        }
-
-        if (highestRow >= highestCol) {
-            C i32 index = (uncRows[0] == highestRow) ? 0 :
-                          (uncRows[1] == highestRow) ? 1 :
-                          (uncRows[2] == highestRow) ? 2 :
-                          (uncRows[3] == highestRow) ? 3 :
-                          (uncRows[4] == highestRow) ? 4 : 5;
-
-            diffCells -= uncRows[index];
-            uncRows[index] = 0;
-
-            for (i32 j = 0; j < 6; j++) {
-                if (getColor(j, index) != theOther.getColor(j, index) && uncCols[j] > 0) {
-                    uncCols[j]--;
-                }
-            }
-        } else {
-            C i32 index = (uncCols[0] == highestCol) ? 0 :
-                          (uncCols[1] == highestCol) ? 1 :
-                          (uncCols[2] == highestCol) ? 2 :
-                          (uncCols[3] == highestCol) ? 3 :
-                          (uncCols[4] == highestCol) ? 4 : 5;
-
-            diffCells -= uncCols[index];
-            uncCols[index] = 0;
-
-            for (i32 j = 0; j < 6; j++) {
-                if (getColor(index, j) != theOther.getColor(index, j) && uncRows[j] > 0) {
-                    uncRows[j]--;
-                }
-            }
-        }
-
-        if (diffCells == 0) {
-            return false;
-        }
-    }
-
-    return diffCells != 0;
-}
-
-template HD bool B1B2::getScore3Till<1>(B1B2 theOther) C;
-template HD bool B1B2::getScore3Till<2>(B1B2 theOther) C;
-template HD bool B1B2::getScore3Till<3>(B1B2 theOther) C;
-template HD bool B1B2::getScore3Till<4>(B1B2 theOther) C;
-template HD bool B1B2::getScore3Till<5>(B1B2 theOther) C;
 
 #define countNonZeroBytes(x) \
 (((((x)&~0ULL/255*127)+~0ULL/255*(127)|(x))&~0ULL/255*128)/128%255)
 
-MUND HD bool B1B2::canBeSolvedIn1Move(C B1B2 theOther) C {
+/**
+ * This blindly wipes a single row or column to check if doing so makes the states equal.
+ * It doesn't do real permutations, so it can have false positives.
+ */
+MUND HD bool B1B2::couldBeSolvedIn1Move(const B1B2 theOther) C {
     C u64 full = buildDiffFull(*this, theOther);
 
     if EXPECT_FALSE(my_popcount(full) == 0) {
@@ -686,3 +612,403 @@ std::string Board::toStringSingle(C PrintSettings theSettings) C {
     }
     return str;
 }
+
+
+
+// ############################################################
+// #                        MEMORY                            #
+// ############################################################
+
+
+MU HD void Memory::setNextMoves(C std::initializer_list<u64> moveValues) {
+    for (C auto& moveValue : moveValues) {
+        setNextNMove<1>(moveValue);
+    }
+}
+
+// ############################################################
+// #            To String -Similar- Functions                 #
+// ############################################################
+
+namespace {
+    std::string removeTrailingSpace(std::string& str) {
+        if (!str.empty() && str.back() == ' ') {
+            str.pop_back();
+        }
+        return str;
+    }
+}
+
+std::string Memory::asmString(C Memory* other) C {
+    std::string start = asmStringForwards();
+    std::string end = other->asmStringBackwards();
+    return start.empty() ? end : end.empty() ? start : start + " " + end;
+}
+
+std::string Memory::formatMoveString(C u8 move, C bool isForwards) {
+    char temp[5] = {};
+    if (isForwards) {
+        memcpy(temp, allActStructList[move].name.data(), 4);
+    } else {
+        C u32 index = move + allActStructList[move].tillNext - 1 - allActStructList[move].tillLast;
+        memcpy(temp, allActStructList[index].name.data(), 4);
+    }
+    return temp;
+}
+
+std::string Memory::asmStringForwards() C {
+    C u32 count = getMoveCount();
+
+    std::string moves_str;
+    moves_str.reserve(3 * count);
+
+    for (u32 i = 0; i < count; i++) {
+        C u8 move = getMove(i);
+        moves_str += formatMoveString(move, true) + " ";
+    }
+
+    removeTrailingSpace(moves_str);
+    return moves_str;
+}
+
+std::string Memory::asmStringBackwards() C {
+    C u32 count = getMoveCount();
+
+    std::string moves_str;
+    moves_str.reserve(3 * count);
+
+    for (u32 i = count; i != 0; i--) {
+        C u8 move = getMove(i - 1);
+        moves_str += formatMoveString(move, false) + " ";
+    }
+
+    removeTrailingSpace(moves_str);
+    return moves_str;
+}
+
+std::string Memory::asmFatString(C u8 fatPos, C Memory* other, C u8 fatPosOther) C {
+    std::string start = asmFatStringForwards(fatPos);
+    if (other == nullptr) {
+        return start;
+    }
+
+    std::string end = other->asmFatStringBackwards(fatPosOther);
+    if (start.empty()) {
+        return end;
+    }
+    if (end.empty()) {
+        return start;
+    }
+    return start + " " + end;
+}
+
+std::string Memory::asmFatStringForwards(C u8 fatPos) C {
+    std::string moves_str;
+    C u32 count = getMoveCount();
+    i32 x = fatPos / 5;
+    i32 y = fatPos % 5;
+
+    for (u32 i = 0; i < count; i++) {
+        char temp[5] = {};
+        memcpy(temp, allActStructList[
+                             fatActionsIndexes[x * 5 + y][getMove(i)]].name.data(), 4);
+
+        C u32 back = 2 + (temp[3] != '\0');
+        moves_str += temp;
+
+        if (back == 3) { // if it is a fat move
+            if (temp[0] == 'R') {
+                if (temp[1] - '0' == y) {
+                    x += temp[back] - '0';
+                    x -= 6 * (x > 5);
+                }
+            } else if EXPECT_TRUE(temp[0] == 'C') {
+                if (temp[1] - '0' == x) {
+                    y += temp[back] - '0';
+                    y -= 6 * (y > 5);
+                }
+            }
+        }
+
+        if (i != count - 1) {
+            moves_str += " ";
+        }
+    }
+
+    return moves_str;
+}
+
+std::string Memory::asmFatStringBackwards(C u8 fatPos) C {
+    C u32 count = getMoveCount();
+
+    std::vector<std::string> moves_vec;
+    moves_vec.resize(count);
+
+    i32 x = fatPos / 5;
+    i32 y = fatPos % 5;
+
+    for (u32 i = 0; i < count; i++) {
+        char temp[5] = {};
+        memcpy(temp, allActStructList[
+                             fatActionsIndexes[x * 5 + y][getMove(i)]].name.data(), 4);
+
+        C u32 back = 2 + (temp[3] != '\0');
+
+        if (back == 3) { // if it is a fat move
+            if (temp[0] == 'R') {
+                if (temp[1] - '0' == y) {
+                    x += temp[back] - '0';
+                    x -= 6 * (x > 5);
+                }
+            } else if EXPECT_TRUE(temp[0] == 'C') {
+                if (temp[1] - '0' == x) {
+                    y += temp[back] - '0';
+                    y -= 6 * (y > 5);
+                }
+            }
+        }
+
+        temp[back] = static_cast<char>('f' - temp[back]);
+        moves_vec[i] = temp;
+    }
+
+    std::string moves_str;
+    for (i32 i = static_cast<i32>(moves_vec.size()) - 1; i >= 0; i--) {
+        moves_str.append(moves_vec[i]);
+        if (i != 0) {
+            moves_str += " ";
+        }
+    }
+
+    return moves_str;
+}
+
+MU std::string Memory::toString() C {
+    std::string str = "Move[";
+
+    C i32 moveCount = getMoveCount();
+    for (i32 i = 0; i < moveCount; i++) {
+        str.append(std::to_string(getMove(i)));
+        if (i != moveCount - 1) {
+            str.append(", ");
+        }
+    }
+
+    str.append("]");
+    return str;
+}
+
+template<bool HAS_FAT>
+static std::vector<u8> parseMoveStringTemplated(C std::string& input) {
+    (void)HAS_FAT;
+
+    std::vector<u8> result;
+    std::istringstream iss(input);
+    std::string seg;
+
+    while (iss >> seg) {
+        if (seg.length() == 3) {
+            C u8 baseValue = seg[0] == 'R' ? 0 : 32;
+            C u32 value = baseValue + (seg[1] - '0') * 5 + (seg[2] - '0') - 1;
+            result.push_back(value);
+        } else if (seg.length() == 4) {
+            C u8 baseValue = seg[0] == 'R' ? 64 : 89;
+            C u32 value = baseValue + (seg[1] - '0') * 5 + (seg[3] - '0') - 1;
+            result.push_back(value);
+        }
+    }
+
+    return result;
+}
+
+MU std::vector<u8> Memory::parseNormMoveString(C std::string& input) {
+    return parseMoveStringTemplated<false>(input);
+}
+
+MU std::vector<u8> Memory::parseFatMoveString(C std::string& input) {
+    return parseMoveStringTemplated<true>(input);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ############################################################
+// #                     STATE HASH                           #
+// ############################################################
+
+
+
+namespace {
+    
+    // MU HD static u64 prime_func1(C u64 b1, C u64 b2) {
+    //     return ((b1 << 4) + b1) ^ b2;
+    // }
+    
+    MU HD FORCEINLINE u64 mix64(u64 x) {
+        x ^= x >> 30;
+        x *= 0xbf58476d1ce4e5b9ULL;
+        x ^= x >> 27;
+        x *= 0x94d049bb133111ebULL;
+        x ^= x >> 31;
+        return x;
+    }
+    
+    MU HD FORCEINLINE u64 prime_func1(C u64 b1, C u64 b2) {
+        u64 x = b1 ^ 0x9e3779b97f4a7c15ULL;
+        u64 y = b2 ^ 0xc2b2ae3d27d4eb4fULL;
+    
+        x = mix64(x);
+        y = mix64(y);
+    
+        C u64 h = x ^ (y + 0x9e3779b97f4a7c15ULL + (x << 6) + (x >> 2));
+        return mix64(h);
+    }
+    
+    // check commits before 10/16/24 for previous impl.
+    MU HD FORCEINLINE u64 getSegment2bits(C u64 segment) {
+#ifndef __CUDA_ARCH__
+        static constexpr u64 MASK_X0 = 0'111111'111111'111111;
+        return my_pext_u64(segment, MASK_X0);
+#else
+        static constexpr u64 MASK_A1 = 0'101010'101010'101010;
+        static constexpr u64 MASK_B1 = MASK_A1 >> 3;
+        static constexpr u64 MASK_A2 = 0'030000'030000'030000;
+        static constexpr u64 MASK_B2 = MASK_A2 >> 6;
+        static constexpr u64 MASK_C2 = MASK_A2 >> 12;
+        static constexpr u64 MASK_A3 = 0'000077'000000'000000;
+        static constexpr u64 MASK_B3 = MASK_A3 >> 18;
+        static constexpr u64 MASK_C3 = MASK_A3 >> 36;
+        C u64 o1 = (segment & MASK_A1) >> 2 | segment & MASK_B1;
+        C u64 o2 = (o1 & MASK_A2) >> 8 | (o1 & MASK_B2) >> 4 | o1 & MASK_C2;
+        C u64 o3 = (o2 & MASK_A3) >> 24 | (o2 & MASK_B3) >> 12 | o2 & MASK_C3;
+        return o3;
+#endif
+    }
+    
+    // check commits before 10/16/24 for previous impl.
+    MU HD FORCEINLINE u64 getSegment3bits(C u64 segment) {
+        static constexpr u64 MASK_CS = 0'003003'003003'003003;
+        C u64 o1 = (segment >> 6 & MASK_CS) * 9 /* 0b1001 */
+                   |
+                   (segment >> 3 & MASK_CS) * 3 /* 0b1001 */
+                   |
+                   segment & MASK_CS
+                ;
+#ifndef __CUDA_ARCH__
+        static constexpr u64 MASK_X23 = 0'037037'037037'037037;
+        C u64 x23 = my_pext_u64(o1, MASK_X23);
+        return x23;
+#else
+        static constexpr u64 MASK_A1 = 0'037000'037000'037000;
+        static constexpr u64 MASK_B1 = MASK_A1 >> 9;
+        static constexpr u64 MASK_A2 = 0'001777'000000'000000;
+        static constexpr u64 MASK_B2 = MASK_A2 >> 18;
+        static constexpr u64 MASK_C2 = MASK_A2 >> 36;
+        C u64 o2 = (o1 & MASK_A1) >> 4 | o1 & MASK_B1;
+        C u64 o3 = (o2 & MASK_A2) >> 16 | (o2 & MASK_B2) >> 8 | o2 & MASK_C2;
+        return o3;
+#endif
+    }
+    
+    // check commits before 10/16/24 for previous impl.
+    MU HD FORCEINLINE u64 getSegment4bits(C u64 segment) {
+#ifndef __CUDA_ARCH__
+        static constexpr u64 MASK_X0 = 0'333333'333333'333333;
+        return my_pext_u64(segment, MASK_X0);
+#else
+        static constexpr u64 MASK_A1 = 0'303030'303030'303030;
+        static constexpr u64 MASK_B1 = MASK_A1 >> 3;
+        static constexpr u64 MASK_A2 = 0'170000'170000'170000;
+        static constexpr u64 MASK_B2 = MASK_A2 >> 6;
+        static constexpr u64 MASK_C2 = MASK_A2 >> 12;
+        static constexpr u64 MASK_A3 = 0'007777'000000'000000;
+        static constexpr u64 MASK_B3 = MASK_A3 >> 18;
+        static constexpr u64 MASK_C3 = MASK_A3 >> 36;
+        C u64 o1 = (segment & MASK_A1) >> 1 | segment & MASK_B1;
+        C u64 o2 = (o1 & MASK_A2) >> 4 | (o1 & MASK_B2) >> 2 | o1 & MASK_C2;
+        C u64 o3 = (o2 & MASK_A3) >> 12 | (o2 & MASK_B3) >> 6 | o2 & MASK_C3;
+        return o3;
+#endif
+    }
+} // hashing
+
+
+StateHash::HashFuncPtr StateHash::gHashFunc_ = &StateHash::computeHash4;
+StateHash::HashKind StateHash::gHashKind_ = StateHash::HashKind::Hash4;
+
+u64 StateHash::computeHash2(C B1B2& state) {
+    C u64 above = getSegment2bits(state.b1);
+    C u64 below = getSegment2bits(state.b2);
+    return (above << 18) | below;
+}
+
+u64 StateHash::computeHash3(C B1B2& state) {
+    C u64 above = getSegment3bits(state.b1);
+    C u64 below = getSegment3bits(state.b2);
+    return (above << 30) | below;
+}
+
+u64 StateHash::computeHash4(C B1B2& state) {
+    return prime_func1(state.b2, state.b1);
+}
+
+StateHash::HashKind StateHash::chooseHashKind(C B1B2& state) {
+    C u64 colorCount = state.getColorCount();
+    if (state.getFatBool() || colorCount > 3) {
+        return HashKind::Hash4;
+    }
+    if (colorCount == 1 || colorCount == 2) {
+        return HashKind::Hash2;
+    }
+    return HashKind::Hash3;
+}
+
+StateHash::HashFuncPtr StateHash::getHashFunc() {
+    return gHashFunc_;
+}
+
+void StateHash::setHashKind(C HashKind kind) {
+    gHashKind_ = kind;
+
+    switch (kind) {
+        case HashKind::Hash2:
+            gHashFunc_ = &StateHash::computeHash2;
+            break;
+        case HashKind::Hash3:
+            gHashFunc_ = &StateHash::computeHash3;
+            break;
+        case HashKind::Hash4:
+        default:
+            gHashFunc_ = &StateHash::computeHash4;
+            break;
+    }
+}
+
+void StateHash::refreshHashFunc(C B1B2& state) {
+    setHashKind(chooseHashKind(state));
+}
+
+u64 StateHash::computeHash(C B1B2& state) {
+    return gHashFunc_(state);
+}
+
+
+
+

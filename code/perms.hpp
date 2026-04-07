@@ -17,7 +17,6 @@
 template<typename T>
 struct IsAllowedPermsType {
     static constexpr bool value =
-            std::is_same_v<T, Memory> ||
             std::is_same_v<T, Board>  ||
             std::is_same_v<T, B1B2>;
 };
@@ -28,7 +27,6 @@ constexpr bool AllowedPermsType = IsAllowedPermsType<T>::value;
 // C++20 concept implementation
 template<typename T>
 concept AllowedPermsType =
-        std::is_same_v<T, Memory> ||
         std::is_same_v<T, Board>  ||
         std::is_same_v<T, B1B2>;
 #endif
@@ -63,7 +61,7 @@ namespace perms_detail {
 
     template<typename T, i32 MAX_DEPTH>
     struct PermBuildState {
-        static_assert(AllowedPermsType<T>, "T must be Memory, Board, or B1B2");
+        static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
         std::array<i32, MAX_DEPTH> dirSeq{};
         std::array<i32, MAX_DEPTH> sectSeq{};
@@ -71,7 +69,6 @@ namespace perms_detail {
         std::array<u64, MAX_DEPTH> curSeq{};
         std::array<bool, MAX_DEPTH> checkRCSeq{};
         std::array<u8, MAX_DEPTH> intersectSeq{};
-        typename T::HasherPtr hasher{};
     };
 
     // ============================================================
@@ -84,10 +81,11 @@ namespace perms_detail {
     static void make_perm_list_inner(
             C Board& board_in,
             JVec<T>& boards_out,
+            JVec<u64>& hashes_out,
             PermBuildState<T, MAX_DEPTH>& state,
             u64 move_prev,
             i32& count);
-
+    
     template<typename T,
              i32 CUR_DEPTH, i32 MAX_DEPTH,
              bool CHECK_CROSS, bool CHECK_SIM,
@@ -95,9 +93,10 @@ namespace perms_detail {
     static void make_perm_list_outer(
             C Board& board_in,
             JVec<T>& boards_out,
+            JVec<u64>& hashes_out,
             PermBuildState<T, MAX_DEPTH>& state,
             i32& count);
-
+    
     template<typename T,
              i32 MAX_DEPTH,
              bool CHECK_CROSS, bool CHECK_SIM,
@@ -105,7 +104,7 @@ namespace perms_detail {
     static void make_perm_list(
             C Board& board_in,
             JVec<T>& boards_out,
-            typename T::HasherPtr hasher);
+            JVec<u64>& hashes_out);
 
     // ============================================================
     // Fat board permutation generation
@@ -117,30 +116,30 @@ namespace perms_detail {
     static void make_fat_perm_list_helper(
             C Board& board,
             JVec<T>& boards_out,
+            JVec<u64>& hashes_out,
             u32& count,
-            typename T::HasherPtr hasher,
             u64 move,
             C ActStruct& lastActStruct,
             u8 startIndex,
             u8 endIndex);
-
+    
     template<typename T,
              i32 DEPTH,
              eSequenceDir SECT_DIR>
     static void make_fat_perm_list(
             C Board& board_in,
             JVec<T>& boards_out,
-            typename T::HasherPtr hasher);
+            JVec<u64>& hashes_out);
 
 } // namespace perms_detail
 
 
 template<typename T>
 class Perms {
-    static_assert(AllowedPermsType<T>, "T must be Memory, Board, or B1B2");
+    static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
 public:
-    using ToDepthFuncPtr = void (*)(C Board&, JVec<T>&, typename T::HasherPtr);
+    using ToDepthFuncPtr = void (*)(C Board&, JVec<T>&, JVec<u64>&);
     using DepthPair = std::pair<u32, u32>;
     using DepthMap = std::unordered_map<u32, std::vector<DepthPair>>;
 
@@ -164,10 +163,17 @@ public:
     };
     
     template<eSequenceDir SECT_DIR>
-    MU static void reserveForDepth(C Board& board_in, JVec<T>& boards_out, u32 depth);
-
+    MU static void reserveForDepth(C Board& board_in,
+                                   JVec<T>& boards_out,
+                                   JVec<u64>& hashes_out,
+                                   u32 depth);
+    
     template<eSequenceDir SECT_DIR>
-    MU static void getDepthFunc(C Board& board_in, JVec<T>& boards_out, u32 depth, bool shouldResize = true);
+    MU static void getDepthFunc(C Board& board_in,
+                                JVec<T>& boards_out,
+                                JVec<u64>& hashes_out,
+                                u32 depth,
+                                bool shouldResize = true);
 };
 
 template<typename T>
@@ -175,44 +181,36 @@ template<eSequenceDir SECT_DIR>
 void Perms<T>::getDepthFunc(
         C Board& board_in,
         JVec<T>& boards_out,
+        JVec<u64>& hashes_out,
         C u32 depth,
         C bool shouldResize) {
     
     if (depth >= PTR_LIST_SIZE) {
+        boards_out.clear();
+        hashes_out.clear();
         return;
     }
 
     if (shouldResize) {
-        reserveForDepth<SECT_DIR>(board_in, boards_out, depth);
+        reserveForDepth<SECT_DIR>(board_in, boards_out, hashes_out, depth);
     }
 
     boards_out.resize(boards_out.capacity());
-
-    typename T::HasherPtr hasher{};
-    if constexpr (std::is_same_v<T, Memory>) {
-        hasher = Memory::getHashFunc();
-    } else if constexpr (std::is_same_v<T, Board>) {
-        hasher = Board::getHashFunc();
-    } else if constexpr (std::is_same_v<T, B1B2>) {
-        hasher = B1B2::getHashFunc();
-    } else {
-        static_assert(AllowedPermsType<T>, "T must be Memory, Board, or B1B2, unsupported permutation type");
-    }
+    hashes_out.resize(hashes_out.capacity());
 
     if (board_in.getFatBool()) {
         constexpr auto table = SECT_DIR == eSequenceDir::ASCENDING ? FromLeft::fatFuncPtrs
                                : SECT_DIR == eSequenceDir::DESCENDING ? FromRight::fatFuncPtrs
                                                                       : FromNone::fatFuncPtrs;
-        table[depth](board_in, boards_out, hasher);
+        table[depth](board_in, boards_out, hashes_out);
     } else {
         constexpr auto table = SECT_DIR == eSequenceDir::ASCENDING ? FromLeft::funcPtrs
                                : SECT_DIR == eSequenceDir::DESCENDING ? FromRight::funcPtrs
                                                                       : FromNone::funcPtrs;
-        table[depth](board_in, boards_out, hasher);
+        table[depth](board_in, boards_out, hashes_out);
     }
 }
 
-extern template class Perms<Memory>;
 extern template class Perms<Board>;
 extern template class Perms<B1B2>;
 

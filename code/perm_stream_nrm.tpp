@@ -13,13 +13,13 @@ namespace perm_stream_detail {
             StreamBuildState<T, MAX_DEPTH>& state,
             C u64 move_prev,
             Sink& sink) {
-        static_assert(AllowedPermsType<T>, "T must be Memory, Board, or B1B2");
+        static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
         if constexpr (MAX_DEPTH == 0) {
-            emitState<T, 0>(board_in, state.hasher, 0, chunk, sink);
+            emitState<T, 0>(board_in, 0, chunk, sink);
 
         } else if constexpr (CUR_DEPTH == MAX_DEPTH) {
-            emitState<T, MAX_DEPTH>(board_in, state.hasher, move_prev, chunk, sink);
+            emitState<T, MAX_DEPTH>(board_in, move_prev, chunk, sink);
 
         } else {
             if constexpr (CHECK_CROSS && CUR_DEPTH > 0) {
@@ -80,7 +80,7 @@ namespace perm_stream_detail {
             StreamChunk<T>& chunk,
             StreamBuildState<T, MAX_DEPTH>& state,
             Sink& sink) {
-        static_assert(AllowedPermsType<T>, "T must be Memory, Board, or B1B2");
+        static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
         if constexpr (CUR_DEPTH == MAX_DEPTH) {
             stream_perm_list_inner<
@@ -214,12 +214,10 @@ namespace perm_stream_detail {
     void stream_perm_list(
             C Board& board_in,
             StreamChunk<T>& chunk,
-            C typename T::HasherPtr hasher,
             Sink& sink) {
-        static_assert(AllowedPermsType<T>, "T must be Memory, Board, or B1B2");
+        static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
         StreamBuildState<T, MAX_DEPTH> state;
-        state.hasher = hasher;
 
         stream_perm_list_outer<
                 T,

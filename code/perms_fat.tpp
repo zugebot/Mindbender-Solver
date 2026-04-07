@@ -1,8 +1,6 @@
 #pragma once
 // code/perms_fat.tpp
 
-#include "utils/hasGetHash.hpp"
-
 namespace perms_detail {
 
     template<typename T,
@@ -11,14 +9,13 @@ namespace perms_detail {
     static void make_fat_perm_list_helper(
             C Board& board,
             JVec<T>& boards_out,
+            JVec<u64>& hashes_out,
             u32& count,
-            C typename T::HasherPtr hasher,
             C u64 move,
             C ActStruct& lastActStruct,
             C u8 startIndex,
             C u8 endIndex) {
-        static_assert(AllowedPermsType<T>, "T must be Memory, Board, or B1B2");
-        static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
+        static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
         MU bool lastActIsRow = false;
         MU bool lastActIsCol = false;
@@ -73,18 +70,14 @@ namespace perms_detail {
             if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
                 C u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
 
-                if constexpr (std::is_same_v<T, Memory>) {
-                    boards_out[count] = board_next.memory;
-                    (boards_out[count].*hasher)(board_next.b1, board_next.b2);
-                    boards_out[count].template setNextNMove<MAX_DEPTH>(move_next);
-
-                } else if constexpr (std::is_same_v<T, Board>) {
+                if constexpr (std::is_same_v<T, Board>) {
                     boards_out[count] = board_next;
-                    (boards_out[count].*hasher)();
                     boards_out[count].memory.template setNextNMove<MAX_DEPTH>(move_next);
+                    hashes_out[count] = StateHash::computeHash(boards_out[count]);
 
                 } else if constexpr (std::is_same_v<T, B1B2>) {
                     boards_out[count] = board_next.asB1B2();
+                    hashes_out[count] = StateHash::computeHash(boards_out[count]);
                 }
 
                 ++count;
@@ -106,10 +99,10 @@ namespace perms_detail {
                 C u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
 
                 make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, SECT_DIR, true>(
-                        board_next, boards_out, count, hasher, move_next, actStruct, nextStart, nextEnd);
+                        board_next, boards_out, hashes_out, count, move_next, actStruct, nextStart, nextEnd);
 
                 make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, SECT_DIR, false>(
-                        board_next, boards_out, count, hasher, move_next, actStruct, 24, 48);
+                        board_next, boards_out, hashes_out, count, move_next, actStruct, 24, 48);
 
             } else {
                 u8 nextStart = 24;
@@ -128,10 +121,10 @@ namespace perms_detail {
                 C u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
 
                 make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, SECT_DIR, true>(
-                        board_next, boards_out, count, hasher, move_next, actStruct, 0, 24);
+                        board_next, boards_out, hashes_out, count, move_next, actStruct, 0, 24);
 
                 make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, SECT_DIR, false>(
-                        board_next, boards_out, count, hasher, move_next, actStruct, nextStart, nextEnd);
+                        board_next, boards_out, hashes_out, count, move_next, actStruct, nextStart, nextEnd);
             }
         }
     }
@@ -141,37 +134,35 @@ namespace perms_detail {
     void make_fat_perm_list(
             C Board& board_in,
             JVec<T>& boards_out,
-            C typename T::HasherPtr hasher) {
-        static_assert(AllowedPermsType<T>, "T must be Memory, Board, or B1B2");
-        static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
+            JVec<u64>& hashes_out) {
+        static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
         MU u32 count = 0;
 
         if constexpr (DEPTH == 0) {
-            if constexpr (std::is_same_v<T, Memory>) {
-                boards_out[0] = board_in.memory;
-                (boards_out[0].*hasher)(board_in.b1, board_in.b2);
-
-            } else if constexpr (std::is_same_v<T, Board>) {
+            if constexpr (std::is_same_v<T, Board>) {
                 boards_out[0] = board_in;
-                (boards_out[0].*hasher)();
+                hashes_out[0] = StateHash::computeHash(boards_out[0]);
 
             } else if constexpr (std::is_same_v<T, B1B2>) {
                 boards_out[0] = board_in.asB1B2();
+                hashes_out[0] = StateHash::computeHash(boards_out[0]);
             }
 
             boards_out.resize(1);
+            hashes_out.resize(1);
 
         } else {
             make_fat_perm_list_helper<T, 0, DEPTH, SECT_DIR, true>(
-                    board_in, boards_out, count, hasher, 0,
+                    board_in, boards_out, hashes_out, count, 0,
                     {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 0, 24);
 
             make_fat_perm_list_helper<T, 0, DEPTH, SECT_DIR, false>(
-                    board_in, boards_out, count, hasher, 0,
+                    board_in, boards_out, hashes_out, count, 0,
                     {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 24, 48);
 
             boards_out.resize(count);
+            hashes_out.resize(count);
         }
     }
 

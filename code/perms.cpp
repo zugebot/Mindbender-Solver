@@ -3,7 +3,6 @@
 #include "rotations.hpp"
 
 
-template class Perms<Memory>;
 template class Perms<Board>;
 template class Perms<B1B2>;
 
@@ -26,7 +25,10 @@ MU C typename Perms<T>::DepthMap Perms<T>::depthMap = {
 
 template<typename T>
 template<eSequenceDir SECT_DIR>
-MU void Perms<T>::reserveForDepth(MU C Board& board_in, JVec<T>& boards_out, C u32 depth) {
+MU void Perms<T>::reserveForDepth(C Board& board_in,
+                                  JVec<T>& boards_out,
+                                  JVec<u64>& hashes_out,
+                                  C u32 depth) {
     C double fraction = Board::getDuplicateEstimateAtDepth(depth);
     
     u64 allocSize;
@@ -39,7 +41,9 @@ MU void Perms<T>::reserveForDepth(MU C Board& board_in, JVec<T>& boards_out, C u
     }
 
     allocSize = static_cast<u64>(static_cast<double>(allocSize) * fraction);
+
     boards_out.reserve(allocSize);
+    hashes_out.reserve(allocSize);
 }
 
 
@@ -107,23 +111,16 @@ MU typename Perms<T>::ToDepthFuncPtr Perms<T>::FromNone::fatFuncPtrs[] = {
         &perms_detail::make_fat_perm_list<T, 5, eSequenceDir::NONE>,
 };
 
-template void Perms<Memory>::reserveForDepth<eSequenceDir::ASCENDING>(
-        C Board& board_in, JVec<Memory>& boards_out, u32 depth);
-template void Perms<Memory>::reserveForDepth<eSequenceDir::DESCENDING>(
-        C Board& board_in, JVec<Memory>& boards_out, u32 depth);
-template void Perms<Memory>::reserveForDepth<eSequenceDir::NONE>(
-        C Board& board_in, JVec<Memory>& boards_out, u32 depth);
-
 template void Perms<Board>::reserveForDepth<eSequenceDir::ASCENDING>(
-        C Board& board_in, JVec<Board>& boards_out, u32 depth);
+        C Board& board_in, JVec<Board>& boards_out, JVec<u64>& hashes_out, u32 depth);
 template void Perms<Board>::reserveForDepth<eSequenceDir::DESCENDING>(
-        C Board& board_in, JVec<Board>& boards_out, u32 depth);
+        C Board& board_in, JVec<Board>& boards_out, JVec<u64>& hashes_out, u32 depth);
 template void Perms<Board>::reserveForDepth<eSequenceDir::NONE>(
-        C Board& board_in, JVec<Board>& boards_out, u32 depth);
+        C Board& board_in, JVec<Board>& boards_out, JVec<u64>& hashes_out, u32 depth);
 
 template void Perms<B1B2>::reserveForDepth<eSequenceDir::ASCENDING>(
-        C Board& board_in, JVec<B1B2>& boards_out, u32 depth);
+        C Board& board_in, JVec<B1B2>& boards_out, JVec<u64>& hashes_out, u32 depth);
 template void Perms<B1B2>::reserveForDepth<eSequenceDir::DESCENDING>(
-        C Board& board_in, JVec<B1B2>& boards_out, u32 depth);
+        C Board& board_in, JVec<B1B2>& boards_out, JVec<u64>& hashes_out, u32 depth);
 template void Perms<B1B2>::reserveForDepth<eSequenceDir::NONE>(
-        C Board& board_in, JVec<B1B2>& boards_out, u32 depth);
+        C Board& board_in, JVec<B1B2>& boards_out, JVec<u64>& hashes_out, u32 depth);

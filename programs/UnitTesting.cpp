@@ -1,6 +1,5 @@
 #include "code/board.hpp"
 #include "code/levels.hpp"
-#include "code/memory.hpp"
 #include "code/perms.hpp"
 #include "code/rotations.hpp"
 #include "utils/timer.hpp"

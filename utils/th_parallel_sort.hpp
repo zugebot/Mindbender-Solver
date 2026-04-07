@@ -91,3 +91,56 @@ MU void parallel_sort(JVec<T>& data) {
     // The final merged chunk is the fully sorted array
     data = std::move(sorted_chunks[0]);
 }
+
+
+
+#pragma once
+
+#include <algorithm>
+#include <cstddef>
+#include <numeric>
+#include <thread>
+#include <vector>
+
+#include "utils/jvec.hpp"
+#include "utils/processor.hpp"
+
+template<int NUM_THREADS, typename T>
+MU void parallel_sort(JVec<T>& dataStates,
+                      JVec<u64>& dataHashes) {
+    (void)NUM_THREADS;
+
+    if (dataStates.size() != dataHashes.size()) {
+        throw std::runtime_error("parallel_sort got mismatched state/hash lane sizes");
+    }
+
+    if (dataStates.size() <= 1) {
+        return;
+    }
+
+    std::vector<std::size_t> order(dataStates.size());
+    std::iota(order.begin(), order.end(), 0);
+
+    std::sort(order.begin(), order.end(), [&](C std::size_t lhs, C std::size_t rhs) {
+        if (dataHashes[lhs] < dataHashes[rhs]) {
+            return true;
+        }
+        if (dataHashes[rhs] < dataHashes[lhs]) {
+            return false;
+        }
+        return dataStates[lhs] < dataStates[rhs];
+    });
+
+    JVec<T> auxStates;
+    JVec<u64> auxHashes;
+    auxStates.resize(dataStates.size());
+    auxHashes.resize(dataHashes.size());
+
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        auxStates[i] = dataStates[order[i]];
+        auxHashes[i] = dataHashes[order[i]];
+    }
+
+    dataStates.swap(auxStates);
+    dataHashes.swap(auxHashes);
+}

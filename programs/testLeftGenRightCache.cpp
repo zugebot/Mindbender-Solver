@@ -1,5 +1,4 @@
 #include "code/include.hpp"
-#include "code/board_hash_segments.hpp"
 #include "code/right_cache_index.hpp"
 
 #include "utils/get_free_memory.hpp"

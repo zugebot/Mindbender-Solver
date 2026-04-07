@@ -1,0 +1,139 @@
+MUND HD i32 getScore3(B1B2 theOther) C;
+    template<i32 MAX_DEPTH>
+    MUND HD bool getScore3Till(B1B2 theOther) C;
+    
+    
+extern template HD bool B1B2::getScore3Till<1>(B1B2 theOther) C;
+extern template HD bool B1B2::getScore3Till<2>(B1B2 theOther) C;
+extern template HD bool B1B2::getScore3Till<3>(B1B2 theOther) C;
+extern template HD bool B1B2::getScore3Till<4>(B1B2 theOther) C;
+extern template HD bool B1B2::getScore3Till<5>(B1B2 theOther) C;
+
+
+MUND HD i32 B1B2::getScore3(C B1B2 theOther) C {
+    C u64 full = buildDiffFull(*this, theOther);
+    u8 differingCells = my_popcount(full);
+
+    alignas(u64) u8 uncRows[8] = {};
+    alignas(u64) u8 uncCols[8] = {};
+    buildUncoveredCounts(full, uncRows, uncCols);
+
+    u8 lanes = 0;
+    while (differingCells > 0) {
+        C i32 promoteRowMask = (1 << uncRows[0]) | (1 << uncRows[1]) | (1 << uncRows[2])
+                               | (1 << uncRows[3]) | (1 << uncRows[4]) | (1 << uncRows[5]);
+        C u8 highestRow = 31 - my_clz(promoteRowMask);
+
+        C i32 promoteColMask = (1 << uncCols[0]) | (1 << uncCols[1]) | (1 << uncCols[2])
+                               | (1 << uncCols[3]) | (1 << uncCols[4]) | (1 << uncCols[5]);
+        C u8 highestCol = 31 - my_clz(promoteColMask);
+
+        if (highestRow == 0 && highestCol == 0) {
+            break;
+        }
+
+        if (highestRow >= highestCol) {
+            C i32 index = (uncRows[0] == highestRow) ? 0 :
+                          (uncRows[1] == highestRow) ? 1 :
+                          (uncRows[2] == highestRow) ? 2 :
+                          (uncRows[3] == highestRow) ? 3 :
+                          (uncRows[4] == highestRow) ? 4 : 5;
+
+            differingCells -= uncRows[index];
+            uncRows[index] = 0;
+
+            for (i32 j = 0; j < 6; j++) {
+                if (getColor(j, index) != theOther.getColor(j, index) && uncCols[j] > 0) {
+                    uncCols[j]--;
+                }
+            }
+        } else {
+            C i32 index = (uncCols[0] == highestCol) ? 0 :
+                          (uncCols[1] == highestCol) ? 1 :
+                          (uncCols[2] == highestCol) ? 2 :
+                          (uncCols[3] == highestCol) ? 3 :
+                          (uncCols[4] == highestCol) ? 4 : 5;
+
+            differingCells -= uncCols[index];
+            uncCols[index] = 0;
+
+            for (i32 j = 0; j < 6; j++) {
+                if (getColor(index, j) != theOther.getColor(index, j) && uncRows[j] > 0) {
+                    uncRows[j]--;
+                }
+            }
+        }
+
+        lanes++;
+    }
+
+    return lanes;
+}
+
+template<i32 MAX_DEPTH>
+MU HD bool B1B2::getScore3Till(C B1B2 theOther) C {
+    C u64 full = buildDiffFull(*this, theOther);
+    u8 diffCells = my_popcount(full);
+
+    alignas(u64) u8 uncRows[8] = {};
+    alignas(u64) u8 uncCols[8] = {};
+    buildUncoveredCounts(full, uncRows, uncCols);
+
+    for (i32 depth = 0; depth < MAX_DEPTH; depth++) {
+        C i32 promoteRowMask = (1 << uncRows[0]) | (1 << uncRows[1]) | (1 << uncRows[2])
+                               | (1 << uncRows[3]) | (1 << uncRows[4]) | (1 << uncRows[5]);
+        C u8 highestRow = 31 - my_clz(promoteRowMask);
+
+        C i32 promoteColMask = (1 << uncCols[0]) | (1 << uncCols[1]) | (1 << uncCols[2])
+                               | (1 << uncCols[3]) | (1 << uncCols[4]) | (1 << uncCols[5]);
+        C u8 highestCol = 31 - my_clz(promoteColMask);
+
+        if (highestRow == 0 && highestCol == 0) {
+            return false;
+        }
+
+        if (highestRow >= highestCol) {
+            C i32 index = (uncRows[0] == highestRow) ? 0 :
+                          (uncRows[1] == highestRow) ? 1 :
+                          (uncRows[2] == highestRow) ? 2 :
+                          (uncRows[3] == highestRow) ? 3 :
+                          (uncRows[4] == highestRow) ? 4 : 5;
+
+            diffCells -= uncRows[index];
+            uncRows[index] = 0;
+
+            for (i32 j = 0; j < 6; j++) {
+                if (getColor(j, index) != theOther.getColor(j, index) && uncCols[j] > 0) {
+                    uncCols[j]--;
+                }
+            }
+        } else {
+            C i32 index = (uncCols[0] == highestCol) ? 0 :
+                          (uncCols[1] == highestCol) ? 1 :
+                          (uncCols[2] == highestCol) ? 2 :
+                          (uncCols[3] == highestCol) ? 3 :
+                          (uncCols[4] == highestCol) ? 4 : 5;
+
+            diffCells -= uncCols[index];
+            uncCols[index] = 0;
+
+            for (i32 j = 0; j < 6; j++) {
+                if (getColor(index, j) != theOther.getColor(index, j) && uncRows[j] > 0) {
+                    uncRows[j]--;
+                }
+            }
+        }
+
+        if (diffCells == 0) {
+            return false;
+        }
+    }
+
+    return diffCells != 0;
+}
+
+template HD bool B1B2::getScore3Till<1>(B1B2 theOther) C;
+template HD bool B1B2::getScore3Till<2>(B1B2 theOther) C;
+template HD bool B1B2::getScore3Till<3>(B1B2 theOther) C;
+template HD bool B1B2::getScore3Till<4>(B1B2 theOther) C;
+template HD bool B1B2::getScore3Till<5>(B1B2 theOther) C;

@@ -12,7 +12,7 @@ namespace perm_stream_detail {
 
     template<typename T, i32 MAX_DEPTH>
     struct StreamBuildState {
-        static_assert(AllowedPermsType<T>, "T must be Memory, Board, or B1B2");
+        static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
         std::array<i32, MAX_DEPTH> dirSeq{};
         std::array<i32, MAX_DEPTH> sectSeq{};
@@ -20,12 +20,12 @@ namespace perm_stream_detail {
         std::array<u64, MAX_DEPTH> curSeq{};
         std::array<bool, MAX_DEPTH> checkRCSeq{};
         std::array<u8, MAX_DEPTH> intersectSeq{};
-        typename T::HasherPtr hasher{};
     };
 
     template<typename T>
     struct StreamChunk {
         JVec<T> data{};
+        JVec<u64> hashes{};
         u32 count = 0;
     };
 
@@ -34,35 +34,33 @@ namespace perm_stream_detail {
         if (chunk.count == 0) {
             return;
         }
-        sink(chunk.data, chunk.count);
+
+        sink(chunk.data, chunk.hashes, chunk.count);
+
+        chunk.data.resize(chunk.data.capacity());
+        chunk.hashes.resize(chunk.hashes.capacity());
         chunk.count = 0;
     }
 
     template<typename T, i32 FINAL_DEPTH, typename Sink>
     MU static void emitState(C Board& board_in,
-                             typename T::HasherPtr hasher,
-                             u64 move_prev,
+                             C u64 move_prev,
                              StreamChunk<T>& chunk,
                              Sink& sink) {
+        static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
+
         T& out = chunk.data[chunk.count];
 
-        if constexpr (std::is_same_v<T, Memory>) {
-            out = board_in.memory;
-            (out.*hasher)(board_in.b1, board_in.b2);
-            if constexpr (FINAL_DEPTH > 0) {
-                out.template setNextNMove<FINAL_DEPTH>(move_prev);
-            }
-
-        } else if constexpr (std::is_same_v<T, Board>) {
+        if constexpr (std::is_same_v<T, Board>) {
             out = board_in;
-            (out.*hasher)();
             if constexpr (FINAL_DEPTH > 0) {
                 out.memory.template setNextNMove<FINAL_DEPTH>(move_prev);
             }
-
         } else if constexpr (std::is_same_v<T, B1B2>) {
             out = board_in.asB1B2();
         }
+
+        chunk.hashes[chunk.count] = StateHash::computeHash(out);
 
         ++chunk.count;
         if (chunk.count == chunk.data.capacity()) {
@@ -100,7 +98,6 @@ namespace perm_stream_detail {
     static void stream_perm_list(
             C Board& board_in,
             StreamChunk<T>& chunk,
-            typename T::HasherPtr hasher,
             Sink& sink);
 
 } // namespace perm_stream_detail
@@ -108,7 +105,7 @@ namespace perm_stream_detail {
 
 template<typename T>
 class PermStream {
-    static_assert(AllowedPermsType<T>, "T must be Memory, Board, or B1B2");
+    static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
     template<eSequenceDir SECT_DIR, i32 DEPTH, typename Sink>
     MU static void streamDepthImpl(C Board& board_in,
@@ -121,18 +118,14 @@ class PermStream {
         perm_stream_detail::StreamChunk<T> chunk;
         chunk.data.reserve(chunkCapacity);
         chunk.data.resize(chunkCapacity);
+
+        chunk.hashes.reserve(chunkCapacity);
+        chunk.hashes.resize(chunkCapacity);
+
         chunk.count = 0;
 
-        typename T::HasherPtr hasher{};
-        if constexpr (std::is_same_v<T, Memory>) {
-            hasher = Memory::getHashFunc();
-        } else if constexpr (std::is_same_v<T, Board>) {
-            hasher = Board::getHashFunc();
-        } else if constexpr (std::is_same_v<T, B1B2>) {
-            hasher = B1B2::getHashFunc();
-        }
-
         if (board_in.getFatBool()) {
+            // I hate coding for fats
             // normal streaming only for now
             return;
         }
@@ -146,7 +139,6 @@ class PermStream {
                 SECT_DIR>(
                 board_in,
                 chunk,
-                hasher,
                 sink
         );
 
