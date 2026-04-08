@@ -36,7 +36,7 @@ namespace my_cuda {
 
     MU __device__ void R_X_X(B1B2& board, i32 idx) {
 
-        C bool is_R3_to_r5 = idx >= 15;
+        const bool is_R3_to_r5 = idx >= 15;
         R_X_X_data data = CUDA_RXX_DATA[idx - 15 * is_R3_to_r5];
 
         u64* addr = &board.b1 + is_R3_to_r5;
@@ -47,7 +47,7 @@ namespace my_cuda {
 
 
     // New R_X_X function that copies and modifies
-    MU __device__ void R_X_X_copy(C B1B2* src, B1B2* dest, u32 idx) {
+    MU __device__ void R_X_X_copy(const B1B2* src, B1B2* dest, u32 idx) {
         // Copy the source board to destination
         *dest = *src;
 
@@ -89,15 +89,15 @@ namespace my_cuda {
     };
 
     MU __device__ void C_X_X(B1B2 &board, i32 idx) {
-        C u8 mod5 = PRECOMPUTED_IDX[idx].mod5;
-        C u64 C_MASK_X = CUDA_COL_MASKS[PRECOMPUTED_IDX[idx].div5];
+        const u8 mod5 = PRECOMPUTED_IDX[idx].mod5;
+        const u64 C_MASK_X = CUDA_COL_MASKS[PRECOMPUTED_IDX[idx].div5];
 
 
-        C u64 vars[2] = {board.b1 & C_MASK_X, board.b2 & C_MASK_X};
+        const u64 vars[2] = {board.b1 & C_MASK_X, board.b2 & C_MASK_X};
 
-        C i32 idx1 = (mod5 <= 2) ? 1 : 0;
-        C u64 *ptr1 = &vars[idx1];
-        C u64 *ptr2 = &vars[1 - idx1];
+        const i32 idx1 = (mod5 <= 2) ? 1 : 0;
+        const u64 *ptr1 = &vars[idx1];
+        const u64 *ptr2 = &vars[1 - idx1];
 
         board.b1 = ((*ptr1 << CUDA_COL_OFF1[mod5] | *ptr2 >>
                                                             (CUDA_COL_OFF1 + 4)[mod5]) & C_MASK_X) | board.b1 & ~C_MASK_X;
@@ -107,7 +107,7 @@ namespace my_cuda {
 
 
     // New C_X_X function that copies and modifies
-    MU __device__ void C_X_X_copy(C B1B2* src, B1B2* dest, u32 idx) {
+    MU __device__ void C_X_X_copy(const B1B2* src, B1B2* dest, u32 idx) {
         // Copy the source board to destination
         *dest = *src;
 

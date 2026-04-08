@@ -71,7 +71,7 @@ std::vector<std::string> readFileLines(const fs::path&filepath) {
 
 int main() {
     
-    fs::path outDirectory = fs::path(R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels)");
+    fs::path outDirectory = fs::path(R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver\levels)");
     
     auto files = getTxtFiles(outDirectory);
     std::sort(files.begin(), files.end(), compareFiles);
@@ -111,7 +111,7 @@ int main() {
             for (const auto& solution : solutions) {
                 std::vector<u8> action_numbers = Memory::parseNormMoveString(solution);
                 Board toCheckBoard = startingBoard;
-                for (C u8 action_number : action_numbers) {
+                for (const u8 action_number : action_numbers) {
                     allActStructList[action_number].action(toCheckBoard);
                 }
                 if (toCheckBoard == realSolutionBoard) {
@@ -127,7 +127,7 @@ int main() {
             for (const auto& solution : solutions) {
                 std::vector<u8> action_numbers = Memory::parseFatMoveString(solution);
                 Board toCheckBoard = startingBoard;
-                for (C u8 action_number : action_numbers) {
+                for (const u8 action_number : action_numbers) {
                     allActStructList[action_number].action(toCheckBoard);
                 }
 

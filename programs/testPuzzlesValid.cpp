@@ -45,7 +45,7 @@ int main() {
             if (last_index > 99) { last_index = 0; }
             boardPair = BoardLookup::getBoardPair(puzzleStrs[last_index]);
         } else if (is_number(input)) {
-            C int num = atoi(input.c_str());
+            const int num = atoi(input.c_str());
             if (num >= 0 && num <= 99) {
                 boardPair = BoardLookup::getBoardPair(puzzleStrs[num]);
             }

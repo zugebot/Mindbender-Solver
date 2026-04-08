@@ -121,7 +121,7 @@ MU void parallel_sort(JVec<T>& dataStates,
     std::vector<std::size_t> order(dataStates.size());
     std::iota(order.begin(), order.end(), 0);
 
-    std::sort(order.begin(), order.end(), [&](C std::size_t lhs, C std::size_t rhs) {
+    std::sort(order.begin(), order.end(), [&](const std::size_t lhs, const std::size_t rhs) {
         if (dataHashes[lhs] < dataHashes[rhs]) {
             return true;
         }

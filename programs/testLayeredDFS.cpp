@@ -26,7 +26,7 @@
 #define CUDA_KERNEL_OPT(array_size, block_size) \
     (((array_size) + (block_size) - 1) / (block_size)), (block_size)
 #define CUDA_LAST_ERROR_TIME_SYNC(message) { \
-    CUDA_LAST_ERR(); C Timer sync; CUDA_DEV_SYNC(); \
+    CUDA_LAST_ERR(); const Timer sync; CUDA_DEV_SYNC(); \
     tcout << (message) << sync.getSeconds() << "\n"; }
 
 
@@ -76,8 +76,8 @@ __global__ void kernelGenBoardsFromOffsets(
         Board* inPtr,
         Board* outPtr,
 
-        C u32* scanSizes,
-        C u32* scanOffsets)
+        const u32* scanSizes,
+        const u32* scanOffsets)
 {
     u32 globalThreadId = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -115,7 +115,7 @@ __global__ void kernelGenBoardsFromOffsets(
 int main() {
     tcout << "entered 'main()'.\n";
     // 13-1
-    C Board board = BoardLookup::getBoardPair("4-4")->getStartState();
+    const Board board = BoardLookup::getBoardPair("4-4")->getStartState();
     Board solve = board;
 
     solve.doMoves({R41, C55, R22, R15 /*C34, R22, R44, C55*/});

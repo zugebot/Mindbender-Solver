@@ -21,7 +21,7 @@ namespace my_cuda {
     MU __constant__ extern u64 CUDA_ROW_MASKS[3];
     MU __constant__ extern R_X_X_data CUDA_RXX_DATA[15];
     MU __device__ void R_X_X(B1B2& board, int idx);
-    MU __device__ void R_X_X_copy(C B1B2* src, B1B2* dest, u32 idx);
+    MU __device__ void R_X_X_copy(const B1B2* src, B1B2* dest, u32 idx);
 
     // C_X_X SECTION
     MU __constant__ extern u64 CUDA_COL_MASKS[6];
@@ -29,6 +29,6 @@ namespace my_cuda {
     struct PrecomputedIdx { u8 div5, mod5; };
     MU __constant__ extern PrecomputedIdx PRECOMPUTED_IDX[30];
     MU __device__ void C_X_X(B1B2& board, int idx);
-    MU __device__ void C_X_X_copy(C B1B2* src, B1B2* dest, u32 idx);
+    MU __device__ void C_X_X_copy(const B1B2* src, B1B2* dest, u32 idx);
 }
 #endif

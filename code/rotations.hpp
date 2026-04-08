@@ -90,8 +90,8 @@ struct ActStruct {
 
     MU ActStruct() = default;
 
-    MU ActStruct(C Action theAction, C u8 theIndex, C u8 theIsColNotFat,
-                 C u8 theTillNext, C u8 theTillLast, C char* theName)
+    MU ActStruct(const Action theAction, const u8 theIndex, const u8 theIsColNotFat,
+                 const u8 theTillNext, const u8 theTillLast, const char* theName)
         : action(theAction),
           index(theIndex),
           isColNotFat(theIsColNotFat),
@@ -120,11 +120,11 @@ inline constexpr u32 FAT_ACTION_INDEX_COLS = 48;
 MU extern ActStruct allActStructList[TOTAL_ACT_STRUCT_COUNT];
 MU extern u8 fatActionsIndexes[FAT_ACTION_INDEX_ROWS][FAT_ACTION_INDEX_COLS];
 
-extern void applyMoves(Board& board, C Memory& memory);
-extern void applyFatMoves(Board& board, C Memory& memory);
+extern void applyMoves(Board& board, const Memory& memory);
+extern void applyFatMoves(Board& board, const Memory& memory);
 
-extern Board makeBoardWithMoves(C Board& board, C Memory& memory);
-extern Board makeBoardWithFatMoves(C Board& board, C Memory& memory);
+extern Board makeBoardWithMoves(const Board& board, const Memory& memory);
+extern Board makeBoardWithFatMoves(const Board& board, const Memory& memory);
 
 
 

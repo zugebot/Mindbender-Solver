@@ -24,7 +24,7 @@ class BoardSorter {
     enum COLORS { C2 = 2, C3 = 3 };
 
     MU static void normalizeEqualHashRuns(JVec<T>& boards,
-                                          C JVec<u64>& hashes) {
+                                          const JVec<u64>& hashes) {
         if (boards.size() <= 1) {
             return;
         }
@@ -32,7 +32,7 @@ class BoardSorter {
         std::size_t begin = 0;
         while (begin < boards.size()) {
             std::size_t end = begin + 1;
-            C u64 hash = hashes[begin];
+            const u64 hash = hashes[begin];
 
             while (end < boards.size() && hashes[end] == hash) {
                 ++end;
@@ -48,7 +48,7 @@ class BoardSorter {
 
     MU void sortByHashThenStateWithAux(JVec<T>& boards,
                                        JVec<u64>& hashes,
-                                       C u32 depth) {
+                                       const u32 depth) {
         ensureAux(depth, boards.size());
 
         std::vector<std::size_t> order(boards.size());
@@ -56,7 +56,7 @@ class BoardSorter {
             order[i] = i;
         }
 
-        std::sort(order.begin(), order.end(), [&](C std::size_t lhs, C std::size_t rhs) {
+        std::sort(order.begin(), order.end(), [&](const std::size_t lhs, const std::size_t rhs) {
             if (hashes[lhs] < hashes[rhs]) {
                 return true;
             }
@@ -79,7 +79,7 @@ class BoardSorter {
     }
 
 public:
-    MU void resize(C u32 depth, C size_t size) {
+    MU void resize(const u32 depth, const size_t size) {
         if (auxBoards_.size() < depth + 1) {
             auxBoards_.resize(depth + 1);
             auxHashes_.resize(depth + 1);
@@ -89,7 +89,7 @@ public:
         auxHashes_[depth].resize(size);
     }
 
-    MU void ensureAux(C u32 depth, C u64 size) {
+    MU void ensureAux(const u32 depth, const u64 size) {
         if (auxBoards_.size() < depth + 1) {
             auxBoards_.resize(depth + 1);
             auxHashes_.resize(depth + 1);
@@ -107,8 +107,8 @@ public:
 
     MU void sortBoards(JVec<T>& boards,
                        JVec<u64>& hashes,
-                       C u32 depth,
-                       C u32 colorCount) {
+                       const u32 depth,
+                       const u32 colorCount) {
         if (boards.size() != hashes.size()) {
             throw std::runtime_error("BoardSorter::sortBoards got mismatched board/hash lane sizes");
         }

@@ -62,7 +62,7 @@ void create6Depth(const Board& board, std::vector<Board>& boards_buffer, const s
 
 int main() {
 
-    const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
+    const std::string outDirectory = R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     const auto pair = BoardLookup::getBoardPair("7-1");
 
     tcout << pair->toString() << std::endl;
@@ -71,8 +71,8 @@ int main() {
 
 
     std::vector<Board> boards_buffer(BUFFER_SIZE);
-    C u32 board_depth = 6;
-    C u32 solve_depth = 5;
+    const u32 board_depth = 6;
+    const u32 solve_depth = 5;
 
     const std::string path = "E:\\" + pair->getName() + "_b\\";
     if (fs::create_directory(path)) {

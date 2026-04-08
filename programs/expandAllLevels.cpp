@@ -18,12 +18,12 @@
 // Hardcoded directories
 // -----------------------------------------------------------------------------
 static const std::vector<fs::path> INPUT_DIRS = {
-        R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels)",
-        R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels_all)"
+        R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver\levels)",
+        R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver\levels_all)"
 };
 
 static const fs::path OUTPUT_DIR =
-        R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels_exp)";
+        R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver\levels_exp)";
 
 static constexpr int MAX_INPUT_FILE_M = 10000;
 

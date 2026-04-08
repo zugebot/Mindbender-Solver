@@ -66,12 +66,12 @@ public:
         trueColors = temp.setStateAndRetColors(const_cast<u8*>(endCells));
     }
 
-    MUND Board getStartState() C { return board; }
-    MUND Board getEndState() C { return solve; }
-    MUND std::string getName() C { return name; }
-    MUND i8 getTrueColor(C u32 color) C { return trueColors[color]; }
-    MUND std::string toString() C { return board.toString(solve, {true, trueColors}); }
-    MUND std::string toStringReversed() C { return solve.toString(board, {true, trueColors}); }
+    MUND Board getStartState() const { return board; }
+    MUND Board getEndState() const { return solve; }
+    MUND std::string getName() const { return name; }
+    MUND i8 getTrueColor(const u32 color) const { return trueColors[color]; }
+    MUND std::string toString() const { return board.toString(solve, {true, trueColors}); }
+    MUND std::string toStringReversed() const { return solve.toString(board, {true, trueColors}); }
 };
 
 class BoardLookup {

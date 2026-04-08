@@ -7,14 +7,14 @@ namespace perms_detail {
              i32 CUR_DEPTH, i32 MAX_DEPTH,
              eSequenceDir SECT_DIR, bool DIRECTION>
     static void make_fat_perm_list_helper(
-            C Board& board,
+            const Board& board,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out,
             u32& count,
-            C u64 move,
-            C ActStruct& lastActStruct,
-            C u8 startIndex,
-            C u8 endIndex) {
+            const u64 move,
+            const ActStruct& lastActStruct,
+            const u8 startIndex,
+            const u8 endIndex) {
         static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
         MU bool lastActIsRow = false;
@@ -26,10 +26,10 @@ namespace perms_detail {
             lastActIsCol = (lastActStruct.isColNotFat & 1) != 0;
         }
 
-        C u8* funcIndexes = fatActionsIndexes[board.getFatXY()];
+        const u8* funcIndexes = fatActionsIndexes[board.getFatXY()];
 
         for (u64 actn_i = startIndex; actn_i < endIndex; ++actn_i) {
-            C ActStruct& actStruct = allActStructList[funcIndexes[actn_i]];
+            const ActStruct& actStruct = allActStructList[funcIndexes[actn_i]];
             Board board_next = board;
             actStruct.action(board_next);
 
@@ -68,7 +68,7 @@ namespace perms_detail {
             }
 
             if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
-                C u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
+                const u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
 
                 if constexpr (std::is_same_v<T, Board>) {
                     boards_out[count] = board_next;
@@ -96,7 +96,7 @@ namespace perms_detail {
                     nextEnd = 24;
                 }
 
-                C u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
+                const u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
 
                 make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, SECT_DIR, true>(
                         board_next, boards_out, hashes_out, count, move_next, actStruct, nextStart, nextEnd);
@@ -118,7 +118,7 @@ namespace perms_detail {
                     nextEnd = 48;
                 }
 
-                C u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
+                const u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
 
                 make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, SECT_DIR, true>(
                         board_next, boards_out, hashes_out, count, move_next, actStruct, 0, 24);
@@ -132,7 +132,7 @@ namespace perms_detail {
     template<typename T,
              i32 DEPTH, eSequenceDir SECT_DIR>
     void make_fat_perm_list(
-            C Board& board_in,
+            const Board& board_in,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out) {
         static_assert(AllowedPermsType<T>, "T must be Board or B1B2");

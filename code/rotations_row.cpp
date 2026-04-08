@@ -84,15 +84,15 @@ static constexpr u64 MASKS_RX_BXSX_PAIR[50] = {
 };
 
 
-HD NOINLINE void funcB1(B1B2& board, C u8* masks) {
-    C u64* BXSXPair = &MASKS_RX_BXSX_PAIR[masks[1]];
+HD NOINLINE void funcB1(B1B2& board, const u8* masks) {
+    const u64* BXSXPair = &MASKS_RX_BXSX_PAIR[masks[1]];
     board.b1 = board.b1 & MASKS_RX_NT[masks[0]]
                | (board.b1 & *BXSXPair) >>  masks[2]
                | (board.b1 & *(BXSXPair + 1)) << (18 - masks[2]);
 }
 
-HD NOINLINE void funcB2(B1B2& board, C u8* masks) {
-    C u64* BXSXPair = &MASKS_RX_BXSX_PAIR[masks[1]];
+HD NOINLINE void funcB2(B1B2& board, const u8* masks) {
+    const u64* BXSXPair = &MASKS_RX_BXSX_PAIR[masks[1]];
     board.b2 = board.b2 & MASKS_RX_NT[masks[0]]
                | (board.b2 & *BXSXPair) >>  masks[2]
                | (board.b2 & *(BXSXPair + 1)) << (18 - masks[2]);
@@ -197,11 +197,11 @@ PERM_MACRO(R455) { board.addFatX(5); funcB2(board, &RXXX_MASKS[72]); }
 #else
 
 FORCEINLINE HD u64 rotateRowBits(
-        C u64 value,
-        C u64 notTouchedMask,
-        C u64 bigMask,
-        C u64 smallMask,
-        C u64 shiftRight) {
+        const u64 value,
+        const u64 notTouchedMask,
+        const u64 bigMask,
+        const u64 smallMask,
+        const u64 shiftRight) {
     return (value & notTouchedMask)
            | ((value & bigMask) >> shiftRight)
            | ((value & smallMask) << (18 - shiftRight));
@@ -209,40 +209,40 @@ FORCEINLINE HD u64 rotateRowBits(
 
 FORCEINLINE HD void rotateUpperRow(
         B1B2& board,
-        C u64 notTouchedMask,
-        C u64 bigMask,
-        C u64 smallMask,
-        C u64 shiftRight) {
+        const u64 notTouchedMask,
+        const u64 bigMask,
+        const u64 smallMask,
+        const u64 shiftRight) {
     board.b1 = rotateRowBits(board.b1, notTouchedMask, bigMask, smallMask, shiftRight);
 }
 
 FORCEINLINE HD void rotateLowerRow(
         B1B2& board,
-        C u64 notTouchedMask,
-        C u64 bigMask,
-        C u64 smallMask,
-        C u64 shiftRight) {
+        const u64 notTouchedMask,
+        const u64 bigMask,
+        const u64 smallMask,
+        const u64 shiftRight) {
     board.b2 = rotateRowBits(board.b2, notTouchedMask, bigMask, smallMask, shiftRight);
 }
 
 FORCEINLINE HD void rotateFatUpperRows(
         B1B2& board,
-        C u64 notTouchedMask,
-        C u64 bigMask,
-        C u64 smallMask,
-        C u64 shiftRight,
-        C u64 fatDeltaX) {
+        const u64 notTouchedMask,
+        const u64 bigMask,
+        const u64 smallMask,
+        const u64 shiftRight,
+        const u64 fatDeltaX) {
     board.b1 = rotateRowBits(board.b1, notTouchedMask, bigMask, smallMask, shiftRight);
     board.addFatX(fatDeltaX);
 }
 
 FORCEINLINE HD void rotateFatLowerRows(
         B1B2& board,
-        C u64 notTouchedMask,
-        C u64 bigMask,
-        C u64 smallMask,
-        C u64 shiftRight,
-        C u64 fatDeltaX) {
+        const u64 notTouchedMask,
+        const u64 bigMask,
+        const u64 smallMask,
+        const u64 shiftRight,
+        const u64 fatDeltaX) {
     board.b2 = rotateRowBits(board.b2, notTouchedMask, bigMask, smallMask, shiftRight);
     board.addFatX(fatDeltaX);
 }
@@ -251,7 +251,7 @@ FORCEINLINE HD void rotateFatSplitRows(
         B1B2& board,
         Action upperAction,
         Action lowerAction,
-        C u64 fatDeltaX) {
+        const u64 fatDeltaX) {
     upperAction(board);
     lowerAction(board);
     board.addFatX(fatDeltaX);

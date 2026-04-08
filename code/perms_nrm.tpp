@@ -7,11 +7,11 @@ namespace perms_detail {
              i32 CUR_DEPTH, i32 MAX_DEPTH,
              bool CHECK_CROSS, bool CHECK_SIM>
     void make_perm_list_inner(
-            C Board& board_in,
+            const Board& board_in,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out,
             PermBuildState<T, MAX_DEPTH>& state,
-            C u64 move_prev,
+            const u64 move_prev,
             i32& count) {
         static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
@@ -54,7 +54,7 @@ namespace perms_detail {
                 }
             }
 
-            C i32 base = state.baseSeq[CUR_DEPTH];
+            const i32 base = state.baseSeq[CUR_DEPTH];
             u64& cur = state.curSeq[CUR_DEPTH];
 
             for (cur = base; cur < base + 5; ++cur) {
@@ -77,7 +77,7 @@ namespace perms_detail {
                     }
                 }
 
-                C u64 move_next = move_prev | (cur << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
+                const u64 move_next = move_prev | (cur << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
 
                 // Recursive call to the next depth
                 make_perm_list_inner<T, CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS, CHECK_SIM>(
@@ -97,7 +97,7 @@ namespace perms_detail {
              bool CHECK_CROSS, bool CHECK_SIM,
              bool CHANGE_SECT_START, eSequenceDir SECT_DIR>
     void make_perm_list_outer(
-            C Board& board_in,
+            const Board& board_in,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out,
             PermBuildState<T, MAX_DEPTH>& state,
@@ -126,7 +126,7 @@ namespace perms_detail {
                         state.baseSeq[CUR_DEPTH] = (dir << 5) + sect * 5;
 
                         if constexpr (CUR_DEPTH > 0) {
-                            C i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
+                            const i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
                             state.checkRCSeq[CUR_DEPTH] = prev_dir != dir && prev_dir != 0;
                         }
 
@@ -158,7 +158,7 @@ namespace perms_detail {
                         state.baseSeq[CUR_DEPTH] = (dir << 5) + sect * 5;
 
                         if constexpr (CUR_DEPTH > 0) {
-                            C i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
+                            const i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
                             state.checkRCSeq[CUR_DEPTH] = prev_dir != dir && prev_dir != 0;
                         }
 
@@ -190,7 +190,7 @@ namespace perms_detail {
                         state.baseSeq[CUR_DEPTH] = (dir << 5) + sect * 5;
 
                         if constexpr (CUR_DEPTH > 0) {
-                            C i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
+                            const i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
                             state.checkRCSeq[CUR_DEPTH] = prev_dir != dir && prev_dir != 0;
                         }
 
@@ -213,7 +213,7 @@ namespace perms_detail {
              bool CHECK_CROSS, bool CHECK_SIM,
              bool CHANGE_SECT_START, eSequenceDir SECT_DIR>
     void make_perm_list(
-            C Board& board_in,
+            const Board& board_in,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out) {
         static_assert(AllowedPermsType<T>, "T must be Board or B1B2");

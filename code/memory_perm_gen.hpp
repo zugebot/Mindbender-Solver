@@ -21,7 +21,7 @@ struct MemoryPermGenPair {
 
     MemoryPermGenPair() = default;
 
-    MemoryPermGenPair(C u32 theStart, C u32 theLength)
+    MemoryPermGenPair(const u32 theStart, const u32 theLength)
         : start(theStart), end(theStart + theLength) {}
 };
 
@@ -33,8 +33,8 @@ public:
     std::vector<std::vector<u8>> myOutput{};
 
     void allPermutations(
-            C std::vector<u8>& toBePermuted,
-            C std::vector<MemoryPermGenPair>& thePairs) {
+            const std::vector<u8>& toBePermuted,
+            const std::vector<MemoryPermGenPair>& thePairs) {
         myToBePermuted = toBePermuted;
         myPairs = thePairs;
         myOutput.clear();
@@ -51,7 +51,7 @@ public:
         tcout << "\n";
 
         for (i32 index = 0; index < static_cast<i32>(myOutput.size()); ++index) {
-            C std::vector<u8>& theVector = myOutput[index];
+            const std::vector<u8>& theVector = myOutput[index];
 
             tcout << std::setw(3) << index + 1 << ": { ";
             for (i32 i = 0; i < static_cast<i32>(theVector.size()); ++i) {
@@ -66,8 +66,8 @@ public:
     }
 
 private:
-    void allPermutations(C u32 nextIndex, C u32 pairIndex) {
-        C MemoryPermGenPair& pair = myPairs[pairIndex];
+    void allPermutations(const u32 nextIndex, const u32 pairIndex) {
+        const MemoryPermGenPair& pair = myPairs[pairIndex];
 
         if (nextIndex == pair.end) {
             if (pairIndex + 1 == myPairs.size()) {
@@ -86,17 +86,17 @@ private:
     }
 };
 
-MUND static char getMoveDirection(C u8 action) {
+MUND static char getMoveDirection(const u8 action) {
     return allActStructList[action].name[0];
 }
 
-MUND static std::string moveToDirectString(C u8 move) {
+MUND static std::string moveToDirectString(const u8 move) {
     char temp[5] = {};
     std::memcpy(temp, allActStructList[move].name.data(), 4);
     return temp;
 }
 
-MUND static std::string moveVectorToDirectString(C std::vector<u8>& moves) {
+MUND static std::string moveVectorToDirectString(const std::vector<u8>& moves) {
     if (moves.empty()) {
         return "";
     }
@@ -115,7 +115,7 @@ MUND static std::string moveVectorToDirectString(C std::vector<u8>& moves) {
 }
 
 MU static std::vector<MemoryPermGenPair> buildMemoryPermutationPairs(
-        C std::vector<u8>& theMemory) {
+        const std::vector<u8>& theMemory) {
     std::vector<MemoryPermGenPair> pairs;
 
     if (theMemory.empty()) {
@@ -127,7 +127,7 @@ MU static std::vector<MemoryPermGenPair> buildMemoryPermutationPairs(
     char currentDir = getMoveDirection(theMemory[0]);
 
     for (u32 i = 1; i < static_cast<u32>(theMemory.size()); ++i) {
-        C char thisDir = getMoveDirection(theMemory[i]);
+        const char thisDir = getMoveDirection(theMemory[i]);
 
         if (thisDir == currentDir) {
             ++groupLength;
@@ -149,8 +149,8 @@ MU static std::vector<MemoryPermGenPair> buildMemoryPermutationPairs(
 }
 
 MU static std::vector<std::vector<u8>> createMemoryPermutations(
-        C std::vector<u8>& theMemory) {
-    C std::vector<MemoryPermGenPair> pairs = buildMemoryPermutationPairs(theMemory);
+        const std::vector<u8>& theMemory) {
+    const std::vector<MemoryPermGenPair> pairs = buildMemoryPermutationPairs(theMemory);
 
     MemoryPermGen gen;
     gen.allPermutations(theMemory, pairs);
@@ -161,7 +161,7 @@ MU static std::vector<std::vector<u8>> createMemoryPermutations(
 // Checked semantic expansion
 // ============================================================
 
-MUND static std::string encodeMoveVector(C std::vector<u8>& moves) {
+MUND static std::string encodeMoveVector(const std::vector<u8>& moves) {
     std::string out;
     out.reserve(moves.size() + 1);
 
@@ -174,9 +174,9 @@ MUND static std::string encodeMoveVector(C std::vector<u8>& moves) {
 }
 
 MUND static bool moveVectorSolvesBoard(
-        C Board& start,
-        C Board& goal,
-        C std::vector<u8>& moves) {
+        const Board& start,
+        const Board& goal,
+        const std::vector<u8>& moves) {
     Board temp = start;
     for (u8 move : moves) {
         allActStructList[move].action(temp);
@@ -185,9 +185,9 @@ MUND static bool moveVectorSolvesBoard(
 }
 
 MUND static bool moveVectorSolvesBoardNoneLegal(
-        C Board& start,
-        C Board& goal,
-        C std::vector<u8>& moves) {
+        const Board& start,
+        const Board& goal,
+        const std::vector<u8>& moves) {
     Board temp = start;
 
     for (u8 move : moves) {
@@ -205,8 +205,8 @@ MUND static bool moveVectorSolvesBoardNoneLegal(
 }
 
 MU static std::vector<Board> buildPrefixStates(
-        C Board& start,
-        C std::vector<u8>& moves) {
+        const Board& start,
+        const std::vector<u8>& moves) {
     std::vector<Board> states;
     states.resize(moves.size() + 1);
     states[0] = start;
@@ -219,7 +219,7 @@ MU static std::vector<Board> buildPrefixStates(
     return states;
 }
 
-MUND static C std::vector<u8>& getNormalMovesForDirection(C char dir) {
+MUND static const std::vector<u8>& getNormalMovesForDirection(const char dir) {
     static const std::vector<u8> rowMoves = [] {
         std::vector<u8> out;
         out.reserve(NORMAL_ROW_MOVE_COUNT);
@@ -242,8 +242,8 @@ MUND static C std::vector<u8>& getNormalMovesForDirection(C char dir) {
 }
 
 MU static std::vector<std::vector<u8>> generateReverseCrossCandidates(
-        C Board& start,
-        C std::vector<u8>& moves) {
+        const Board& start,
+        const std::vector<u8>& moves) {
     std::vector<std::vector<u8>> out;
 
     if (start.getFatBool()) {
@@ -254,23 +254,23 @@ MU static std::vector<std::vector<u8>> generateReverseCrossCandidates(
         return out;
     }
 
-    C std::vector<Board> prefixStates = buildPrefixStates(start, moves);
+    const std::vector<Board> prefixStates = buildPrefixStates(start, moves);
 
     for (u32 i = 0; i + 1 < static_cast<u32>(moves.size()); ++i) {
-        C u8 firstMove = moves[i];
-        C u8 secondMove = moves[i + 1];
-        C char firstDir = getMoveDirection(firstMove);
-        C char secondDir = getMoveDirection(secondMove);
+        const u8 firstMove = moves[i];
+        const u8 secondMove = moves[i + 1];
+        const char firstDir = getMoveDirection(firstMove);
+        const char secondDir = getMoveDirection(secondMove);
 
         if (firstDir == secondDir) {
             continue;
         }
 
-        C Board& beforePair = prefixStates[i];
-        C Board& afterPair = prefixStates[i + 2];
+        const Board& beforePair = prefixStates[i];
+        const Board& afterPair = prefixStates[i + 2];
 
-        C std::vector<u8>& swappedFirstDirMoves = getNormalMovesForDirection(secondDir);
-        C std::vector<u8>& swappedSecondDirMoves = getNormalMovesForDirection(firstDir);
+        const std::vector<u8>& swappedFirstDirMoves = getNormalMovesForDirection(secondDir);
+        const std::vector<u8>& swappedSecondDirMoves = getNormalMovesForDirection(firstDir);
 
         for (u8 replacementFirst : swappedFirstDirMoves) {
             Board temp = beforePair;
@@ -299,19 +299,19 @@ MU static std::vector<std::vector<u8>> generateReverseCrossCandidates(
 }
 
 MU static std::vector<std::vector<u8>> createMemoryPermutationsChecked(
-        C Board& start,
-        C Board& goal,
-        C std::vector<u8>& theMemory) {
+        const Board& start,
+        const Board& goal,
+        const std::vector<u8>& theMemory) {
     std::vector<std::vector<u8>> result;
     std::unordered_set<std::string> seen;
     std::deque<std::vector<u8>> work;
 
-    auto enqueueIfValid = [&](C std::vector<u8>& candidate) {
+    auto enqueueIfValid = [&](const std::vector<u8>& candidate) {
         if (!moveVectorSolvesBoardNoneLegal(start, goal, candidate)) {
             return;
         }
 
-        C std::string key = encodeMoveVector(candidate);
+        const std::string key = encodeMoveVector(candidate);
         if (seen.insert(key).second) {
             work.push_back(candidate);
         }
@@ -319,8 +319,8 @@ MU static std::vector<std::vector<u8>> createMemoryPermutationsChecked(
 
     enqueueIfValid(theMemory);
 
-    C std::vector<std::vector<u8>> initialPerms = createMemoryPermutations(theMemory);
-    for (C auto& perm : initialPerms) {
+    const std::vector<std::vector<u8>> initialPerms = createMemoryPermutations(theMemory);
+    for (const auto& perm : initialPerms) {
         enqueueIfValid(perm);
     }
 
@@ -330,19 +330,19 @@ MU static std::vector<std::vector<u8>> createMemoryPermutationsChecked(
 
         result.push_back(current);
 
-        C std::vector<std::vector<u8>> sameDirPerms = createMemoryPermutations(current);
-        for (C auto& perm : sameDirPerms) {
+        const std::vector<std::vector<u8>> sameDirPerms = createMemoryPermutations(current);
+        for (const auto& perm : sameDirPerms) {
             enqueueIfValid(perm);
         }
 
-        C std::vector<std::vector<u8>> reverseCrossPerms =
+        const std::vector<std::vector<u8>> reverseCrossPerms =
                 generateReverseCrossCandidates(start, current);
-        for (C auto& candidate : reverseCrossPerms) {
+        for (const auto& candidate : reverseCrossPerms) {
             enqueueIfValid(candidate);
         }
     }
 
-    std::sort(result.begin(), result.end(), [](C std::vector<u8>& a, C std::vector<u8>& b) {
+    std::sort(result.begin(), result.end(), [](const std::vector<u8>& a, const std::vector<u8>& b) {
         return moveVectorToDirectString(a) < moveVectorToDirectString(b);
     });
 
@@ -350,15 +350,15 @@ MU static std::vector<std::vector<u8>> createMemoryPermutationsChecked(
 }
 
 MU static std::vector<std::string> createMemoryPermutationStringsChecked(
-        C Board& start,
-        C Board& goal,
-        C std::vector<u8>& theMemory) {
+        const Board& start,
+        const Board& goal,
+        const std::vector<u8>& theMemory) {
     std::vector<std::string> out;
-    C std::vector<std::vector<u8>> perms =
+    const std::vector<std::vector<u8>> perms =
             createMemoryPermutationsChecked(start, goal, theMemory);
 
     out.reserve(perms.size());
-    for (C auto& perm : perms) {
+    for (const auto& perm : perms) {
         out.push_back(moveVectorToDirectString(perm));
     }
 

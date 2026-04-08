@@ -43,7 +43,7 @@ std::vector<std::pair<Board *, Board *>> intersection(std::vector<Board>& boards
 }
 
 
-auto BOARD_SORTER = [](C Board &a, C Board &b) { return a.getHash() < b.getHash(); };
+auto BOARD_SORTER = [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); };
 
 
 
@@ -117,7 +117,7 @@ tcout << board2.toString() << std::endl;
 */
 
     /*
-std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
+std::string outDirectory = R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver)";
 auto pair = BoardLookup::getBoardPair("9-1");
 Board board1 = pair->getInitialState();
 Board board2 = pair->getSolutionState();
@@ -134,8 +134,8 @@ std::vector<Board> boards2 = makeFatPermutationListFuncs[4](board2, 4);
 
 tcout << "did perms" << std::endl;
 
-std::sort(boards1.begin(), boards1.end(), [](C Board &a, C Board &b) { return a.getHash() < b.getHash(); });
-std::sort(boards2.begin(), boards2.end(), [](C Board &a, C Board &b) { return a.getHash() < b.getHash(); });
+std::sort(boards1.begin(), boards1.end(), [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); });
+std::sort(boards2.begin(), boards2.end(), [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); });
 
 tcout << "did sorting" << std::endl;
 
@@ -306,7 +306,7 @@ int main() {
     std::vector<Board> boards_depth_3 = makePermutationListFuncs[3](board);
     std::vector<Board> boards_depth_4 = makePermutationListFuncs[4](board);
     bool found1 = false;
-    for (C auto& iterBoard : boards_depth_4) {
+    for (const auto& iterBoard : boards_depth_4) {
         if (iterBoard.getHash() == board_left.getHash()) {
             found1 = true;
         }
@@ -327,7 +327,7 @@ int main() {
     std::vector<Board> solves_depth_3 = makePermutationListFuncs[3](solve);
     std::vector<Board> solves_depth_4 = makePermutationListFuncs[4](solve);
     bool found2 = false;
-    for (C auto& iterBoard : solves_depth_3) {
+    for (const auto& iterBoard : solves_depth_3) {
         std::string str = iterBoard.memory.toString();
         if (str == "Move[11, 41, 48]") {
             volatile int x = 0;

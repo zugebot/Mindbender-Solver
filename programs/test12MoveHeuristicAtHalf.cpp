@@ -20,7 +20,7 @@ public:
     u64 myDepthsCount[CLASS_MAX_DEPTH + 1] = {};
 
 
-    BoardDFS(C Board& board, C Board& solve) :
+    BoardDFS(const Board& board, const Board& solve) :
     myStart(static_cast<B1B2>(board)),
     myEnd(static_cast<B1B2>(solve)),
     myCount(0),
@@ -28,7 +28,7 @@ public:
 
 
     double recursive() {
-        C Timer timer;
+        const Timer timer;
         recursive_helper<0, true>(0);
         return timer.getSeconds();
     }
@@ -36,16 +36,16 @@ public:
 
 private:
     template<u32 CUR_DEPTH, bool ROW_TRUE>
-    void recursive_helper(C int theNext) {
+    void recursive_helper(const int theNext) {
         ++myDepthsCount[CUR_DEPTH];
         ++myStatesTraversed;
 
-        C B1B2 * stack_prev = &myArray[CUR_DEPTH];
+        const B1B2 * stack_prev = &myArray[CUR_DEPTH];
         B1B2 * stack_next = &myArray[CUR_DEPTH + 1];
         // static constexpr int DIFF_DEPTH = MAX_DEPTH - CUR_DEPTH;
 
         if constexpr (CUR_DEPTH == CLASS_MAX_DEPTH) {
-            /* C i32 heur = theBoard.getScore3(THE_STATE.end);
+            /* const i32 heur = theBoard.getScore3(THE_STATE.end);
             if (heur < lowestHueuristic) {
                 lowestHueuristic = heur;
                 worstBoard = theBoard; } */
@@ -94,14 +94,14 @@ private:
 
 
 int main() {
-    C Board board = BoardLookup::getBoardPair("9-2")->getStartState();
-    C Board solve = BoardLookup::getBoardPair("9-2")->getEndState();
+    const Board board = BoardLookup::getBoardPair("9-2")->getStartState();
+    const Board solve = BoardLookup::getBoardPair("9-2")->getEndState();
 
     tcout << BoardLookup::getBoardPair("9-2")->toString() << std::endl;
 
     static constexpr u32 DEPTH = 5;
     BoardDFS<DEPTH> dfs(board, solve);
-    C double time = dfs.recursive();
+    const double time = dfs.recursive();
 
     tcout << "Time: " << time << std::endl;
     tcout << "Depth: " << DEPTH << std::endl;

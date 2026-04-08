@@ -57,7 +57,7 @@
 #define MU [[maybe_unused]]
 #define MUND [[maybe_unused]] [[nodiscard]]
 
-#define C const
+#define const const
 
 using i8  = std::int8_t;
 using i16 = std::int16_t;

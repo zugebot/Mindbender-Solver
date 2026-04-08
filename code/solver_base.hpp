@@ -37,7 +37,7 @@ protected:
 
     BoardSorter<Board> boardSorter;
 
-    C BoardPair* pair;
+    const BoardPair* pair;
     Board board1;
     Board board2;
     bool hasFat;
@@ -48,7 +48,7 @@ protected:
     u32 depthGuessMax{};
 
 public:
-    MU explicit BoardSolverBase(C BoardPair* pairIn) {
+    MU explicit BoardSolverBase(const BoardPair* pairIn) {
         pair = pairIn;
         board1 = pair->getStartState();
         board2 = pair->getEndState();
@@ -57,7 +57,7 @@ public:
         StateHash::refreshHashFunc(board1);
     }
 
-    MU void setDepthParams(C u32 depthSideMaxIn, C u32 depthGuessMaxIn, C u32 depthTotalMaxIn) {
+    MU void setDepthParams(const u32 depthSideMaxIn, const u32 depthGuessMaxIn, const u32 depthTotalMaxIn) {
         depthSideMax = depthSideMaxIn;
         depthTotalMax = depthTotalMaxIn;
         depthGuessMax = depthGuessMaxIn;
@@ -69,12 +69,12 @@ public:
         board2HashesTable.resize(depthSideMax + 1);
     }
 
-    MU void setWriteDirectory(C std::string directory) {
+    MU void setWriteDirectory(const std::string directory) {
         outDirectory = directory;
     }
 
-    MU void preAllocateMemory(C u32 maxDepth = MAX_DEPTH) {
-        C u32 highestDepth = std::max(1U, std::min(maxDepth, depthTotalMax + 1) / 2);
+    MU void preAllocateMemory(const u32 maxDepth = MAX_DEPTH) {
+        const u32 highestDepth = std::max(1U, std::min(maxDepth, depthTotalMax + 1) / 2);
 
         Perms<Board>::reserveForDepth<eSequenceDir::ASCENDING>(
                 board1,
@@ -138,26 +138,26 @@ public:
         }
     }
 
-    MUND std::string getMemorySize() C {
+    MUND std::string getMemorySize() const {
         u64 allocMemory = 0;
 
-        for (C auto& boardTable : board1Table) {
+        for (const auto& boardTable : board1Table) {
             if (!boardTable.empty()) {
                 allocMemory += boardTable.size() * sizeof(boardTable[0]);
             }
         }
-        for (C auto& hashTable : board1HashesTable) {
+        for (const auto& hashTable : board1HashesTable) {
             if (!hashTable.empty()) {
                 allocMemory += hashTable.size() * sizeof(hashTable[0]);
             }
         }
 
-        for (C auto& boardTable : board2Table) {
+        for (const auto& boardTable : board2Table) {
             if (!boardTable.empty()) {
                 allocMemory += boardTable.size() * sizeof(boardTable[0]);
             }
         }
-        for (C auto& hashTable : board2HashesTable) {
+        for (const auto& hashTable : board2HashesTable) {
             if (!hashTable.empty()) {
                 allocMemory += hashTable.size() * sizeof(hashTable[0]);
             }
@@ -167,7 +167,7 @@ public:
     }
 
 protected:
-    MU static std::vector<std::string> tokenizeMoves(C std::string& line) {
+    MU static std::vector<std::string> tokenizeMoves(const std::string& line) {
         std::vector<std::string> tokens;
         std::istringstream iss(line);
         std::string token;
@@ -180,19 +180,19 @@ protected:
     }
 
     MU static bool applyMovesAndCheckGoal(Board board,
-                                          C Board& goal,
-                                          C std::vector<u8>& moves) {
-        for (C u8 move : moves) {
+                                          const Board& goal,
+                                          const std::vector<u8>& moves) {
+        for (const u8 move : moves) {
             allActStructList[move].action(board);
         }
         return board == goal;
     }
 
-    MU static bool tryParseValidatedLine(C std::string& rawLine,
-                                         C bool isFatPuzzle,
+    MU static bool tryParseValidatedLine(const std::string& rawLine,
+                                         const bool isFatPuzzle,
                                          std::vector<u8>& outMoves,
                                          std::string& outCanonicalLine) {
-        C std::vector<std::string> inputTokens = tokenizeMoves(rawLine);
+        const std::vector<std::string> inputTokens = tokenizeMoves(rawLine);
         if (inputTokens.empty()) {
             return false;
         }
@@ -211,7 +211,7 @@ protected:
         }
 
         outCanonicalLine = moveVectorToDirectString(outMoves);
-        C std::vector<std::string> canonicalTokens = tokenizeMoves(outCanonicalLine);
+        const std::vector<std::string> canonicalTokens = tokenizeMoves(outCanonicalLine);
 
         if (canonicalTokens.size() != inputTokens.size()) {
             return false;
@@ -226,9 +226,9 @@ protected:
         return true;
     }
 
-    MU static bool tryExpandNormalLine(C Board& start,
-                                       C Board& goal,
-                                       C std::string& solution,
+    MU static bool tryExpandNormalLine(const Board& start,
+                                       const Board& goal,
+                                       const std::string& solution,
                                        std::set<std::string>& expandedSolutions) {
         std::vector<u8> baseMoves;
         std::string canonicalBaseLine;
@@ -250,7 +250,7 @@ protected:
 
         expandedSolutions.insert(canonicalBaseLine);
 
-        for (C auto& perm : perms) {
+        for (const auto& perm : perms) {
             if (!applyMovesAndCheckGoal(start, goal, perm)) {
                 continue;
             }
@@ -261,9 +261,9 @@ protected:
         return true;
     }
 
-    MU static bool tryKeepFatLine(C Board& start,
-                                  C Board& goal,
-                                  C std::string& solution,
+    MU static bool tryKeepFatLine(const Board& start,
+                                  const Board& goal,
+                                  const std::string& solution,
                                   std::set<std::string>& fatSolutions) {
         std::vector<u8> baseMoves;
         std::string canonicalLine;
@@ -280,13 +280,13 @@ protected:
         return true;
     }
 
-    MU static void writeLines(C fs::path& filepath, C std::set<std::string>& lines) {
+    MU static void writeLines(const fs::path& filepath, const std::set<std::string>& lines) {
         std::ofstream file(filepath, std::ios::out | std::ios::trunc);
         if (!file.is_open()) {
             throw std::runtime_error("failed to open output file");
         }
 
-        for (C auto& line : lines) {
+        for (const auto& line : lines) {
             file << line << '\n';
         }
     }
@@ -299,8 +299,8 @@ protected:
 
         tcout << "\nExpanding solver results...\n";
 
-        for (C auto& solution : resultSet) {
-            C bool ok = hasFat
+        for (const auto& solution : resultSet) {
+            const bool ok = hasFat
                                 ? tryKeepFatLine(board1, board2, solution, expandedResultSet)
                                 : tryExpandNormalLine(board1, board2, solution, expandedResultSet);
 
@@ -318,30 +318,30 @@ protected:
         tcout << "Expanded total solutions: " << expandedResultSet.size() << '\n';
     }
 
-    MU void writeExpandedSolutions(C u32 currentDepth) {
+    MU void writeExpandedSolutions(const u32 currentDepth) {
         if (expandedResultSet.empty()) {
             tcout << "No expanded solutions produced.\n";
             return;
         }
 
-        C std::size_t moveCount = tokenizeMoves(*expandedResultSet.begin()).size();
+        const std::size_t moveCount = tokenizeMoves(*expandedResultSet.begin()).size();
 
         fs::path outputDir = outDirectory / "levels";
         fs::create_directories(outputDir);
 
-        C std::string filename = pair->getName()
+        const std::string filename = pair->getName()
                                  + "_c" + std::to_string(moveCount)
                                  + "_" + std::to_string(expandedResultSet.size())
                                  + ".txt";
 
-        C fs::path filepath = outputDir / filename;
+        const fs::path filepath = outputDir / filename;
         tcout << "Saving expanded results to " << filepath << ".\n";
         writeLines(filepath, expandedResultSet);
     }
 
-    MU static void validateStateHashLanes(C JVec<Board>& states,
-                                          C JVec<u64>& hashes,
-                                          C char* label) {
+    MU static void validateStateHashLanes(const JVec<Board>& states,
+                                          const JVec<u64>& hashes,
+                                          const char* label) {
         if (states.size() != hashes.size()) {
             throw std::runtime_error(std::string("state/hash lane size mismatch in ") + label);
         }

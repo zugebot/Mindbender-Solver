@@ -13,7 +13,7 @@
 #include <vector>
 
 #ifdef USE_CUDA
-// C++17 version because my GPU is ASS
+// const++17 version because my GPU is ASS
 template<typename T>
 struct IsAllowedPermsType {
     static constexpr bool value =
@@ -24,7 +24,7 @@ struct IsAllowedPermsType {
 template<typename T>
 constexpr bool AllowedPermsType = IsAllowedPermsType<T>::value;
 #else
-// C++20 concept implementation
+// const++20 concept implementation
 template<typename T>
 concept AllowedPermsType =
         std::is_same_v<T, Board>  ||
@@ -79,7 +79,7 @@ namespace perms_detail {
              i32 CUR_DEPTH, i32 MAX_DEPTH,
              bool CHECK_CROSS, bool CHECK_SIM>
     static void make_perm_list_inner(
-            C Board& board_in,
+            const Board& board_in,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out,
             PermBuildState<T, MAX_DEPTH>& state,
@@ -91,7 +91,7 @@ namespace perms_detail {
              bool CHECK_CROSS, bool CHECK_SIM,
              bool CHANGE_SECT_START, eSequenceDir SECT_DIR>
     static void make_perm_list_outer(
-            C Board& board_in,
+            const Board& board_in,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out,
             PermBuildState<T, MAX_DEPTH>& state,
@@ -102,7 +102,7 @@ namespace perms_detail {
              bool CHECK_CROSS, bool CHECK_SIM,
              bool CHANGE_SECT_START, eSequenceDir SECT_DIR>
     static void make_perm_list(
-            C Board& board_in,
+            const Board& board_in,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out);
 
@@ -114,12 +114,12 @@ namespace perms_detail {
              i32 CUR_DEPTH, i32 MAX_DEPTH,
              eSequenceDir SECT_DIR, bool DIRECTION>
     static void make_fat_perm_list_helper(
-            C Board& board,
+            const Board& board,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out,
             u32& count,
             u64 move,
-            C ActStruct& lastActStruct,
+            const ActStruct& lastActStruct,
             u8 startIndex,
             u8 endIndex);
     
@@ -127,7 +127,7 @@ namespace perms_detail {
              i32 DEPTH,
              eSequenceDir SECT_DIR>
     static void make_fat_perm_list(
-            C Board& board_in,
+            const Board& board_in,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out);
 
@@ -139,13 +139,13 @@ class Perms {
     static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
 public:
-    using ToDepthFuncPtr = void (*)(C Board&, JVec<T>&, JVec<u64>&);
+    using ToDepthFuncPtr = void (*)(const Board&, JVec<T>&, JVec<u64>&);
     using DepthPair = std::pair<u32, u32>;
     using DepthMap = std::unordered_map<u32, std::vector<DepthPair>>;
 
     static constexpr u32 PTR_LIST_SIZE = 6;
 
-    static C DepthMap depthMap;
+    static const DepthMap depthMap;
 
     struct FromLeft {
         static ToDepthFuncPtr funcPtrs[PTR_LIST_SIZE];
@@ -163,13 +163,13 @@ public:
     };
     
     template<eSequenceDir SECT_DIR>
-    MU static void reserveForDepth(C Board& board_in,
+    MU static void reserveForDepth(const Board& board_in,
                                    JVec<T>& boards_out,
                                    JVec<u64>& hashes_out,
                                    u32 depth);
     
     template<eSequenceDir SECT_DIR>
-    MU static void getDepthFunc(C Board& board_in,
+    MU static void getDepthFunc(const Board& board_in,
                                 JVec<T>& boards_out,
                                 JVec<u64>& hashes_out,
                                 u32 depth,
@@ -179,11 +179,11 @@ public:
 template<typename T>
 template<eSequenceDir SECT_DIR>
 void Perms<T>::getDepthFunc(
-        C Board& board_in,
+        const Board& board_in,
         JVec<T>& boards_out,
         JVec<u64>& hashes_out,
-        C u32 depth,
-        C bool shouldResize) {
+        const u32 depth,
+        const bool shouldResize) {
     
     if (depth >= PTR_LIST_SIZE) {
         boards_out.clear();

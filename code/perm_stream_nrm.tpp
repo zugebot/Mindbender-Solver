@@ -8,10 +8,10 @@ namespace perm_stream_detail {
              bool CHECK_CROSS, bool CHECK_SIM,
              typename Sink>
     void stream_perm_list_inner(
-            C Board& board_in,
+            const Board& board_in,
             StreamChunk<T>& chunk,
             StreamBuildState<T, MAX_DEPTH>& state,
-            C u64 move_prev,
+            const u64 move_prev,
             Sink& sink) {
         static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
@@ -31,7 +31,7 @@ namespace perm_stream_detail {
                 }
             }
 
-            C i32 base = state.baseSeq[CUR_DEPTH];
+            const i32 base = state.baseSeq[CUR_DEPTH];
             u64& cur = state.curSeq[CUR_DEPTH];
 
             for (cur = base; cur < static_cast<u64>(base + 5); ++cur) {
@@ -51,7 +51,7 @@ namespace perm_stream_detail {
                     }
                 }
 
-                C u64 move_next = move_prev | (cur << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
+                const u64 move_next = move_prev | (cur << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
 
                 stream_perm_list_inner<
                         T,
@@ -76,7 +76,7 @@ namespace perm_stream_detail {
              bool CHANGE_SECT_START, eSequenceDir SECT_DIR,
              typename Sink>
     void stream_perm_list_outer(
-            C Board& board_in,
+            const Board& board_in,
             StreamChunk<T>& chunk,
             StreamBuildState<T, MAX_DEPTH>& state,
             Sink& sink) {
@@ -108,7 +108,7 @@ namespace perm_stream_detail {
                         state.baseSeq[CUR_DEPTH] = (dir << 5) + sect * 5;
 
                         if constexpr (CUR_DEPTH > 0) {
-                            C i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
+                            const i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
                             state.checkRCSeq[CUR_DEPTH] = prev_dir != dir && prev_dir != 0;
                         }
 
@@ -145,7 +145,7 @@ namespace perm_stream_detail {
                         state.baseSeq[CUR_DEPTH] = (dir << 5) + sect * 5;
 
                         if constexpr (CUR_DEPTH > 0) {
-                            C i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
+                            const i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
                             state.checkRCSeq[CUR_DEPTH] = prev_dir != dir && prev_dir != 0;
                         }
 
@@ -182,7 +182,7 @@ namespace perm_stream_detail {
                         state.baseSeq[CUR_DEPTH] = (dir << 5) + sect * 5;
 
                         if constexpr (CUR_DEPTH > 0) {
-                            C i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
+                            const i32 prev_dir = state.dirSeq[CUR_DEPTH - 1];
                             state.checkRCSeq[CUR_DEPTH] = prev_dir != dir && prev_dir != 0;
                         }
 
@@ -212,7 +212,7 @@ namespace perm_stream_detail {
              bool CHANGE_SECT_START, eSequenceDir SECT_DIR,
              typename Sink>
     void stream_perm_list(
-            C Board& board_in,
+            const Board& board_in,
             StreamChunk<T>& chunk,
             Sink& sink) {
         static_assert(AllowedPermsType<T>, "T must be Board or B1B2");

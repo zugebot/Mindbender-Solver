@@ -18,21 +18,21 @@ struct ColParts {
     u64 lower;
 };
 
-FORCEINLINE HD ColParts getColParts(C B1B2& board, C u64 mask) {
+FORCEINLINE HD ColParts getColParts(const B1B2& board, const u64 mask) {
     return {board.b1 & mask, board.b2 & mask};
 }
 
 FORCEINLINE HD void applyColumnRotation(
         B1B2& board,
-        C u64 mask,
-        C u64 newUpper,
-        C u64 newLower) {
+        const u64 mask,
+        const u64 newUpper,
+        const u64 newLower) {
     board.b1 = (board.b1 & ~mask) | (newUpper & mask);
     board.b2 = (board.b2 & ~mask) | (newLower & mask);
 }
 
-FORCEINLINE HD void rotateColumnForwards18(B1B2& board, C u64 mask) {
-    C ColParts parts = getColParts(board, mask);
+FORCEINLINE HD void rotateColumnForwards18(B1B2& board, const u64 mask) {
+    const ColParts parts = getColParts(board, mask);
     applyColumnRotation(
             board,
             mask,
@@ -40,8 +40,8 @@ FORCEINLINE HD void rotateColumnForwards18(B1B2& board, C u64 mask) {
             (parts.upper << 36) | (parts.lower >> 18));
 }
 
-FORCEINLINE HD void rotateColumnForwards36(B1B2& board, C u64 mask) {
-    C ColParts parts = getColParts(board, mask);
+FORCEINLINE HD void rotateColumnForwards36(B1B2& board, const u64 mask) {
+    const ColParts parts = getColParts(board, mask);
     applyColumnRotation(
             board,
             mask,
@@ -49,13 +49,13 @@ FORCEINLINE HD void rotateColumnForwards36(B1B2& board, C u64 mask) {
             (parts.upper << 18) | (parts.lower >> 36));
 }
 
-FORCEINLINE HD void swapColumnHalves(B1B2& board, C u64 mask) {
-    C ColParts parts = getColParts(board, mask);
+FORCEINLINE HD void swapColumnHalves(B1B2& board, const u64 mask) {
+    const ColParts parts = getColParts(board, mask);
     applyColumnRotation(board, mask, parts.lower, parts.upper);
 }
 
-FORCEINLINE HD void rotateColumnBackward18(B1B2& board, C u64 mask) {
-    C ColParts parts = getColParts(board, mask);
+FORCEINLINE HD void rotateColumnBackward18(B1B2& board, const u64 mask) {
+    const ColParts parts = getColParts(board, mask);
     applyColumnRotation(
             board,
             mask,
@@ -63,8 +63,8 @@ FORCEINLINE HD void rotateColumnBackward18(B1B2& board, C u64 mask) {
             (parts.lower << 36) | (parts.upper >> 18));
 }
 
-FORCEINLINE HD void rotateColumnBackward36(B1B2& board, C u64 mask) {
-    C ColParts parts = getColParts(board, mask);
+FORCEINLINE HD void rotateColumnBackward36(B1B2& board, const u64 mask) {
+    const ColParts parts = getColParts(board, mask);
     applyColumnRotation(
             board,
             mask,
@@ -113,7 +113,7 @@ FORCEINLINE HD void applyFatColumnMove(
         B1B2& board,
         Action first,
         Action second,
-        C u64 fatDeltaY) {
+        const u64 fatDeltaY) {
     first(board);
     second(board);
     board.addFatY(fatDeltaY);
@@ -167,35 +167,35 @@ static constexpr u64 C_MASK_45 = 0'000077'000077'000077;
 
 
 PERM_MACRO(C_01_1) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_01) & C_MASK_01;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_01) & C_MASK_01;
     board.addFatY(1);
 }
 
 PERM_MACRO(C_01_2) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_01) & C_MASK_01;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_01) & C_MASK_01;
     board.addFatY(2);
 }
 
 PERM_MACRO(C_01_3) {
-    C u64 var1 = board.b1;
+    const u64 var1 = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_01;
     board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_01;
     board.addFatY(3);
 }
 
 PERM_MACRO(C_01_4) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_01) & C_MASK_01;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_01) & C_MASK_01;
     board.addFatY(4);
 }
 
 PERM_MACRO(C_01_5) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_01) & C_MASK_01;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_01) & C_MASK_01;
     board.addFatY(5);
@@ -204,35 +204,35 @@ PERM_MACRO(C_01_5) {
 
 
 PERM_MACRO(C_12_1) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_12) & C_MASK_12;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_12) & C_MASK_12;
     board.addFatY(1);
 }
 
 PERM_MACRO(C_12_2) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_12) & C_MASK_12;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_12) & C_MASK_12;
     board.addFatY(2);
 }
 
 PERM_MACRO(C_12_3) {
-    C u64 var1 = board.b1;
+    const u64 var1 = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_12;
     board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_12;
     board.addFatY(3);
 }
 
 PERM_MACRO(C_12_4) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_12) & C_MASK_12;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_12) & C_MASK_12;
     board.addFatY(4);
 }
 
 PERM_MACRO(C_12_5) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_12) & C_MASK_12;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_12) & C_MASK_12;
     board.addFatY(5);
@@ -241,35 +241,35 @@ PERM_MACRO(C_12_5) {
 
 
 PERM_MACRO(C_23_1) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_23) & C_MASK_23;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_23) & C_MASK_23;
     board.addFatY(1);
 }
 
 PERM_MACRO(C_23_2) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_23) & C_MASK_23;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_23) & C_MASK_23;
     board.addFatY(2);
 }
 
 PERM_MACRO(C_23_3) {
-    C u64 var1 = board.b1;
+    const u64 var1 = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_23;
     board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_23;
     board.addFatY(3);
 }
 
 PERM_MACRO(C_23_4) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_23) & C_MASK_23;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_23) & C_MASK_23;
     board.addFatY(4);
 }
 
 PERM_MACRO(C_23_5) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_23) & C_MASK_23;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_23) & C_MASK_23;
     board.addFatY(5);
@@ -278,35 +278,35 @@ PERM_MACRO(C_23_5) {
 
 
 PERM_MACRO(C_34_1) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_34) & C_MASK_34;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_34) & C_MASK_34;
     board.addFatY(1);
 }
 
 PERM_MACRO(C_34_2) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_34) & C_MASK_34;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_34) & C_MASK_34;
     board.addFatY(2);
 }
 
 PERM_MACRO(C_34_3) {
-    C u64 var1 = board.b1;
+    const u64 var1 = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_34;
     board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_34;
     board.addFatY(3);
 }
 
 PERM_MACRO(C_34_4) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_34) & C_MASK_34;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_34) & C_MASK_34;
     board.addFatY(4);
 }
 
 PERM_MACRO(C_34_5) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_34) & C_MASK_34;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_34) & C_MASK_34;
     board.addFatY(5);
@@ -315,35 +315,35 @@ PERM_MACRO(C_34_5) {
 
 
 PERM_MACRO(C_45_1) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_45) & C_MASK_45;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_45) & C_MASK_45;
     board.addFatY(1);
 }
 
 PERM_MACRO(C_45_2) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_45) & C_MASK_45;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_45) & C_MASK_45;
     board.addFatY(2);
 }
 
 PERM_MACRO(C_45_3) {
-    C u64 var1 = board.b1;
+    const u64 var1 = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_45;
     board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_45;
     board.addFatY(3);
 }
 
 PERM_MACRO(C_45_4) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_45) & C_MASK_45;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_45) & C_MASK_45;
     board.addFatY(4);
 }
 
 PERM_MACRO(C_45_5) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_45) & C_MASK_45;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_45) & C_MASK_45;
     board.addFatY(5);
@@ -361,35 +361,35 @@ static constexpr u64 C_MASK_45 = 0'000077'000077'000077;
 
 
 PERM_MACRO(C_01_1) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_01) & C_MASK_01;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_01) & C_MASK_01;
     board.addFatY(1);
 }
 
 PERM_MACRO(C_01_2) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_01) & C_MASK_01;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_01) & C_MASK_01;
     board.addFatY(2);
 }
 
 PERM_MACRO(C_01_3) {
-    C u64 var1 = board.b1;
+    const u64 var1 = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_01;
     board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_01;
     board.addFatY(3);
 }
 
 PERM_MACRO(C_01_4) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_01) & C_MASK_01;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_01) & C_MASK_01;
     board.addFatY(4);
 }
 
 PERM_MACRO(C_01_5) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_01) & C_MASK_01;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_01) & C_MASK_01;
     board.addFatY(5);
@@ -398,35 +398,35 @@ PERM_MACRO(C_01_5) {
 
 
 PERM_MACRO(C_12_1) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_12) & C_MASK_12;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_12) & C_MASK_12;
     board.addFatY(1);
 }
 
 PERM_MACRO(C_12_2) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_12) & C_MASK_12;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_12) & C_MASK_12;
     board.addFatY(2);
 }
 
 PERM_MACRO(C_12_3) {
-    C u64 var1 = board.b1;
+    const u64 var1 = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_12;
     board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_12;
     board.addFatY(3);
 }
 
 PERM_MACRO(C_12_4) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_12) & C_MASK_12;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_12) & C_MASK_12;
     board.addFatY(4);
 }
 
 PERM_MACRO(C_12_5) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_12) & C_MASK_12;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_12) & C_MASK_12;
     board.addFatY(5);
@@ -435,35 +435,35 @@ PERM_MACRO(C_12_5) {
 
 
 PERM_MACRO(C_23_1) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_23) & C_MASK_23;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_23) & C_MASK_23;
     board.addFatY(1);
 }
 
 PERM_MACRO(C_23_2) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_23) & C_MASK_23;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_23) & C_MASK_23;
     board.addFatY(2);
 }
 
 PERM_MACRO(C_23_3) {
-    C u64 var1 = board.b1;
+    const u64 var1 = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_23;
     board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_23;
     board.addFatY(3);
 }
 
 PERM_MACRO(C_23_4) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_23) & C_MASK_23;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_23) & C_MASK_23;
     board.addFatY(4);
 }
 
 PERM_MACRO(C_23_5) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_23) & C_MASK_23;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_23) & C_MASK_23;
     board.addFatY(5);
@@ -472,35 +472,35 @@ PERM_MACRO(C_23_5) {
 
 
 PERM_MACRO(C_34_1) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_34) & C_MASK_34;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_34) & C_MASK_34;
     board.addFatY(1);
 }
 
 PERM_MACRO(C_34_2) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_34) & C_MASK_34;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_34) & C_MASK_34;
     board.addFatY(2);
 }
 
 PERM_MACRO(C_34_3) {
-    C u64 var1 = board.b1;
+    const u64 var1 = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_34;
     board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_34;
     board.addFatY(3);
 }
 
 PERM_MACRO(C_34_4) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_34) & C_MASK_34;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_34) & C_MASK_34;
     board.addFatY(4);
 }
 
 PERM_MACRO(C_34_5) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_34) & C_MASK_34;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_34) & C_MASK_34;
     board.addFatY(5);
@@ -509,35 +509,35 @@ PERM_MACRO(C_34_5) {
 
 
 PERM_MACRO(C_45_1) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 18 | board.b2 << 36) & C_MASK_45) & C_MASK_45;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 18 | b1_temp << 36) & C_MASK_45) & C_MASK_45;
     board.addFatY(1);
 }
 
 PERM_MACRO(C_45_2) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 >> 36 | board.b2 << 18) & C_MASK_45) & C_MASK_45;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 >> 36 | b1_temp << 18) & C_MASK_45) & C_MASK_45;
     board.addFatY(2);
 }
 
 PERM_MACRO(C_45_3) {
-    C u64 var1 = board.b1;
+    const u64 var1 = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ board.b2) & C_MASK_45;
     board.b2 = board.b2 ^ (board.b2 ^ var1) & C_MASK_45;
     board.addFatY(3);
 }
 
 PERM_MACRO(C_45_4) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 36 | board.b2 >> 18) & C_MASK_45) & C_MASK_45;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 36 | b1_temp >> 18) & C_MASK_45) & C_MASK_45;
     board.addFatY(4);
 }
 
 PERM_MACRO(C_45_5) {
-    C u64 b1_temp = board.b1;
+    const u64 b1_temp = board.b1;
     board.b1 = board.b1 ^ (board.b1 ^ (board.b1 << 18 | board.b2 >> 36) & C_MASK_45) & C_MASK_45;
     board.b2 = board.b2 ^ (board.b2 ^ (board.b2 << 18 | b1_temp >> 36) & C_MASK_45) & C_MASK_45;
     board.addFatY(5);

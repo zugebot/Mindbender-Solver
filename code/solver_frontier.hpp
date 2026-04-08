@@ -57,7 +57,7 @@ private:
     static constexpr double AUTO_DIRECTION_RATIO_THRESHOLD = 1.20;
 
 private:
-    MUND static const char* directionName(C SearchDirection direction) {
+    MUND static const char* directionName(const SearchDirection direction) {
         switch (direction) {
             case SearchDirection::Auto:
                 return "auto";
@@ -78,22 +78,22 @@ private:
         }
     }
 
-    MUND static SearchDirection smallerSideToDirection(C std::size_t forwardCount,
-                                                       C std::size_t reverseCount) {
+    MUND static SearchDirection smallerSideToDirection(const std::size_t forwardCount,
+                                                       const std::size_t reverseCount) {
         if (forwardCount <= reverseCount) {
             return SearchDirection::Forward;
         }
         return SearchDirection::Reverse;
     }
 
-    MUND static bool ratioClearlyDifferent(C std::size_t lhs,
-                                           C std::size_t rhs) {
+    MUND static bool ratioClearlyDifferent(const std::size_t lhs,
+                                           const std::size_t rhs) {
         if (lhs == rhs) {
             return false;
         }
 
-        C double smaller = static_cast<double>(std::min(lhs, rhs));
-        C double larger = static_cast<double>(std::max(lhs, rhs));
+        const double smaller = static_cast<double>(std::min(lhs, rhs));
+        const double larger = static_cast<double>(std::max(lhs, rhs));
 
         if (smaller <= 0.0) {
             return true;
@@ -120,7 +120,7 @@ private:
         }
     }
 
-    MU static std::string reverseNormalSolutionString(C std::string& solution) {
+    MU static std::string reverseNormalSolutionString(const std::string& solution) {
         if (solution.empty()) {
             return {};
         }
@@ -145,8 +145,8 @@ private:
         return out;
     }
 
-    MU static void buildBoardExactNoneFrontier(C Board& root,
-                                               C u32 depth,
+    MU static void buildBoardExactNoneFrontier(const Board& root,
+                                               const u32 depth,
                                                RecoveryBoardFrontierCache& cache) {
         cache.states.clear();
         cache.hashes.clear();
@@ -163,8 +163,8 @@ private:
     }
 
     MU void ensureCache(RecoveryBoardFrontierCache& cache,
-                        C Board& root,
-                        C u32 depth) {
+                        const Board& root,
+                        const u32 depth) {
         if (cache.valid && cache.depth == depth && cache.root == root) {
             return;
         }
@@ -175,24 +175,24 @@ private:
         buildBoardExactNoneFrontier(cache.root, cache.depth, cache);
     }
 
-    MU static void recoverExactNormalSplit(C Board& leftRoot,
-                                           C u32 leftDepth,
-                                           C JVec<Board>& leftStates,
-                                           C JVec<u64>& leftHashes,
-                                           C Board& rightRoot,
-                                           C u32 rightDepth,
-                                           C JVec<Board>& rightStates,
-                                           C JVec<u64>& rightHashes,
+    MU static void recoverExactNormalSplit(const Board& leftRoot,
+                                           const u32 leftDepth,
+                                           const JVec<Board>& leftStates,
+                                           const JVec<u64>& leftHashes,
+                                           const Board& rightRoot,
+                                           const u32 rightDepth,
+                                           const JVec<Board>& rightStates,
+                                           const JVec<u64>& rightHashes,
                                            std::set<std::string>& outPaths) {
         outPaths.clear();
 
-        C auto matches = (leftDepth != 0 && rightDepth != 0)
+        const auto matches = (leftDepth != 0 && rightDepth != 0)
                                  ? intersection_threaded(leftStates, leftHashes, rightStates, rightHashes)
                                  : intersection(leftStates, leftHashes, rightStates, rightHashes);
 
-        for (C auto& [fst, snd] : matches) {
-            C Board temp1 = makeBoardWithMoves(leftRoot, fst->memory);
-            C Board temp2 = makeBoardWithMoves(rightRoot, snd->memory);
+        for (const auto& [fst, snd] : matches) {
+            const Board temp1 = makeBoardWithMoves(leftRoot, fst->memory);
+            const Board temp2 = makeBoardWithMoves(rightRoot, snd->memory);
 
             if (temp1 == temp2) {
                 outPaths.insert(fst->memory.asmString(&snd->memory));
@@ -201,9 +201,9 @@ private:
     }
 
     template<bool REVERSE_SEARCH>
-    MU void recoverSeedPrefixes(C Board& seedBoard,
-                                C u32 prefixLeftDepth,
-                                C u32 prefixRightDepth,
+    MU void recoverSeedPrefixes(const Board& seedBoard,
+                                const u32 prefixLeftDepth,
+                                const u32 prefixRightDepth,
                                 std::set<std::string>& outPrefixes) {
         outPrefixes.clear();
 
@@ -232,10 +232,10 @@ private:
         );
     }
 
-    MU void recoverSeedToMiddle(C Board& seedBoard,
-                                C B1B2& middleState,
-                                C u32 seedLeftDepth,
-                                C u32 middleRightDepth,
+    MU void recoverSeedToMiddle(const Board& seedBoard,
+                                const B1B2& middleState,
+                                const u32 seedLeftDepth,
+                                const u32 middleRightDepth,
                                 RecoveryBoardFrontierCache& seedLeftCache,
                                 RecoveryBoardFrontierCache& middleRightCache,
                                 std::set<std::string>& outPaths) {
@@ -258,9 +258,9 @@ private:
     }
 
     template<bool REVERSE_SEARCH>
-    MU void recoverMiddleToGoal(C B1B2& middleState,
-                                C u32 middleLeftDepth,
-                                C u32 goalRightDepth,
+    MU void recoverMiddleToGoal(const B1B2& middleState,
+                                const u32 middleLeftDepth,
+                                const u32 goalRightDepth,
                                 RecoveryBoardFrontierCache& middleLeftCache,
                                 std::set<std::string>& outPaths) {
         Board middleBoard = makeBoardFromState(middleState);
@@ -283,12 +283,12 @@ private:
     }
 
     template<bool REVERSE_SEARCH>
-    MU static void appendJoinedSolutions(C std::set<std::string>& prefixes,
-                                         C std::set<std::string>& middles,
-                                         C std::set<std::string>& suffixes,
+    MU static void appendJoinedSolutions(const std::set<std::string>& prefixes,
+                                         const std::set<std::string>& middles,
+                                         const std::set<std::string>& suffixes,
                                          std::unordered_set<std::string>& outRaw) {
-        for (C auto& p : prefixes) {
-            for (C auto& m : middles) {
+        for (const auto& p : prefixes) {
+            for (const auto& m : middles) {
                 std::string leftHalf;
                 if (p.empty()) {
                     leftHalf = m;
@@ -298,7 +298,7 @@ private:
                     leftHalf = p + " " + m;
                 }
 
-                for (C auto& s : suffixes) {
+                for (const auto& s : suffixes) {
                     std::string fullSolution;
                     if (leftHalf.empty()) {
                         fullSolution = s;
@@ -320,13 +320,13 @@ private:
 
     MU static void appendStates(JVec<B1B2>& dstStates,
                                 JVec<u64>& dstHashes,
-                                C JVec<B1B2>& srcStates,
-                                C JVec<u64>& srcHashes) {
+                                const JVec<B1B2>& srcStates,
+                                const JVec<u64>& srcHashes) {
         if (srcStates.empty()) {
             return;
         }
 
-        C std::size_t oldSize = dstStates.size();
+        const std::size_t oldSize = dstStates.size();
         dstStates.resize(oldSize + srcStates.size());
         dstHashes.resize(oldSize + srcHashes.size());
 
@@ -337,7 +337,7 @@ private:
     }
 
     template<int LEFT_FRONTIER_DEPTH, int RIGHT_FRONTIER_DEPTH, bool COLLECT_PROBE_STATS>
-    MU void collectLeftFrontierMiddleMatchesStreamed(C Board& seedBoard,
+    MU void collectLeftFrontierMiddleMatchesStreamed(const Board& seedBoard,
                                                      JVec<B1B2>& outMiddleMatches,
                                                      JVec<u64>& outMiddleMatchHashes,
                                                      StreamProbeMetrics& metrics) {
@@ -346,7 +346,7 @@ private:
         metrics = {};
 
         struct Sink {
-            C RightFrontierIndexB1B2& rightIndex;
+            const RightFrontierIndexB1B2& rightIndex;
             JVec<B1B2>& allMatches;
             JVec<u64>& allMatchHashes;
             StreamProbeMetrics& metrics;
@@ -354,7 +354,7 @@ private:
             JVec<B1B2> chunkMatches;
             JVec<u64> chunkMatchHashes;
 
-            MU Sink(C RightFrontierIndexB1B2& rightIndexIn,
+            MU Sink(const RightFrontierIndexB1B2& rightIndexIn,
                     JVec<B1B2>& allMatchesIn,
                     JVec<u64>& allMatchHashesIn,
                     StreamProbeMetrics& metricsIn)
@@ -492,8 +492,8 @@ private:
         buildUniqueNoneDepthFrontierB1B2<1>(board1, forwardDepth1States, forwardDepth1Hashes);
         buildUniqueNoneDepthFrontierB1B2<1>(board2, reverseDepth1States, reverseDepth1Hashes);
 
-        C std::size_t forwardDepth1Count = forwardDepth1States.size();
-        C std::size_t reverseDepth1Count = reverseDepth1States.size();
+        const std::size_t forwardDepth1Count = forwardDepth1States.size();
+        const std::size_t reverseDepth1Count = reverseDepth1States.size();
 
         if constexpr (debug) {
             tcout << "auto direction preview depth 1:\n";
@@ -513,8 +513,8 @@ private:
         buildUniqueNoneDepthFrontierB1B2<2>(board1, forwardDepth2States, forwardDepth2Hashes);
         buildUniqueNoneDepthFrontierB1B2<2>(board2, reverseDepth2States, reverseDepth2Hashes);
 
-        C std::size_t forwardDepth2Count = forwardDepth2States.size();
-        C std::size_t reverseDepth2Count = reverseDepth2States.size();
+        const std::size_t forwardDepth2Count = forwardDepth2States.size();
+        const std::size_t reverseDepth2Count = reverseDepth2States.size();
 
         if constexpr (debug) {
             tcout << "auto direction preview depth 2:\n";
@@ -567,7 +567,7 @@ private:
         Board& searchStartRoot = getSearchStartBoard<REVERSE_SEARCH>();
         Board& searchGoalRoot = getSearchGoalBoard<REVERSE_SEARCH>();
 
-        C Timer totalTime;
+        const Timer totalTime;
 
         JVec<B1B2> leftSeeds;
         JVec<u64> leftSeedHashes;
@@ -771,7 +771,7 @@ private:
         Board& searchStartRoot = getSearchStartBoard<REVERSE_SEARCH>();
         Board& searchGoalRoot = getSearchGoalBoard<REVERSE_SEARCH>();
 
-        C Timer totalTime;
+        const Timer totalTime;
 
         JVec<B1B2> leftSeeds;
         JVec<u64> leftSeedHashes;
@@ -839,7 +839,7 @@ private:
             std::unordered_set<std::string> localRecovered;
 
             while (true) {
-                C std::size_t i = nextIndex.fetch_add(1);
+                const std::size_t i = nextIndex.fetch_add(1);
                 if (i >= leftSeeds.size()) {
                     break;
                 }
@@ -978,7 +978,7 @@ private:
 
                 {
                     std::lock_guard<std::mutex> lock(resultMutex);
-                    for (C auto& s : localRecovered) {
+                    for (const auto& s : localRecovered) {
                         resultSet.insert(s);
                     }
                 }
@@ -1001,9 +1001,10 @@ private:
         for (auto& t : workers) {
             t.join();
         }
-
+        
         tcout << "\nTotal Time: " << totalTime.getSeconds() << '\n';
-        tcout << "Seed depth: " << SEED_DEPTH << '\n';
+        tcout << "Puzzle: " << pair->getName() << '\n';
+        tcout << "Left Seed depth: " << SEED_DEPTH << '\n';
         tcout << "Left frontier depth: " << LEFT_FRONTIER_DEPTH << '\n';
         tcout << "Right frontier depth: " << RIGHT_FRONTIER_DEPTH << '\n';
         tcout << "Search direction: " << directionNameTemplated<REVERSE_SEARCH>() << '\n';

@@ -1,117 +1,211 @@
-// programs/findSolutionOld.cpp
+// programs/findSolutions.cpp
 #include "code/include.hpp"
 #include "code/memory_perm_gen.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <string>
 
 #include "code/solver_direct.hpp"
 #include "code/solver_frontier.hpp"
+#include "include/nlohmann/json.hpp"
 #include "utils/get_free_memory.hpp"
 
 
 
 
-/*
-probe exact matches: 2
-probe exact matches: 54
-probe exact matches: 1080
-probe exact matches: 0
-probe exact matches: 3
-*/
+
+struct FindSolutionConfig {
+    std::string outDirectory = R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver)";
+    BoardSolverFrontier::SearchDirection searchDirection = BoardSolverFrontier::SearchDirection::Auto;
+    bool debug = true;
+    std::string puzzle = "14-2";
+    int estimatedDepth = 10;
+    int threads = 12;
+};
+
+static std::string toLowerCopy(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return s;
+}
+
+static BoardSolverFrontier::SearchDirection parseSearchDirection(const nlohmann::json& value) {
+    using SearchDirection = BoardSolverFrontier::SearchDirection;
+
+    if (value.is_number_integer()) {
+        switch (value.get<int>()) {
+            case 0: return SearchDirection::Auto;
+            case 1: return SearchDirection::Forward;
+            case 2: return SearchDirection::Reverse;
+            default: return SearchDirection::Auto;
+        }
+    }
+
+    if (value.is_string()) {
+        const std::string s = toLowerCopy(value.get<std::string>());
+        if (s == "auto") {
+            return SearchDirection::Auto;
+        }
+        if (s == "forward") {
+            return SearchDirection::Forward;
+        }
+        if (s == "reverse") {
+            return SearchDirection::Reverse;
+        }
+    }
+
+    return SearchDirection::Auto;
+}
+
+static FindSolutionConfig loadFindSolutionConfig() {
+    FindSolutionConfig cfg;
+    namespace fs = std::filesystem;
+
+    const fs::path sourceDir = fs::path(__FILE__).parent_path();
+    const fs::path candidatePaths[] = {
+            sourceDir / "config.json",
+            fs::current_path() / "config.json"
+    };
+
+    fs::path configPath;
+    for (const fs::path& candidate: candidatePaths) {
+        std::error_code ec;
+        if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec)) {
+            configPath = candidate;
+            break;
+        }
+    }
+
+    if (configPath.empty()) {
+        return cfg;
+    }
+
+    try {
+        std::ifstream in(configPath);
+        if (!in.is_open()) {
+            return cfg;
+        }
+
+        nlohmann::json j;
+        in >> j;
+
+        if (const auto it = j.find("outDirectory"); it != j.end() && it->is_string()) {
+            cfg.outDirectory = it->get<std::string>();
+        }
+
+        if (const auto it = j.find("searchDirection"); it != j.end()) {
+            cfg.searchDirection = parseSearchDirection(*it);
+        }
+
+        if (const auto it = j.find("debug"); it != j.end() && it->is_boolean()) {
+            cfg.debug = it->get<bool>();
+        }
+
+        if (const auto it = j.find("puzzle"); it != j.end() && it->is_string()) {
+            cfg.puzzle = it->get<std::string>();
+        }
+
+        if (const auto it = j.find("estimatedDepth"); it != j.end() && it->is_number_integer()) {
+            cfg.estimatedDepth = it->get<int>();
+        }
+
+        if (const auto it = j.find("threads"); it != j.end() && it->is_number_integer()) {
+            cfg.threads = it->get<int>();
+        }
+    } catch (const std::exception& e) {
+        tcout << "Failed to read config.json, using defaults: " << e.what() << '\n';
+    }
+
+    return cfg;
+}
+
+template<bool DEBUG>
+static int runSolverForEstimatedDepth(
+        BoardSolverFrontier& solver,
+        int estimatedDepth,
+        int threads,
+        BoardSolverFrontier::SearchDirection searchDirection
+) {
+    switch (estimatedDepth) {
+        case 3:
+            solver.findSolutionsFrontierThreaded<1, 1, 1, DEBUG>(threads, searchDirection);
+            return 0;
+
+        case 4:
+            solver.findSolutionsFrontierThreaded<1, 1, 2, DEBUG>(threads, searchDirection);
+            return 0;
+
+        case 5:
+            solver.findSolutionsFrontierThreaded<1, 1, 3, DEBUG>(threads, searchDirection);
+            return 0;
+
+        case 6:
+            solver.findSolutionsFrontierThreaded<1, 1, 4, DEBUG>(threads, searchDirection);
+            return 0;
+
+        case 7:
+            solver.findSolutionsFrontierThreaded<1, 1, 5, DEBUG>(threads, searchDirection);
+            return 0;
+
+        case 8:
+            solver.findSolutionsFrontierThreaded<1, 3, 4, DEBUG>(threads, searchDirection);
+            return 0;
+
+        case 9:
+            solver.findSolutionsFrontierThreaded<1, 4, 4, DEBUG>(threads, searchDirection);
+            return 0;
+
+        case 10:
+            solver.findSolutionsFrontierThreaded<1, 4, 5, DEBUG>(threads, searchDirection);
+            return 0;
+
+        case 11:
+            solver.findSolutionsFrontierThreaded<1, 5, 5, DEBUG>(threads, searchDirection);
+            return 0;
+
+        case 12:
+            solver.findSolutionsFrontierThreaded<2, 5, 5, DEBUG>(threads, searchDirection);
+            return 0;
+
+        default:
+            tcout << "Unsupported estimated depth: " << estimatedDepth << '\n';
+            return -1;
+    }
+}
 
 int main() {
-
-    static constexpr u32 GB_NEEDED = 8;
+    static constexpr u32 GB_NEEDED = 12;
     if (!hasAtLeastGBMemoryTotal(GB_NEEDED)) {
         tcout << "Program requires more RAM, exiting...\n";
-        C u64 mem = getTotalSystemMemory();
+        const u64 mem = getTotalSystemMemory();
         tcout << bytesFormatted(mem) << "/" << GB_NEEDED << ".000GB" << std::endl;
         return -1;
     }
 
-    const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
-    constexpr auto SEARCH_DIRECTION = BoardSolverFrontier::SearchDirection::Auto;
-    constexpr bool DEBUG = true;
-    std::string puzzle = "12-5";
-    int estimatedDepth = 12;
-    int threads = 12;
+    const FindSolutionConfig config = loadFindSolutionConfig();
 
+    const std::string outDirectory = config.outDirectory;
+    const auto SEARCH_DIRECTION = config.searchDirection;
+    std::string puzzle = config.puzzle;
+    int estimatedDepth = config.estimatedDepth;
+    int threads = config.threads;
 
     const auto pair = BoardLookup::getBoardPair(puzzle);
 
     tcout << pair->toString() << std::endl;
 
+    BoardSolverFrontier solver(pair);
+    solver.setWriteDirectory(outDirectory);
 
-
-    switch (estimatedDepth) {
-        case 3: {
-            BoardSolverFrontier solver(pair);
-            solver.setWriteDirectory(outDirectory);
-            solver.findSolutionsFrontierThreaded<1, 1, 1, DEBUG>(threads, SEARCH_DIRECTION);
-            break;
-        }
-        case 4: {
-            BoardSolverFrontier solver(pair);
-            solver.setWriteDirectory(outDirectory);
-            solver.findSolutionsFrontierThreaded<1, 1, 2, DEBUG>(threads, SEARCH_DIRECTION);
-            break;
-        }
-        case 5: {
-            BoardSolverFrontier solver(pair);
-            solver.setWriteDirectory(outDirectory);
-            solver.findSolutionsFrontierThreaded<1, 1, 3, DEBUG>(threads, SEARCH_DIRECTION);
-            break;
-        }
-        case 6: {
-            BoardSolverFrontier solver(pair);
-            solver.setWriteDirectory(outDirectory);
-            solver.findSolutionsFrontierThreaded<1, 1, 4, DEBUG>(threads, SEARCH_DIRECTION);
-            break;
-        }
-        case 7: {
-            BoardSolverFrontier solver(pair);
-            solver.setWriteDirectory(outDirectory);
-            solver.findSolutionsFrontierThreaded<1, 1, 5, DEBUG>(threads, SEARCH_DIRECTION);
-            break;
-        }
-        case 8: {
-            BoardSolverFrontier solver(pair);
-            solver.setWriteDirectory(outDirectory);
-            solver.findSolutionsFrontierThreaded<1, 3, 4, DEBUG>(threads, SEARCH_DIRECTION);
-            break;
-        }
-        case 9: {
-            BoardSolverFrontier solver(pair);
-            solver.setWriteDirectory(outDirectory);
-            solver.findSolutionsFrontierThreaded<1, 4, 4, DEBUG>(threads, SEARCH_DIRECTION);
-            break;
-        }
-        
-        case 10: {
-            BoardSolverFrontier solver(pair);
-            solver.setWriteDirectory(outDirectory);
-            solver.findSolutionsFrontierThreaded<1, 4, 5, DEBUG>(threads, SEARCH_DIRECTION);
-            break;
-        }
-        case 11: {
-            BoardSolverFrontier solver(pair);
-            solver.setWriteDirectory(outDirectory);
-            solver.findSolutionsFrontierThreaded<1, 5, 5, DEBUG>(threads, SEARCH_DIRECTION);
-            break;
-        }
-        case 12: {
-            BoardSolverFrontier solver(pair);
-            solver.setWriteDirectory(outDirectory);
-            solver.findSolutionsFrontierThreaded<2, 5, 5, DEBUG>(threads, SEARCH_DIRECTION);
-            break;
-        }
-        default: {
-            tcout << "Unsupported estimated depth: " << estimatedDepth << '\n';
-            return -1;
-        }
+    if (config.debug) {
+        return runSolverForEstimatedDepth<true>(solver, estimatedDepth, threads, SEARCH_DIRECTION);
     }
 
-    return 0;
+    return runSolverForEstimatedDepth<false>(solver, estimatedDepth, threads, SEARCH_DIRECTION);
 
 
     /*

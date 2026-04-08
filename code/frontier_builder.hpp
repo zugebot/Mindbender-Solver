@@ -16,7 +16,7 @@
 #include "perms.hpp"
 #include "sorter.hpp"
 
-MU static Board makeBoardFromState(C B1B2& state) {
+MU static Board makeBoardFromState(const B1B2& state) {
     Board out;
     out.b1 = state.b1;
     out.b2 = state.b2;
@@ -33,7 +33,7 @@ namespace frontier_recovery_detail {
         JVec<u64> hashes;
     };
 
-    MUND FORCEINLINE std::size_t chooseExpandThreadCount(C std::size_t frontierSize) {
+    MUND FORCEINLINE std::size_t chooseExpandThreadCount(const std::size_t frontierSize) {
         if (frontierSize < 4096) {
             return 1;
         }
@@ -56,7 +56,7 @@ namespace frontier_recovery_detail {
 
     MU static void reserveStateHashLanes(JVec<B1B2>& states,
                                          JVec<u64>& hashes,
-                                         C std::size_t capacity) {
+                                         const std::size_t capacity) {
         if (capacity == 0) {
             return;
         }
@@ -71,7 +71,7 @@ namespace frontier_recovery_detail {
 
     MU static void ensureWritableTail(JVec<B1B2>& states,
                                       JVec<u64>& hashes,
-                                      C std::size_t requiredSize) {
+                                      const std::size_t requiredSize) {
         if (requiredSize <= states.size()) {
             return;
         }
@@ -95,7 +95,7 @@ namespace frontier_recovery_detail {
     }
 
     MUND FORCEINLINE std::size_t emitNormalNoneChildren(
-            C B1B2& parent,
+            const B1B2& parent,
             B1B2* dstStates,
             u64* dstHashes) {
         std::size_t produced = 0;
@@ -132,12 +132,12 @@ namespace frontier_recovery_detail {
     }
 
     MU static void expandNoneFrontierRangeByOne(
-            C JVec<B1B2>& frontierStates,
-            C std::size_t beginIndex,
-            C std::size_t endIndex,
+            const JVec<B1B2>& frontierStates,
+            const std::size_t beginIndex,
+            const std::size_t endIndex,
             JVec<B1B2>& outStates,
             JVec<u64>& outHashes,
-            C u64 reserveGuessPerThread) {
+            const u64 reserveGuessPerThread) {
         outStates.clear();
         outHashes.clear();
 
@@ -145,8 +145,8 @@ namespace frontier_recovery_detail {
             return;
         }
 
-        C std::size_t parentCount = endIndex - beginIndex;
-        C std::size_t hardUpper = parentCount * NORMAL_NONE_MOVE_COUNT;
+        const std::size_t parentCount = endIndex - beginIndex;
+        const std::size_t hardUpper = parentCount * NORMAL_NONE_MOVE_COUNT;
 
         if (reserveGuessPerThread != 0) {
             reserveStateHashLanes(
@@ -180,9 +180,9 @@ namespace frontier_recovery_detail {
     MU static void copyLaneRangeIntoOffset(
             JVec<B1B2>& dstStates,
             JVec<u64>& dstHashes,
-            C std::size_t dstOffset,
-            C JVec<B1B2>& srcStates,
-            C JVec<u64>& srcHashes) {
+            const std::size_t dstOffset,
+            const JVec<B1B2>& srcStates,
+            const JVec<u64>& srcHashes) {
         if (srcStates.empty()) {
             return;
         }
@@ -194,10 +194,10 @@ namespace frontier_recovery_detail {
     }
 
     MU static void expandNoneFrontierByOne(
-            C JVec<B1B2>& frontierStates,
+            const JVec<B1B2>& frontierStates,
             JVec<B1B2>& nextStates,
             JVec<u64>& nextHashes,
-            C u64 reserveGuess) {
+            const u64 reserveGuess) {
         nextStates.clear();
         nextHashes.clear();
 
@@ -205,7 +205,7 @@ namespace frontier_recovery_detail {
             return;
         }
 
-        C std::size_t threadCount = chooseExpandThreadCount(frontierStates.size());
+        const std::size_t threadCount = chooseExpandThreadCount(frontierStates.size());
 
         if (threadCount <= 1) {
             expandNoneFrontierRangeByOne(
@@ -223,8 +223,8 @@ namespace frontier_recovery_detail {
         std::vector<std::thread> workers;
         workers.reserve(threadCount);
 
-        C std::size_t baseChunk = frontierStates.size() / threadCount;
-        C std::size_t remainder = frontierStates.size() % threadCount;
+        const std::size_t baseChunk = frontierStates.size() / threadCount;
+        const std::size_t remainder = frontierStates.size() % threadCount;
 
         u64 reserveGuessPerThread = reserveGuess == 0
                                             ? 0
@@ -236,8 +236,8 @@ namespace frontier_recovery_detail {
 
         std::size_t begin = 0;
         for (std::size_t t = 0; t < threadCount; ++t) {
-            C std::size_t chunkLen = baseChunk + (t < remainder ? 1 : 0);
-            C std::size_t end = begin + chunkLen;
+            const std::size_t chunkLen = baseChunk + (t < remainder ? 1 : 0);
+            const std::size_t end = begin + chunkLen;
 
             workers.emplace_back([&, t, begin, end]() {
                 expandNoneFrontierRangeByOne(
@@ -258,7 +258,7 @@ namespace frontier_recovery_detail {
         }
 
         std::size_t totalSize = 0;
-        for (C auto& partial : partials) {
+        for (const auto& partial : partials) {
             totalSize += partial.states.size();
         }
 
@@ -275,7 +275,7 @@ namespace frontier_recovery_detail {
         nextHashes.resize(totalSize);
 
         std::size_t writeOffset = 0;
-        for (C auto& partial : partials) {
+        for (const auto& partial : partials) {
             copyLaneRangeIntoOffset(
                     nextStates,
                     nextHashes,
@@ -288,10 +288,10 @@ namespace frontier_recovery_detail {
     }
 
     template<typename T>
-    MUND FORCEINLINE bool lessByHashThenState(C T& lhsState,
-                                              C u64 lhsHash,
-                                              C T& rhsState,
-                                              C u64 rhsHash) {
+    MUND FORCEINLINE bool lessByHashThenState(const T& lhsState,
+                                              const u64 lhsHash,
+                                              const T& rhsState,
+                                              const u64 rhsHash) {
         if (lhsHash < rhsHash) {
             return true;
         }
@@ -302,16 +302,16 @@ namespace frontier_recovery_detail {
     }
 
     template<typename T>
-    MUND FORCEINLINE bool equalByHashAndState(C T& lhsState,
-                                              C u64 lhsHash,
-                                              C T& rhsState,
-                                              C u64 rhsHash) {
+    MUND FORCEINLINE bool equalByHashAndState(const T& lhsState,
+                                              const u64 lhsHash,
+                                              const T& rhsState,
+                                              const u64 rhsHash) {
         return lhsHash == rhsHash && lhsState == rhsState;
     }
 
     template<typename T>
     MU static void normalizeBucketsByState(JVec<T>& states,
-                                           C JVec<u64>& hashes) {
+                                           const JVec<u64>& hashes) {
         if (states.size() <= 1) {
             return;
         }
@@ -319,7 +319,7 @@ namespace frontier_recovery_detail {
         std::size_t begin = 0;
         while (begin < states.size()) {
             std::size_t end = begin + 1;
-            C u64 hash = hashes[begin];
+            const u64 hash = hashes[begin];
 
             while (end < states.size() && hashes[end] == hash) {
                 ++end;
@@ -342,9 +342,9 @@ MU static void sortStatesByHash(JVec<T>& states,
         return;
     }
 
-    std::sort(states.begin(), states.end(), [&](C T& a, C T& b) {
-        C u64 ha = StateHash::computeHash(a);
-        C u64 hb = StateHash::computeHash(b);
+    std::sort(states.begin(), states.end(), [&](const T& a, const T& b) {
+        const u64 ha = StateHash::computeHash(a);
+        const u64 hb = StateHash::computeHash(b);
 
         if (ha < hb) {
             return true;
@@ -390,8 +390,8 @@ MU static void compactUniqueSortedStatesInPlace(JVec<T>& states,
 template<typename T>
 MU static void removeStatesPresentInSortedSetLinear(JVec<T>& states,
                                                     JVec<u64>& hashes,
-                                                    C JVec<T>& sortedSeenStates,
-                                                    C JVec<u64>& sortedSeenHashes) {
+                                                    const JVec<T>& sortedSeenStates,
+                                                    const JVec<u64>& sortedSeenHashes) {
     if (states.empty() || sortedSeenStates.empty()) {
         return;
     }
@@ -400,7 +400,7 @@ MU static void removeStatesPresentInSortedSetLinear(JVec<T>& states,
     std::size_t seenIndex = 0;
 
     for (std::size_t i = 0; i < states.size(); ++i) {
-        C u64 curHash = hashes[i];
+        const u64 curHash = hashes[i];
 
         while (seenIndex < sortedSeenStates.size() && sortedSeenHashes[seenIndex] < curHash) {
             ++seenIndex;
@@ -431,8 +431,8 @@ MU static void removeStatesPresentInSortedSetLinear(JVec<T>& states,
 template<typename T>
 MU static void mergeSortedUniqueStatesIntoSeen(JVec<T>& seenStates,
                                                JVec<u64>& seenHashes,
-                                               C JVec<T>& newStates,
-                                               C JVec<u64>& newHashes,
+                                               const JVec<T>& newStates,
+                                               const JVec<u64>& newHashes,
                                                JVec<T>& scratchStates,
                                                JVec<u64>& scratchHashes) {
     if (newStates.empty()) {
@@ -531,44 +531,44 @@ class FrontierBuilderB1B2 {
     u64 peakWorkspaceCapacityBytes_ = 0;
 
     template<typename T>
-    MUND static u64 laneLiveBytes(C JVec<T>& lane) {
+    MUND static u64 laneLiveBytes(const JVec<T>& lane) {
         return static_cast<u64>(lane.size()) * static_cast<u64>(sizeof(T));
     }
 
     template<typename T>
-    MUND static u64 laneCapacityBytes(C JVec<T>& lane) {
+    MUND static u64 laneCapacityBytes(const JVec<T>& lane) {
         return static_cast<u64>(lane.capacity()) * static_cast<u64>(sizeof(T));
     }
 
-    MUND static u64 pairLiveBytes(C JVec<B1B2>& states,
-                                  C JVec<u64>& hashes) {
+    MUND static u64 pairLiveBytes(const JVec<B1B2>& states,
+                                  const JVec<u64>& hashes) {
         return laneLiveBytes(states) + laneLiveBytes(hashes);
     }
 
-    MUND static u64 pairCapacityBytes(C JVec<B1B2>& states,
-                                      C JVec<u64>& hashes) {
+    MUND static u64 pairCapacityBytes(const JVec<B1B2>& states,
+                                      const JVec<u64>& hashes) {
         return laneCapacityBytes(states) + laneCapacityBytes(hashes);
     }
 
-    MUND static std::string fmtBytes(C u64 bytes) {
+    MUND static std::string fmtBytes(const u64 bytes) {
         return bytesFormatted<1000>(bytes);
     }
 
-    MUND static double pct(C u64 num, C u64 den) {
+    MUND static double pct(const u64 num, const u64 den) {
         if (den == 0) {
             return 0.0;
         }
         return 100.0 * static_cast<double>(num) / static_cast<double>(den);
     }
 
-    MUND u64 workspaceLiveBytes() C {
+    MUND u64 workspaceLiveBytes() const {
         return pairLiveBytes(seen_, seenHashes_)
                + pairLiveBytes(frontier_, frontierHashes_)
                + pairLiveBytes(next_, nextHashes_)
                + pairLiveBytes(mergeScratch_, mergeScratchHashes_);
     }
 
-    MUND u64 workspaceCapacityBytes() C {
+    MUND u64 workspaceCapacityBytes() const {
         return pairCapacityBytes(seen_, seenHashes_)
                + pairCapacityBytes(frontier_, frontierHashes_)
                + pairCapacityBytes(next_, nextHashes_)
@@ -576,15 +576,15 @@ class FrontierBuilderB1B2 {
     }
 
     MU void updatePeakWorkspaceCapacity() {
-        C u64 cur = workspaceCapacityBytes();
+        const u64 cur = workspaceCapacityBytes();
         if (cur > peakWorkspaceCapacityBytes_) {
             peakWorkspaceCapacityBytes_ = cur;
         }
     }
 
-    MU void printLaneStats(C char* label,
-                           C JVec<B1B2>& states,
-                           C JVec<u64>& hashes) C {
+    MU void printLaneStats(const char* label,
+                           const JVec<B1B2>& states,
+                           const JVec<u64>& hashes) const {
         tcout << "    " << label
               << ": size=" << states.size()
               << ", cap=" << states.capacity()
@@ -593,11 +593,11 @@ class FrontierBuilderB1B2 {
               << '\n';
     }
 
-    MUND u64 getBranchCap() C {
+    MUND u64 getBranchCap() const {
         return root_.getFatBool() ? FAT_BRANCH_CAP : NORMAL_BRANCH_CAP;
     }
 
-    MUND static u64 mulSaturating(C u64 a, C u64 b) {
+    MUND static u64 mulSaturating(const u64 a, const u64 b) {
         if (a == 0 || b == 0) {
             return 0;
         }
@@ -607,8 +607,8 @@ class FrontierBuilderB1B2 {
         return a * b;
     }
 
-    MUND u64 estimateNextReserve() C {
-        C u64 hardUpper = mulSaturating(static_cast<u64>(frontier_.size()), getBranchCap());
+    MUND u64 estimateNextReserve() const {
+        const u64 hardUpper = mulSaturating(static_cast<u64>(frontier_.size()), getBranchCap());
 
         if (hardUpper == 0) {
             return 0;
@@ -618,11 +618,11 @@ class FrontierBuilderB1B2 {
             return hardUpper;
         }
 
-        C double keepRatio =
+        const double keepRatio =
                 static_cast<double>(lastStats_.afterSeenSubtract) /
                 static_cast<double>(lastStats_.rawGenerated);
 
-        C double paddedRatio = std::clamp(keepRatio * 1.25, 0.10, 1.0);
+        const double paddedRatio = std::clamp(keepRatio * 1.25, 0.10, 1.0);
 
         u64 estimate = static_cast<u64>(static_cast<double>(hardUpper) * paddedRatio + 64.0);
 
@@ -651,8 +651,8 @@ class FrontierBuilderB1B2 {
         frontier_.resize(1);
         frontierHashes_.resize(1);
 
-        C B1B2 rootState = root_.asB1B2();
-        C u64 rootHash = StateHash::computeHash(rootState);
+        const B1B2 rootState = root_.asB1B2();
+        const u64 rootHash = StateHash::computeHash(rootState);
 
         seen_[0] = rootState;
         seenHashes_[0] = rootHash;
@@ -668,14 +668,14 @@ class FrontierBuilderB1B2 {
         updatePeakWorkspaceCapacity();
     }
 
-    MU void expandOneDepth(C u32 depth) {
+    MU void expandOneDepth(const u32 depth) {
         Timer stepTimer;
         tcout << "Generating NONE depth " << depth << "...\n" << std::flush;
 
         next_.clear();
         nextHashes_.clear();
 
-        C u64 reserveGuess = estimateNextReserve();
+        const u64 reserveGuess = estimateNextReserve();
         frontier_recovery_detail::reserveStateHashLanes(
                 next_,
                 nextHashes_,
@@ -698,7 +698,7 @@ class FrontierBuilderB1B2 {
               << " live, " << fmtBytes(pairCapacityBytes(seen_, seenHashes_))
               << " reserved\n";
 
-        C u64 hardUpper = static_cast<u64>(frontier_.size()) * getBranchCap();
+        const u64 hardUpper = static_cast<u64>(frontier_.size()) * getBranchCap();
 
         tcout << "    expand threads: " << lastStats_.expandThreads << '\n';
 
@@ -806,18 +806,18 @@ class FrontierBuilderB1B2 {
 public:
     MU FrontierBuilderB1B2() = default;
 
-    MU explicit FrontierBuilderB1B2(C Board& root)
+    MU explicit FrontierBuilderB1B2(const Board& root)
         : root_(root), colorCount_(root.getColorCount()) {
         initRootState();
     }
 
-    MU void reset(C Board& root) {
+    MU void reset(const Board& root) {
         root_ = root;
         colorCount_ = root.getColorCount();
         initRootState();
     }
 
-    MU void buildExactNoneDepth(C u32 targetDepth,
+    MU void buildExactNoneDepth(const u32 targetDepth,
                                 JVec<B1B2>& outDepth,
                                 JVec<u64>& outHashes) {
         outDepth.clear();
@@ -845,7 +845,7 @@ public:
 };
 
 template<int DEPTH>
-MU static void buildUniqueNoneDepthFrontierB1B2(C Board& root,
+MU static void buildUniqueNoneDepthFrontierB1B2(const Board& root,
                                                 JVec<B1B2>& outDepth,
                                                 JVec<u64>& outHashes) {
     FrontierBuilderB1B2 builder(root);

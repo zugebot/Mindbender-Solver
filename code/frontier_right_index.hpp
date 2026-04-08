@@ -112,44 +112,44 @@ private:
     BucketStats stats_{};
 
     template<typename T>
-    MUND static u64 liveBytes(C JVec<T>& lane) {
+    MUND static u64 liveBytes(const JVec<T>& lane) {
         return static_cast<u64>(lane.size()) * static_cast<u64>(sizeof(T));
     }
 
     template<typename T>
-    MUND static u64 reservedBytes(C JVec<T>& lane) {
+    MUND static u64 reservedBytes(const JVec<T>& lane) {
         return static_cast<u64>(lane.capacity()) * static_cast<u64>(sizeof(T));
     }
 
-    MUND static u32 hashPrefix(C u64 hash) {
+    MUND static u32 hashPrefix(const u64 hash) {
         return static_cast<u32>(hash >> HASH_PREFIX_SHIFT);
     }
 
-    MUND static u32 hashPresenceHighBucket(C u64 hash) {
+    MUND static u32 hashPresenceHighBucket(const u64 hash) {
         return static_cast<u32>(hash >> HASH_PRESENCE_HIGH_SHIFT);
     }
 
-    MUND static u32 hashPresenceMidBucket(C u64 hash) {
+    MUND static u32 hashPresenceMidBucket(const u64 hash) {
         return static_cast<u32>((hash >> HASH_PRESENCE_MID_SHIFT) & HASH_PRESENCE_MID_MASK);
     }
 
-    MUND static u32 hashPresenceLowBucket(C u64 hash) {
+    MUND static u32 hashPresenceLowBucket(const u64 hash) {
         return static_cast<u32>(hash & HASH_PRESENCE_LOW_MASK);
     }
 
     MU static void setPresenceBit(JVec<u64>& words,
-                                  C u32 bucket) {
+                                  const u32 bucket) {
         words[static_cast<std::size_t>(bucket >> 6U)] |=
                 (1ULL << static_cast<u32>(bucket & 63U));
     }
 
-    MUND static bool getPresenceBit(C JVec<u64>& words,
-                                    C u32 bucket) {
+    MUND static bool getPresenceBit(const JVec<u64>& words,
+                                    const u32 bucket) {
         return (words[static_cast<std::size_t>(bucket >> 6U)] &
                 (1ULL << static_cast<u32>(bucket & 63U))) != 0ULL;
     }
 
-    MU static void addBucketToHistogram(C u32 bucketSize,
+    MU static void addBucketToHistogram(const u32 bucketSize,
                                         BucketStats& s) {
         if (bucketSize == 1) {
             ++s.bucketsSize1;
@@ -212,7 +212,7 @@ private:
         std::fill(lowPresenceWords_.begin(), lowPresenceWords_.end(), 0ULL);
 
         for (std::size_t i = 0; i < ranges_.size(); ++i) {
-            C u64 hash = ranges_[i].hash;
+            const u64 hash = ranges_[i].hash;
 
             setPresenceBit(highPresenceWords_, hashPresenceHighBucket(hash));
             setPresenceBit(midPresenceWords_, hashPresenceMidBucket(hash));
@@ -220,24 +220,24 @@ private:
         }
     }
 
-    MUND i64 findRangeIndex(C u64 hash) C {
+    MUND i64 findRangeIndex(const u64 hash) const {
         if (ranges_.empty() || prefixStarts_.empty()) {
             return -1;
         }
 
-        C u32 prefix = hashPrefix(hash);
-        C u32 begin = prefixStarts_[prefix];
-        C u32 end = prefixStarts_[prefix + 1];
+        const u32 prefix = hashPrefix(hash);
+        const u32 begin = prefixStarts_[prefix];
+        const u32 end = prefixStarts_[prefix + 1];
 
         if (begin == end) {
             return -1;
         }
 
-        C u32 span = end - begin;
+        const u32 span = end - begin;
 
         if (span <= PREFIX_LINEAR_SCAN_THRESHOLD) {
             for (u32 i = begin; i < end; ++i) {
-                C u64 cur = ranges_[i].hash;
+                const u64 cur = ranges_[i].hash;
                 if (cur == hash) {
                     return static_cast<i64>(i);
                 }
@@ -252,8 +252,8 @@ private:
         i64 hi = static_cast<i64>(end) - 1;
 
         while (lo <= hi) {
-            C i64 mid = lo + ((hi - lo) >> 1);
-            C u64 midHash = ranges_[static_cast<std::size_t>(mid)].hash;
+            const i64 mid = lo + ((hi - lo) >> 1);
+            const u64 midHash = ranges_[static_cast<std::size_t>(mid)].hash;
 
             if (midHash < hash) {
                 lo = mid + 1;
@@ -285,7 +285,7 @@ private:
         u32 maxBucketSize = minBucketSize;
 
         for (std::size_t i = 0; i < ranges_.size(); ++i) {
-            C u32 bucketSize = ranges_[i].end - ranges_[i].begin;
+            const u32 bucketSize = ranges_[i].end - ranges_[i].begin;
             bucketSizes[i] = bucketSize;
 
             totalBucketSize += bucketSize;
@@ -346,7 +346,7 @@ public:
     template<bool BUILD_BUCKET_STATS = true>
     MU void buildFromUniqueStates(JVec<B1B2>&& states,
                                   JVec<u64>&& hashes,
-                                  C Board& goalBoard) {
+                                  const Board& goalBoard) {
         states_.clear();
         hashes_.clear();
         ranges_.clear();
@@ -380,7 +380,7 @@ public:
         u64 currentHash = hashes_[0];
 
         for (u32 i = 1; i < hashes_.size(); ++i) {
-            C u64 nextHash = hashes_[i];
+            const u64 nextHash = hashes_[i];
             if (nextHash != currentHash) {
                 ranges_[rangeWrite].hash = currentHash;
                 ranges_[rangeWrite].begin = begin;
@@ -408,47 +408,47 @@ public:
         }
     }
 
-    MUND C JVec<B1B2>& states() C {
+    MUND const JVec<B1B2>& states() const {
         return states_;
     }
 
-    MUND C JVec<u64>& hashes() C {
+    MUND const JVec<u64>& hashes() const {
         return hashes_;
     }
 
-    MUND std::size_t size() C {
+    MUND std::size_t size() const {
         return states_.size();
     }
 
-    MUND std::size_t rangeCount() C {
+    MUND std::size_t rangeCount() const {
         return ranges_.size();
     }
 
-    MUND C BucketStats& stats() C {
+    MUND const BucketStats& stats() const {
         return stats_;
     }
 
-    MU void printStats() C {
-        C u64 statesLive = liveBytes(states_);
-        C u64 hashesLive = liveBytes(hashes_);
-        C u64 rangesLive = liveBytes(ranges_);
-        C u64 prefixLive = liveBytes(prefixStarts_);
-        C u64 highPresenceLive = liveBytes(highPresenceWords_);
-        C u64 midPresenceLive = liveBytes(midPresenceWords_);
-        C u64 lowPresenceLive = liveBytes(lowPresenceWords_);
+    MU void printStats() const {
+        const u64 statesLive = liveBytes(states_);
+        const u64 hashesLive = liveBytes(hashes_);
+        const u64 rangesLive = liveBytes(ranges_);
+        const u64 prefixLive = liveBytes(prefixStarts_);
+        const u64 highPresenceLive = liveBytes(highPresenceWords_);
+        const u64 midPresenceLive = liveBytes(midPresenceWords_);
+        const u64 lowPresenceLive = liveBytes(lowPresenceWords_);
 
-        C u64 statesReserved = reservedBytes(states_);
-        C u64 hashesReserved = reservedBytes(hashes_);
-        C u64 rangesReserved = reservedBytes(ranges_);
-        C u64 prefixReserved = reservedBytes(prefixStarts_);
-        C u64 highPresenceReserved = reservedBytes(highPresenceWords_);
-        C u64 midPresenceReserved = reservedBytes(midPresenceWords_);
-        C u64 lowPresenceReserved = reservedBytes(lowPresenceWords_);
+        const u64 statesReserved = reservedBytes(states_);
+        const u64 hashesReserved = reservedBytes(hashes_);
+        const u64 rangesReserved = reservedBytes(ranges_);
+        const u64 prefixReserved = reservedBytes(prefixStarts_);
+        const u64 highPresenceReserved = reservedBytes(highPresenceWords_);
+        const u64 midPresenceReserved = reservedBytes(midPresenceWords_);
+        const u64 lowPresenceReserved = reservedBytes(lowPresenceWords_);
 
-        C u64 totalLive =
+        const u64 totalLive =
                 statesLive + hashesLive + rangesLive + prefixLive +
                 highPresenceLive + midPresenceLive + lowPresenceLive;
-        C u64 totalReserved =
+        const u64 totalReserved =
                 statesReserved + hashesReserved + rangesReserved + prefixReserved +
                 highPresenceReserved + midPresenceReserved + lowPresenceReserved;
 
@@ -527,11 +527,11 @@ public:
     }
 
     template<int RIGHT_FRONTIER_DEPTH, bool COLLECT_PROBE_STATS = true>
-    MU void collectMatches(C JVec<B1B2>& leftStates,
-                           C JVec<u64>& leftHashes,
+    MU void collectMatches(const JVec<B1B2>& leftStates,
+                           const JVec<u64>& leftHashes,
                            JVec<B1B2>& outUniqueMatches,
                            JVec<u64>& outUniqueMatchHashes,
-                           ProbeStats* probeStats = nullptr) C {
+                           ProbeStats* probeStats = nullptr) const {
         outUniqueMatches.clear();
         outUniqueMatchHashes.clear();
         
@@ -553,8 +553,8 @@ public:
         std::size_t writeIndex = 0;
 
         for (std::size_t lhsIndex = 0; lhsIndex < leftStates.size(); ++lhsIndex) {
-            C B1B2& lhs = leftStates[lhsIndex];
-            C u64 lhsHash = leftHashes[lhsIndex];
+            const B1B2& lhs = leftStates[lhsIndex];
+            const u64 lhsHash = leftHashes[lhsIndex];
 
             // if constexpr (RIGHT_FRONTIER_DEPTH > 0) {
             //     if (hasGoalState_
@@ -563,7 +563,7 @@ public:
             //     }
             // }
 
-            C u32 highBucket = hashPresenceHighBucket(lhsHash);
+            const u32 highBucket = hashPresenceHighBucket(lhsHash);
             if (!getPresenceBit(highPresenceWords_, highBucket)) {
                 if constexpr (COLLECT_PROBE_STATS) {
                     ++probeStats->hashMisses;
@@ -572,7 +572,7 @@ public:
                 continue;
             }
 
-            C u32 midBucket = hashPresenceMidBucket(lhsHash);
+            const u32 midBucket = hashPresenceMidBucket(lhsHash);
             if (!getPresenceBit(midPresenceWords_, midBucket)) {
                 if constexpr (COLLECT_PROBE_STATS) {
                     ++probeStats->hashMisses;
@@ -581,7 +581,7 @@ public:
                 continue;
             }
 
-            C u32 lowBucket = hashPresenceLowBucket(lhsHash);
+            const u32 lowBucket = hashPresenceLowBucket(lhsHash);
             if (!getPresenceBit(lowPresenceWords_, lowBucket)) {
                 if constexpr (COLLECT_PROBE_STATS) {
                     ++probeStats->hashMisses;
@@ -594,7 +594,7 @@ public:
                 ++probeStats->filterPasses;
             }
 
-            C i64 rangeIndex = findRangeIndex(lhsHash);
+            const i64 rangeIndex = findRangeIndex(lhsHash);
             if (rangeIndex < 0) {
                 if constexpr (COLLECT_PROBE_STATS) {
                     ++probeStats->hashMisses;
@@ -608,7 +608,7 @@ public:
                 ++probeStats->bucketsVisited;
             }
 
-            C HashRange& range = ranges_[static_cast<std::size_t>(rangeIndex)];
+            const HashRange& range = ranges_[static_cast<std::size_t>(rangeIndex)];
 
             if constexpr (COLLECT_PROBE_STATS) {
                 probeStats->bucketStatesScanned += static_cast<u64>(range.end - range.begin);

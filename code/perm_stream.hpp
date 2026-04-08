@@ -43,8 +43,8 @@ namespace perm_stream_detail {
     }
 
     template<typename T, i32 FINAL_DEPTH, typename Sink>
-    MU static void emitState(C Board& board_in,
-                             C u64 move_prev,
+    MU static void emitState(const Board& board_in,
+                             const u64 move_prev,
                              StreamChunk<T>& chunk,
                              Sink& sink) {
         static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
@@ -73,7 +73,7 @@ namespace perm_stream_detail {
              bool CHECK_CROSS, bool CHECK_SIM,
              typename Sink>
     static void stream_perm_list_inner(
-            C Board& board_in,
+            const Board& board_in,
             StreamChunk<T>& chunk,
             StreamBuildState<T, MAX_DEPTH>& state,
             u64 move_prev,
@@ -85,7 +85,7 @@ namespace perm_stream_detail {
              bool CHANGE_SECT_START, eSequenceDir SECT_DIR,
              typename Sink>
     static void stream_perm_list_outer(
-            C Board& board_in,
+            const Board& board_in,
             StreamChunk<T>& chunk,
             StreamBuildState<T, MAX_DEPTH>& state,
             Sink& sink);
@@ -96,7 +96,7 @@ namespace perm_stream_detail {
              bool CHANGE_SECT_START, eSequenceDir SECT_DIR,
              typename Sink>
     static void stream_perm_list(
-            C Board& board_in,
+            const Board& board_in,
             StreamChunk<T>& chunk,
             Sink& sink);
 
@@ -108,9 +108,9 @@ class PermStream {
     static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
     template<eSequenceDir SECT_DIR, i32 DEPTH, typename Sink>
-    MU static void streamDepthImpl(C Board& board_in,
+    MU static void streamDepthImpl(const Board& board_in,
                                    Sink& sink,
-                                   C u32 chunkCapacity) {
+                                   const u32 chunkCapacity) {
         if (chunkCapacity == 0) {
             return;
         }
@@ -147,18 +147,18 @@ class PermStream {
 
 public:
     template<eSequenceDir SECT_DIR, i32 DEPTH, typename Sink>
-    MU static void streamDepth(C Board& board_in,
+    MU static void streamDepth(const Board& board_in,
                                Sink& sink,
-                               C u32 chunkCapacity = 1u << 20) {
+                               const u32 chunkCapacity = 1u << 20) {
         static_assert(DEPTH >= 0 && DEPTH <= 5, "DEPTH must be in range 0..5");
         streamDepthImpl<SECT_DIR, DEPTH>(board_in, sink, chunkCapacity);
     }
 
     template<eSequenceDir SECT_DIR, typename Sink>
-    MU static void streamDepthRuntime(C Board& board_in,
+    MU static void streamDepthRuntime(const Board& board_in,
                                       Sink& sink,
-                                      C u32 depth,
-                                      C u32 chunkCapacity = 1u << 20) {
+                                      const u32 depth,
+                                      const u32 chunkCapacity = 1u << 20) {
         switch (depth) {
             case 0: streamDepthImpl<SECT_DIR, 0>(board_in, sink, chunkCapacity); break;
             case 1: streamDepthImpl<SECT_DIR, 1>(board_in, sink, chunkCapacity); break;

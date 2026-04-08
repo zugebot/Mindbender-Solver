@@ -58,30 +58,30 @@ u8 fatActionsIndexes[FAT_ACTION_INDEX_ROWS][FAT_ACTION_INDEX_COLS] = {
 };
 
 
-void applyMoves(Board &board, C Memory &memory) {
+void applyMoves(Board &board, const Memory &memory) {
     for (i32 i = 0; i < memory.getMoveCount(); i++)
         allActStructList[memory.getMove(i)].action(board);
 }
 
 
-void applyFatMoves(Board &board, C Memory &memory) {
+void applyFatMoves(Board &board, const Memory &memory) {
     for (i32 index = 0; index < memory.getMoveCount(); index++) {
-        C u8 move = memory.getMove(index);
+        const u8 move = memory.getMove(index);
 
-        C u8* funcIndexes = fatActionsIndexes[board.getFatXY()];
+        const u8* funcIndexes = fatActionsIndexes[board.getFatXY()];
         allActStructList[funcIndexes[move]].action(board);
     }
 }
 
 
-Board makeBoardWithMoves(C Board& board, C Memory& memory) {
+Board makeBoardWithMoves(const Board& board, const Memory& memory) {
     Board temp = board;
     applyMoves(temp, memory);
     return temp;
 }
 
 
-Board makeBoardWithFatMoves(C Board& board, C Memory& memory) {
+Board makeBoardWithFatMoves(const Board& board, const Memory& memory) {
     Board temp = board;
     applyFatMoves(temp, memory);
     return temp;

@@ -8,9 +8,9 @@
 #include <vector>
 
 
-int calculateColorDistributionHeuristic(C Board& currentBoard, C Board& goalBoard) {
-    C int numColors = 8; // Assuming colors are numbered from 0 to 7
-    C int gridSize = 6;  // 6x6 grid
+int calculateColorDistributionHeuristic(const Board& currentBoard, const Board& goalBoard) {
+    const int numColors = 8; // Assuming colors are numbered from 0 to 7
+    const int gridSize = 6;  // 6x6 grid
 
     // Arrays to hold color counts for rows and columns
     int currentRowColorCounts[gridSize][numColors] = {0};
@@ -75,12 +75,12 @@ struct SearchNode {
     int fCost{}; // Total estimated cost (gCost + hCost)
     std::vector<Action> actionsTaken; // Sequence of actions leading to this node
 
-    bool operator>(C SearchNode& other) C {
+    bool operator>(const SearchNode& other) const {
         return fCost > other.fCost; // Min-heap based on fCost
     }
 };
 
-std::pair<Board, int> solvePuzzle(C Board& startBoard, C Board& goalBoard) {
+std::pair<Board, int> solvePuzzle(const Board& startBoard, const Board& goalBoard) {
     std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<>> openSet;
     std::unordered_set<u64> closedSet; // Using hash of the board for fast lookup
 

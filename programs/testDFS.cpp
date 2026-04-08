@@ -38,7 +38,7 @@ struct RefState {
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool ROW_TRUE>
 HD void recursive_helper(
-        RefState<MAX_DEPTH>& theState, C B1B2 theBoard, C int theNext);
+        RefState<MAX_DEPTH>& theState, const B1B2 theBoard, const int theNext);
 
 
 
@@ -71,7 +71,7 @@ HD void recursive_helper(
 
 
 template<int CUR_DEPTH, int MAX_DEPTH, bool ROW_TRUE>
-HD void recursive_helper(RefState<MAX_DEPTH>& theState, C B1B2 theBoard, C int theNext) {
+HD void recursive_helper(RefState<MAX_DEPTH>& theState, const B1B2 theBoard, const int theNext) {
     ++theState.DEPTHS_COUNT[CUR_DEPTH];
     ++theState.states_traversed;
 
@@ -99,7 +99,7 @@ HD void recursive_helper(RefState<MAX_DEPTH>& theState, C B1B2 theBoard, C int t
 template <int MAX_DEPTH>
 __global__ void cudaRecursiveKernel(
         RefState<MAX_DEPTH>* states, int numThreads) {
-    C u32 idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const u32 idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < numThreads) {
         RefState<MAX_DEPTH>& state = states[idx];
         recursive_helper<0, MAX_DEPTH, true>(state, state.start, 0);
@@ -109,7 +109,7 @@ __global__ void cudaRecursiveKernel(
 
 
 MU __global__ void testRXX(Board theBoardPtr[30]) {
-    C i32 idx = static_cast<i32>(blockIdx.x * blockDim.x + threadIdx.x);
+    const i32 idx = static_cast<i32>(blockIdx.x * blockDim.x + threadIdx.x);
     if (idx < 30) {
         my_cuda::R_X_X(theBoardPtr[idx], idx);
     }
@@ -117,7 +117,7 @@ MU __global__ void testRXX(Board theBoardPtr[30]) {
 
 
 MU __global__ void testCXX(Board theBoardPtr[30]) {
-    C i32 idx = static_cast<i32>(blockIdx.x * blockDim.x + threadIdx.x);
+    const i32 idx = static_cast<i32>(blockIdx.x * blockDim.x + threadIdx.x);
     if (idx < 30) {
         my_cuda::C_X_X(theBoardPtr[idx], idx);
     }
@@ -198,7 +198,7 @@ int main() {
 
     tcout << "starting" << std::endl;
     // 13-1
-    C Board board = BoardLookup::getBoardPair("4-4")->getStartState();
+    const Board board = BoardLookup::getBoardPair("4-4")->getStartState();
     Board solve = board;
 
     solve.doMoves({R_4_1, C_5_5, R_2_2, R_1_5, C_3_4, R_2_2, R_4_4,});
@@ -242,7 +242,7 @@ int main() {
 
     // Device-side memory allocation
     RefState<DEPTH>* d_states;
-    C Timer allocT;
+    const Timer allocT;
     CUDA_CHECK(cudaMalloc(&d_states, STATE_SIZE));
     tcout << "Alloc: " << allocT.getSeconds() << std::endl;
 
@@ -256,7 +256,7 @@ int main() {
     CUDA_CHECK(cudaGetLastError());
 
 
-    C Timer syncT;
+    const Timer syncT;
     CUDA_CHECK(cudaDeviceSynchronize());
     tcout << "Synchronize: " << syncT.getSeconds() << std::endl;
 
@@ -286,7 +286,7 @@ int main() {
 
 /*
 int main() {
-    C Board board = BoardLookup::getBoardPair("13-1")->getStartState();
+    const Board board = BoardLookup::getBoardPair("13-1")->getStartState();
     Board solve = board;
 
     R_4_1(solve); // 0

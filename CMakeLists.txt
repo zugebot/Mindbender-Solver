@@ -128,6 +128,14 @@ function(add_solver_program target_name main_file)
             ${SHARED_SOURCES}
     )
 
+    set_target_properties(${target_name} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build"
+            RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/build"
+            RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/build"
+            RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/build"
+            RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_SOURCE_DIR}/build"
+    )
+
     if (TBB_FOUND)
         target_link_libraries(${target_name} PRIVATE TBB::tbb)
     endif()
@@ -190,7 +198,6 @@ endfunction()
 add_solver_program(testLayeredDFS         "${CMAKE_SOURCE_DIR}/programs/testLayeredDFS.cpp")
 add_solver_program(testKnownSolutions     "${CMAKE_SOURCE_DIR}/programs/testKnownSolutions.cpp")
 add_solver_program(testPuzzlesValid       "${CMAKE_SOURCE_DIR}/programs/testPuzzlesValid.cpp")
-add_solver_program(testLeftGenRightCache  "${CMAKE_SOURCE_DIR}/programs/testLeftGenRightCache.cpp")
 add_solver_program(testRotations          "${CMAKE_SOURCE_DIR}/programs/testRotations.cpp")
 add_solver_program(testDepth4Direct       "${CMAKE_SOURCE_DIR}/programs/testDepth4Direct.cpp")
 add_solver_program(testDepth4DirectFat    "${CMAKE_SOURCE_DIR}/programs/testDepth4DirectFat.cpp")
