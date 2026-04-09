@@ -1,5 +1,5 @@
 #pragma once
-// code/perms_gen.hpp
+// code/solver/memory_perm_gen.hpp
 
 #include <algorithm>
 #include <deque>
@@ -11,7 +11,7 @@
 #include <vector>
 #include <cstring>
 
-#include "include.hpp"
+#include "code/include.hpp"
 #include "utils/processor.hpp"
 #include "utils/timestamped_cout.hpp"
 

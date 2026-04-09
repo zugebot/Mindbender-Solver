@@ -117,7 +117,7 @@ tcout << board2.toString() << std::endl;
 */
 
     /*
-std::string outDirectory = R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver)";
+std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
 auto pair = BoardLookup::getBoardPair("9-1");
 Board board1 = pair->getInitialState();
 Board board2 = pair->getSolutionState();

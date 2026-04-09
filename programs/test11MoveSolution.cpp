@@ -62,7 +62,7 @@ void create6Depth(const Board& board, std::vector<Board>& boards_buffer, const s
 
 int main() {
 
-    const std::string outDirectory = R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver)";
+    const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     const auto pair = BoardLookup::getBoardPair("7-1");
 
     tcout << pair->toString() << std::endl;

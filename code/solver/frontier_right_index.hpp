@@ -1,7 +1,7 @@
 #pragma once
-// code/frontier_right_index.hpp
+// code/solver/frontier_right_index.hpp
 
-#include "frontier_builder.hpp"
+#include "code/solver/frontier_builder.hpp"
 
 class RightFrontierIndexB1B2 {
 public:

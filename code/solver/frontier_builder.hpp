@@ -1,5 +1,5 @@
 #pragma once
-// code/frontier_builder.hpp
+// code/solver/frontier_builder.hpp
 
 #include <algorithm>
 #include <cstddef>
@@ -12,9 +12,9 @@
 #include "utils/timestamped_cout.hpp"
 #include "utils/timer.hpp"
 
-#include "board.hpp"
-#include "perms.hpp"
-#include "sorter.hpp"
+#include "code/board.hpp"
+#include "code/perms.hpp"
+#include "code/solver/sorter.hpp"
 
 MU static Board makeBoardFromState(const B1B2& state) {
     Board out;
@@ -27,6 +27,8 @@ namespace frontier_recovery_detail {
 
     static constexpr std::size_t NORMAL_NONE_MOVE_COUNT =
             static_cast<std::size_t>(NORMAL_ROW_MOVE_COUNT + NORMAL_COL_MOVE_COUNT);
+
+    static constexpr std::size_t FAT_NONE_MOVE_COUNT = 48;
 
     struct FrontierChunkResult {
         JVec<B1B2> states;
@@ -131,10 +133,46 @@ namespace frontier_recovery_detail {
         return produced;
     }
 
+    MUND FORCEINLINE std::size_t emitFatNoneChildren(
+            const B1B2& parent,
+            B1B2* dstStates,
+            u64* dstHashes) {
+        std::size_t produced = 0;
+
+        const u8* funcIndexes = fatActionsIndexes[parent.getFatXY()];
+
+        for (u8 actn_i = 0; actn_i < FAT_NONE_MOVE_COUNT; ++actn_i) {
+            B1B2 child = parent;
+            allActStructList[funcIndexes[actn_i]].action(child);
+
+            if (child == parent) {
+                continue;
+            }
+
+            dstStates[produced] = child;
+            dstHashes[produced] = StateHash::computeHash(child);
+            ++produced;
+        }
+
+        return produced;
+    }
+
+    MUND FORCEINLINE std::size_t emitNoneChildren(
+            const B1B2& parent,
+            const bool isFatPuzzle,
+            B1B2* dstStates,
+            u64* dstHashes) {
+        if (isFatPuzzle) {
+            return emitFatNoneChildren(parent, dstStates, dstHashes);
+        }
+        return emitNormalNoneChildren(parent, dstStates, dstHashes);
+    }
+
     MU static void expandNoneFrontierRangeByOne(
             const JVec<B1B2>& frontierStates,
             const std::size_t beginIndex,
             const std::size_t endIndex,
+            const bool isFatPuzzle,
             JVec<B1B2>& outStates,
             JVec<u64>& outHashes,
             const u64 reserveGuessPerThread) {
@@ -145,8 +183,9 @@ namespace frontier_recovery_detail {
             return;
         }
 
+        const std::size_t branchCap = isFatPuzzle ? FAT_NONE_MOVE_COUNT : NORMAL_NONE_MOVE_COUNT;
         const std::size_t parentCount = endIndex - beginIndex;
-        const std::size_t hardUpper = parentCount * NORMAL_NONE_MOVE_COUNT;
+        const std::size_t hardUpper = parentCount * branchCap;
 
         if (reserveGuessPerThread != 0) {
             reserveStateHashLanes(
@@ -166,8 +205,9 @@ namespace frontier_recovery_detail {
 
         std::size_t producedTotal = 0;
         for (std::size_t i = beginIndex; i < endIndex; ++i) {
-            producedTotal += emitNormalNoneChildren(
+            producedTotal += emitNoneChildren(
                     frontierStates[i],
+                    isFatPuzzle,
                     &outStates[producedTotal],
                     &outHashes[producedTotal]
             );
@@ -195,6 +235,7 @@ namespace frontier_recovery_detail {
 
     MU static void expandNoneFrontierByOne(
             const JVec<B1B2>& frontierStates,
+            const bool isFatPuzzle,
             JVec<B1B2>& nextStates,
             JVec<u64>& nextHashes,
             const u64 reserveGuess) {
@@ -212,6 +253,7 @@ namespace frontier_recovery_detail {
                     frontierStates,
                     0,
                     frontierStates.size(),
+                    isFatPuzzle,
                     nextStates,
                     nextHashes,
                     reserveGuess
@@ -230,8 +272,12 @@ namespace frontier_recovery_detail {
                                             ? 0
                                             : (reserveGuess / static_cast<u64>(threadCount));
 
-        if (reserveGuessPerThread < NORMAL_NONE_MOVE_COUNT) {
-            reserveGuessPerThread = NORMAL_NONE_MOVE_COUNT;
+        const u64 minReservePerThread = isFatPuzzle
+                                                ? static_cast<u64>(FAT_NONE_MOVE_COUNT)
+                                                : static_cast<u64>(NORMAL_NONE_MOVE_COUNT);
+
+        if (reserveGuessPerThread < minReservePerThread) {
+            reserveGuessPerThread = minReservePerThread;
         }
 
         std::size_t begin = 0;
@@ -239,11 +285,12 @@ namespace frontier_recovery_detail {
             const std::size_t chunkLen = baseChunk + (t < remainder ? 1 : 0);
             const std::size_t end = begin + chunkLen;
 
-            workers.emplace_back([&, t, begin, end]() {
+            workers.emplace_back([&, t, begin, end, isFatPuzzle, reserveGuessPerThread]() {
                 expandNoneFrontierRangeByOne(
                         frontierStates,
                         begin,
                         end,
+                        isFatPuzzle,
                         partials[t].states,
                         partials[t].hashes,
                         reserveGuessPerThread
@@ -593,8 +640,12 @@ class FrontierBuilderB1B2 {
               << '\n';
     }
 
+    MUND bool isFatPuzzle() const {
+        return root_.getFatBool();
+    }
+
     MUND u64 getBranchCap() const {
-        return root_.getFatBool() ? FAT_BRANCH_CAP : NORMAL_BRANCH_CAP;
+        return isFatPuzzle() ? FAT_BRANCH_CAP : NORMAL_BRANCH_CAP;
     }
 
     MUND static u64 mulSaturating(const u64 a, const u64 b) {
@@ -675,6 +726,7 @@ class FrontierBuilderB1B2 {
         next_.clear();
         nextHashes_.clear();
 
+        const bool fatPuzzle = isFatPuzzle();
         const u64 reserveGuess = estimateNextReserve();
         frontier_recovery_detail::reserveStateHashLanes(
                 next_,
@@ -710,6 +762,7 @@ class FrontierBuilderB1B2 {
 
         frontier_recovery_detail::expandNoneFrontierByOne(
                 frontier_,
+                fatPuzzle,
                 next_,
                 nextHashes_,
                 reserveGuess

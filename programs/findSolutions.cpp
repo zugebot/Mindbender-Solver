@@ -1,6 +1,6 @@
 // programs/findSolutions.cpp
 #include "code/include.hpp"
-#include "code/memory_perm_gen.hpp"
+#include "code/solver/memory_perm_gen.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -9,8 +9,8 @@
 #include <iostream>
 #include <string>
 
-#include "code/solver_direct.hpp"
-#include "code/solver_frontier.hpp"
+#include "code/solver/solver_direct.hpp"
+#include "code/solver/solver_frontier.hpp"
 #include "include/nlohmann/json.hpp"
 #include "utils/get_free_memory.hpp"
 
@@ -19,7 +19,7 @@
 
 
 struct FindSolutionConfig {
-    std::string outDirectory = R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver)";
+    std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     BoardSolverFrontier::SearchDirection searchDirection = BoardSolverFrontier::SearchDirection::Auto;
     bool debug = true;
     std::string puzzle = "14-2";
@@ -169,6 +169,10 @@ static int runSolverForEstimatedDepth(
 
         case 12:
             solver.findSolutionsFrontierThreaded<2, 5, 5, DEBUG>(threads, searchDirection);
+            return 0;
+            
+        case 13:
+            solver.findSolutionsFrontierThreaded<3, 5, 5, DEBUG>(threads, searchDirection);
             return 0;
 
         default:

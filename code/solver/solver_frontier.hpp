@@ -1,5 +1,5 @@
 #pragma once
-// code/solver_frontier.hpp
+// code/solver/solver_frontier.hpp
 
 #include <atomic>
 #include <cstddef>
@@ -10,9 +10,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include "code/intersection.hpp"
+#include "code/perm_stream.hpp"
 #include "frontier_right_index.hpp"
-#include "intersection.hpp"
-#include "perm_stream.hpp"
 #include "solver_base.hpp"
 
 class MU BoardSolverFrontier : public BoardSolverBase {
@@ -120,29 +120,32 @@ private:
         }
     }
 
-    MU static std::string reverseNormalSolutionString(const std::string& solution) {
-        if (solution.empty()) {
-            return {};
-        }
-
-        std::string copy = solution;
-        std::vector<u8> moves = Memory::parseNormMoveString(copy);
-
-        if (moves.empty()) {
-            return solution;
-        }
-
-        std::string out;
-        out.reserve(solution.size());
-
-        for (std::size_t i = moves.size(); i > 0; --i) {
-            if (!out.empty()) {
-                out += ' ';
+    template<bool REVERSE_OUTPUT>
+    MUND static std::string buildRecoveredPathString(const Board& leftRoot,
+                                                     const Memory& leftMemory,
+                                                     const Board& rightRoot,
+                                                     const Memory& rightMemory) {
+        if constexpr (REVERSE_OUTPUT) {
+            if (leftRoot.getFatBool() || rightRoot.getFatBool()) {
+                return rightMemory.asmFatString(
+                        rightRoot.getFatXY(),
+                        &leftMemory,
+                        leftRoot.getFatXY()
+                );
             }
-            out += Memory::formatMoveString(moves[i - 1], false);
-        }
 
-        return out;
+            return rightMemory.asmString(&leftMemory);
+        } else {
+            if (leftRoot.getFatBool() || rightRoot.getFatBool()) {
+                return leftMemory.asmFatString(
+                        leftRoot.getFatXY(),
+                        &rightMemory,
+                        rightRoot.getFatXY()
+                );
+            }
+
+            return leftMemory.asmString(&rightMemory);
+        }
     }
 
     MU static void buildBoardExactNoneFrontier(const Board& root,
@@ -175,27 +178,41 @@ private:
         buildBoardExactNoneFrontier(cache.root, cache.depth, cache);
     }
 
-    MU static void recoverExactNormalSplit(const Board& leftRoot,
-                                           const u32 leftDepth,
-                                           const JVec<Board>& leftStates,
-                                           const JVec<u64>& leftHashes,
-                                           const Board& rightRoot,
-                                           const u32 rightDepth,
-                                           const JVec<Board>& rightStates,
-                                           const JVec<u64>& rightHashes,
-                                           std::set<std::string>& outPaths) {
+    template<bool REVERSE_OUTPUT>
+    MU static void recoverExactSplit(const Board& leftRoot,
+                                     const u32 leftDepth,
+                                     const JVec<Board>& leftStates,
+                                     const JVec<u64>& leftHashes,
+                                     const Board& rightRoot,
+                                     const u32 rightDepth,
+                                     const JVec<Board>& rightStates,
+                                     const JVec<u64>& rightHashes,
+                                     std::set<std::string>& outPaths) {
         outPaths.clear();
-
+        
         const auto matches = (leftDepth != 0 && rightDepth != 0)
-                                 ? intersection_threaded(leftStates, leftHashes, rightStates, rightHashes)
-                                 : intersection(leftStates, leftHashes, rightStates, rightHashes);
+                                     ? intersection_threaded(leftStates, leftHashes, rightStates, rightHashes)
+                                     : intersection(leftStates, leftHashes, rightStates, rightHashes);
+
+        const bool leftIsFat = leftRoot.getFatBool();
+        const bool rightIsFat = rightRoot.getFatBool();
 
         for (const auto& [fst, snd] : matches) {
-            const Board temp1 = makeBoardWithMoves(leftRoot, fst->memory);
-            const Board temp2 = makeBoardWithMoves(rightRoot, snd->memory);
+            const Board temp1 = leftIsFat
+                                        ? makeBoardWithFatMoves(leftRoot, fst->memory)
+                                        : makeBoardWithMoves(leftRoot, fst->memory);
+
+            const Board temp2 = rightIsFat
+                                        ? makeBoardWithFatMoves(rightRoot, snd->memory)
+                                        : makeBoardWithMoves(rightRoot, snd->memory);
 
             if (temp1 == temp2) {
-                outPaths.insert(fst->memory.asmString(&snd->memory));
+                outPaths.insert(buildRecoveredPathString<REVERSE_OUTPUT>(
+                        leftRoot,
+                        fst->memory,
+                        rightRoot,
+                        snd->memory
+                        ));
             }
         }
     }
@@ -219,7 +236,7 @@ private:
         RecoveryBoardFrontierCache seedPrefixRightCache;
         ensureCache(seedPrefixRightCache, seedBoard, prefixRightDepth);
 
-        recoverExactNormalSplit(
+        recoverExactSplit<REVERSE_SEARCH>(
                 searchStartRoot,
                 prefixLeftDepth,
                 prefixLeftCache_.states,
@@ -232,6 +249,7 @@ private:
         );
     }
 
+    template<bool REVERSE_OUTPUT>
     MU void recoverSeedToMiddle(const Board& seedBoard,
                                 const B1B2& middleState,
                                 const u32 seedLeftDepth,
@@ -244,7 +262,7 @@ private:
         ensureCache(seedLeftCache, seedBoard, seedLeftDepth);
         ensureCache(middleRightCache, middleBoard, middleRightDepth);
 
-        recoverExactNormalSplit(
+        recoverExactSplit<REVERSE_OUTPUT>(
                 seedBoard,
                 seedLeftDepth,
                 seedLeftCache.states,
@@ -269,7 +287,7 @@ private:
         ensureCache(middleLeftCache, middleBoard, middleLeftDepth);
         ensureCache(goalRightCache_, searchGoalRoot, goalRightDepth);
 
-        recoverExactNormalSplit(
+        recoverExactSplit<REVERSE_SEARCH>(
                 middleBoard,
                 middleLeftDepth,
                 middleLeftCache.states,
@@ -282,11 +300,10 @@ private:
         );
     }
 
-    template<bool REVERSE_SEARCH>
-    MU static void appendJoinedSolutions(const std::set<std::string>& prefixes,
-                                         const std::set<std::string>& middles,
-                                         const std::set<std::string>& suffixes,
-                                         std::unordered_set<std::string>& outRaw) {
+    MU static void appendJoinedSolutionsForward(const std::set<std::string>& prefixes,
+                                                const std::set<std::string>& middles,
+                                                const std::set<std::string>& suffixes,
+                                                std::unordered_set<std::string>& outRaw) {
         for (const auto& p : prefixes) {
             for (const auto& m : middles) {
                 std::string leftHalf;
@@ -299,22 +316,65 @@ private:
                 }
 
                 for (const auto& s : suffixes) {
-                    std::string fullSolution;
                     if (leftHalf.empty()) {
-                        fullSolution = s;
+                        outRaw.insert(s);
                     } else if (s.empty()) {
-                        fullSolution = leftHalf;
+                        outRaw.insert(leftHalf);
                     } else {
-                        fullSolution = leftHalf + " " + s;
-                    }
-
-                    if constexpr (REVERSE_SEARCH) {
-                        outRaw.insert(reverseNormalSolutionString(fullSolution));
-                    } else {
-                        outRaw.insert(std::move(fullSolution));
+                        outRaw.insert(leftHalf + " " + s);
                     }
                 }
             }
+        }
+    }
+
+    MU static void appendJoinedSolutionsReverse(const std::set<std::string>& seedToGoalPaths,
+                                                const std::set<std::string>& middleToSeedPaths,
+                                                const std::set<std::string>& startToMiddlePaths,
+                                                std::unordered_set<std::string>& outRaw) {
+        for (const auto& startToMiddle : startToMiddlePaths) {
+            for (const auto& middleToSeed : middleToSeedPaths) {
+                std::string leftHalf;
+                if (startToMiddle.empty()) {
+                    leftHalf = middleToSeed;
+                } else if (middleToSeed.empty()) {
+                    leftHalf = startToMiddle;
+                } else {
+                    leftHalf = startToMiddle + " " + middleToSeed;
+                }
+
+                for (const auto& seedToGoal : seedToGoalPaths) {
+                    if (leftHalf.empty()) {
+                        outRaw.insert(seedToGoal);
+                    } else if (seedToGoal.empty()) {
+                        outRaw.insert(leftHalf);
+                    } else {
+                        outRaw.insert(leftHalf + " " + seedToGoal);
+                    }
+                }
+            }
+        }
+    }
+
+    template<bool REVERSE_SEARCH>
+    MU static void appendJoinedSolutions(const std::set<std::string>& prefixes,
+                                         const std::set<std::string>& middles,
+                                         const std::set<std::string>& suffixes,
+                                         std::unordered_set<std::string>& outRaw) {
+        if constexpr (REVERSE_SEARCH) {
+            appendJoinedSolutionsReverse(
+                    prefixes,
+                    middles,
+                    suffixes,
+                    outRaw
+            );
+        } else {
+            appendJoinedSolutionsForward(
+                    prefixes,
+                    middles,
+                    suffixes,
+                    outRaw
+            );
         }
     }
 
@@ -555,11 +615,6 @@ private:
         resultSet.clear();
         expandedResultSet.clear();
 
-        if (hasFat) {
-            tcout << "findSolutionsFrontier currently only supports non-fat puzzles.\n";
-            return;
-        }
-
         prefixLeftCache_.valid = false;
         goalRightCache_.valid = false;
         rightFrontierIndex_.clear();
@@ -673,7 +728,7 @@ private:
                 middleRightCache.valid = false;
                 middleLeftCache.valid = false;
 
-                recoverSeedToMiddle(
+                recoverSeedToMiddle<REVERSE_SEARCH>(
                         seedBoard,
                         middleMatches[m],
                         SEED_LEFT_DEPTH,
@@ -716,7 +771,7 @@ private:
                 tcout << "    unique raw solutions so far: " << resultSet.size() << '\n';
             }
         }
-        
+
         tcout << "\nPuzzle: " << pair->getName() << '\n';
         tcout << "Total Depth: " << TOTAL_DEPTH << '\n';
         tcout << "Total Time: " << totalTime.getSeconds() << '\n';
@@ -754,11 +809,6 @@ private:
 
         resultSet.clear();
         expandedResultSet.clear();
-
-        if (hasFat) {
-            tcout << "findSolutionsFrontierThreaded currently only supports non-fat puzzles.\n";
-            return;
-        }
 
         if (worker_count < 1) {
             worker_count = 1;
@@ -912,11 +962,11 @@ private:
                 if constexpr (SEED_DEPTH == 0) {
                     prefixPaths.insert("");
                 } else {
-                    Board& searchStartRootLocal = getSearchStartBoard<REVERSE_SEARCH>();
-
                     ensureCache(seedPrefixRightCache, seedBoard, PREFIX_RIGHT_DEPTH);
 
-                    recoverExactNormalSplit(
+                    Board& searchStartRootLocal = getSearchStartBoard<REVERSE_SEARCH>();
+
+                    recoverExactSplit<REVERSE_SEARCH>(
                             searchStartRootLocal,
                             PREFIX_LEFT_DEPTH,
                             prefixLeftCache_.states,
@@ -937,7 +987,7 @@ private:
                     middleRightCache.valid = false;
                     middleLeftCache.valid = false;
 
-                    recoverSeedToMiddle(
+                    recoverSeedToMiddle<REVERSE_SEARCH>(
                             seedBoard,
                             middleMatches[m],
                             SEED_LEFT_DEPTH,
@@ -1001,7 +1051,7 @@ private:
         for (auto& t : workers) {
             t.join();
         }
-        
+
         tcout << "\nTotal Time: " << totalTime.getSeconds() << '\n';
         tcout << "Puzzle: " << pair->getName() << '\n';
         tcout << "Left Seed depth: " << SEED_DEPTH << '\n';

@@ -1,5 +1,5 @@
 #pragma once
-// code/solver_base.hpp
+// code/solver/solver_base.hpp
 
 #include <fstream>
 #include <iostream>
@@ -14,7 +14,7 @@
 #include "utils/get_free_memory.hpp"
 #include "utils/timestamped_cout.hpp"
 
-#include "levels.hpp"
+#include "code/levels.hpp"
 #include "memory_perm_gen.hpp"
 #include "sorter.hpp"
 

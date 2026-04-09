@@ -100,6 +100,28 @@ namespace perm_stream_detail {
             StreamChunk<T>& chunk,
             Sink& sink);
 
+    template<typename T,
+             i32 CUR_DEPTH, i32 MAX_DEPTH,
+             eSequenceDir SECT_DIR, bool DIRECTION,
+             typename Sink>
+    static void stream_fat_perm_list_helper(
+            const Board& board,
+            StreamChunk<T>& chunk,
+            u64 move,
+            const ActStruct& lastActStruct,
+            u8 startIndex,
+            u8 endIndex,
+            Sink& sink);
+
+    template<typename T,
+             i32 DEPTH,
+             eSequenceDir SECT_DIR,
+             typename Sink>
+    static void stream_fat_perm_list(
+            const Board& board_in,
+            StreamChunk<T>& chunk,
+            Sink& sink);
+
 } // namespace perm_stream_detail
 
 
@@ -125,8 +147,16 @@ class PermStream {
         chunk.count = 0;
 
         if (board_in.getFatBool()) {
-            // I hate coding for fats
-            // normal streaming only for now
+            perm_stream_detail::stream_fat_perm_list<
+                    T,
+                    DEPTH,
+                    SECT_DIR>(
+                    board_in,
+                    chunk,
+                    sink
+            );
+
+            perm_stream_detail::flushChunk(chunk, sink);
             return;
         }
 
@@ -172,3 +202,4 @@ public:
 };
 
 #include "perm_stream_nrm.tpp"
+#include "perm_stream_fat.tpp"

@@ -1,5 +1,5 @@
 #include "code/include.hpp"
-#include "code/memory_perm_gen.hpp"
+#include "code/solver/memory_perm_gen.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -18,12 +18,12 @@
 // Hardcoded directories
 // -----------------------------------------------------------------------------
 static const std::vector<fs::path> INPUT_DIRS = {
-        R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver\levels)",
-        R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver\levels_all)"
+        R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels)",
+        R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels_all)"
 };
 
 static const fs::path OUTPUT_DIR =
-        R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver\levels_exp)";
+        R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels_exp)";
 
 static constexpr int MAX_INPUT_FILE_M = 10000;
 

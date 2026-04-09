@@ -71,7 +71,7 @@ std::vector<std::string> readFileLines(const fs::path&filepath) {
 
 int main() {
     
-    fs::path outDirectory = fs::path(R"(const:\Users\jerrin\CLionProjects\Mindbender-Solver\levels)");
+    fs::path outDirectory = fs::path(R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels)");
     
     auto files = getTxtFiles(outDirectory);
     std::sort(files.begin(), files.end(), compareFiles);

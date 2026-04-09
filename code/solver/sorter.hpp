@@ -1,5 +1,5 @@
 #pragma once
-// code/sorter.hpp
+// code/solver/sorter.hpp
 
 #ifdef BOOST_FOUND
 #include <boost/sort/block_indirect_sort/block_indirect_sort.hpp>
@@ -131,7 +131,7 @@ public:
                 switch (colorCount) {
                     case (COLORS::C2): {
                         ensureAux(depth, boards.size());
-                        radix_sort<3, 12>(boards, hashes, auxBoards_[depth], auxHashes_[depth]);
+                        radix_sort<6, 11>(boards, hashes, auxBoards_[depth], auxHashes_[depth]);
                         normalizeEqualHashRuns(boards, hashes);
                         break;
                     }
@@ -154,7 +154,7 @@ public:
                 switch (colorCount) {
                     case (COLORS::C2): {
                         ensureAux(depth, boards.size());
-                        radix_sort<3, 12>(boards, hashes, auxBoards_[depth], auxHashes_[depth]);
+                        radix_sort<6, 11>(boards, hashes, auxBoards_[depth], auxHashes_[depth]);
                         normalizeEqualHashRuns(boards, hashes);
                         break;
                     }

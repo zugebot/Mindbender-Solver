@@ -1,5 +1,5 @@
 #include "code/include.hpp"
-#include "code/memory_perm_gen.hpp"
+#include "code/solver/memory_perm_gen.hpp"
 
 #include <iostream>
 #include <set>

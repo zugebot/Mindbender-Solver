@@ -205,3 +205,4 @@ add_solver_program(findSolutions          "${CMAKE_SOURCE_DIR}/programs/findSolu
 add_solver_program(CFCC                   "${CMAKE_SOURCE_DIR}/programs/CFCC.cpp")
 add_solver_program(expandAllLevels        "${CMAKE_SOURCE_DIR}/programs/expandAllLevels.cpp")
 add_solver_program(benchmarkMatchingBound "${CMAKE_SOURCE_DIR}/programs/benchmarkMatchingBound.cpp")
+add_solver_program(debughIntersection4_4  "${CMAKE_SOURCE_DIR}/programs/debug_intersection_4_4.cpp")

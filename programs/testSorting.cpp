@@ -7,7 +7,7 @@
 
 
 #include "code/board.hpp"
-#include "code/sorter.hpp"
+#include "code/solver/sorter.hpp"
 #include "utils/th_parallel_sort.hpp"
 #include "utils/timer.hpp"
 
