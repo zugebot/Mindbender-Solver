@@ -791,8 +791,8 @@ private:
         for (std::size_t i = 0; i < leftSeeds.size(); ++i) {
             if constexpr (debug) {
                 tcout << "[seed " << (i + 1) << "/" << leftSeeds.size()
-                      << "] streaming left frontier +" << LEFT_FRONTIER_DEPTH
-                      << " from seed(" << SEED_DEPTH << ")\n" << std::flush;
+                      << "] streaming left seed(" << SEED_DEPTH << ") +" 
+                      << LEFT_FRONTIER_DEPTH << "\n" << std::flush;
             }
 
             Board seedBoard = makeBoardFromState(leftSeeds[i]);
@@ -806,28 +806,11 @@ private:
             );
 
             if constexpr (debug) {
-                double estimatedStreamOnlySeconds =
-                        metrics.permStreamSeconds - metrics.probeSeconds - metrics.appendSeconds;
-                if (estimatedStreamOnlySeconds < 0.0) {
-                    estimatedStreamOnlySeconds = 0.0;
-                }
-
-                tcout << "    middle matches: " << middleMatches.size() << '\n';
-                tcout << "    permstream total time: " << metrics.permStreamSeconds << '\n';
-                tcout << "    estimated stream-only time: " << estimatedStreamOnlySeconds << '\n';
-                tcout << "    probe time: " << metrics.probeSeconds << '\n';
-                tcout << "    append time: " << metrics.appendSeconds << '\n';
-                tcout << "    final sort time: " << metrics.finalSortSeconds << '\n';
-                tcout << "    final dedupe time: " << metrics.finalDedupeSeconds << '\n';
-                tcout << "    streamed chunks: " << metrics.chunkCount << '\n';
-                tcout << "    streamed states: " << metrics.streamedStateCount << '\n';
-                tcout << "    pre-merge match count: " << metrics.preMergeMatchCount << '\n';
-                tcout << "    probe hash hits: " << metrics.probeStats.hashHits << '\n';
-                tcout << "    probe hash misses: " << metrics.probeStats.hashMisses << '\n';
-                tcout << "    probe buckets visited: " << metrics.probeStats.bucketsVisited << '\n';
-                tcout << "    probe bucket states scanned: " << metrics.probeStats.bucketStatesScanned << '\n';
-                tcout << "    probe equality checks: " << metrics.probeStats.equalityChecks << '\n';
-                tcout << "    probe exact matches: " << metrics.probeStats.exactMatches << '\n';
+                tcout << "    middle matches: " << middleMatches.size()
+                      << "\n    streamed states: " << metrics.streamedStateCount
+                      << "\n    permstream time: " << metrics.permStreamSeconds
+                      << "\n    probe time: " << metrics.probeSeconds
+                      << '\n';
             }
 
             if (middleMatches.empty()) {
@@ -1048,10 +1031,9 @@ private:
 
                 if constexpr (debug) {
                     std::lock_guard<std::mutex> lock(printMutex);
-                    tcout << "[worker " << workerId
-                          << "] [seed " << (i + 1) << "/" << leftSeeds.size()
-                          << "] streaming left frontier +" << LEFT_FRONTIER_DEPTH
-                          << " from seed(" << SEED_DEPTH << ")\n" << std::flush;
+                    tcout << "[seed " << (i + 1) << "/" << leftSeeds.size()
+                          << "] streaming left seed(" << SEED_DEPTH << ") +" 
+                          << LEFT_FRONTIER_DEPTH << "\n" << std::flush;
                 }
 
                 Board seedBoard = makeBoardFromState(leftSeeds[i]);
@@ -1065,45 +1047,13 @@ private:
                 );
 
                 if constexpr (debug) {
-                    double estimatedStreamOnlySeconds =
-                            metrics.permStreamSeconds - metrics.probeSeconds - metrics.appendSeconds;
-                    if (estimatedStreamOnlySeconds < 0.0) {
-                        estimatedStreamOnlySeconds = 0.0;
-                    }
-
                     std::lock_guard<std::mutex> lock(printMutex);
-                    tcout << "    [worker " << workerId
-                          << "] middle matches: " << middleMatches.size() << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] permstream total time: " << metrics.permStreamSeconds << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] estimated stream-only time: " << estimatedStreamOnlySeconds << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] probe time: " << metrics.probeSeconds << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] append time: " << metrics.appendSeconds << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] final sort time: " << metrics.finalSortSeconds << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] final dedupe time: " << metrics.finalDedupeSeconds << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] streamed chunks: " << metrics.chunkCount << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] streamed states: " << metrics.streamedStateCount << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] pre-merge match count: " << metrics.preMergeMatchCount << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] probe hash hits: " << metrics.probeStats.hashHits << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] probe hash misses: " << metrics.probeStats.hashMisses << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] probe buckets visited: " << metrics.probeStats.bucketsVisited << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] probe bucket states scanned: " << metrics.probeStats.bucketStatesScanned << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] probe equality checks: " << metrics.probeStats.equalityChecks << '\n';
-                    tcout << "    [worker " << workerId
-                          << "] probe exact matches: " << metrics.probeStats.exactMatches << '\n';
+                    tcout << "[worker " << workerId << "]"
+                             "\n  middle  matches: " << middleMatches.size()
+                          << "\n  streamed states: " << metrics.streamedStateCount
+                          << "\n  permstream time: " << metrics.permStreamSeconds
+                          << "\n  probe      time: " << metrics.probeSeconds
+                          << '\n';
                 }
 
                 if (middleMatches.empty()) {

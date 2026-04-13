@@ -157,22 +157,22 @@ namespace frontier_recovery_detail {
         return produced;
     }
 
+    template<bool IS_FAT>
     MUND FORCEINLINE std::size_t emitNoneChildren(
             const B1B2& parent,
-            const bool isFatPuzzle,
             B1B2* dstStates,
             u64* dstHashes) {
-        if (isFatPuzzle) {
+        if constexpr (IS_FAT) {
             return emitFatNoneChildren(parent, dstStates, dstHashes);
         }
         return emitNormalNoneChildren(parent, dstStates, dstHashes);
     }
 
+    template<bool IS_FAT>
     MU static void expandNoneFrontierRangeByOne(
             const JVec<B1B2>& frontierStates,
             const std::size_t beginIndex,
             const std::size_t endIndex,
-            const bool isFatPuzzle,
             JVec<B1B2>& outStates,
             JVec<u64>& outHashes,
             const u64 reserveGuessPerThread) {
@@ -183,7 +183,7 @@ namespace frontier_recovery_detail {
             return;
         }
 
-        const std::size_t branchCap = isFatPuzzle ? FAT_NONE_MOVE_COUNT : NORMAL_NONE_MOVE_COUNT;
+        const std::size_t branchCap = IS_FAT ? FAT_NONE_MOVE_COUNT : NORMAL_NONE_MOVE_COUNT;
         const std::size_t parentCount = endIndex - beginIndex;
         const std::size_t hardUpper = parentCount * branchCap;
 
@@ -205,9 +205,8 @@ namespace frontier_recovery_detail {
 
         std::size_t producedTotal = 0;
         for (std::size_t i = beginIndex; i < endIndex; ++i) {
-            producedTotal += emitNoneChildren(
+            producedTotal += emitNoneChildren<IS_FAT>(
                     frontierStates[i],
-                    isFatPuzzle,
                     &outStates[producedTotal],
                     &outHashes[producedTotal]
             );
@@ -233,9 +232,9 @@ namespace frontier_recovery_detail {
         }
     }
 
+    template<bool IS_FAT>
     MU static void expandNoneFrontierByOne(
             const JVec<B1B2>& frontierStates,
-            const bool isFatPuzzle,
             JVec<B1B2>& nextStates,
             JVec<u64>& nextHashes,
             const u64 reserveGuess) {
@@ -249,11 +248,10 @@ namespace frontier_recovery_detail {
         const std::size_t threadCount = chooseExpandThreadCount(frontierStates.size());
 
         if (threadCount <= 1) {
-            expandNoneFrontierRangeByOne(
+            expandNoneFrontierRangeByOne<IS_FAT>(
                     frontierStates,
                     0,
                     frontierStates.size(),
-                    isFatPuzzle,
                     nextStates,
                     nextHashes,
                     reserveGuess
@@ -272,7 +270,7 @@ namespace frontier_recovery_detail {
                                             ? 0
                                             : (reserveGuess / static_cast<u64>(threadCount));
 
-        const u64 minReservePerThread = isFatPuzzle
+        const u64 minReservePerThread = IS_FAT
                                                 ? static_cast<u64>(FAT_NONE_MOVE_COUNT)
                                                 : static_cast<u64>(NORMAL_NONE_MOVE_COUNT);
 
@@ -285,12 +283,11 @@ namespace frontier_recovery_detail {
             const std::size_t chunkLen = baseChunk + (t < remainder ? 1 : 0);
             const std::size_t end = begin + chunkLen;
 
-            workers.emplace_back([&, t, begin, end, isFatPuzzle, reserveGuessPerThread]() {
-                expandNoneFrontierRangeByOne(
+            workers.emplace_back([&, t, begin, end, reserveGuessPerThread]() {
+                expandNoneFrontierRangeByOne<IS_FAT>(
                         frontierStates,
                         begin,
                         end,
-                        isFatPuzzle,
                         partials[t].states,
                         partials[t].hashes,
                         reserveGuessPerThread
@@ -389,25 +386,9 @@ MU static void sortStatesByHash(JVec<T>& states,
         return;
     }
 
-    std::sort(states.begin(), states.end(), [&](const T& a, const T& b) {
-        const u64 ha = StateHash::computeHash(a);
-        const u64 hb = StateHash::computeHash(b);
-
-        if (ha < hb) {
-            return true;
-        }
-        if (hb < ha) {
-            return false;
-        }
-        return a < b;
-    });
-
-    hashes.resize(states.size());
-    for (std::size_t i = 0; i < states.size(); ++i) {
-        hashes[i] = StateHash::computeHash(states[i]);
-    }
-
-    frontier_recovery_detail::normalizeBucketsByState(states, hashes);
+    // Caller contract: hashes are already aligned 1:1 with states.
+    thread_local BoardSorter<T> sorter;
+    sorter.sortBoards(states, hashes, 2, 0);
 }
 
 template<typename T>
@@ -770,13 +751,21 @@ class FrontierBuilderB1B2 {
                   << " states, " << fmtBytes(hardUpper * STATE_PAIR_BYTES) << '\n';
         }
 
-        frontier_recovery_detail::expandNoneFrontierByOne(
-                frontier_,
-                fatPuzzle,
-                next_,
-                nextHashes_,
-                reserveGuess
-        );
+        if (fatPuzzle) {
+            frontier_recovery_detail::expandNoneFrontierByOne<true>(
+                    frontier_,
+                    next_,
+                    nextHashes_,
+                    reserveGuess
+            );
+        } else {
+            frontier_recovery_detail::expandNoneFrontierByOne<false>(
+                    frontier_,
+                    next_,
+                    nextHashes_,
+                    reserveGuess
+            );
+        }
 
         lastStats_.rawGenerated = next_.size();
 

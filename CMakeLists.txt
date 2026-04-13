@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.24)
 # Project options
 # ------------------------------------------------------------
 option(USE_CUDA "Enable CUDA support" OFF)
-option(USE_SIMT_ROTATIONS "Use a SIMT-friendly rotation implementation with smaller GPU code size" ON)
+option(USE_SIMT_ROTATIONS "Use a SIMT-friendly rotation implementation with smaller GPU code size" OFF)
 option(USE_BOARD_HASH "Enable board hashing" OFF)
 option(ENABLE_ALLOC_COUNTERS "Enable global allocation counters and malloc/free wrap hooks" ON)
 
