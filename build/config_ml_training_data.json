@@ -1,0 +1,14 @@
+{
+  "output_path": "ml_training_data.csv",
+  "base_puzzle": "12-1",
+  "generation_mode": "scramble_walk",
+  "num_puzzles": 50000,
+  "target_depth": 10,
+  "min_target_depth": 10,
+  "max_target_depth": 12,
+  "scramble_extra_moves": 1,
+  "threads": 12,
+  "seed": 1337,
+  "verbose": true,
+  "color_counts": [6, 6, 6, 6, 6, 6]
+}

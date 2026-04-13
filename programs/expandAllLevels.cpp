@@ -11,21 +11,23 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
+#include <atomic>
 
 // -----------------------------------------------------------------------------
 // Hardcoded directories
 // -----------------------------------------------------------------------------
 static const std::vector<fs::path> INPUT_DIRS = {
-        R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels)",
-        R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels_all)"
+        "levels",
 };
 
-static const fs::path OUTPUT_DIR =
-        R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver\levels_exp)";
+static const fs::path OUTPUT_DIR = 
+        "levels_final";
 
-static constexpr int MAX_INPUT_FILE_M = 10000;
+static constexpr int MAX_INPUT_FILE_M = 100000;
 
 // -----------------------------------------------------------------------------
 // Filename parsing
@@ -316,10 +318,23 @@ struct GroupResult {
     bool isFatPuzzle = false;
     std::size_t sourceFileCount = 0;
     std::size_t rawLineCount = 0;
+    std::size_t uniqueLineCount = 0;
+    std::size_t dedupedLineCount = 0;
     std::size_t validLineCount = 0;
     std::size_t skippedLineCount = 0;
     std::size_t outputCount = 0;
 };
+
+static std::size_t computeWorkerCount(const std::size_t taskCount) {
+    if (taskCount < 256) {
+        return 1;
+    }
+
+    const unsigned int hw = 8; // std::thread::hardware_concurrency();
+    const std::size_t maxWorkers = hw == 0 ? 8 : static_cast<std::size_t>(hw);
+    return std::max<std::size_t>(1, std::min(taskCount, maxWorkers));
+}
+
 
 static GroupResult processGroup(const PuzzleKey& key,
                                 std::vector<fs::path> files,
@@ -341,18 +356,44 @@ static GroupResult processGroup(const PuzzleKey& key,
     const bool isFatPuzzle = start.getFatBool() || goal.getFatBool();
 
     std::set<std::string> outputSolutions;
+    std::vector<std::vector<std::string>> perFileLines(files.size());
+
+    tcout << "Read threads: 1\n";
+    for (std::size_t i = 0; i < files.size(); ++i) {
+        tcout << "Reading file: " << files[i].string() << '\n';
+        perFileLines[i] = readFileLines(files[i]);
+    }
+
     std::size_t rawLineCount = 0;
+    std::vector<std::string> allLines;
+    for (const std::vector<std::string>& fileLines : perFileLines) {
+        rawLineCount += fileLines.size();
+    }
+    allLines.reserve(rawLineCount);
+
+    std::unordered_set<std::string> seenLines;
+    seenLines.reserve(rawLineCount * 2 + 1);
+    for (const std::vector<std::string>& fileLines : perFileLines) {
+        for (const std::string& line : fileLines) {
+            if (seenLines.insert(line).second) {
+                allLines.push_back(line);
+            }
+        }
+    }
+
+    const std::size_t uniqueLineCount = allLines.size();
+    const std::size_t dedupedLineCount = rawLineCount - uniqueLineCount;
+    tcout << "Combined lines: raw=" << rawLineCount
+          << " | unique=" << uniqueLineCount
+          << " | deduped=" << dedupedLineCount << '\n';
+
     std::size_t validLineCount = 0;
     std::size_t skippedLineCount = 0;
 
-    for (const fs::path& file : files) {
-        tcout << "Reading file: " << file.string() << '\n' << std::flush;
-        
-        const std::vector<std::string> lines = readFileLines(file);
-
-        for (const std::string& line : lines) {
-            ++rawLineCount;
-
+    const std::size_t workerCount = computeWorkerCount(allLines.size());
+    tcout << "Expand threads: " << workerCount << '\n';
+    if (workerCount == 1) {
+        for (const std::string& line : allLines) {
             const bool ok = isFatPuzzle
                                     ? tryProcessFatLine(start, goal, static_cast<std::size_t>(key.c), line, outputSolutions)
                                     : tryProcessNormalLine(start, goal, static_cast<std::size_t>(key.c), line, outputSolutions);
@@ -363,20 +404,70 @@ static GroupResult processGroup(const PuzzleKey& key,
                 ++skippedLineCount;
             }
         }
+    } else {
+        std::atomic<std::size_t> nextIndex{0};
+        std::vector<std::thread> workers;
+        std::vector<std::set<std::string>> workerSolutions(workerCount);
+        std::vector<std::size_t> workerValid(workerCount, 0);
+        std::vector<std::size_t> workerSkipped(workerCount, 0);
+
+        workers.reserve(workerCount);
+        for (std::size_t workerId = 0; workerId < workerCount; ++workerId) {
+            workers.emplace_back([&, workerId] {
+                std::set<std::string> localSolutions;
+                std::size_t localValid = 0;
+                std::size_t localSkipped = 0;
+
+                while (true) {
+                    const std::size_t index = nextIndex.fetch_add(1, std::memory_order_relaxed);
+                    if (index >= allLines.size()) {
+                        break;
+                    }
+
+                    const std::string& line = allLines[index];
+                    const bool ok = isFatPuzzle
+                                            ? tryProcessFatLine(start, goal, static_cast<std::size_t>(key.c), line, localSolutions)
+                                            : tryProcessNormalLine(start, goal, static_cast<std::size_t>(key.c), line, localSolutions);
+
+                    if (ok) {
+                        ++localValid;
+                    } else {
+                        ++localSkipped;
+                    }
+                }
+
+                workerValid[workerId] = localValid;
+                workerSkipped[workerId] = localSkipped;
+                workerSolutions[workerId] = std::move(localSolutions);
+            });
+        }
+
+        for (std::thread& worker : workers) {
+            worker.join();
+        }
+
+        for (std::size_t workerId = 0; workerId < workerCount; ++workerId) {
+            validLineCount += workerValid[workerId];
+            skippedLineCount += workerSkipped[workerId];
+            outputSolutions.insert(workerSolutions[workerId].begin(), workerSolutions[workerId].end());
+        }
     }
 
     fs::create_directories(outputDir);
     removeExistingSpeciesOutputs(outputDir, key.x, key.y, key.c);
 
     const std::size_t outputCount = outputSolutions.size();
-    const fs::path outputFile = outputDir / makeOutputFileName(key.x, key.y, key.c, outputCount);
-
-    writeLines(outputFile, outputSolutions);
+    if (outputCount > 0) {
+        const fs::path outputFile = outputDir / makeOutputFileName(key.x, key.y, key.c, outputCount);
+        writeLines(outputFile, outputSolutions);
+    }
 
     return {
             isFatPuzzle,
             files.size(),
             rawLineCount,
+            uniqueLineCount,
+            dedupedLineCount,
             validLineCount,
             skippedLineCount,
             outputCount
@@ -387,6 +478,10 @@ static GroupResult processGroup(const PuzzleKey& key,
 // Main
 // -----------------------------------------------------------------------------
 int main() {
+    const unsigned int hw = std::thread::hardware_concurrency();
+    const std::size_t maxThreads = hw == 0 ? 8 : static_cast<std::size_t>(hw);
+    tcout << "Thread cap: " << maxThreads << "\n";
+
     tcout << "Input dirs:\n";
     for (const fs::path& dir : INPUT_DIRS) {
         tcout << "  " << dir.string() << '\n';
@@ -447,20 +542,24 @@ int main() {
                 tcout << "FAT ["
                           << std::setw(4) << levelName
                           << ", " << std::setw(3) << ("c" + std::to_string(key.c))
-                          << "] files: " << std::setw(2) << result.sourceFileCount
-                          << " | raw: " << std::setw(5) << result.rawLineCount
-                          << " | valid: " << std::setw(5) << result.validLineCount
-                          << " | skipped lines: " << std::setw(5) << result.skippedLineCount
+                          << "] files: " << result.sourceFileCount
+                          << " | raw: " << result.rawLineCount
+                          << " | unique: " << result.uniqueLineCount
+                          << " | deduped: " << result.dedupedLineCount
+                          << " | valid: " << result.validLineCount
+                          << " | skipped: " << result.skippedLineCount
                           << " | out: " << result.outputCount
                           << '\n';
             } else {
                 tcout << "["
                           << std::setw(4) << levelName
                           << ", " << std::setw(3) << ("c" + std::to_string(key.c))
-                          << "] files: " << std::setw(2) << result.sourceFileCount
-                          << " | raw: " << std::setw(5) << result.rawLineCount
-                          << " | valid: " << std::setw(5) << result.validLineCount
-                          << " | skipped lines: " << std::setw(5) << result.skippedLineCount
+                          << "] files: " << result.sourceFileCount
+                          << " | raw: " << result.rawLineCount
+                          << " | unique: " << result.uniqueLineCount
+                          << " | deduped: " << result.dedupedLineCount
+                          << " | valid: " << result.validLineCount
+                          << " | skipped: " << result.skippedLineCount
                           << " | out: " << result.outputCount
                           << '\n';
             }

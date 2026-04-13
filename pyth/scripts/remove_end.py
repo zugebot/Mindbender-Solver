@@ -2,7 +2,7 @@ import os
 import re
 
 # Iterate over each file in the current directory
-for filename in os.listdir('../../levels'):
+for filename in os.listdir('../../build/levels'):
     # Check if the file is a .txt file and contains a pattern like _{LEN} before .txt
     if filename.endswith('.txt'):
         # Use a regular expression to match and remove the last _{LEN} part

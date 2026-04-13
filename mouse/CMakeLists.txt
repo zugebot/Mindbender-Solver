@@ -10,7 +10,7 @@ target_include_directories(ChuzzleMouse
 )
 
 if (MSVC)
-    target_compile_options(ChuzzleMouse PRIVATE /O2)
+    # target_compile_options(ChuzzleMouse PRIVATE /O2)
 else()
     target_compile_options(ChuzzleMouse PRIVATE -O3)
     target_link_libraries(ChuzzleMouse PRIVATE m)

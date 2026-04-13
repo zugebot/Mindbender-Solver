@@ -20,7 +20,7 @@ from chuzzle_mouse_adapter import (
 )
 
 APP_TITLE = "Chuzzle DP Studio"
-DEFAULT_FOLDER = "../../levels"
+DEFAULT_FOLDER = "../../build/levels_final"
 FILE_PATTERN = re.compile(r"^(\d+)-(\d+)_.*\.txt$")
 
 BOARD_CELL_SIZE = 96

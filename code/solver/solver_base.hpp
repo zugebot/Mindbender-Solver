@@ -2,6 +2,7 @@
 // code/solver/solver_base.hpp
 
 #include <fstream>
+#include <limits>
 #include <iostream>
 #include <set>
 #include <sstream>
@@ -19,6 +20,7 @@
 #include "sorter.hpp"
 
 #include "include/ghc/fs_std.hpp"
+#include "utils/allocation_counter.hpp"
 
 class MU BoardSolverBase {
 public:
@@ -42,6 +44,7 @@ protected:
     Board board2;
     bool hasFat;
     fs::path outDirectory;
+    bool writeSolutionsToFile_ = true;
 
     u32 depthSideMax{};
     u32 depthTotalMax{};
@@ -53,8 +56,6 @@ public:
         board1 = pair->getStartState();
         board2 = pair->getEndState();
         hasFat = board1.getFatBool();
-
-        StateHash::refreshHashFunc(board1);
     }
 
     MU void setDepthParams(const u32 depthSideMaxIn, const u32 depthGuessMaxIn, const u32 depthTotalMaxIn) {
@@ -71,6 +72,29 @@ public:
 
     MU void setWriteDirectory(const std::string directory) {
         outDirectory = directory;
+    }
+
+    MU void setWriteSolutionsToFile(const bool enabled) {
+        writeSolutionsToFile_ = enabled;
+    }
+
+    MUND bool shouldWriteSolutionsToFile() const {
+        return writeSolutionsToFile_;
+    }
+
+    MUND const std::set<std::string>& getExpandedSolutions() const {
+        return expandedResultSet;
+    }
+
+    MUND std::vector<std::string> getExpandedSolutionsList() const {
+        return {expandedResultSet.begin(), expandedResultSet.end()};
+    }
+
+    MUND int getExpandedSolutionCount() const {
+        if (expandedResultSet.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+            return std::numeric_limits<int>::max();
+        }
+        return static_cast<int>(expandedResultSet.size());
     }
 
     MU void preAllocateMemory(const u32 maxDepth = MAX_DEPTH) {
@@ -296,6 +320,8 @@ protected:
 
         std::size_t validInputSolutions = 0;
         std::size_t skippedInputSolutions = 0;
+        
+        alloc_counter::printReport();
 
         tcout << "\nExpanding solver results...\n";
 
@@ -311,6 +337,8 @@ protected:
                 tcout << "Skipping invalid solver solution: " << solution << '\n';
             }
         }
+        
+        alloc_counter::printReport();
 
         tcout << "Original solver solutions: " << resultSet.size() << '\n';
         tcout << "Valid base solutions: " << validInputSolutions << '\n';

@@ -1,18 +1,21 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <iomanip>
 #include <iostream>
 #include <ostream>
 #include <sstream>
 #include <streambuf>
 #include <string>
+#include <utility>
 
 class TimestampedStreamBuf final : public std::streambuf {
 private:
     std::streambuf* dest_;
     std::chrono::steady_clock::time_point startTime_;
     bool atLineStart_ = true;
+    std::string linePrefix_;
 
 private:
     static std::string formatElapsed(std::chrono::steady_clock::duration elapsed) {
@@ -42,6 +45,11 @@ private:
 
         const std::string prefix = formatElapsed(std::chrono::steady_clock::now() - startTime_);
         dest_->sputn(prefix.data(), static_cast<std::streamsize>(prefix.size()));
+
+        if (!linePrefix_.empty()) {
+            dest_->sputn(linePrefix_.data(), static_cast<std::streamsize>(linePrefix_.size()));
+        }
+
         atLineStart_ = false;
     }
 
@@ -88,6 +96,14 @@ public:
     void resetTimer() {
         startTime_ = std::chrono::steady_clock::now();
     }
+
+    void setLinePrefix(std::string prefix) {
+        linePrefix_ = std::move(prefix);
+    }
+
+    void clearLinePrefix() {
+        linePrefix_.clear();
+    }
 };
 
 class TimestampedCout final : public std::ostream {
@@ -100,6 +116,33 @@ public:
 
     void resetTimer() {
         buffer_.resetTimer();
+    }
+
+    void setLinePrefix(std::string prefix) {
+        buffer_.setLinePrefix(std::move(prefix));
+    }
+
+    void clearLinePrefix() {
+        buffer_.clearLinePrefix();
+    }
+
+    void setProgressPrefix(const std::size_t current,
+                           const std::size_t total,
+                           std::size_t currentWidth = 0) {
+        if (currentWidth == 0) {
+            currentWidth = std::to_string(total).size();
+        }
+
+        std::ostringstream oss;
+        oss << '['
+            << std::setw(static_cast<int>(currentWidth))
+            << std::setfill(' ')
+            << current
+            << '/'
+            << total
+            << "] ";
+
+        buffer_.setLinePrefix(oss.str());
     }
 };
 

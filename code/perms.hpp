@@ -7,10 +7,9 @@
 #include "utils/processor.hpp"
 
 #include <array>
+#include <span>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
-#include <vector>
 
 #ifdef USE_CUDA
 // const++17 version because my GPU is ASS
@@ -141,11 +140,52 @@ class Perms {
 public:
     using ToDepthFuncPtr = void (*)(const Board&, JVec<T>&, JVec<u64>&);
     using DepthPair = std::pair<u32, u32>;
-    using DepthMap = std::unordered_map<u32, std::vector<DepthPair>>;
+
+    struct DepthRange {
+        u8 offset;
+        u8 count;
+    };
 
     static constexpr u32 PTR_LIST_SIZE = 6;
+    static constexpr u32 DEPTH_TABLE_MAX = 11;
 
-    static const DepthMap depthMap;
+    inline static constexpr std::array<DepthPair, 36> depthPairs = {{
+            {1, 0}, {0, 1},
+            {1, 1}, {0, 2}, {2, 0},
+            {1, 2}, {2, 1}, {0, 3}, {3, 0},
+            {2, 2}, {3, 1}, {1, 3}, {4, 0}, {0, 4},
+            {3, 2}, {2, 3}, {4, 1}, {1, 4}, {5, 0}, {0, 5},
+            {3, 3}, {4, 2}, {2, 4}, {5, 1}, {1, 5},
+            {4, 3}, {3, 4}, {5, 2}, {2, 5},
+            {4, 4}, {5, 3}, {3, 5},
+            {4, 5}, {5, 4},
+            {5, 5},
+            {6, 5},
+    }};
+
+    inline static constexpr std::array<DepthRange, DEPTH_TABLE_MAX + 1> depthRanges = {{
+            {0, 0},
+            {0, 2},
+            {2, 3},
+            {5, 4},
+            {9, 5},
+            {14, 6},
+            {20, 5},
+            {25, 4},
+            {29, 3},
+            {32, 2},
+            {34, 1},
+            {35, 1},
+    }};
+
+    MU static std::span<const DepthPair> getDepthPairs(u32 depth) noexcept {
+        if (depth > DEPTH_TABLE_MAX) {
+            return {};
+        }
+
+        const DepthRange range = depthRanges[depth];
+        return {depthPairs.data() + range.offset, range.count};
+    }
 
     struct FromLeft {
         static ToDepthFuncPtr funcPtrs[PTR_LIST_SIZE];

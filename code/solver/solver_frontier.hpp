@@ -12,7 +12,7 @@
 
 #include "code/intersection.hpp"
 #include "code/perm_stream.hpp"
-#include "frontier_right_index.hpp"
+#include "frontier_right_index2.hpp"
 #include "solver_base.hpp"
 
 class MU BoardSolverFrontier : public BoardSolverBase {
@@ -36,6 +36,11 @@ private:
     };
 
     RightFrontierIndexB1B2 rightFrontierIndex_;
+    RightFrontierIndexB1B2 rightFrontierCache_;
+    Board rightFrontierCacheRoot_{};
+    int rightFrontierCacheDepth_ = -1;
+    bool rightFrontierCacheValid_ = false;
+    bool enableRightFrontierCache_ = false;
     RecoveryBoardFrontierCache prefixLeftCache_;
     RecoveryBoardFrontierCache goalRightCache_;
 
@@ -549,8 +554,8 @@ private:
         JVec<B1B2> reverseDepth1States;
         JVec<u64> reverseDepth1Hashes;
 
-        buildUniqueNoneDepthFrontierB1B2<1>(board1, forwardDepth1States, forwardDepth1Hashes);
-        buildUniqueNoneDepthFrontierB1B2<1>(board2, reverseDepth1States, reverseDepth1Hashes);
+        buildUniqueNoneDepthFrontierB1B2<1>(board1, forwardDepth1States, forwardDepth1Hashes, debug);
+        buildUniqueNoneDepthFrontierB1B2<1>(board2, reverseDepth1States, reverseDepth1Hashes, debug);
 
         const std::size_t forwardDepth1Count = forwardDepth1States.size();
         const std::size_t reverseDepth1Count = reverseDepth1States.size();
@@ -570,8 +575,8 @@ private:
         JVec<B1B2> reverseDepth2States;
         JVec<u64> reverseDepth2Hashes;
 
-        buildUniqueNoneDepthFrontierB1B2<2>(board1, forwardDepth2States, forwardDepth2Hashes);
-        buildUniqueNoneDepthFrontierB1B2<2>(board2, reverseDepth2States, reverseDepth2Hashes);
+        buildUniqueNoneDepthFrontierB1B2<2>(board1, forwardDepth2States, forwardDepth2Hashes, debug);
+        buildUniqueNoneDepthFrontierB1B2<2>(board2, reverseDepth2States, reverseDepth2Hashes, debug);
 
         const std::size_t forwardDepth2Count = forwardDepth2States.size();
         const std::size_t reverseDepth2Count = reverseDepth2States.size();
@@ -593,6 +598,143 @@ private:
         return SearchDirection::Forward;
     }
 
+    MUND static bool hasExactDepthSolutionShallow(const Board& start,
+                                                  const Board& goal,
+                                                  const int depth) {
+        if (depth == 0) {
+            return start == goal;
+        }
+
+        FrontierBuilderB1B2 builder(start, false);
+        JVec<B1B2> frontier;
+        JVec<u64> hashes;
+        builder.buildExactNoneDepth(depth, frontier, hashes);
+
+        const B1B2 goalState = goal.asB1B2();
+        for (const auto& s : frontier) {
+            if (s == goalState) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    template<int RIGHT_FRONTIER_DEPTH, bool debug>
+    MU void prepareRightFrontierIndex(const Board& searchGoalRoot) {
+        bool usedCache = false;
+
+        if (enableRightFrontierCache_
+            && rightFrontierCacheValid_
+            && rightFrontierCacheDepth_ == RIGHT_FRONTIER_DEPTH
+            && rightFrontierCacheRoot_ == searchGoalRoot) {
+            rightFrontierIndex_ = rightFrontierCache_;
+            usedCache = true;
+            tcout << "right frontier(" << RIGHT_FRONTIER_DEPTH << ") reused from cache\n";
+        }
+
+        if (usedCache) {
+            tcout << "right frontier ranges built for "
+                  << rightFrontierIndex_.size()
+                  << " states across "
+                  << rightFrontierIndex_.rangeCount()
+                  << " hash buckets\n";
+            return;
+        }
+
+        JVec<B1B2> rightFrontierStates;
+        JVec<u64> rightFrontierHashes;
+        buildUniqueNoneDepthFrontierB1B2<RIGHT_FRONTIER_DEPTH>(searchGoalRoot, rightFrontierStates, rightFrontierHashes, debug);
+        tcout << "right frontier(" << RIGHT_FRONTIER_DEPTH << ") final unique size: "
+              << rightFrontierStates.size() << '\n';
+
+        rightFrontierIndex_.template buildFromUniqueStates<debug>(
+                std::move(rightFrontierStates),
+                std::move(rightFrontierHashes),
+                searchGoalRoot
+        );
+        tcout << "right frontier ranges built for "
+              << rightFrontierIndex_.size()
+              << " states across "
+              << rightFrontierIndex_.rangeCount()
+              << " hash buckets\n";
+
+        if (enableRightFrontierCache_) {
+            rightFrontierCache_ = rightFrontierIndex_;
+            rightFrontierCacheRoot_ = searchGoalRoot;
+            rightFrontierCacheDepth_ = RIGHT_FRONTIER_DEPTH;
+            rightFrontierCacheValid_ = true;
+        }
+    }
+
+    template<
+            int SEED_DEPTH,
+            int LEFT_FRONTIER_DEPTH,
+            int RIGHT_FRONTIER_DEPTH,
+            bool debug
+            >
+    MU int findSolutionsFrontierThreadedPreset(int worker_count,
+                                               const SearchDirection direction) {
+        SearchDirection resolvedDirection = direction;
+
+        if (resolvedDirection == SearchDirection::Auto) {
+            resolvedDirection = chooseAutoSearchDirection<SEED_DEPTH, LEFT_FRONTIER_DEPTH, RIGHT_FRONTIER_DEPTH, debug>();
+            tcout << "search direction: auto -> " << directionName(resolvedDirection) << '\n';
+        } else {
+            tcout << "search direction: forced " << directionName(resolvedDirection) << '\n';
+        }
+
+        if (resolvedDirection == SearchDirection::Reverse) {
+            return findSolutionsFrontierThreadedImpl<
+                    SEED_DEPTH,
+                    LEFT_FRONTIER_DEPTH,
+                    RIGHT_FRONTIER_DEPTH,
+                    debug,
+                    true
+                    >(worker_count);
+        }
+
+        return findSolutionsFrontierThreadedImpl<
+                SEED_DEPTH,
+                LEFT_FRONTIER_DEPTH,
+                RIGHT_FRONTIER_DEPTH,
+                debug,
+                false
+                >(worker_count);
+    }
+
+    template<bool debug>
+    MU int runThreadedForTotalDepth(const int totalDepth,
+                                    int worker_count,
+                                    const SearchDirection direction) {
+        switch (totalDepth) {
+            case 3:
+                return findSolutionsFrontierThreadedPreset<1, 1, 1, debug>(worker_count, direction);
+            case 4:
+                return findSolutionsFrontierThreadedPreset<1, 1, 2, debug>(worker_count, direction);
+            case 5:
+                return findSolutionsFrontierThreadedPreset<1, 1, 3, debug>(worker_count, direction);
+            case 6:
+                return findSolutionsFrontierThreadedPreset<1, 1, 4, debug>(worker_count, direction);
+            case 7:
+                return findSolutionsFrontierThreadedPreset<1, 2, 4, debug>(worker_count, direction);
+            case 8:
+                return findSolutionsFrontierThreadedPreset<1, 3, 4, debug>(worker_count, direction);
+            case 9:
+                return findSolutionsFrontierThreadedPreset<1, 4, 4, debug>(worker_count, direction);
+            case 10:
+                return findSolutionsFrontierThreadedPreset<1, 4, 5, debug>(worker_count, direction);
+            case 11:
+                return findSolutionsFrontierThreadedPreset<1, 5, 5, debug>(worker_count, direction);
+            case 12:
+                return findSolutionsFrontierThreadedPreset<2, 5, 5, debug>(worker_count, direction);
+            case 13:
+                return findSolutionsFrontierThreadedPreset<3, 5, 5, debug>(worker_count, direction);
+            default:
+                return -1;
+        }
+    }
+
     template<
             int SEED_DEPTH,
             int LEFT_FRONTIER_DEPTH,
@@ -600,7 +742,7 @@ private:
             bool debug,
             bool REVERSE_SEARCH
             >
-    MU void findSolutionsFrontierImpl() {
+    MU int findSolutionsFrontierImpl() {
         static constexpr int TOTAL_DEPTH = SEED_DEPTH + LEFT_FRONTIER_DEPTH + RIGHT_FRONTIER_DEPTH;
 
         static constexpr u32 PREFIX_LEFT_DEPTH  = SEED_DEPTH / 2;
@@ -626,25 +768,10 @@ private:
 
         JVec<B1B2> leftSeeds;
         JVec<u64> leftSeedHashes;
-        buildUniqueNoneDepthFrontierB1B2<SEED_DEPTH>(searchStartRoot, leftSeeds, leftSeedHashes);
+        buildUniqueNoneDepthFrontierB1B2<SEED_DEPTH>(searchStartRoot, leftSeeds, leftSeedHashes, debug);
         tcout << "seed(" << SEED_DEPTH << ") final unique size: " << leftSeeds.size() << '\n';
 
-        JVec<B1B2> rightFrontierStates;
-        JVec<u64> rightFrontierHashes;
-        buildUniqueNoneDepthFrontierB1B2<RIGHT_FRONTIER_DEPTH>(searchGoalRoot, rightFrontierStates, rightFrontierHashes);
-        tcout << "right frontier(" << RIGHT_FRONTIER_DEPTH << ") final unique size: "
-              << rightFrontierStates.size() << '\n';
-
-        rightFrontierIndex_.template buildFromUniqueStates<debug>(
-                std::move(rightFrontierStates),
-                std::move(rightFrontierHashes),
-                searchGoalRoot
-        );
-        tcout << "right frontier ranges built for "
-              << rightFrontierIndex_.size()
-              << " states across "
-              << rightFrontierIndex_.rangeCount()
-              << " hash buckets\n";
+        prepareRightFrontierIndex<RIGHT_FRONTIER_DEPTH, debug>(searchGoalRoot);
 
         if constexpr (debug) {
             rightFrontierIndex_.printStats();
@@ -782,10 +909,14 @@ private:
 
         if (!resultSet.empty()) {
             expandRawSolutionsIntoFinalSet();
-            writeExpandedSolutions(TOTAL_DEPTH);
+            if (shouldWriteSolutionsToFile()) {
+                writeExpandedSolutions(TOTAL_DEPTH);
+            }
         } else {
             tcout << "No solutions found...\n";
         }
+
+        return getExpandedSolutionCount();
     }
 
     template<
@@ -795,7 +926,7 @@ private:
             bool debug,
             bool REVERSE_SEARCH
             >
-    MU void findSolutionsFrontierThreadedImpl(int worker_count) {
+    MU int findSolutionsFrontierThreadedImpl(int worker_count) {
         static constexpr int TOTAL_DEPTH = SEED_DEPTH + LEFT_FRONTIER_DEPTH + RIGHT_FRONTIER_DEPTH;
 
         static constexpr u32 PREFIX_LEFT_DEPTH  = SEED_DEPTH / 2;
@@ -832,11 +963,45 @@ private:
             tcout << "#####################################\n\n";
         }
 
-        buildUniqueNoneDepthFrontierB1B2<SEED_DEPTH>(searchStartRoot, leftSeeds, leftSeedHashes);
+        buildUniqueNoneDepthFrontierB1B2<SEED_DEPTH>(searchStartRoot, leftSeeds, leftSeedHashes, debug);
+        
         tcout << "seed(" << SEED_DEPTH << ") final unique size: " << leftSeeds.size() << '\n';
-
-        JVec<B1B2> rightFrontierStates;
-        JVec<u64> rightFrontierHashes;
+        
+        {
+            Timer sortTimer;
+            struct SeedAndHash {
+                B1B2 seed;
+                u64 hash;
+            };
+    
+            std::vector<SeedAndHash> scoredSeeds;
+            scoredSeeds.reserve(leftSeeds.size());
+    
+            for (std::size_t i = 0; i < leftSeeds.size(); ++i) {
+                scoredSeeds.push_back({leftSeeds[i], leftSeedHashes[i]});
+            }
+    
+            const B1B2 goalState = searchGoalRoot.asB1B2();
+    
+            std::sort(scoredSeeds.begin(), scoredSeeds.end(), 
+                      [&](const SeedAndHash& a, const SeedAndHash& b) {
+                const u64 sa = a.seed.getScore1(goalState);
+                const u64 sb = b.seed.getScore1(goalState);
+    
+                if (sa != sb) {
+                    return sa < sb;
+                }
+    
+                return a.hash < b.hash;
+            });
+    
+            for (std::size_t i = 0; i < scoredSeeds.size(); ++i) {
+                leftSeeds[i] = scoredSeeds[i].seed;
+                leftSeedHashes[i] = scoredSeeds[i].hash;
+            }
+            
+            tcout << "sort time: " << sortTimer.getSeconds() << '\n';
+        }
 
         if constexpr (debug) {
             tcout << "\n#####################################\n";
@@ -844,20 +1009,7 @@ private:
             tcout << "#####################################\n\n";
         }
 
-        buildUniqueNoneDepthFrontierB1B2<RIGHT_FRONTIER_DEPTH>(searchGoalRoot, rightFrontierStates, rightFrontierHashes);
-        tcout << "right frontier(" << RIGHT_FRONTIER_DEPTH << ") final unique size: "
-              << rightFrontierStates.size() << '\n';
-
-        rightFrontierIndex_.template buildFromUniqueStates<debug>(
-                std::move(rightFrontierStates),
-                std::move(rightFrontierHashes),
-                searchGoalRoot
-        );
-        tcout << "right frontier ranges built for "
-              << rightFrontierIndex_.size()
-              << " states across "
-              << rightFrontierIndex_.rangeCount()
-              << " hash buckets\n";
+        prepareRightFrontierIndex<RIGHT_FRONTIER_DEPTH, debug>(searchGoalRoot);
 
         if constexpr (debug) {
             tcout << "\n";
@@ -1061,10 +1213,14 @@ private:
 
         if (!resultSet.empty()) {
             expandRawSolutionsIntoFinalSet();
-            writeExpandedSolutions(TOTAL_DEPTH);
+            if (shouldWriteSolutionsToFile()) {
+                writeExpandedSolutions(TOTAL_DEPTH);
+            }
         } else {
             tcout << "No solutions found...\n";
         }
+
+        return getExpandedSolutionCount();
     }
 
 public:
@@ -1076,7 +1232,7 @@ public:
             int RIGHT_FRONTIER_DEPTH = 5,
             bool debug = true
             >
-    MU void findSolutionsFrontier(SearchDirection direction = SearchDirection::Auto) {
+    MU int findSolutionsFrontier(SearchDirection direction = SearchDirection::Auto) {
         SearchDirection resolvedDirection = direction;
 
         if (resolvedDirection == SearchDirection::Auto) {
@@ -1087,7 +1243,7 @@ public:
         }
 
         if (resolvedDirection == SearchDirection::Reverse) {
-            findSolutionsFrontierImpl<
+            return findSolutionsFrontierImpl<
                     SEED_DEPTH,
                     LEFT_FRONTIER_DEPTH,
                     RIGHT_FRONTIER_DEPTH,
@@ -1095,7 +1251,7 @@ public:
                     true
                     >();
         } else {
-            findSolutionsFrontierImpl<
+            return findSolutionsFrontierImpl<
                     SEED_DEPTH,
                     LEFT_FRONTIER_DEPTH,
                     RIGHT_FRONTIER_DEPTH,
@@ -1111,33 +1267,62 @@ public:
             int RIGHT_FRONTIER_DEPTH = 5,
             bool debug = true
             >
-    MU void findSolutionsFrontierThreaded(int worker_count = 1,
-                                          SearchDirection direction = SearchDirection::Auto) {
-        SearchDirection resolvedDirection = direction;
+    MU int findSolutionsFrontierThreaded(int worker_count = 1,
+                                         SearchDirection direction = SearchDirection::Auto,
+                                         const bool ensureNoLowerSolutions = false,
+                                         const bool enableDepth5RightCache = false) {
+        static constexpr int TARGET_TOTAL_DEPTH = SEED_DEPTH + LEFT_FRONTIER_DEPTH + RIGHT_FRONTIER_DEPTH;
 
-        if (resolvedDirection == SearchDirection::Auto) {
-            resolvedDirection = chooseAutoSearchDirection<SEED_DEPTH, LEFT_FRONTIER_DEPTH, RIGHT_FRONTIER_DEPTH, debug>();
-            tcout << "search direction: auto -> " << directionName(resolvedDirection) << '\n';
-        } else {
-            tcout << "search direction: forced " << directionName(resolvedDirection) << '\n';
+        enableRightFrontierCache_ = enableDepth5RightCache;
+
+        SearchDirection rampDirection = direction;
+        if (ensureNoLowerSolutions && rampDirection == SearchDirection::Auto) {
+            if constexpr (debug) {
+                rampDirection = chooseAutoSearchDirection<SEED_DEPTH, LEFT_FRONTIER_DEPTH, RIGHT_FRONTIER_DEPTH, debug>();
+                tcout << "search direction: auto (locked for ramp-up) -> " << directionName(rampDirection) << '\n';
+            } else {
+                rampDirection = SearchDirection::Forward;
+                tcout << "search direction: auto (locked for ramp-up) -> forward (preview disabled)\n";
+            }
         }
 
-        if (resolvedDirection == SearchDirection::Reverse) {
-            findSolutionsFrontierThreadedImpl<
-                    SEED_DEPTH,
-                    LEFT_FRONTIER_DEPTH,
-                    RIGHT_FRONTIER_DEPTH,
-                    debug,
-                    true
-                    >(worker_count);
-        } else {
-            findSolutionsFrontierThreadedImpl<
-                    SEED_DEPTH,
-                    LEFT_FRONTIER_DEPTH,
-                    RIGHT_FRONTIER_DEPTH,
-                    debug,
-                    false
-                    >(worker_count);
+        if (!ensureNoLowerSolutions) {
+            return findSolutionsFrontierThreadedPreset<SEED_DEPTH, LEFT_FRONTIER_DEPTH, RIGHT_FRONTIER_DEPTH, debug>(
+                    worker_count,
+                    direction
+            );
         }
+
+        for (int d = 0; d < TARGET_TOTAL_DEPTH; ++d) {
+            if (d <= 2) {
+                if (hasExactDepthSolutionShallow(board1, board2, d)) {
+                    resultSet.clear();
+                    expandedResultSet.clear();
+                    tcout << "lower-depth solution found at depth " << d << ", skipping target depth "
+                          << TARGET_TOTAL_DEPTH << '\n';
+                    return 0;
+                }
+                continue;
+            }
+
+            const int lowerCount = runThreadedForTotalDepth<debug>(d, worker_count, rampDirection);
+            if (lowerCount < 0) {
+                tcout << "unsupported ramp-up depth: " << d << '\n';
+                return -1;
+            }
+
+            if (lowerCount > 0) {
+                resultSet.clear();
+                expandedResultSet.clear();
+                tcout << "lower-depth solution found at depth " << d << ", skipping target depth "
+                      << TARGET_TOTAL_DEPTH << '\n';
+                return 0;
+            }
+        }
+
+        return findSolutionsFrontierThreadedPreset<SEED_DEPTH, LEFT_FRONTIER_DEPTH, RIGHT_FRONTIER_DEPTH, debug>(
+                worker_count,
+                rampDirection
+        );
     }
 };

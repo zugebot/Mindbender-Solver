@@ -574,6 +574,7 @@ class FrontierBuilderB1B2 {
     JVec<u64> mergeScratchHashes_{};
 
     u32 colorCount_ = 0;
+    bool verbose_ = true;
     LayerStats lastStats_{};
     u64 peakWorkspaceCapacityBytes_ = 0;
 
@@ -632,11 +633,14 @@ class FrontierBuilderB1B2 {
     MU void printLaneStats(const char* label,
                            const JVec<B1B2>& states,
                            const JVec<u64>& hashes) const {
+        if (!verbose_) {
+            return;
+        }
         tcout << "    " << label
               << ": size=" << states.size()
               << ", cap=" << states.capacity()
               << ", live=" << fmtBytes(pairLiveBytes(states, hashes))
-              << ", reserved=" << fmtBytes(pairCapacityBytes(states, hashes))
+              << ", rsv=" << fmtBytes(pairCapacityBytes(states, hashes))
               << '\n';
     }
 
@@ -721,7 +725,9 @@ class FrontierBuilderB1B2 {
 
     MU void expandOneDepth(const u32 depth) {
         Timer stepTimer;
-        tcout << "Generating NONE depth " << depth << "...\n" << std::flush;
+        if (verbose_) {
+            tcout << "Generating NONE depth " << depth << "...\n" << std::flush;
+        }
 
         next_.clear();
         nextHashes_.clear();
@@ -740,25 +746,29 @@ class FrontierBuilderB1B2 {
         lastStats_.frontierSize = frontier_.size();
         lastStats_.expandThreads = frontier_recovery_detail::chooseExpandThreadCount(frontier_.size());
 
-        tcout << "    frontier in: " << frontier_.size()
-              << " states, " << fmtBytes(pairLiveBytes(frontier_, frontierHashes_))
-              << " live, " << fmtBytes(pairCapacityBytes(frontier_, frontierHashes_))
-              << " reserved\n";
+        if (verbose_) {
+            tcout << "    frontier in: " << frontier_.size()
+                  << " states, " << fmtBytes(pairLiveBytes(frontier_, frontierHashes_))
+                  << " live, " << fmtBytes(pairCapacityBytes(frontier_, frontierHashes_))
+                  << " rsv\n";
 
-        tcout << "    seen so far: " << seen_.size()
-              << " states, " << fmtBytes(pairLiveBytes(seen_, seenHashes_))
-              << " live, " << fmtBytes(pairCapacityBytes(seen_, seenHashes_))
-              << " reserved\n";
+            tcout << "    seen so far: " << seen_.size()
+                  << " states, " << fmtBytes(pairLiveBytes(seen_, seenHashes_))
+                  << " live, " << fmtBytes(pairCapacityBytes(seen_, seenHashes_))
+                  << " rsv\n";
+        }
 
         const u64 hardUpper = static_cast<u64>(frontier_.size()) * getBranchCap();
 
-        tcout << "    expand threads: " << lastStats_.expandThreads << '\n';
+        if (verbose_) {
+            tcout << "    expand threads: " << lastStats_.expandThreads << '\n';
 
-        tcout << "    reserve guess: " << reserveGuess
-              << " states, " << fmtBytes(reserveGuess * STATE_PAIR_BYTES) << '\n';
+            tcout << "    reserve guess: " << reserveGuess
+                  << " states, " << fmtBytes(reserveGuess * STATE_PAIR_BYTES) << '\n';
 
-        tcout << "    hard upper bound: " << hardUpper
-              << " states, " << fmtBytes(hardUpper * STATE_PAIR_BYTES) << '\n';
+            tcout << "    hard upper bound: " << hardUpper
+                  << " states, " << fmtBytes(hardUpper * STATE_PAIR_BYTES) << '\n';
+        }
 
         frontier_recovery_detail::expandNoneFrontierByOne(
                 frontier_,
@@ -772,25 +782,29 @@ class FrontierBuilderB1B2 {
 
         updatePeakWorkspaceCapacity();
 
-        tcout << "    raw size: " << next_.size()
-              << " states, " << fmtBytes(pairLiveBytes(next_, nextHashes_))
-              << " live, " << fmtBytes(pairCapacityBytes(next_, nextHashes_))
-              << " reserved\n";
+        if (verbose_) {
+            tcout << "    raw size: " << next_.size()
+                  << " states, " << fmtBytes(pairLiveBytes(next_, nextHashes_))
+                  << " live, " << fmtBytes(pairCapacityBytes(next_, nextHashes_))
+                  << " reserved\n";
 
-        tcout << "    reserve utilization: "
-              << pct(static_cast<u64>(next_.size()), reserveGuess) << "%\n";
+            tcout << "    reserve utilization: "
+                  << pct(static_cast<u64>(next_.size()), reserveGuess) << "%\n";
 
-        tcout << "    avg branching: "
-              << (frontier_.empty()
-                          ? 0.0
-                          : static_cast<double>(lastStats_.rawGenerated) / static_cast<double>(frontier_.size()))
-              << '\n';
+            tcout << "    avg branching: "
+                  << (frontier_.empty()
+                              ? 0.0
+                              : static_cast<double>(lastStats_.rawGenerated) / static_cast<double>(frontier_.size()))
+                  << '\n';
+        }
 
         {
             Timer timerSort;
             sorter_.sortBoards(next_, nextHashes_, depth, colorCount_);
             frontier_recovery_detail::normalizeBucketsByState(next_, nextHashes_);
-            tcout << "    sort time: " << timerSort.getSeconds() << '\n';
+            if (verbose_) {
+                tcout << "    sort time: " << timerSort.getSeconds() << '\n';
+            }
         }
 
         {
@@ -798,10 +812,12 @@ class FrontierBuilderB1B2 {
             compactUniqueSortedStatesInPlace(next_, nextHashes_);
             lastStats_.afterSelfDedupe = next_.size();
 
-            tcout << "    after self dedupe: " << next_.size()
-                  << " states (" << pct(lastStats_.afterSelfDedupe, lastStats_.rawGenerated) << "% of raw)\n";
+            if (verbose_) {
+                tcout << "    after self dedupe: " << next_.size()
+                      << " states (" << pct(lastStats_.afterSelfDedupe, lastStats_.rawGenerated) << "% of raw)\n";
 
-            tcout << "    self dedupe time: " << timerDedupe.getSeconds() << '\n';
+                tcout << "    self dedupe time: " << timerDedupe.getSeconds() << '\n';
+            }
         }
 
         {
@@ -814,11 +830,13 @@ class FrontierBuilderB1B2 {
             );
             lastStats_.afterSeenSubtract = next_.size();
 
-            tcout << "    after seen subtract: " << next_.size()
-                  << " states (" << pct(lastStats_.afterSeenSubtract, lastStats_.rawGenerated) << "% of raw, "
-                  << pct(lastStats_.afterSeenSubtract, lastStats_.afterSelfDedupe) << "% of self-deduped)\n";
+            if (verbose_) {
+                tcout << "    after seen subtract: " << next_.size()
+                      << " states (" << pct(lastStats_.afterSeenSubtract, lastStats_.rawGenerated) << "% of raw, "
+                      << pct(lastStats_.afterSeenSubtract, lastStats_.afterSelfDedupe) << "% of self-deduped)\n";
 
-            tcout << "    subtract seen time: " << timerSubtract.getSeconds() << '\n';
+                tcout << "    subtract seen time: " << timerSubtract.getSeconds() << '\n';
+            }
         }
 
         {
@@ -831,8 +849,10 @@ class FrontierBuilderB1B2 {
                     mergeScratch_,
                     mergeScratchHashes_
             );
-            tcout << "    cumulative seen size: " << seen_.size() << '\n';
-            tcout << "    seen merge time: " << timerMerge.getSeconds() << '\n';
+            if (verbose_) {
+                tcout << "    cumulative seen size: " << seen_.size() << '\n';
+                tcout << "    seen merge time: " << timerMerge.getSeconds() << '\n';
+            }
         }
 
         frontier_.swap(next_);
@@ -842,26 +862,32 @@ class FrontierBuilderB1B2 {
 
         updatePeakWorkspaceCapacity();
 
-        tcout << "    new frontier size: " << frontier_.size() << '\n';
+        if (verbose_) {
+            tcout << "    new frontier size: " << frontier_.size() << '\n';
 
-        printLaneStats("frontier lane", frontier_, frontierHashes_);
-        printLaneStats("seen lane", seen_, seenHashes_);
-        printLaneStats("next scratch", next_, nextHashes_);
-        printLaneStats("merge scratch", mergeScratch_, mergeScratchHashes_);
+            printLaneStats("frontier lane", frontier_, frontierHashes_);
+            printLaneStats("seen lane", seen_, seenHashes_);
+            printLaneStats("next scratch", next_, nextHashes_);
+            printLaneStats("merge scratch", mergeScratch_, mergeScratchHashes_);
 
-        tcout << "    workspace live: " << fmtBytes(workspaceLiveBytes()) << '\n';
-        tcout << "    workspace reserved: " << fmtBytes(workspaceCapacityBytes()) << '\n';
-        tcout << "    workspace peak reserved: " << fmtBytes(peakWorkspaceCapacityBytes_) << '\n';
+            tcout << "    workspace live: " << fmtBytes(workspaceLiveBytes()) << '\n';
+            tcout << "    workspace rsv: " << fmtBytes(workspaceCapacityBytes()) << '\n';
+            tcout << "    workspace peak rsv: " << fmtBytes(peakWorkspaceCapacityBytes_) << '\n';
 
-        tcout << "    total depth time: " << stepTimer.getSeconds() << '\n';
+            tcout << "    total depth time: " << stepTimer.getSeconds() << '\n';
+        }
     }
 
 public:
     MU FrontierBuilderB1B2() = default;
 
-    MU explicit FrontierBuilderB1B2(const Board& root)
-        : root_(root), colorCount_(root.getColorCount()) {
+    MU explicit FrontierBuilderB1B2(const Board& root, const bool verbose = true)
+        : root_(root), colorCount_(root.getColorCount()), verbose_(verbose) {
         initRootState();
+    }
+
+    MU void setVerbose(const bool verbose) {
+        verbose_ = verbose;
     }
 
     MU void reset(const Board& root) {
@@ -877,6 +903,7 @@ public:
         outHashes.clear();
 
         initRootState();
+        sorter_.ensureDepthSlots(targetDepth);
 
         if (targetDepth == 0) {
             outDepth.resize(1);
@@ -900,7 +927,8 @@ public:
 template<int DEPTH>
 MU static void buildUniqueNoneDepthFrontierB1B2(const Board& root,
                                                 JVec<B1B2>& outDepth,
-                                                JVec<u64>& outHashes) {
-    FrontierBuilderB1B2 builder(root);
+                                                JVec<u64>& outHashes,
+                                                const bool verbose = true) {
+    FrontierBuilderB1B2 builder(root, verbose);
     builder.buildExactNoneDepth(DEPTH, outDepth, outHashes);
 }

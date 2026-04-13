@@ -1,0 +1,28 @@
+{
+  "mode": "infer",
+  "train": {
+    "dataset_path": "train/ml_training_data_12-1.csv",
+    "output_model_path": "models/ml_model_12-1.pt",
+    "batch_size": 64,
+    "num_epochs": 80,
+    "learning_rate": 0.0005,
+    "weight_decay": 0.0001,
+    "val_ratio": 0.1,
+    "split_seed": 1337,
+    "label_smoothing": 0.05,
+    "ce_loss_weight": 1.0,
+    "reg_loss_weight": 0.5,
+    "use_cuda": true,
+    "verbose": true
+  },
+  "infer": {
+    "dataset_path": "train/ml_training_data_12-1.csv",
+    "model_path": "models/ml_model_12-1.pt",
+    "batch_size": 128,
+    "val_ratio": 0.1,
+    "split_seed": 1337,
+    "samples_to_print": 25,
+    "use_cuda": true
+  }
+}
+

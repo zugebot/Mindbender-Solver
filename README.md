@@ -15,12 +15,6 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 
 
 
-
-
-
-
-
-
 # 36 puzzles remain unsolved:
  6-4: at least 14 moves
  9-3: at least 13 moves
@@ -32,9 +26,9 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 14-3: 
 14-4: 
 15-1: 
-15-2: 
-15-3: 
-15-4: 
+15-2: at least 13 moves
+15-3: at least 13 moves
+15-4:
 16-1: 
 16-2: 
 16-3: 

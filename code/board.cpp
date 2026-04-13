@@ -29,16 +29,6 @@ namespace {
         }
     }
 
-    constexpr u64 MAKE_MASK(const u64 offset, const u64 bits) {
-        return ~(((1ULL << bits) - 1ULL) << offset);
-    }
-
-    template<typename T1, typename T2>
-    FORCEINLINE u64 getShiftAmount(const T1 x, const T2 y) {
-        static constexpr u64 MAGIC = 0x33210F33210F;
-        return (MAGIC >> (y * 8)) - (x * 3);
-    }
-
     FORCEINLINE HD u64 getSimilar54(const u64 &sect1, const u64 &sect2) {
         const u64 s = sect1 ^ sect2;
         return ~(s | s >> 1 | s >> 2) & 0'111111'111111'111111;
@@ -53,11 +43,6 @@ namespace {
 
 Board::ColorArray_t Board::ColorsDefault = {0, 1, 2, 3, 4, 5, 6, 7};
 
-
-Board::Board(const u8 values[36], const u8 x, const u8 y) {
-    setState(values);
-    setFatXY(x, y);
-}
 
 void B1B2::setState(const u8 values[36]) {
     ColorArray_t colors = {8, 8, 8, 8, 8, 8, 8, 8};
@@ -124,82 +109,6 @@ MU B1B2::ColorArray_t B1B2::setStateAndRetColors(const u8 values[36]) {
 
 
 // ============================================================
-// Packed-state metadata
-// ============================================================
-
-static constexpr u64 COLOR_COUNT_OFFSET = 54ULL;
-static constexpr u64 COLOR_COUNT_BITS = 3ULL;
-static constexpr u64 COLOR_COUNT_MASK = MAKE_MASK(COLOR_COUNT_OFFSET, COLOR_COUNT_BITS);
-
-static constexpr u64 FAT_BOOL_OFFSET = 57ULL;
-static constexpr u64 FAT_BOOL_BITS = 1ULL;
-static constexpr u64 FAT_BOOL_MASK = MAKE_MASK(FAT_BOOL_OFFSET, FAT_BOOL_BITS);
-
-static constexpr u64 FAT_Y_OFFSET = 58ULL;
-static constexpr u64 FAT_Y_BITS = 3ULL;
-static constexpr u64 FAT_Y_MASK = MAKE_MASK(FAT_Y_OFFSET, FAT_Y_BITS);
-
-static constexpr u64 FAT_X_OFFSET = 61ULL;
-static constexpr u64 FAT_X_BITS = 3ULL;
-static constexpr u64 FAT_X_MASK = MAKE_MASK(FAT_X_OFFSET, FAT_X_BITS);
-
-MU HD void B1B2::setColorCount(const u64 colorCount) {
-    b1 = (b1 & COLOR_COUNT_MASK) | ((colorCount - 1) << COLOR_COUNT_OFFSET);
-}
-
-u32 HD B1B2::getColorCount() const {
-    const u64 colorCount = (b1 & ~COLOR_COUNT_MASK) >> COLOR_COUNT_OFFSET;
-    return colorCount + 1;
-}
-
-MU HD void B1B2::setFatBool(const bool flag) {
-    b1 = (b1 & FAT_BOOL_MASK) | (static_cast<u64>(flag) << FAT_BOOL_OFFSET);
-}
-
-bool HD B1B2::getFatBool() const {
-    return (b1 >> FAT_BOOL_OFFSET) & 1;
-}
-
-MU HD void B1B2::setFatX(const u64 x) {
-    b1 = (b1 & FAT_X_MASK) | (x << FAT_X_OFFSET);
-}
-
-MU HD void B1B2::setFatY(const u64 y) {
-    b1 = (b1 & FAT_Y_MASK) | (y << FAT_Y_OFFSET);
-}
-
-u8 HD B1B2::getFatX() const {
-    return (b1 & ~FAT_X_MASK) >> FAT_X_OFFSET;
-}
-
-u8 HD B1B2::getFatY() const {
-    return (b1 & ~FAT_Y_MASK) >> FAT_Y_OFFSET;
-}
-
-static constexpr u64 ADD_FAT_MAGIC = 0x8D116344;
-
-MU HD void B1B2::addFatX(const u64 x) {
-    b1 = (b1 & FAT_X_MASK)
-         | ((((ADD_FAT_MAGIC >> (3 * (getFatX() + x) - 1)) & 0b111)) << FAT_X_OFFSET);
-}
-
-MU HD void B1B2::addFatY(const u64 y) {
-    b1 = (b1 & FAT_Y_MASK)
-         | ((((ADD_FAT_MAGIC >> (3 * (getFatY() + y) - 1)) & 0b111)) << FAT_Y_OFFSET);
-}
-
-HD void B1B2::setFatXY(const u64 x, const u64 y) {
-    setFatX(x);
-    setFatY(y);
-    setFatBool(true);
-}
-
-MU u8 HD B1B2::getColor(const u8 x, const u8 y) const {
-    const u64 shift_amount = getShiftAmount<u8, u8>(x, y);
-    return (*(&b1 + (y >= 3)) >> shift_amount) & 0'7;
-}
-
-// ============================================================
 // Board-only helpers
 // ============================================================
 
@@ -220,13 +129,16 @@ MU HD bool Board::doActISColMatch(const u8 x1, const u8 y1, const u8 m, const u8
         return false;
     }
 
-    const u64 shift_amount2 = getShiftAmount<u8, i32>(x1, y2);
+    const u64 shift_amount2 = b1b2::getShiftAmount<u8, i32>(x1, y2);
     const u64 base2 = y2 < 3 ? b1 : b2;
     const u8 color2 = base2 >> shift_amount2;
 
     return (color1 ^ color2) & 0'7;
 }
 
+// TODO: very important to optimize
+// TODO: this code sucks make it better
+// TODO: actually nvm I think the perm code specifically doesn't use the branch that has this
 u8 HD Board::doActISColMatchBatched(const u8 x1, const u8 y1, const u8 m) const {
     const i32 x2 = (x1 - m + 6) % 6;
     const u64 base = y1 < 3 ? b1 : b2;
@@ -614,18 +526,6 @@ std::string Board::toStringSingle(const PrintSettings theSettings) const {
 }
 
 
-
-// ############################################################
-// #                        MEMORY                            #
-// ############################################################
-
-
-MU HD void Memory::setNextMoves(const std::initializer_list<u64> moveValues) {
-    for (const auto& moveValue : moveValues) {
-        setNextNMove<1>(moveValue);
-    }
-}
-
 // ############################################################
 // #            To String -Similar- Functions                 #
 // ############################################################
@@ -947,67 +847,5 @@ namespace {
 #endif
     }
 } // hashing
-
-
-StateHash::HashFuncPtr StateHash::gHashFunc_ = &StateHash::computeHash4;
-StateHash::HashKind StateHash::gHashKind_ = StateHash::HashKind::Hash4;
-
-u64 StateHash::computeHash2(const B1B2& state) {
-    const u64 above = getSegment2bits(state.b1);
-    const u64 below = getSegment2bits(state.b2);
-    return (above << 18) | below;
-}
-
-u64 StateHash::computeHash3(const B1B2& state) {
-    const u64 above = getSegment3bits(state.b1);
-    const u64 below = getSegment3bits(state.b2);
-    return (above << 30) | below;
-}
-
-u64 StateHash::computeHash4(const B1B2& state) {
-    return prime_func1(state.b2, state.b1);
-}
-
-StateHash::HashKind StateHash::chooseHashKind(const B1B2& state) {
-    const u64 colorCount = state.getColorCount();
-    if (state.getFatBool() || colorCount > 3) {
-        return HashKind::Hash4;
-    }
-    if (colorCount == 1 || colorCount == 2) {
-        return HashKind::Hash2;
-    }
-    return HashKind::Hash3;
-}
-
-StateHash::HashFuncPtr StateHash::getHashFunc() {
-    return gHashFunc_;
-}
-
-void StateHash::setHashKind(const HashKind kind) {
-    gHashKind_ = kind;
-
-    switch (kind) {
-        case HashKind::Hash2:
-            gHashFunc_ = &StateHash::computeHash2;
-            break;
-        case HashKind::Hash3:
-            gHashFunc_ = &StateHash::computeHash3;
-            break;
-        case HashKind::Hash4:
-        default:
-            gHashFunc_ = &StateHash::computeHash4;
-            break;
-    }
-}
-
-void StateHash::refreshHashFunc(const B1B2& state) {
-    setHashKind(chooseHashKind(state));
-}
-
-u64 StateHash::computeHash(const B1B2& state) {
-    return gHashFunc_(state);
-}
-
-
 
 

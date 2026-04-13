@@ -8,8 +8,6 @@
 #include <cstring>
 #include <string>
 #include <string_view>
-#include <unordered_map>
-#include <vector>
 
 /*
 RED     0
@@ -66,9 +64,20 @@ public:
         trueColors = temp.setStateAndRetColors(const_cast<u8*>(endCells));
     }
 
+    BoardPair(const std::string& nameIn,
+              const Board& startBoard,
+              const Board& endBoard)
+        : board(startBoard),
+          solve(endBoard),
+          trueColors(Board::ColorsDefault) {
+        std::strncpy(name, nameIn.c_str(), 4);
+        name[4] = '\0';
+    }
+
     MUND Board getStartState() const { return board; }
     MUND Board getEndState() const { return solve; }
     MUND std::string getName() const { return name; }
+    MUND std::string_view getNameView() const { return std::string_view(name); }
     MUND i8 getTrueColor(const u32 color) const { return trueColors[color]; }
     MUND std::string toString() const { return board.toString(solve, {true, trueColors}); }
     MUND std::string toStringReversed() const { return solve.toString(board, {true, trueColors}); }
@@ -198,23 +207,12 @@ private:
             {"20-5",  LevelCells::b20_5,  LevelCells::s20_5,  {},           {}},
     }};
 
-    inline static const std::vector<BoardPair> BOARD_PAIRS = [] {
-        std::vector<BoardPair> out;
-        out.reserve(LEVEL_DEFS.size());
+    inline static const std::array<BoardPair, LEVEL_DEFS.size()> BOARD_PAIRS = [] {
+        std::array<BoardPair, LEVEL_DEFS.size()> out{};
 
-        for (const auto& def : LEVEL_DEFS) {
-            out.emplace_back(def.name, def.startCells, def.endCells, def.startFat, def.endFat);
-        }
-
-        return out;
-    }();
-
-    inline static const std::unordered_map<std::string, const BoardPair*> BOARD_PAIR_DICT = [] {
-        std::unordered_map<std::string, const BoardPair*> out;
-        out.reserve(BOARD_PAIRS.size());
-
-        for (const auto& pair : BOARD_PAIRS) {
-            out.emplace(pair.getName(), &pair);
+        for (size_t i = 0; i < LEVEL_DEFS.size(); ++i) {
+            const auto& def = LEVEL_DEFS[i];
+            out[i] = BoardPair(def.name, def.startCells, def.endCells, def.startFat, def.endFat);
         }
 
         return out;
@@ -222,14 +220,15 @@ private:
 
 public:
     MUND static const BoardPair* getBoardPair(const std::string& name) {
-        const auto it = BOARD_PAIR_DICT.find(name);
-        if (it == BOARD_PAIR_DICT.end()) {
-            return nullptr;
+        for (const auto& pair : BOARD_PAIRS) {
+            if (pair.getNameView() == name) {
+                return &pair;
+            }
         }
-        return it->second;
+        return nullptr;
     }
 
-    MUND static const std::vector<BoardPair>& getAllBoardPairs() {
+    MUND static const std::array<BoardPair, LEVEL_DEFS.size()>& getAllBoardPairs() {
         return BOARD_PAIRS;
     }
 

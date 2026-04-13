@@ -63,7 +63,7 @@ namespace perm_stream_detail {
         chunk.hashes[chunk.count] = StateHash::computeHash(out);
 
         ++chunk.count;
-        if (chunk.count == chunk.data.capacity()) {
+        if EXPECT_FALSE(chunk.count == chunk.data.capacity()) {
             flushChunk(chunk, sink);
         }
     }
@@ -133,7 +133,7 @@ class PermStream {
     MU static void streamDepthImpl(const Board& board_in,
                                    Sink& sink,
                                    const u32 chunkCapacity) {
-        if (chunkCapacity == 0) {
+        if EXPECT_FALSE(chunkCapacity == 0) {
             return;
         }
 
@@ -180,6 +180,8 @@ public:
     MU static void streamDepth(const Board& board_in,
                                Sink& sink,
                                const u32 chunkCapacity = 1u << 20) {
+        // this assert is arbitrary only for template instantiation
+        // and what is a reasonable amount of RAM a PC may have
         static_assert(DEPTH >= 0 && DEPTH <= 5, "DEPTH must be in range 0..5");
         streamDepthImpl<SECT_DIR, DEPTH>(board_in, sink, chunkCapacity);
     }

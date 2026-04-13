@@ -6,6 +6,7 @@ cmake_minimum_required(VERSION 3.24)
 option(USE_CUDA "Enable CUDA support" OFF)
 option(USE_SIMT_ROTATIONS "Use a SIMT-friendly rotation implementation with smaller GPU code size" ON)
 option(USE_BOARD_HASH "Enable board hashing" OFF)
+option(ENABLE_ALLOC_COUNTERS "Enable global allocation counters and malloc/free wrap hooks" ON)
 
 # ------------------------------------------------------------
 # Project declaration
@@ -54,6 +55,10 @@ endif()
 
 if (USE_BOARD_HASH)
     add_compile_definitions(USE_BOARD_HASH)
+endif()
+
+if (ENABLE_ALLOC_COUNTERS)
+    add_compile_definitions(ENABLE_ALLOC_COUNTERS)
 endif()
 
 # ------------------------------------------------------------
@@ -107,6 +112,12 @@ set(COMMON_SOURCES
 
         "${CMAKE_SOURCE_DIR}/utils/jvec.cpp"
 )
+
+if (ENABLE_ALLOC_COUNTERS)
+    list(APPEND COMMON_SOURCES
+            "${CMAKE_SOURCE_DIR}/utils/allocation_counter.cpp"
+    )
+endif()
 
 if (USE_CUDA)
     file(GLOB_RECURSE CUDA_SOURCES
@@ -190,6 +201,17 @@ function(add_solver_program target_name main_file)
     if (USE_CUDA)
         set_target_properties(${target_name} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
     endif()
+
+    if (ENABLE_ALLOC_COUNTERS)
+        if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            target_link_options(${target_name} PRIVATE
+                    -Wl,--wrap=malloc
+                    -Wl,--wrap=free
+                    -Wl,--wrap=calloc
+                    -Wl,--wrap=realloc
+            )
+        endif()
+    endif()
 endfunction()
 
 # ------------------------------------------------------------
@@ -206,3 +228,6 @@ add_solver_program(CFCC                   "${CMAKE_SOURCE_DIR}/programs/CFCC.cpp
 add_solver_program(expandAllLevels        "${CMAKE_SOURCE_DIR}/programs/expandAllLevels.cpp")
 add_solver_program(benchmarkMatchingBound "${CMAKE_SOURCE_DIR}/programs/benchmarkMatchingBound.cpp")
 add_solver_program(debughIntersection4_4  "${CMAKE_SOURCE_DIR}/programs/debug_intersection_4_4.cpp")
+add_solver_program(generateMLTrainingData "${CMAKE_SOURCE_DIR}/programs/generate_ml_training_data.cpp")
+add_solver_program(analyzeLevelsFinalHeuristic "${CMAKE_SOURCE_DIR}/programs/analyzeLevelsFinalHeuristic.cpp")
+add_solver_program(testHeuristicsOnLeftSeed "${CMAKE_SOURCE_DIR}/programs/testHeuristicsOnLeftSeed.cpp")

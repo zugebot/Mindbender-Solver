@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <numeric>
 #include <stdexcept>
 #include <vector>
 
@@ -19,6 +20,7 @@ template<typename T>
 class BoardSorter {
     std::vector<JVec<T>> auxBoards_{};
     std::vector<JVec<u64>> auxHashes_{};
+    std::vector<std::vector<std::size_t>> auxOrder_{};
 
     enum DEPTH { D2 = 2, D3 = 3, D4 = 4, D5 = 5 };
     enum COLORS { C2 = 2, C3 = 3 };
@@ -51,10 +53,8 @@ class BoardSorter {
                                        const u32 depth) {
         ensureAux(depth, boards.size());
 
-        std::vector<std::size_t> order(boards.size());
-        for (std::size_t i = 0; i < order.size(); ++i) {
-            order[i] = i;
-        }
+        auto& order = auxOrder_[depth];
+        std::iota(order.begin(), order.end(), static_cast<std::size_t>(0));
 
         std::sort(order.begin(), order.end(), [&](const std::size_t lhs, const std::size_t rhs) {
             if (hashes[lhs] < hashes[rhs]) {
@@ -79,27 +79,43 @@ class BoardSorter {
     }
 
 public:
-    MU void resize(const u32 depth, const size_t size) {
-        if (auxBoards_.size() < depth + 1) {
-            auxBoards_.resize(depth + 1);
-            auxHashes_.resize(depth + 1);
+    MU void ensureDepthSlots(const u32 maxDepth) {
+        const std::size_t needed = static_cast<std::size_t>(maxDepth) + 1;
+        if (auxBoards_.size() >= needed) {
+            return;
         }
+
+        // Reserve outer slot vectors once so increasing depth does not repeatedly reallocate metadata lanes.
+        if (auxBoards_.capacity() < needed) {
+            auxBoards_.reserve(needed);
+            auxHashes_.reserve(needed);
+            auxOrder_.reserve(needed);
+        }
+
+        auxBoards_.resize(needed);
+        auxHashes_.resize(needed);
+        auxOrder_.resize(needed);
+    }
+
+    MU void resize(const u32 depth, const size_t size) {
+        ensureDepthSlots(depth);
 
         auxBoards_[depth].resize(size);
         auxHashes_[depth].resize(size);
+        auxOrder_[depth].resize(size);
     }
 
     MU void ensureAux(const u32 depth, const u64 size) {
-        if (auxBoards_.size() < depth + 1) {
-            auxBoards_.resize(depth + 1);
-            auxHashes_.resize(depth + 1);
-        }
+        ensureDepthSlots(depth);
 
         if (auxBoards_[depth].capacity() < size) {
             auxBoards_[depth].reserve(size);
         }
         if (auxHashes_[depth].capacity() < size) {
             auxHashes_[depth].reserve(size);
+        }
+        if (auxOrder_[depth].capacity() < size) {
+            auxOrder_[depth].reserve(size);
         }
 
         resize(depth, size);

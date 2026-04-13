@@ -12,6 +12,43 @@ class B1B2;
 using Action = void (*)(B1B2&);
 
 
+
+
+
+
+
+namespace b1b2 {
+    
+
+    constexpr u64 MAKE_MASK(const u64 offset, const u64 bits) {
+        return ~(((1ULL << bits) - 1ULL) << offset);
+    }
+
+    static constexpr u64 COLOR_COUNT_OFFSET = 54ULL;
+    static constexpr u64 COLOR_COUNT_BITS = 3ULL;
+    static constexpr u64 COLOR_COUNT_MASK = MAKE_MASK(COLOR_COUNT_OFFSET, COLOR_COUNT_BITS);
+    
+    static constexpr u64 FAT_BOOL_OFFSET = 57ULL;
+    static constexpr u64 FAT_BOOL_BITS = 1ULL;
+    static constexpr u64 FAT_BOOL_MASK = MAKE_MASK(FAT_BOOL_OFFSET, FAT_BOOL_BITS);
+    
+    static constexpr u64 FAT_Y_OFFSET = 58ULL;
+    static constexpr u64 FAT_Y_BITS = 3ULL;
+    static constexpr u64 FAT_Y_MASK = MAKE_MASK(FAT_Y_OFFSET, FAT_Y_BITS);
+    
+    static constexpr u64 FAT_X_OFFSET = 61ULL;
+    static constexpr u64 FAT_X_BITS = 3ULL;
+    static constexpr u64 FAT_X_MASK = MAKE_MASK(FAT_X_OFFSET, FAT_X_BITS);
+    
+    
+    template<typename T1, typename T2>
+    FORCEINLINE u64 getShiftAmount(const T1 x, const T2 y) {
+        static constexpr u64 MAGIC = 0x33210F33210F;
+        return (MAGIC >> (y * 8)) - (x * 3);
+    }
+
+}
+
 class B1B2 {
 public:
     using ColorArray_t = std::array<i8, 8>;
@@ -36,25 +73,69 @@ public:
     MU void setState(const u8 values[36]);
     MU ColorArray_t setStateAndRetColors(const u8 values[36]);
 
-    MU HD void setColorCount(u64 colorCount);
-    MUND HD u32 getColorCount() const;
+    MU FORCEINLINE HD void setColorCount(const u64 colorCount) {
+        b1 = (b1 & b1b2::COLOR_COUNT_MASK) | ((colorCount - 1) << b1b2::COLOR_COUNT_OFFSET);
+    }
+    
+    MUND FORCEINLINE HD u32 getColorCount() const {
+        const u64 colorCount = (b1 & ~b1b2::COLOR_COUNT_MASK) >> b1b2::COLOR_COUNT_OFFSET;
+        return colorCount + 1;
+    }
 
-    MU HD void setFatBool(bool flag);
-    MUND HD bool getFatBool() const;
+    MU FORCEINLINE HD void setFatBool(const bool flag) {
+        b1 = (b1 & b1b2::FAT_BOOL_MASK) | (static_cast<u64>(flag) << b1b2::FAT_BOOL_OFFSET);
+    }
+    MUND FORCEINLINE HD bool getFatBool() const {
+        return (b1 >> b1b2::FAT_BOOL_OFFSET) & 1;
+    }
 
-    MU HD void setFatX(u64 x);
-    MU HD void addFatX(u64 x);
-    MUND HD u8 getFatX() const;
+    MU FORCEINLINE HD void setFatX(const u64 x) {
+        b1 = (b1 & b1b2::FAT_X_MASK) | (x << b1b2::FAT_X_OFFSET);
+    }
+    MU FORCEINLINE HD void addFatX(const u64 x) {
+        static constexpr u64 ADD_FAT_MAGIC = 0x8D116344;
+        b1 = (b1 & b1b2::FAT_X_MASK)
+             | ((((ADD_FAT_MAGIC >> (3 * (getFatX() + x) - 1)) & 0b111)) << b1b2::FAT_X_OFFSET);
+    }
+    
+    MUND FORCEINLINE HD u8 getFatX() const {
+        return (b1 & ~b1b2::FAT_X_MASK) >> b1b2::FAT_X_OFFSET;
+    }
 
-    MU HD void setFatY(u64 y);
-    MU HD void addFatY(u64 y);
-    MUND HD u8 getFatY() const;
+    MU FORCEINLINE HD void setFatY(const u64 y) {
+        b1 = (b1 & b1b2::FAT_Y_MASK) | (y << b1b2::FAT_Y_OFFSET);
+    }
+    MU FORCEINLINE HD void addFatY(const u64 y) {
+        static constexpr u64 ADD_FAT_MAGIC = 0x8D116344;
+        b1 = (b1 & b1b2::FAT_Y_MASK)
+             | ((((ADD_FAT_MAGIC >> (3 * (getFatY() + y) - 1)) & 0b111)) << b1b2::FAT_Y_OFFSET);
+    }
+    MUND FORCEINLINE HD u8 getFatY() const {
+        return (b1 & ~b1b2::FAT_Y_MASK) >> b1b2::FAT_Y_OFFSET;
+    }
 
-    MU HD void setFatXY(u64 x, u64 y);
-    MUND HD u8 getFatXY() const { return getFatX() * 5 + getFatY();}
-    MUND HD u8 getFatXYFast() const { return (getFatX() << 3) + getFatY();}
-
-    MUND HD u8 getColor(u8 x, u8 y) const;
+    MU FORCEINLINE HD void setFatXY(const u64 x, const u64 y) {
+        setFatX(x);
+        setFatY(y);
+        setFatBool(true);
+    }
+    
+    MUND FORCEINLINE HD u8 getFatXY() const { 
+        return getFatX() * 5 + getFatY();
+    }
+    MUND FORCEINLINE HD u8 getFatXYFast() const { 
+        return (getFatX() << 3) + getFatY();
+    }
+    
+    MU FORCEINLINE u8 HD getColor(const u8 x, const u8 y) const {
+        const u64 shift_amount = b1b2::getShiftAmount<u8, u8>(x, y);
+        return (*(&b1 + (y >= 3)) >> shift_amount) & 0'7;
+    }
+    
+    MU FORCEINLINE u8 HD getColor(const u64 x, const u64 y) const {
+        const u64 shift_amount = b1b2::getShiftAmount<u64, u64>(x, y);
+        return (*(&b1 + (y >= 3)) >> shift_amount) & 0'7;
+    }
 
     MUND HD u64 getScore1(const B1B2& other) const;
     
@@ -111,8 +192,8 @@ public:
     // #                       u64 hash                           #
     // ############################################################
 
-    MUND HD u64 getMem() const { return mem; }
-    MU HD void setMem(const u64 value) { mem = value; }
+    MUND FORCEINLINE HD u64 getMem() const { return mem; }
+    MU FORCEINLINE HD void setMem(const u64 value) { mem = value; }
 
     // ############################################################
     // #                       u64 moves                          #
@@ -133,7 +214,11 @@ public:
     template<i32 COUNT>
     HD void setNextNMove(u64 moveValue);
 
-    MU HD void setNextMoves(std::initializer_list<u64> moveValues);
+    MU HD void setNextMoves(const std::initializer_list<u64> moveValues) {
+        for (const auto& moveValue : moveValues) {
+            setNextNMove<1>(moveValue);
+        }
+    }
 
     // ############################################################
     // #            To String -Similar- Functions                 #
@@ -202,12 +287,15 @@ public:
 
     Board(const std::initializer_list<u8> values) { setState(values.begin()); }
     explicit Board(const u8 values[36]) { setState(values); }
-    explicit Board(const u8 values[36], u8 x, u8 y);
+    explicit Board(const u8 values[36], const u8 fatX, const u8 fatY) {
+        setState(values);
+        setFatXY(fatX, fatY);
+    }
 
-    MUND HD B1B2 asB1B2() const { return {b1, b2}; }
+    MUND FORCEINLINE HD B1B2 asB1B2() const { return {b1, b2}; }
     
-    MUND HD Memory& getMemory() { return memory; }
-    MUND HD const Memory& getMemory() const { return memory; }
+    MUND FORCEINLINE HD Memory& getMemory() { return memory; }
+    MUND FORCEINLINE HD const Memory& getMemory() const { return memory; }
 
     MUND HD bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
     MUND HD u8 doActISColMatchBatched(u8 x1, u8 y1, u8 m) const;
@@ -264,28 +352,11 @@ namespace my_cuda {
 
 class StateHash {
 public:
-    enum class HashKind : u8 {
-        Hash2,
-        Hash3,
-        Hash4,
-    };
-    
-    using HashFuncPtr = u64 (*)(const B1B2& state);
-
-    MUND HD static u64 computeHash(const B1B2& state);
-    MUND HD static HashFuncPtr getHashFunc();
-    MU static void refreshHashFunc(const B1B2& state);
-    MU static void setHashKind(HashKind kind);
-
-private:
-    MUND HD static HashKind chooseHashKind(const B1B2& state);
-
-    MUND HD static u64 computeHash2(const B1B2& state);
-    MUND HD static u64 computeHash3(const B1B2& state);
-    MUND HD static u64 computeHash4(const B1B2& state);
-
-    static HashFuncPtr gHashFunc_;
-    static HashKind gHashKind_;
+    MUND FORCEINLINE HD static u64 computeHash(const B1B2& state) {
+        const u64 x = state.b1;
+        const u64 y = state.b2;
+        return x ^ ((y << 1) | (y >> 63)) ^ (x >> 17) ^ (y << 13);
+    }
 };
 
 

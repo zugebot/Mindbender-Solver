@@ -18,6 +18,7 @@
 
 
 
+
 struct FindSolutionConfig {
     std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     BoardSolverFrontier::SearchDirection searchDirection = BoardSolverFrontier::SearchDirection::Auto;
@@ -25,6 +26,7 @@ struct FindSolutionConfig {
     std::string puzzle = "14-2";
     int estimatedDepth = 10;
     int threads = 12;
+    std::vector<std::string> unsolvedPuzzles;
 };
 
 static std::string toLowerCopy(std::string s) {
@@ -116,6 +118,16 @@ static FindSolutionConfig loadFindSolutionConfig() {
         if (const auto it = j.find("threads"); it != j.end() && it->is_number_integer()) {
             cfg.threads = it->get<int>();
         }
+        if (const auto it = j.find("unsolvedPuzzles"); it != j.end() && it->is_array()) {
+            cfg.unsolvedPuzzles.clear();
+            cfg.unsolvedPuzzles.reserve(it->size());
+            for (const auto& v : *it) {
+                if (v.is_string()) {
+                    cfg.unsolvedPuzzles.push_back(v.get<std::string>());
+                }
+            }
+        }
+        
     } catch (const std::exception& e) {
         tcout << "Failed to read config.json, using defaults: " << e.what() << '\n';
     }
@@ -130,6 +142,7 @@ static int runSolverForEstimatedDepth(
         int threads,
         BoardSolverFrontier::SearchDirection searchDirection
 ) {
+
     switch (estimatedDepth) {
         case 3:
             solver.findSolutionsFrontierThreaded<1, 1, 1, DEBUG>(threads, searchDirection);
@@ -181,23 +194,13 @@ static int runSolverForEstimatedDepth(
     }
 }
 
-int main() {
-    static constexpr u32 GB_NEEDED = 12;
-    if (!hasAtLeastGBMemoryTotal(GB_NEEDED)) {
-        tcout << "Program requires more RAM, exiting...\n";
-        const u64 mem = getTotalSystemMemory();
-        tcout << bytesFormatted(mem) << "/" << GB_NEEDED << ".000GB" << std::endl;
-        return -1;
-    }
-
-    const FindSolutionConfig config = loadFindSolutionConfig();
-
+int runSingleFindSolution(const FindSolutionConfig& config) {
     const std::string outDirectory = config.outDirectory;
     const auto SEARCH_DIRECTION = config.searchDirection;
     std::string puzzle = config.puzzle;
     int estimatedDepth = config.estimatedDepth;
     int threads = config.threads;
-
+    
     const auto pair = BoardLookup::getBoardPair(puzzle);
 
     tcout << pair->toString() << std::endl;
@@ -210,46 +213,61 @@ int main() {
     }
 
     return runSolverForEstimatedDepth<false>(solver, estimatedDepth, threads, SEARCH_DIRECTION);
+}
 
 
-    /*
-    Board board = pair->getSolutionState();
-    std::vector<std::vector<HashMem>> boards_vec(6);
-    Perms::reserveForDepth(board, boards_vec[0], 0);
-    Perms::reserveForDepth(board, boards_vec[0], 1);
-    Perms::reserveForDepth(board, boards_vec[0], 2);
-    Perms::reserveForDepth(board, boards_vec[1], 3);
-    Perms::reserveForDepth(board, boards_vec[2], 4);
-    Perms::reserveForDepth(board, boards_vec[3], 5);
-
-    std::vector<Sizes> sizes(25);
-    int index = 0;
-    for (int x = 0; x < 5; x++) {
-        for (int y = 0; y < 5; y++) {
-            board.setFatXY(x, y);
-            for (int i = 0; i < 6; i++) {
-                Perms::getDepthFunc(board, boards_vec[i], i, true);
-                tcout << x << " " << y << " Size " << i << ": " << boards_vec[i].size() << std::endl;
-                sizes[index].sizes[i] = boards_vec[i].size();
-                boards_vec[i].resize(0);
-            }
-            index++;
+int runMultiFindSolution(const FindSolutionConfig& config) {
+    const std::string outDirectory = config.outDirectory;
+    const auto SEARCH_DIRECTION = config.searchDirection;
+    int estimatedDepth = config.estimatedDepth;
+    int threads = config.threads;
+    
+    int status = 0;
+    for (auto puzzle : config.unsolvedPuzzles) {
+        
+        
+        tcout << "Solving puzzle: " << puzzle << std::endl;
+        
+        const auto pair = BoardLookup::getBoardPair(puzzle);
+        if (pair->getStartState().getFatBool()) {
+            continue;
         }
+    
+        tcout << pair->toString() << std::endl;
+        
+        BoardSolverFrontier solver(pair);
+        solver.setWriteDirectory(outDirectory);
+
+        if (config.debug) {
+            status += runSolverForEstimatedDepth<true>(solver, estimatedDepth, threads, SEARCH_DIRECTION);
+        }
+        status += runSolverForEstimatedDepth<false>(solver, estimatedDepth, threads, SEARCH_DIRECTION);
+    }
+    return status;
+}
+
+
+
+int main() {
+    static constexpr u32 GB_NEEDED = 12;
+    if (!hasAtLeastGBMemoryTotal(GB_NEEDED)) {
+        tcout << "Program requires more RAM, exiting...\n";
+        const u64 mem = getTotalSystemMemory();
+        tcout << bytesFormatted(mem) << "/" << GB_NEEDED << ".000GB" << std::endl;
+        return -1;
     }
 
-    for (int x = 0; x < 6; x++) {
-        u64 lowest = 0;
-        for (auto size : sizes) {
-            if (size.sizes[x] > lowest) {
-                lowest = size.sizes[x];
-            }
-        }
-        tcout << "Size " << x << ": " << lowest << std::endl;
+    const FindSolutionConfig config = loadFindSolutionConfig();
 
-    }
-
-    return 0;
-    */
+    return runSingleFindSolution(config);
+    // return runMultiFindSolution(config);
+  
+    
+    
+    
+    
+    
+    
     /*
     namespace std {
         template <>
@@ -359,79 +377,4 @@ int main() {
 
     return 0;
     */
-    /*
-    static constexpr int DEPTH_TEST = 5;
-
-    Timer timer1;
-    auto boards1 = make2PermutationListFuncs[DEPTH_TEST](board1, 2);
-    auto time1 = timer1.getSeconds();
-
-
-    std::map<u64, Board> boardMap1;
-    std::map<u64, u64> board1_B1;
-    std::map<u64, u64> board1_B2;
-    for (auto& board : boards1) {
-        // boardMap1[board.hash] = board;
-        board1_B1[board.b1] = 1;
-        board1_B2[board.b2] = 1;
-    }
-
-
-    Timer timer2;
-    auto boards2 = makePermutationListFuncs[DEPTH_TEST](board1, 2);
-    auto time2 = timer2.getSeconds();
-
-
-    std::map<u64, Board> boardMap2;
-    std::map<u64, u64> board2_B1;
-    std::map<u64, u64> board2_B2;
-    for (auto& board : boards2) {
-        // boardMap2[board.hash] = board;
-        board2_B1[board.b1] = 1;
-        board2_B2[board.b2] = 1;
-    }
-
-
-
-
-    tcout << "Size New: " << boards1.size() << "\n";
-    tcout << "Size Old: " << boards2.size() << "\n";
-    tcout << "\n";
-    // tcout << "Uniq New: " << boardMap1.size() << "\n";
-    // tcout << "Uniq Old: " << boardMap2.size() << "\n";
-    // tcout << "\n";
-    tcout << "__b1 New: " << board1_B1.size() << "\n";
-    tcout << "__b2 New: " << board1_B2.size() << "\n";
-    tcout << "\n";
-    tcout << "__b1 Old: " << board2_B1.size() << "\n";
-    tcout << "__b2 Old: " << board2_B2.size() << "\n";
-    tcout << "\n";
-    tcout << "Time New: " << time1 << "\n";
-    tcout << "Time Old: " << time2 << "\n";
-    tcout << std::flush;
-
-
-
-
-
-
-    return 0;
-    */
-    /*
-    vecBoard_t boards1;
-    Permutations::getDepthFunc(board1, boards1, 4);
-
-    vecBoard_t boards2;
-    Permutations::allocateForDepth(boards2, 5);
-
-    Timer timer;
-    Permutations::getDepthPlus1Func(boards1, boards2, false);
-    auto end = timer.getSeconds();
-
-    tcout << "Time: " << end << "\n";
-    tcout << "siz4: " << boards1.size() << "\n";
-    tcout << "siz5: " << boards2.size() << "\n";
-
-    return 0;
-     */
 }

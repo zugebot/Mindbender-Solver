@@ -150,12 +150,12 @@ public:
         const Timer totalTime;
 
         while (currentDepth <= depthTotalMax) {
-            const auto permutationsFromDepth = Perms<Board>::depthMap.at(currentDepth);
+            const auto permutationsFromDepth = Perms<Board>::getDepthPairs(currentDepth);
             i32 permCount = 0;
 
             if (currentDepth > 1 && currentDepth % 2 == 1) {
                 IF_DEBUG_COUT("\nSolving for (depth - 1): " << currentDepth - 1 << "\n\n")
-                const auto oneBefore = Perms<Board>::depthMap.at(currentDepth - 1);
+                const auto oneBefore = Perms<Board>::getDepthPairs(currentDepth - 1);
                 findSolutionsAtDepth<debug>(permCount, oneBefore[0].first, oneBefore[0].second, false);
             }
 

@@ -1,7 +1,7 @@
 import os
 from permutations import get_permutations
 
-files = os.listdir("../../levels")
+files = os.listdir("../../build/levels")
 files = [file for file in files if file.endswith(".txt")]
 
 for file in files:
