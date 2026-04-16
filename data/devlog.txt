@@ -1,0 +1,36 @@
+
+
+
+
+
+
+# 1.30.2023
+ - added image.py, a simpler sprite
+ - rewrote the menus to use image.py
+
+ -- SCALING --
+ - made board size adjustable
+ - made normal chuzzles resize to chuzzle count, so they always fit
+ - made fat chuzzles resize to chuzzle count, so they always fit
+ - made locks resize to chuzzle count, so they always fit
+ - made rainbow resizable to chuzzle count, so it always fits
+ - made mindbender solution scale to different chuzzle amounts
+
+ -- YES
+ - updated point.py to handle floats better
+ - fixed bug with moving rows with multiple fat chuzzles in them
+ - made it so fat chuzzles have their own big sized locks
+
+
+# 2.1.2023
+ - rewriting / moving parts of different tools to different files to make it easier to code with
+
+
+
+
+
+
+
+
+
+

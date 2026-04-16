@@ -1,0 +1,56 @@
+{
+  "hitbox": "None",
+  "clickable": "None",
+
+  "textures": {
+    "default": "None",
+    "hover": "None",
+    "clickdown": "None"
+  },
+
+  "render": {
+    "blend-type": "None",
+    "opacity": 0,
+
+    "rotate": {
+        "running": true,
+        "frame": 0,
+        "frame-count": 240,
+        "clockwise": 1
+    },
+    "move": {
+      "running": false,
+      "frame": 0,
+      "frame-count": 240,
+      "delta-change": [0, 0],
+      "move-to": [0, 0]
+    },
+    "fade_out": {
+      "running": false,
+      "frame": 0,
+      "frame-count": 240,
+      "opacity-start": 0,
+      "opacity-end": 0
+    },
+    "fade_in": {
+      "running": false,
+      "frame": 0,
+      "frame-count": 240,
+      "opacity-start": 0,
+      "opacity-end": 0
+    },
+    "sounds": {
+      "clickdown": "None",
+      "clickup": "None",
+      "hover": "None",
+      "repeat": false
+    }
+
+  },
+
+  "funcs": {
+    "clickup": "None",
+    "clickdown": "None",
+    "hover": "None"
+  }
+}
