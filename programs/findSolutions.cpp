@@ -181,6 +181,10 @@ static int runSolverForEstimatedDepth(
             return 0;
 
         case 12:
+            // <2,5,5> [0:19:39.047]
+            // <3,4,5> [0:21:31.331]
+            // <4,3,5> [also too long]
+            // <5,2,5> [way too long..., like 3 days]
             solver.findSolutionsFrontierThreaded<2, 5, 5, DEBUG>(threads, searchDirection);
             return 0;
             

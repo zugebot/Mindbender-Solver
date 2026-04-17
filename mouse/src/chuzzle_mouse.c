@@ -12,6 +12,8 @@
 #define CHUZZLE_EPSILON 1e-12
 #define CHUZZLE_TERNARY_SEARCH_STEPS 70
 #define CHUZZLE_MOVE_TOKEN_CAPACITY 5
+#define CHUZZLE_FAT_TOP_LEFT_MAX (CHUZZLE_GRID_SIZE - 2)
+#define CHUZZLE_FAT_STATE_COUNT ((CHUZZLE_GRID_SIZE - 1) * (CHUZZLE_GRID_SIZE - 1))
 
 typedef struct ParsedMove {
     char token[CHUZZLE_MOVE_TOKEN_CAPACITY];
@@ -263,6 +265,82 @@ static int chuzzle_get_displacements(int amount, int out_displacements[2], int *
 static int chuzzle_is_free_drag(int displacement, double lock_threshold, int free_drag_min_displacement) {
     int displacement_abs = displacement < 0 ? -displacement : displacement;
     return displacement_abs >= free_drag_min_displacement && (double) displacement_abs > lock_threshold;
+}
+
+static int chuzzle_level_pos_valid(int value) {
+    return value >= 0 && value <= CHUZZLE_FAT_TOP_LEFT_MAX;
+}
+
+static int chuzzle_fat_index_from_xy(int x, int y) {
+    return y * (CHUZZLE_GRID_SIZE - 1) + x;
+}
+
+static void chuzzle_fat_xy_from_index(int index, int *out_x, int *out_y) {
+    int row_width = CHUZZLE_GRID_SIZE - 1;
+    *out_x = index % row_width;
+    *out_y = index / row_width;
+}
+
+static int chuzzle_move_affects_fat(const ParsedMove *move, int fat_x, int fat_y) {
+    if (move == NULL || move->line_count != 2) {
+        return 0;
+    }
+
+    if (move->axis == 'R') {
+        int y0 = fat_y;
+        int y1 = fat_y + 1;
+        return (move->lines[0] == y0 || move->lines[1] == y0) &&
+               (move->lines[0] == y1 || move->lines[1] == y1);
+    }
+
+    if (move->axis == 'C') {
+        int x0 = fat_x;
+        int x1 = fat_x + 1;
+        return (move->lines[0] == x0 || move->lines[1] == x0) &&
+               (move->lines[0] == x1 || move->lines[1] == x1);
+    }
+
+    return 0;
+}
+
+static int chuzzle_try_transition_fat_index(
+        const ParsedMove *move,
+        int displacement,
+        int fat_before_index,
+        int *out_fat_after_index) {
+    int fat_x;
+    int fat_y;
+
+    if (move == NULL || out_fat_after_index == NULL) {
+        return 0;
+    }
+
+    chuzzle_fat_xy_from_index(fat_before_index, &fat_x, &fat_y);
+
+    if (!chuzzle_move_affects_fat(move, fat_x, fat_y)) {
+        *out_fat_after_index = fat_before_index;
+        return 1;
+    }
+
+    if (move->axis == 'R') {
+        int next_x = fat_x + displacement;
+        if (!chuzzle_level_pos_valid(next_x)) {
+            return 0;
+        }
+        *out_fat_after_index = chuzzle_fat_index_from_xy(next_x, fat_y);
+        return 1;
+    }
+
+    if (move->axis == 'C') {
+        int next_y = fat_y + displacement;
+        if (!chuzzle_level_pos_valid(next_y)) {
+            return 0;
+        }
+        *out_fat_after_index = chuzzle_fat_index_from_xy(fat_x, next_y);
+        return 1;
+    }
+
+    return 0;
 }
 
 static int chuzzle_build_candidates(
@@ -538,9 +616,13 @@ int chuzzle_solve_sequence_utf8(
     int result = CHUZZLE_OK;
 
     CandidateLayer *candidate_layers = NULL;
+    ParsedMove *parsed_moves = NULL;
     size_t sequence_len = 0;
     ChuzzlePoint start_pos = {0.0, 0.0};
     int has_start_pos = 0;
+    int has_fat_pos = 0;
+    int initial_fat_index = 0;
+    int fat_state_count = 1;
     const ChuzzlePoint *final_targets = NULL;
     size_t final_target_count = 0;
     double lock_threshold = 1.0;
@@ -552,6 +634,7 @@ int chuzzle_solve_sequence_utf8(
 
     TerminalChoice *terminal_choices = NULL;
     int *chosen_indices = NULL;
+    int *chosen_fat_indices = NULL;
     ChuzzleStep *steps = NULL;
 
     size_t move_index;
@@ -574,8 +657,20 @@ int chuzzle_solve_sequence_utf8(
     sequence_len = token_count;
     has_start_pos = config->has_start_mouse_position ? 1 : 0;
     start_pos = config->start_mouse_position;
+    has_fat_pos = config->has_initial_fat_position ? 1 : 0;
     lock_threshold = config->lock_threshold;
     free_drag_min_displacement = config->free_drag_min_displacement;
+
+    if (has_fat_pos) {
+        int fat_x = (int) llround(config->initial_fat_position.x);
+        int fat_y = (int) llround(config->initial_fat_position.y);
+        if (!chuzzle_level_pos_valid(fat_x) || !chuzzle_level_pos_valid(fat_y)) {
+            result = CHUZZLE_ERR_INVALID_ARGUMENT;
+            goto cleanup;
+        }
+        initial_fat_index = chuzzle_fat_index_from_xy(fat_x, fat_y);
+        fat_state_count = CHUZZLE_FAT_STATE_COUNT;
+    }
 
     if (config->end_next_puzzle) {
         final_targets = CHUZZLE_DEFAULT_NEXT_PUZZLE_TARGETS;
@@ -586,22 +681,22 @@ int chuzzle_solve_sequence_utf8(
     }
 
     candidate_layers = (CandidateLayer *) calloc(sequence_len, sizeof(*candidate_layers));
+    parsed_moves = (ParsedMove *) calloc(sequence_len, sizeof(*parsed_moves));
     candidate_counts = (size_t *) calloc(sequence_len, sizeof(*candidate_counts));
     parents = (int **) calloc(sequence_len, sizeof(*parents));
-    if (candidate_layers == NULL || candidate_counts == NULL || parents == NULL) {
+    if (candidate_layers == NULL || parsed_moves == NULL || candidate_counts == NULL || parents == NULL) {
         result = CHUZZLE_ERR_INVALID_ARGUMENT;
         goto cleanup;
     }
 
     for (move_index = 0; move_index < sequence_len; ++move_index) {
-        ParsedMove parsed_move;
-        result = chuzzle_parse_move_token(tokens[move_index], &parsed_move);
+        result = chuzzle_parse_move_token(tokens[move_index], &parsed_moves[move_index]);
         if (result != CHUZZLE_OK) {
             goto cleanup;
         }
 
         result = chuzzle_build_candidates(
-                &parsed_move,
+                &parsed_moves[move_index],
                 lock_threshold,
                 free_drag_min_displacement,
                 &candidate_layers[move_index]);
@@ -624,9 +719,18 @@ int chuzzle_solve_sequence_utf8(
 
         for (final_index = 0; final_index < only_layer->count; ++final_index) {
             MoveCandidate *candidate = &only_layer->items[final_index];
+            int fat_after = initial_fat_index;
             TerminalChoice terminal = chuzzle_best_terminal_choice(candidate, final_targets, final_target_count);
             double initial_move_distance = 0.0;
             double total_cost;
+
+            if (has_fat_pos && !chuzzle_try_transition_fat_index(
+                    &parsed_moves[0],
+                    candidate->displacement,
+                    initial_fat_index,
+                    &fat_after)) {
+                continue;
+            }
 
             if (has_start_pos) {
                 initial_move_distance = chuzzle_distance(start_pos, candidate->click_down);
@@ -690,27 +794,53 @@ int chuzzle_solve_sequence_utf8(
         goto cleanup;
     }
 
-    prev_costs = (double *) malloc(candidate_counts[0] * sizeof(*prev_costs));
-    parents[0] = (int *) malloc(candidate_counts[0] * sizeof(*parents[0]));
+    {
+        size_t first_state_count = candidate_counts[0] * (size_t) fat_state_count;
+        prev_costs = (double *) malloc(first_state_count * sizeof(*prev_costs));
+        parents[0] = (int *) malloc(first_state_count * sizeof(*parents[0]));
+    }
     if (prev_costs == NULL || parents[0] == NULL) {
         result = CHUZZLE_ERR_INVALID_ARGUMENT;
         goto cleanup;
     }
 
-    for (final_index = 0; final_index < candidate_counts[0]; ++final_index) {
-        if (has_start_pos) {
-            prev_costs[final_index] = chuzzle_distance(start_pos, candidate_layers[0].items[final_index].click_down);
-        } else {
-            prev_costs[final_index] = 0.0;
+    {
+        size_t first_state_count = candidate_counts[0] * (size_t) fat_state_count;
+        for (final_index = 0; final_index < first_state_count; ++final_index) {
+            prev_costs[final_index] = DBL_MAX;
+            parents[0][final_index] = -1;
         }
-        parents[0][final_index] = -1;
+
+        for (final_index = 0; final_index < candidate_counts[0]; ++final_index) {
+            int fat_after_index = initial_fat_index;
+            size_t state_index;
+            double start_cost;
+
+            if (has_fat_pos && !chuzzle_try_transition_fat_index(
+                    &parsed_moves[0],
+                    candidate_layers[0].items[final_index].displacement,
+                    initial_fat_index,
+                    &fat_after_index)) {
+                continue;
+            }
+
+            state_index = final_index * (size_t) fat_state_count + (size_t) (has_fat_pos ? fat_after_index : 0);
+            start_cost = has_start_pos
+                                 ? chuzzle_distance(start_pos, candidate_layers[0].items[final_index].click_down)
+                                 : 0.0;
+            if (start_cost < prev_costs[state_index]) {
+                prev_costs[state_index] = start_cost;
+            }
+        }
     }
 
     for (move_index = 1; move_index < sequence_len; ++move_index) {
         CandidateLayer *prev_layer = &candidate_layers[move_index - 1];
         CandidateLayer *curr_layer = &candidate_layers[move_index];
-        double *curr_costs = (double *) malloc(curr_layer->count * sizeof(*curr_costs));
-        int *curr_parents = (int *) malloc(curr_layer->count * sizeof(*curr_parents));
+        size_t prev_state_count = prev_layer->count * (size_t) fat_state_count;
+        size_t curr_state_count = curr_layer->count * (size_t) fat_state_count;
+        double *curr_costs = (double *) malloc(curr_state_count * sizeof(*curr_costs));
+        int *curr_parents = (int *) malloc(curr_state_count * sizeof(*curr_parents));
         size_t curr_index;
         size_t prev_index;
 
@@ -721,24 +851,48 @@ int chuzzle_solve_sequence_utf8(
             goto cleanup;
         }
 
-        for (curr_index = 0; curr_index < curr_layer->count; ++curr_index) {
-            MoveCandidate *curr_candidate = &curr_layer->items[curr_index];
-            double best_cost = DBL_MAX;
-            int best_parent = -1;
+        for (curr_index = 0; curr_index < curr_state_count; ++curr_index) {
+            curr_costs[curr_index] = DBL_MAX;
+            curr_parents[curr_index] = -1;
+        }
 
-            for (prev_index = 0; prev_index < prev_layer->count; ++prev_index) {
-                MoveCandidate *prev_candidate = &prev_layer->items[prev_index];
-                TransitionChoice edge = chuzzle_optimize_release_to_point(prev_candidate, curr_candidate->click_down);
-                double candidate_cost = prev_costs[prev_index] + edge.total_cost;
+        for (prev_index = 0; prev_index < prev_layer->count; ++prev_index) {
+            MoveCandidate *prev_candidate = &prev_layer->items[prev_index];
+            int prev_fat_index;
 
-                if (candidate_cost < best_cost) {
-                    best_cost = candidate_cost;
-                    best_parent = (int) prev_index;
+            for (prev_fat_index = 0; prev_fat_index < fat_state_count; ++prev_fat_index) {
+                size_t prev_state_index = prev_index * (size_t) fat_state_count + (size_t) prev_fat_index;
+                double prev_cost = prev_costs[prev_state_index];
+
+                if (prev_cost >= DBL_MAX * 0.5) {
+                    continue;
+                }
+
+                for (curr_index = 0; curr_index < curr_layer->count; ++curr_index) {
+                    MoveCandidate *curr_candidate = &curr_layer->items[curr_index];
+                    int curr_fat_index = prev_fat_index;
+                    size_t curr_state_index;
+                    TransitionChoice edge;
+                    double candidate_cost;
+
+                    if (has_fat_pos && !chuzzle_try_transition_fat_index(
+                            &parsed_moves[move_index],
+                            curr_candidate->displacement,
+                            prev_fat_index,
+                            &curr_fat_index)) {
+                        continue;
+                    }
+
+                    curr_state_index = curr_index * (size_t) fat_state_count + (size_t) (has_fat_pos ? curr_fat_index : 0);
+                    edge = chuzzle_optimize_release_to_point(prev_candidate, curr_candidate->click_down);
+                    candidate_cost = prev_cost + edge.total_cost;
+
+                    if (candidate_cost < curr_costs[curr_state_index]) {
+                        curr_costs[curr_state_index] = candidate_cost;
+                        curr_parents[curr_state_index] = (int) prev_state_index;
+                    }
                 }
             }
-
-            curr_costs[curr_index] = best_cost;
-            curr_parents[curr_index] = best_parent;
         }
 
         parents[move_index] = curr_parents;
@@ -752,35 +906,57 @@ int chuzzle_solve_sequence_utf8(
         goto cleanup;
     }
 
-    for (final_index = 0; final_index < candidate_counts[sequence_len - 1]; ++final_index) {
+    {
+        int best_final_state = -1;
+        for (final_index = 0; final_index < candidate_counts[sequence_len - 1]; ++final_index) {
+            int fat_index;
         terminal_choices[final_index] = chuzzle_best_terminal_choice(
                 &candidate_layers[sequence_len - 1].items[final_index],
                 final_targets,
                 final_target_count);
 
-        {
-            double total_cost = prev_costs[final_index] + terminal_choices[final_index].total_cost;
-            if (total_cost < best_final_total) {
-                best_final_total = total_cost;
-                best_final_index = (int) final_index;
+            for (fat_index = 0; fat_index < fat_state_count; ++fat_index) {
+                size_t state_index = final_index * (size_t) fat_state_count + (size_t) fat_index;
+                double state_cost = prev_costs[state_index];
+                double total_cost;
+                if (state_cost >= DBL_MAX * 0.5) {
+                    continue;
+                }
+                total_cost = state_cost + terminal_choices[final_index].total_cost;
+                if (total_cost < best_final_total) {
+                    best_final_total = total_cost;
+                    best_final_index = (int) final_index;
+                    best_final_state = (int) state_index;
+                }
             }
         }
-    }
 
-    if (best_final_index < 0) {
-        result = CHUZZLE_ERR_INVALID_ARGUMENT;
-        goto cleanup;
-    }
+        if (best_final_index < 0 || best_final_state < 0) {
+            result = CHUZZLE_ERR_INVALID_ARGUMENT;
+            goto cleanup;
+        }
 
-    chosen_indices = (int *) malloc(sequence_len * sizeof(*chosen_indices));
-    if (chosen_indices == NULL) {
-        result = CHUZZLE_ERR_INVALID_ARGUMENT;
-        goto cleanup;
-    }
+        chosen_indices = (int *) malloc(sequence_len * sizeof(*chosen_indices));
+        chosen_fat_indices = (int *) malloc(sequence_len * sizeof(*chosen_fat_indices));
+        if (chosen_indices == NULL || chosen_fat_indices == NULL) {
+            result = CHUZZLE_ERR_INVALID_ARGUMENT;
+            goto cleanup;
+        }
 
-    chosen_indices[sequence_len - 1] = best_final_index;
-    for (move_index = sequence_len - 1; move_index > 0; --move_index) {
-        chosen_indices[move_index - 1] = parents[move_index][chosen_indices[move_index]];
+        {
+            int current_state = best_final_state;
+            for (move_index = sequence_len; move_index-- > 0;) {
+                chosen_indices[move_index] = current_state / fat_state_count;
+                chosen_fat_indices[move_index] = current_state % fat_state_count;
+                if (move_index > 0) {
+                    current_state = parents[move_index][current_state];
+                    if (current_state < 0) {
+                        result = CHUZZLE_ERR_INVALID_ARGUMENT;
+                        goto cleanup;
+                    }
+                }
+            }
+        }
     }
 
     steps = (ChuzzleStep *) calloc(sequence_len, sizeof(*steps));
@@ -870,6 +1046,7 @@ cleanup:
     if (steps != NULL) {
         free(steps);
     }
+    free(chosen_fat_indices);
     free(chosen_indices);
     free(terminal_choices);
     free(prev_costs);
@@ -881,6 +1058,7 @@ cleanup:
     }
     free(parents);
     free(candidate_counts);
+    free(parsed_moves);
     chuzzle_free_candidate_layers(candidate_layers, sequence_len);
     chuzzle_free_token_storage(tokens, normalized_moves);
 

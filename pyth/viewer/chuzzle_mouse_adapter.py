@@ -70,6 +70,8 @@ class ChuzzleSolveConfig(ctypes.Structure):
     _fields_ = [
         ("has_start_mouse_position", ctypes.c_int),
         ("start_mouse_position", ChuzzlePoint),
+        ("has_initial_fat_position", ctypes.c_int),
+        ("initial_fat_position", ChuzzlePoint),
         ("end_next_puzzle", ctypes.c_int),
         ("end_position_count", ctypes.c_size_t),
         ("end_positions", ctypes.POINTER(ChuzzlePoint)),
@@ -264,6 +266,8 @@ def solve_sequence(
     move_string: str | Sequence[str],
     *,
     start_mouse_position: Sequence[float] | None = None,
+    has_fat: bool = False,
+    initial_fat_position: Sequence[float] | None = None,
     end_positions: Iterable[Sequence[float]] | None = None,
     end_next_puzzle: bool = False,
     lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
@@ -300,6 +304,15 @@ def solve_sequence(
     else:
         config.has_start_mouse_position = 1
         config.start_mouse_position = _as_point(start_mouse_position)
+
+    if has_fat:
+        if initial_fat_position is None:
+            raise ValueError("has_fat=True requires initial_fat_position")
+        config.has_initial_fat_position = 1
+        config.initial_fat_position = _as_point(initial_fat_position)
+    else:
+        config.has_initial_fat_position = 0
+        config.initial_fat_position = ChuzzlePoint(0.0, 0.0)
 
     config.end_next_puzzle = 1 if end_next_puzzle else 0
     config.end_position_count = 0 if end_next_puzzle else len(final_targets)
@@ -348,6 +361,8 @@ def score_sequences(
     sequences: Iterable[str | Sequence[str]],
     *,
     start_mouse_position: Sequence[float] | None = None,
+    has_fat: bool = False,
+    initial_fat_position: Sequence[float] | None = None,
     end_positions: Iterable[Sequence[float]] | None = None,
     end_next_puzzle: bool = False,
     lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
@@ -360,6 +375,8 @@ def score_sequences(
             solve_sequence(
                 sequence,
                 start_mouse_position=start_mouse_position,
+                has_fat=has_fat,
+                initial_fat_position=initial_fat_position,
                 end_positions=end_positions,
                 end_next_puzzle=end_next_puzzle,
                 lock_threshold=lock_threshold,
@@ -376,6 +393,8 @@ def score_file(
     dedupe: bool = False,
     *,
     start_mouse_position: Sequence[float] | None = None,
+    has_fat: bool = False,
+    initial_fat_position: Sequence[float] | None = None,
     end_positions: Iterable[Sequence[float]] | None = None,
     end_next_puzzle: bool = False,
     lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
@@ -386,6 +405,8 @@ def score_file(
     solutions = score_sequences(
         lines,
         start_mouse_position=start_mouse_position,
+        has_fat=has_fat,
+        initial_fat_position=initial_fat_position,
         end_positions=end_positions,
         end_next_puzzle=end_next_puzzle,
         lock_threshold=lock_threshold,
@@ -400,6 +421,8 @@ class DpMouseSolver:
         move_string: str | Sequence[str],
         *,
         start_mouse_position: Sequence[float] | None = None,
+        has_fat: bool = False,
+        initial_fat_position: Sequence[float] | None = None,
         end_positions: Iterable[Sequence[float]] | None = None,
         end_next_puzzle: bool = False,
         lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
@@ -408,6 +431,8 @@ class DpMouseSolver:
         return solve_sequence(
             move_string,
             start_mouse_position=start_mouse_position,
+            has_fat=has_fat,
+            initial_fat_position=initial_fat_position,
             end_positions=end_positions,
             end_next_puzzle=end_next_puzzle,
             lock_threshold=lock_threshold,
@@ -420,6 +445,8 @@ class DpMouseSolver:
         dedupe: bool = False,
         *,
         start_mouse_position: Sequence[float] | None = None,
+        has_fat: bool = False,
+        initial_fat_position: Sequence[float] | None = None,
         end_positions: Iterable[Sequence[float]] | None = None,
         end_next_puzzle: bool = False,
         lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
@@ -429,6 +456,8 @@ class DpMouseSolver:
             path,
             dedupe=dedupe,
             start_mouse_position=start_mouse_position,
+            has_fat=has_fat,
+            initial_fat_position=initial_fat_position,
             end_positions=end_positions,
             end_next_puzzle=end_next_puzzle,
             lock_threshold=lock_threshold,

@@ -30,6 +30,9 @@ typedef struct ChuzzleSolveConfig {
     int has_start_mouse_position;
     ChuzzlePoint start_mouse_position;
 
+    int has_initial_fat_position;
+    ChuzzlePoint initial_fat_position;
+
     int end_next_puzzle;
     size_t end_position_count;
     const ChuzzlePoint* end_positions;
