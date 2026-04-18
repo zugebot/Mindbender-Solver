@@ -43,8 +43,8 @@ class Puzzles:
 
     def load_puzzles(self):
         root = os.path.dirname(os.path.dirname(__file__))
-        levels_path = os.path.join(root, "engine", "levels.hpp")
-        levels_cells_path = os.path.join(root, "engine", "levels_cells.hpp")
+        levels_path = os.path.join(root, "data", "levels.hpp")
+        levels_cells_path = os.path.join(root, "data", "levels_cells.hpp")
 
         cell_map = self._parse_cells(levels_cells_path)
 

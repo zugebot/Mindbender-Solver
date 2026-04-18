@@ -1,12 +1,5 @@
 # Jerrin Shirks
 
-BOARD_SIZE = 6
-COLORBLIND_MODE = True
-FX_VOLUME = 1.0
-MUSIC_VOLUME = 1.0
-CUSTOM_CURSOR = True
-WINDOW_SIZE = (800, 600)
-
 # mouse state values
 MOUSE_CLICK_DOWN = 1
 MOUSE_HELD_DOWN = -1

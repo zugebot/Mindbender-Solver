@@ -2,12 +2,8 @@
 
 # native imports
 import pygame as p
-
-# custom imports
-from data.config import *
 from tools.point import Point
 from tools.texture_utils import rotate, convertToAlpha
-
 
 
 class Button:
@@ -35,9 +31,9 @@ class Button:
 
         self.clickedDownBeforeHover = False
         self.lastFrameTouching = False
+        self.mouseDownStartedInside = False
 
         # pre-scale image sizes
-
         if "render" in self.data:
             if "scale" in self.data["render"]:
                 scale = self.data["render"]["scale"]
@@ -50,7 +46,6 @@ class Button:
                 # set height to value, force width to stay in ratio
                 elif "set-H" in scale:
                     oldSize = Point(self.data["textures"]["default"].get_size())
-                    # allows to be same height as screen, else set to int size
                     if scale["set-H"] == "screen-size":
                         scale = self.game.screenSize.y / oldSize.y
                     else:
@@ -59,27 +54,25 @@ class Button:
 
                     self.data["textures"]["default"] = p.transform.scale(self.data["textures"]["default"], newSize)
 
-        self.image = data["textures"]["default"]
+        self.image = self.data["textures"]["default"]
         self.size = Point((self.image.get_width(), self.image.get_height()))
         self.rect = self.image.get_rect(center=(coords + self.size / 2).tuple())
 
         self.fixData()
 
-
-
     def setDefault(self):
         self.image = self.data["textures"]["default"]
         self.clickedDownBeforeHover = False
         self.lastFrameTouching = False
-
+        self.mouseDownStartedInside = False
 
     def fixData(self):
-
         # attributes
         self.data.setdefault("draggable", False)
 
         # textures
         self.data.setdefault("textures", {})
+        self.data["textures"].setdefault("default", None)
         self.data["textures"].setdefault("clickup", None)
         self.data["textures"].setdefault("clickdown", None)
         self.data["textures"].setdefault("hover", None)
@@ -109,102 +102,93 @@ class Button:
         self.data["func"].setdefault("clickdown", None)
         self.data["func"].setdefault("hover", None)
 
+    def _is_touching(self, mousePos):
+        if not self.clickable:
+            return False
 
+        if not self.rect.collidepoint(*mousePos):
+            return False
+
+        pos_in_mask = mousePos[0] - self.rect.x, mousePos[1] - self.rect.y
+
+        if isinstance(self.data["hitbox"], str):
+            return self.data["hitbox"] == "all"
+
+        return bool(self.data["hitbox"].get_at(pos_in_mask))
 
     def testMouseStates(self, mousePos, mouseState):
         if not self.clickable:
             return
 
-        touching = False
-        clickdown = False
-
-
-        pos_in_mask = mousePos[0] - self.rect.x, mousePos[1] - self.rect.y
-
-        if self.rect.collidepoint(*mousePos):
-            touching = False
-
-            if isinstance(self.data["hitbox"], str):
-                if self.data["hitbox"] == "all":
-                    touching = True
-            else:
-                if self.data["hitbox"].get_at(pos_in_mask):
-                    touching = True
-
-            if touching:
-
-                # mouse is being held down
-                if mouseState == MOUSE_HELD_DOWN:
-                    clickdown = True
-                    if not self.lastFrameTouching:
-                        self.clickedDownBeforeHover = True
-
-                # mouse not currently held down
-                elif mouseState == MOUSE_HOVER:
-                    self.clickedDownBeforeHover = False
-
-                # mouse clicked down this frame
-                elif mouseState == MOUSE_CLICK_DOWN:
-                    clickdown = True
-
-                    # this does sound effect
-                    if self.data["sounds"]["clickdown"]:
-                        self.game.sounds.playSound(self.data["sounds"]["clickdown"])
-
-                    # this performs function
-                    if self.data["func"]["clickdown"]:
-                        dat = self.data["func"]["clickdown"]
-                        if type(dat) == tuple:
-                            dat[0](dat[1])
-                        else:
-                            dat()
-
-
-                elif mouseState == MOUSE_CLICK_UP:
-
-                    # this does sound effect
-                    self.game.sounds.playSound(self.data["sounds"]["clickup"])
-
-                    # this performs function
-                    if self.data["func"]["clickup"]:
-                        dat = self.data["func"]["clickup"]
-                        if type(dat) == tuple:
-                            dat[0](dat[1])
-                        else:
-                            dat()
-
-
+        touching = self._is_touching(mousePos)
+        pressed_visual = False
 
         if touching:
             self.game.cursorIndex = 2
-            if not self.lastFrameTouching:
+            if not self.lastFrameTouching and self.data["sounds"]["hover"]:
                 self.game.sounds.playSound(self.data["sounds"]["hover"])
             self.lastFrameTouching = True
-
-        elif self.lastFrameTouching:
-            self.clickedDownBeforeHover = False
+        else:
+            if self.lastFrameTouching:
+                self.game.cursorIndex = 0
             self.lastFrameTouching = False
-            self.game.cursorIndex = 0
 
+        if mouseState == 1:  # MOUSE_CLICK_DOWN
+            self.mouseDownStartedInside = touching
+            self.clickedDownBeforeHover = not touching
 
+            if touching:
+                if self.data["sounds"]["clickdown"]:
+                    self.game.sounds.playSound(self.data["sounds"]["clickdown"])
 
+                if self.data["func"]["clickdown"]:
+                    dat = self.data["func"]["clickdown"]
+                    if type(dat) == tuple:
+                        dat[0](dat[1])
+                    else:
+                        dat()
 
-        if touching and clickdown:
-            if self.clickedDownBeforeHover:
-                if self.data["textures"]["hover"]:
-                    self.image = self.data["textures"]["hover"]
+        elif mouseState == -1:  # MOUSE_HELD_DOWN
+            pressed_visual = self.mouseDownStartedInside
+            if touching and not self.mouseDownStartedInside:
+                self.clickedDownBeforeHover = True
 
+        elif mouseState == 0:  # MOUSE_HOVER
+            pass
+
+        elif mouseState == -2:  # MOUSE_CLICK_UP
+            should_activate = touching and self.mouseDownStartedInside
+
+            if should_activate:
+                if self.data["sounds"]["clickup"]:
+                    self.game.sounds.playSound(self.data["sounds"]["clickup"])
+
+                if self.data["func"]["clickup"]:
+                    dat = self.data["func"]["clickup"]
+                    if type(dat) == tuple:
+                        dat[0](dat[1])
+                    else:
+                        dat()
+
+            self.mouseDownStartedInside = False
+            self.clickedDownBeforeHover = False
+            pressed_visual = False
+
+        if pressed_visual:
+            if self.data["textures"]["clickdown"]:
+                self.image = self.data["textures"]["clickdown"]
+            elif touching and self.data["textures"]["hover"]:
+                self.image = self.data["textures"]["hover"]
             else:
-                if self.data["textures"]["clickdown"]:
-                    self.image = self.data["textures"]["clickdown"]
-
-        elif not clickdown:
+                self.image = self.data["textures"]["default"]
+        else:
             if touching:
                 if self.data["textures"]["hover"]:
                     self.image = self.data["textures"]["hover"]
+                else:
+                    self.image = self.data["textures"]["default"]
             else:
                 self.image = self.data["textures"]["default"]
-
 
     def render(self, screen, image=None, default=False):
         if default:
@@ -218,8 +202,6 @@ class Button:
             image = image.image
         rect = self.rect
 
-
-
         if "render" in data:
             render = data["render"]
 
@@ -230,7 +212,6 @@ class Button:
                 data["render"]["apply"]["frame"] = (rot["frame"] + rot["clockwise"]) % rot["frame-count"]
                 size = Point((image.get_width(), image.get_height()))
                 image, rect = rotate(image, angle, pivot=(size / 2).tuple())
-
 
             # make the image move panoramically left or right.
             if "panorama" in render:
@@ -247,13 +228,11 @@ class Button:
                     else:
                         data["render"]["panorama"]["frame"] -= 1
 
-                # create the new image
                 if panorama["frame"] != 0:
                     loc1 = (panorama["frame"] / panorama["frame-count"])
                     screen.blit(image, (image.get_width() * loc1, 0))
                     screen.blit(image, (image.get_width() * (loc1 - 1), 0))
                     return image
-
 
             if "convert" in render:
                 if data["render"]["convert"] == "alpha":

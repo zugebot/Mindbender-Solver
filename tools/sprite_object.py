@@ -1,14 +1,9 @@
 # Jerrin Shirks
 
 # native imports
-import pygame as p
-import random as r
 
 # custom imports
-from data.config import *
-from tools.button import Button
-from tools.point import Point
-
+from engine.constants import *
 
 
 class spriteObject:

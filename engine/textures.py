@@ -1,18 +1,18 @@
 # Jerrin Shirks
 
 # native imports
-import pygame as p
+
 
 # custom imports
-from data.config import *
+from tools.game import Game
 from tools.texture_utils import *
 
 
 
 class Textures:
-    def __init__(self, parent):
-        self.parent = parent
-        self.p = parent.instance
+    def __init__(self, game: Game):
+        self.game: Game = game
+        self.p = game.instance
 
         self.ChuzzleBase = [None] * 9
         self.ChuzzleHuge = [None] * 9
@@ -112,7 +112,10 @@ class Textures:
         self.MatchThis = self.loadTexture("textures/MatchThis.png", split=5)
         self.Menu = self.loadTexture("textures/Menu.png")
         self.MessageDot = self.loadTexture("textures/MessageDot.png")
-        self.MindbBenderMini_Select = self.loadTexture("textures/MindbBenderMini_Select.png", pngOnly=True)
+        self.MindbBenderMini_Select_Base = self.loadTexture("textures/MindbBenderMini_Select.png", pngOnly=True)
+        self.MindBenderMini_Select_Alpha = self.loadTexture("textures/MindBenderMini_Select_Alpha.png", alphaOnly=True)
+        self.MindbBenderMini_Select = self.MindbBenderMini_Select_Base.copy()
+        self.MindbBenderMini_Select.blit(self.MindBenderMini_Select_Alpha, (0, 0), None, p.BLEND_RGBA_MULT)
         self.Mindbender_Menu = self.loadTexture("textures/Mindbender_Menu.png")
         self.MindBenderBigStar = self.loadTexture("textures/MindBenderBigStar.png")
         self.MindBenderGadget = self.loadTexture("textures/MindBenderGadget.png")
@@ -211,8 +214,47 @@ class Textures:
         self.ZenChuzzle_Menu = self.loadTexture("textures/ZenChuzzle_Menu.png")
         self.ZenLight = self.loadTexture("textures/ZenLight.png")
 
-        self.colorsMain = None
-        self.colorsMainBlind = None
+        # (255, 255, 0),  # yellow
+        self.colorsMain = {
+            "0": {"color": (178, 8, 8)},  # red
+            "1": {"color": (8, 174, 8)},  # green
+            "2": {"color": (8, 8, 255)},  # blue
+            "3": {"color": (255, 105, 2)},  # orange
+            "4": {"texture": {"base": "textures/Chuzzle-Yellow.png", "alpha": "cached/Chuzzle-Base_Alpha.png"}},
+            # yellow
+            "5": {"color": (207, 7, 207)},  # purple
+            "6": {"color": (255, 255, 255)},  # white
+            "7": {"color": (87, 197, 221)},  # cyan
+            "8": {"texture": {"base": "textures/RainbowChuzzle.png", "alpha": "cached/RainbowChuzzle_Alpha.png"}},
+            # rainbow
+            "9": {"name": "cinnamon", "color": (98, 42, 15)}
+        }
+        self.colorsMainBlind = {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 5,
+            "6": 6,
+            "7": 7,
+            "8": 6,
+            "9": 6
+        }
+
+        self.colorsMainBlindSmall = {
+            "0": 0,
+            "1": 1,
+            "2": 2,
+            "3": 3,
+            "4": 4,
+            "5": 5,
+            "6": -1,
+            "7": 6,
+            "8": None,
+            "9": None
+        }
+
         self.loadChuzzleTextures()
         self.loadChuzzleTexturesFat()
 
@@ -250,32 +292,6 @@ class Textures:
         createAlpha("textures/Chuzzle-Base_Alpha.png")
         createAlpha("textures/Chuzzle-Hilite_Alpha.png")
 
-        # (255, 255, 0),  # yellow
-        self.colorsMain = {
-            "0": {"color": (158, 29, 29)},  # red
-            "1": {"color": (74, 178, 74)},  # green
-            "2": {"color": (57, 57, 255)},  # blue
-            "3": {"color": (255, 143, 12)},  # orange
-            "4": {"texture": {"base": "textures/Chuzzle-Yellow.png", "alpha": "cached/Chuzzle-Base_Alpha.png"}}, # yellow
-            "5": {"color": (185, 60, 185)},  # purple
-            "6": {"color": (255, 255, 255)},  # white
-            "7": {"color": (81, 186, 210)},  # cyan
-            "8": {"texture": {"base": "textures/RainbowChuzzle.png", "alpha": "cached/RainbowChuzzle_Alpha.png"}}, # rainbow
-            "9": {"name": "cinnamon", "color": 	(98, 42, 15)}
-        }
-        self.colorsMainBlind = {
-            "0": 0,
-            "1": 1,
-            "2": 2,
-            "3": 3,
-            "4": 4,
-            "5": 5,
-            "6": 6,
-            "7": None,
-            "8": None,
-            "9": None
-        }
-
         BaseImage = p.image.load("textures/Chuzzle-Base.png").convert_alpha()
         AlphaImage = p.image.load("cached/Chuzzle-Base_Alpha.png").convert_alpha()
         HiliteImage = p.image.load("cached/Chuzzle-Hilite_Alpha.png").convert_alpha()
@@ -294,11 +310,11 @@ class Textures:
                 color1.fill(colorObj["color"])
 
                 color2 = surface.copy()
-                color2.fill((60, 60, 60, 60))
+                color2.fill((60,60,60,0))
                 color2.blit(HiliteImage, (0, 0), None, p.BLEND_RGBA_MULT)
 
                 base.blit(color1, (0, 0), None, p.BLEND_RGBA_MULT)
-                base.blit(color2, (0, 0), None, p.BLEND_RGBA_ADD)
+                base.blit(color2, (0, 0), None, p.BLEND_RGB_ADD)
                 base.blit(AlphaImage, (0, 0), None, p.BLEND_RGBA_MULT)
 
             elif "texture" in colorObj.keys():
@@ -317,8 +333,8 @@ class Textures:
                 surfaces[-1].blit(base, (0, 0), (81 * i, 2, 80, 80), p.BLEND_RGBA_ADD)
 
                 # resize the texture
-                new = 480 / BOARD_SIZE + 1
-                if BOARD_SIZE != 6:
+                new = 480 / self.game.settings.boardSize + 1
+                if self.game.settings.boardSize != 6:
                     oldSize = Point(surfaces[-1].get_size())
                     newSize = (oldSize * new / 81).tuple()
                     surfaces[-1] = p.transform.scale(surfaces[-1], newSize)
@@ -333,20 +349,6 @@ class Textures:
         createAlpha("textures/ChuzzleHuge-Base_Alpha.png")
         createAlpha("textures/ChuzzleHuge-Hilite_Alpha.png")
 
-        # (255, 255, 0),  # yellow
-        colorsMain = {
-            "0": {"color": (158, 29, 29)},  # red
-            "1": {"color": (255, 143, 12)},  # orange
-            "2": {"color": (100, 100, 100)}, # grey. make yellow later
-            # "2": {"texture": {"base": "textures/Chuzzle-Yellow.png", "alpha": "cached/Chuzzle-Base_Alpha.png"}}, # yellow
-            "3": {"color": (74, 178, 74)},  # green
-            "4": {"color": (81, 186, 210)},  # cyan
-            "5": {"color": (57, 57, 255)},  # blue
-            "6": {"color": (185, 60, 185)},  # purple
-            "7": {"color": (255, 255, 255)},  # white
-            "8": {"name": "cinnamon", "color": 	(98, 42, 15)},
-            # "8": {"texture": {"base": "textures/RainbowChuzzle.png", "alpha": "cached/RainbowChuzzle_Alpha.png"}}, # rainbow
-        }
         BaseImage = p.image.load("textures/ChuzzleHuge-Base.png").convert_alpha()
         AlphaImage = p.image.load("cached/ChuzzleHuge-Base_Alpha.png").convert_alpha()
         HiliteImage = p.image.load("cached/ChuzzleHuge-Hilite_Alpha.png").convert_alpha()
@@ -357,7 +359,7 @@ class Textures:
 
 
         for color in range(9):
-            colorObj = colorsMain[str(color)]
+            colorObj = self.colorsMain[str(color)]
 
             print(colorObj)
             base = None
@@ -371,7 +373,7 @@ class Textures:
                 color2.blit(HiliteImage, (0, 0), None, p.BLEND_RGBA_MULT)
 
                 base.blit(color1, (0, 0), None, p.BLEND_RGBA_MULT)
-                base.blit(color2, (0, 0), None, p.BLEND_RGBA_ADD)
+                base.blit(color2, (0, 0), None, p.BLEND_RGB_ADD)
                 base.blit(AlphaImage, (0, 0), None, p.BLEND_RGBA_MULT)
 
             elif "texture" in colorObj.keys():
@@ -389,13 +391,16 @@ class Textures:
                 surfaces[-1].blit(base, (0, 0), (179 * i, 0, 179, 179), p.BLEND_RGBA_ADD)
 
                 # resize the texture
-                new = 480 / BOARD_SIZE * 2 + 18
-                if BOARD_SIZE != 6:
+                new = 480 / self.game.settings.boardSize * 2 + 18
+                if self.game.settings.boardSize != 6:
                     oldSize = Point(surfaces[-1].get_size())
                     newSize = (oldSize * new / 179).tuple()
                     surfaces[-1] = p.transform.scale(surfaces[-1], newSize)
 
             self.ChuzzleHuge[color] = surfaces
+
+
+
 
 
 

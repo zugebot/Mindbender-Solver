@@ -3,17 +3,17 @@
 # native imports
 
 # custom imports
-
+from tools.game import Game
 
 # https://www.pygame.org/docs/ref/mixer.html#pygame.mixer.Channel
 
 
 class Sounds:
-    def __init__(self, parent):
-        self.parent = parent
-        self.p = parent.instance
+    def __init__(self, game: Game):
+        self.game: Game = game
+        self.p = game.instance
         self.mixer = self.p.mixer
-        self.mixer.music.set_volume(0.3)
+        self.mixer.music.set_volume(self.game.settings.FXVolume)
         self.mixer.init()
 
         self.BadMove = self.p.mixer.Sound("sounds/BadMove.ogg")
@@ -98,7 +98,8 @@ class Sounds:
         self.JewelLand = self.p.mixer.Sound("sounds/Bonus/JewelLand.ogg")
 
 
-    def playSound(self, sound):
+    @staticmethod
+    def playSound(sound):
         if sound is not None:
             sound.set_volume(0.1)
             sound.play()

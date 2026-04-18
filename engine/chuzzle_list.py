@@ -5,14 +5,19 @@ import json
 import random
 
 # custom imports
-from data.config import *
 from tools.point import Point
+from tools.game import Game
 from engine.chuzzle import Chuzzle
 
 
+
+
 class ChuzzleList(list):
-    def __init__(self, game, count=(BOARD_SIZE, BOARD_SIZE), *args):
+    def __init__(self, game: Game, count=None, *args):
         super().__init__(args)
+        if count is None:
+            count = (game.settings.boardSize, game.settings.boardSize)
+        
         self.game = game
         self.chuzCount = Point(count)
         self.random = random
@@ -20,8 +25,8 @@ class ChuzzleList(list):
 
     def fill(self):
         self.clear()
-        for x in range(BOARD_SIZE):
-            for y in range(BOARD_SIZE):
+        for x in range(self.chuzCount.x):
+            for y in range(self.chuzCount.y):
                 self.append(Chuzzle(game=self.game, position=Point(x, y)))
 
 
@@ -121,10 +126,15 @@ class ChuzzleList(list):
 
     def randomMoves(self, amount):
         for count in range(amount):
-            sect = self.random.randint(0, BOARD_SIZE - 1)  # 0 - 5
             direction = self.random.randint(0, 1)  # 0 - 1
-            amount = self.random.randint(1, BOARD_SIZE - 1)  # 1 - 5
-            self.shiftSection(sect, direction, amount)
+            if direction == 0:
+                sect = self.random.randint(0, self.chuzCount.y - 1)  # 0 - 5
+                amount = self.random.randint(1, self.chuzCount.x - 1)  # 1 - 5
+                self.shiftSection(sect, direction, amount)
+            else:
+                sect = self.random.randint(0, self.chuzCount.x - 1)  # 0 - 5
+                amount = self.random.randint(1, self.chuzCount.y - 1)  # 1 - 5
+                self.shiftSection(sect, direction, amount)
 
 
     def getRow(self, point=Point()):

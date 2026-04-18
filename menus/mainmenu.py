@@ -5,7 +5,6 @@
 
 # custom imports
 from tools.menu import Menu
-from tools.point import Point
 from tools.image import Image
 from tools.button import Button
 
