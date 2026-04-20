@@ -22,7 +22,8 @@ class MatchBoard(spriteObject):
         self.surface.fill((0, 0, 0, 0))
         self.colors = [[r.randint(0, 8) for _ in range(self.game.settings.boardSize)] for _ in range(self.game.settings.boardSize)]
 
-        self.preview_pos = (75, 203)
+        self.matchThis_pos = (75, 202)
+        self.gameModeTitle_pos = (57, 110)
 
         # MatchThis.png is a 5-state strip: 0 -> 1 -> 2 -> 3 -> 4 -> repeat.
         raw_frames = self.game.textures.MatchThis
@@ -57,7 +58,7 @@ class MatchBoard(spriteObject):
 
         for y in range(self.board.chuzCount.y):
             for x in range(self.board.chuzCount.x):
-                point = Point(x, y) * 18 + Point(0, 1)
+                point = Point(x, y) * 18 + Point(1, 2)
                 chuzzle = self.board[y * self.game.settings.boardSize + x]
                 color = chuzzle.color
 
@@ -95,8 +96,8 @@ class MatchBoard(spriteObject):
                     surface.blit(texture, point.tuple())
 
         should_tint_solved = (
-            self.menu.current_index in self.menu.solved_indices
-            and not self.menu.popup.replaying_solved_puzzle
+                self.menu.current_index in self.menu.solved_indices
+                and not self.menu.popup.replaying_solved_puzzle
         )
 
         if should_tint_solved:
@@ -106,7 +107,14 @@ class MatchBoard(spriteObject):
 
         newSize = self.size / self.game.settings.boardSize * 6
         surface = p.transform.smoothscale(surface, newSize.tuple())
-        screen.blit(surface, self.preview_pos)
+        screen.blit(surface, self.matchThis_pos)
+
+        game_mode_title = self.game.textures.GameModeTitle
+        if isinstance(game_mode_title, list):
+            if len(game_mode_title) > 0 and isinstance(game_mode_title[0], p.Surface):
+                screen.blit(game_mode_title[0], self.gameModeTitle_pos)
+        elif isinstance(game_mode_title, p.Surface):
+            screen.blit(game_mode_title, self.gameModeTitle_pos)
 
         if self.match_this_frames:
             self.match_this_tick += 1
@@ -116,6 +124,6 @@ class MatchBoard(spriteObject):
 
             badge_frame_index = self.match_this_sequence[self.match_this_sequence_index]
             badge = self.match_this_frames[badge_frame_index]
-            preview_rect = surface.get_rect(topleft=self.preview_pos)
+            preview_rect = surface.get_rect(topleft=self.matchThis_pos)
             badge_rect = badge.get_rect(midbottom=(preview_rect.centerx - 5, preview_rect.top - 6))
             screen.blit(badge, badge_rect)

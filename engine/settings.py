@@ -10,10 +10,11 @@ class Settings:
         self.customCursor = False
         self.fps = 60
         self.internalWindowSize = (800, 600)
-        self.outputWindowSize = (800*1.5, 600*1.5)
+        self.outputWindowSize = (800, 600)
         self.smoothScale = False
         self.windowName = "Chuzzle Deluxe"
         self.boardSize = 6
         self.debug = True
+        self.needsWindowFocus = False
         
         

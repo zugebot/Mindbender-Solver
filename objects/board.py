@@ -6,14 +6,11 @@ import math
 
 # custom imports
 from engine.constants import *
-
 from tools.sprite_object import spriteObject
 from tools.point import Point
 from tools.texture_utils import blit_alpha
-
 from engine.chuzzle_list import ChuzzleList
 from engine.chuzzle import Chuzzle
-
 
 
 class Board(spriteObject):
@@ -28,9 +25,12 @@ class Board(spriteObject):
         self.chuzSize = Point(480, 480) // self.game.settings.boardSize
         self.chuzCount = Point(chuzCount)
 
-        self.surfaceSize = self.chuzSize * self.chuzCount
-        self.surface = p.Surface(self.surfaceSize.tuple(), p.SRCALPHA)
+        self.boardSizePx = self.chuzSize * self.chuzCount
 
+        # 20 total extra pixels, centered as 10 on each side
+        self.surfacePad = Point(10, 10)
+        self.surfaceSize = self.boardSizePx + self.surfacePad * 2
+        self.surface = p.Surface(self.surfaceSize.tuple(), p.SRCALPHA)
         self.surface.fill((0, 0, 0, 0))
 
         # dealing with board states
@@ -82,16 +82,18 @@ class Board(spriteObject):
             oldSize = Point(self.DragRainbowV.get_size())
             newSize = (oldSize * 6 / self.game.settings.boardSize).tuple()
             self.DragRainbowV = p.transform.smoothscale(self.DragRainbowV, newSize)
+
             oldSize = Point(self.DragRainbowH.get_size())
             newSize = (oldSize * 6 / self.game.settings.boardSize).tuple()
             self.DragRainbowH = p.transform.smoothscale(self.DragRainbowH, newSize)
 
-        # print(self.chuzCount)
-
-
-
         for i in range(self.chuzCount.x * self.chuzCount.y):
-            self.chuzzles.append(Chuzzle(self.game, Point(i % self.game.settings.boardSize, i // self.game.settings.boardSize)))
+            self.chuzzles.append(
+                Chuzzle(
+                    self.game,
+                    Point(i % self.game.settings.boardSize, i // self.game.settings.boardSize)
+                )
+            )
 
         self.gamemode = gamemode
         self.objects = []
@@ -105,9 +107,55 @@ class Board(spriteObject):
         self._lock_texture = None
         self._lock_texture_fat = None
 
-
     def initiateGameMode(self):
         pass
+
+    def _get_drag_span_bounds(self):
+        if not self.sectsToMove:
+            return None
+
+        min_sect = min(self.sectsToMove)
+        max_sect = max(self.sectsToMove)
+
+        if self.curDir == 1:
+            # moving rows horizontally
+            # rows are stacked vertically, so span is in Y
+            x = 0
+            y = min_sect * self.chuzSize.y
+            w = self.boardSizePx.x
+            h = (max_sect - min_sect + 1) * self.chuzSize.y
+            return p.Rect(int(x), int(y), int(w), int(h))
+
+        elif self.curDir == 0:
+            # moving cols vertically
+            # cols are stacked horizontally, so span is in X
+            x = min_sect * self.chuzSize.x
+            y = 0
+            w = (max_sect - min_sect + 1) * self.chuzSize.x
+            h = self.boardSizePx.y
+            return p.Rect(int(x), int(y), int(w), int(h))
+
+        return None
+
+    def _build_drag_rainbow_surface(self):
+        span_rect = self._get_drag_span_bounds()
+        if span_rect is None or self.curDir not in [0, 1]:
+            return None, None
+
+        if self.curDir == 1:
+            # horizontal movement across one or more rows
+            base = self.DragRainbowH
+            target_size = (span_rect.width, span_rect.height)
+        else:
+            # vertical movement across one or more columns
+            base = self.DragRainbowV
+            target_size = (span_rect.width, span_rect.height)
+
+        if target_size[0] <= 0 or target_size[1] <= 0:
+            return None, None
+
+        scaled = p.transform.smoothscale(base, target_size)
+        return scaled, span_rect
 
     def _get_lock_textures(self):
         if self._lock_texture is None or self._lock_texture_fat is None:
@@ -119,16 +167,21 @@ class Board(spriteObject):
 
         return self._lock_texture, self._lock_texture_fat
 
-    def testMouseStates(self, mousePos, mouseState):
+    def _surface_blit_pos(self, board_pos):
+        return Point(board_pos) + self.surfacePad
 
-        self.inBounds = self.boardOffset.x <= mousePos[0] <= self.boardOffset.x + self.surfaceSize.x and \
-            self.boardOffset.y <= mousePos[1] <= self.boardOffset.y + self.surfaceSize.y
+    def testMouseStates(self, mousePos, mouseState):
+        self.inBounds = (
+            self.boardOffset.x <= mousePos[0] <= self.boardOffset.x + self.boardSizePx.x and
+            self.boardOffset.y <= mousePos[1] <= self.boardOffset.y + self.boardSizePx.y
+        )
 
         if self.inBounds:
             if mouseState == MOUSE_CLICK_DOWN:
                 self.onMouseDown(mousePos)
             if mouseState == MOUSE_HOVER:
                 self.onMouseHover(mousePos)
+
         if mouseState == MOUSE_HELD_DOWN:
             self.onHeldDown(mousePos)
         if mouseState == MOUSE_CLICK_UP:
@@ -137,6 +190,7 @@ class Board(spriteObject):
     def convertToPosition(self, other, mode="floor"):
         if type(other) == tuple:
             other = Point(other)
+
         if type(other) == int:
             if mode == "floor":
                 return other // self.chuzSize.x
@@ -172,7 +226,6 @@ class Board(spriteObject):
                 return other * self.chuzSize.y
         else:
             raise Exception("you suck ass at coding")
-
 
     # If I grab it at 0, and the fat is on -5/0, it does not move the row -5
     def recurseMain(self, sectNumber, debug=False):
@@ -250,21 +303,81 @@ class Board(spriteObject):
         else:
             self.sectsToMove = [self.mouseDownPos.get(self.curDir)]
 
-        # print(self.sectsToMove)
-
         self.isLocked = any([chuzzle.locked for chuzzle in self.chuzzles.getMultipleDirs(self.sectsToMove, self.curDir)])
-
 
     def onMouseHover(self, mousePos):
         self.centerPos = Point(mousePos) - self.boardOffset
         self.mouseDownPos = self.convertToPosition(self.centerPos)
 
-        pos = self.convertToPosition(self.mouseDownPos)
-        if pos == (0, 0):
-            self.chuzzles.getPos(pos).setEyeBallDirection(self.centerPos)
-            # print(self.centerPos, self.mouseDownPos)
+        pos = Point(self.mouseDownPos)
+        chuzzle = self.chuzzles.getPos(pos)
 
+        if chuzzle is not None and pos == (0, 0):
+            chuzzle.setEyeBallDirection(self.centerPos)
 
+    def onRightClickDown(self, mousePos):
+        local = Point(mousePos) - self.boardOffset
+
+        if not (0 <= local.x < self.boardSizePx.x and 0 <= local.y < self.boardSizePx.y):
+            print("[RIGHT CLICK] outside board")
+            return
+
+        cell_pos = self.convertToPosition(local, mode="floor")
+        chuzzle = self.chuzzles.getPos(cell_pos)
+
+        print("\n" + "=" * 70)
+        print(f"[RIGHT CLICK] screen={mousePos} local={local} cell={cell_pos}")
+
+        if chuzzle is None:
+            print("No chuzzle found at that logical cell.")
+            print("=" * 70)
+            return
+
+        self._print_chuzzle_debug(chuzzle, clicked_cell=cell_pos)
+        print("=" * 70)
+
+    def _print_chuzzle_debug(self, chuzzle, clicked_cell=None):
+        fat_anchor = None
+        if hasattr(self.chuzzles, "_fat_anchor_from_chuzzle"):
+            fat_anchor = self.chuzzles._fat_anchor_from_chuzzle(chuzzle)
+
+        print(f"id                : {id(chuzzle)}")
+        print(f"clicked_cell      : {clicked_cell}")
+        print(f"color             : {chuzzle.color}")
+        print(f"position          : {chuzzle.position}")
+        print(f"offset            : {chuzzle.offset}")
+        print(f"delta             : {chuzzle.delta}")
+        print(f"velocity          : {chuzzle.velocity}")
+        print(f"direction         : {chuzzle.direction}")
+        print(f"motionSpeed       : {chuzzle.motionSpeed}")
+        print(f"motionSpeedSmooth : {chuzzle.motionSpeedSmoothed}")
+        print(f"locked            : {chuzzle.locked}")
+        print(f"isNormal          : {chuzzle.isNormal()}")
+        print(f"fatTL             : {chuzzle.fatTL}")
+        print(f"fatTR             : {chuzzle.fatTR}")
+        print(f"fatBL             : {chuzzle.fatBL}")
+        print(f"fatBR             : {chuzzle.fatBR}")
+        print(f"fat_anchor        : {fat_anchor}")
+        print(f"getX/getY         : ({chuzzle.getX()}, {chuzzle.getY()})")
+        print(f"getXY             : {chuzzle.getXY()}")
+
+        if fat_anchor is not None:
+            ax = int(fat_anchor.x)
+            ay = int(fat_anchor.y)
+            body = [
+                Point(ax, ay),
+                Point(ax + 1, ay),
+                Point(ax, ay + 1),
+                Point(ax + 1, ay + 1),
+            ]
+            print(f"fat_body_cells    : {body}")
+
+        if self.curDir in [0, 1]:
+            print(f"drag curDir       : {self.curDir}")
+            print(f"drag sectsToMove  : {self.sectsToMove}")
+            in_drag_set = chuzzle in list(self.chuzzles.getMultipleDirs(self.sectsToMove, self.curDir))
+            print(f"in dragged set    : {in_drag_set}")
+    
     def onMouseDown(self, mousePos):
         if not self.mouseDown:
             self.mouseDown = True
@@ -304,8 +417,6 @@ class Board(spriteObject):
                 self.movedMouse = True
                 self.cursorDragging = True
 
-        # Before lock, follow the dominant axis of this frame so a slow true diagonal
-        # naturally jitters/switches direction.
         candidate_dir = None
         if frame_x > frame_y:
             candidate_dir = 1
@@ -319,7 +430,6 @@ class Board(spriteObject):
             self.curDir = candidate_dir
             self.testChuzzleStates()
 
-        # Dynamic lock: once past 33% it locks, and if dragged back below 33% it unlocks.
         if self.curDir == 1:
             active_offset = X
         elif self.curDir == 0:
@@ -330,7 +440,6 @@ class Board(spriteObject):
 
         if (not self.directionLocked) and candidate_dir is not None and self.curDir in [0, 1] and candidate_dir != self.curDir:
             self.curDir = candidate_dir
-            # Keep lane source fixed at original click-down; only re-anchor offsets.
             self.centerPos = Point(self.pointPos)
             self.lockLastDelta = 0
             self.lockCurDelta = 0
@@ -340,7 +449,6 @@ class Board(spriteObject):
             X = 0
             Y = 0
 
-        # fixes glitch where row you are moving changes while locked lol
         if self.isLocked:
             if self.curDir == 1:
                 X = 0
@@ -351,20 +459,16 @@ class Board(spriteObject):
             self.lastPos = self.pointPos
             return
 
-        # prevents you from switching directions when a locked chuzzle is in that row
         if self.isLocked:
             if self.lastDir != -1:
                 self.curDir = self.lastDir
 
-        # this deals with snapping chuzzles to the board when changing directions
         if self.curDir != self.lastDir:
             self.lastDir = self.curDir
             for chuzzle in self.chuzzles:
                 chuzzle.snapToBoard()
 
-                # prevents changing directions while locked
                 if self.isLocked:
-
                     if self.lockLastDelta == 0:
                         self.lockLastDelta = self.pointPos.x - self.lastPos.x
 
@@ -373,7 +477,6 @@ class Board(spriteObject):
                         if self.lockLastDelta > 0 and self.lockCurDelta < -self.threshold3:
                             self.centerPos.x = self.pointPos.x
                             self.lockLastDelta = self.lockCurDelta
-
                         elif self.lockLastDelta < 0 and self.lockCurDelta > self.threshold3:
                             self.centerPos.x = self.pointPos.x
                             self.lockLastDelta = self.lockCurDelta
@@ -383,62 +486,98 @@ class Board(spriteObject):
                         if self.lockLastDelta > 0 and self.lockCurDelta < -self.threshold3:
                             self.centerPos.y = self.pointPos.y
                             self.lockLastDelta = self.lockCurDelta
-
                         elif self.lockLastDelta < 0 and self.lockCurDelta > self.threshold3:
                             self.centerPos.y = self.pointPos.y
                             self.lockLastDelta = self.lockCurDelta
 
         self.sectOffset = abs((self.mouseDownPos - self.pointPos).get(self.curDir))
 
-        #  this determines the final offset of the chuzzles.
-        if self.curDir == 1:  # vertical
+        if self.curDir == 1:  # moving rows horizontally
+            proposed_offset = self.pointPos.x - self.centerPos.x
+
+            if self.isLocked:
+                proposed_offset = max(min(proposed_offset, self.threshold1), -self.threshold1)
+
+            clamp_info = None
+            if self.chuzzles.sectionHasFat(self.sectsToMove, self.curDir):
+                proposed_offset, clamp_info = self.chuzzles.clampSectionOffsetPixels(
+                    sects=self.sectsToMove,
+                    direction=self.curDir,
+                    offset_pixels=proposed_offset
+                )
+                if clamp_info["clamped"]:
+                    self.chuzzles.onFatEdgeClamp(clamp_info)
+
+            for chuzzle in self.chuzzles.getMultipleDirs(self.sectsToMove, self.curDir):
+                if self.lockCurDelta != 0:
+                    chuzzle.endSwayAnim()
+
+                chuzzle.offset.x = proposed_offset
+
+                if clamp_info is not None and clamp_info["clamped"]:
+                    chuzzle.stopMotionKeepOffset()
+                else:
+                    chuzzle.calculateVelocity(self.curDir)
+
+
+
+        elif self.curDir == 0:  # moving cols vertically
+
+            proposed_offset = self.pointPos.y - self.centerPos.y
+
+            if self.isLocked:
+                proposed_offset = max(min(proposed_offset, self.threshold1), -self.threshold1)
+
+            clamp_info = None
+
+            if self.chuzzles.sectionHasFat(self.sectsToMove, self.curDir):
+
+                proposed_offset, clamp_info = self.chuzzles.clampSectionOffsetPixels(
+
+                    sects=self.sectsToMove,
+
+                    direction=self.curDir,
+
+                    offset_pixels=proposed_offset
+
+                )
+
+                if clamp_info["clamped"]:
+                    self.chuzzles.onFatEdgeClamp(clamp_info)
 
             for chuzzle in self.chuzzles.getMultipleDirs(self.sectsToMove, self.curDir):
 
                 if self.lockCurDelta != 0:
                     chuzzle.endSwayAnim()
 
-                chuzzle.offset.x = self.pointPos.x - self.centerPos.x
-                # ensures sections can only move a little for lock rattling.
-                if self.isLocked:
-                    chuzzle.offset.x = max(min(chuzzle.offset.x, self.threshold1), -self.threshold1)
+                chuzzle.offset.y = proposed_offset
 
-                chuzzle.calculateVelocity(self.curDir)
+                if clamp_info is not None and clamp_info["clamped"]:
 
-        elif self.curDir == 0:  # horizontal
+                    chuzzle.stopMotionKeepOffset()
 
-            # for chuzzle in self.getRow(self.mouseDownPos):
-            for chuzzle in self.chuzzles.getMultipleDirs(self.sectsToMove, self.curDir):
+                else:
 
-                if self.lockCurDelta != 0:
-                    chuzzle.endSwayAnim()
+                    chuzzle.calculateVelocity(self.curDir)
 
-                chuzzle.offset.y = self.pointPos.y - self.centerPos.y
-
-                # ensures sections can only move a little for lock rattling.
-                if self.isLocked:
-                    chuzzle.offset.y = max(min(chuzzle.offset.y, self.threshold1), -self.threshold1)
-
-                chuzzle.calculateVelocity(self.curDir)
-
-
-
-        # print(self.chuzzles.getPos(self.mouseDownPos).direction)
-        # g = self.pointPos - self.centerPos
-        # print(X, g.x, Y, g.y)
-
-        # performed at end of onHeldDown()
         self.lastPos = self.pointPos
 
     def onMouseUp(self, mousePos):
         committed_move = None
 
-        if self.mouseDown and self.movedMouse and self.curDir in [0, 1]:
-            moved_chuzzles = list(self.chuzzles.getMultipleDirs(self.sectsToMove, self.curDir))
+        # Capture drag state BEFORE clearing it.
+        active_cur_dir = self.curDir
+        active_sects = list(self.sectsToMove)
+        active_mouse_down_pos = self.mouseDownPos.copy() if isinstance(self.mouseDownPos, Point) else Point(
+            self.mouseDownPos)
+        moved_chuzzles = []
+
+        if self.mouseDown and self.movedMouse and active_cur_dir in [0, 1]:
+            moved_chuzzles = list(self.chuzzles.getMultipleDirs(active_sects, active_cur_dir))
             if moved_chuzzles:
                 ref = moved_chuzzles[0]
 
-                if self.curDir == 1:
+                if active_cur_dir == 1:
                     raw_disp = int(round(ref.offset.x / float(self.chuzSize.x)))
                     axis = "R"
                 else:
@@ -448,11 +587,80 @@ class Board(spriteObject):
                 if raw_disp != 0:
                     committed_move = {
                         "axis": axis,
-                        "selected_line": int(self.mouseDownPos.get(self.curDir)),
+                        "selected_line": int(active_mouse_down_pos.get(active_cur_dir)),
                         "displacement": int(raw_disp),
-                        "sects_to_move": [int(v) for v in self.sectsToMove],
+                        "sects_to_move": [int(v) for v in active_sects],
                     }
 
+        if self.gamemode == "mindbender":
+            if self.movedMouse:
+                self.game.sounds.playSound(self.game.sounds.Click)
+                self.movedMouse = False
+
+            if active_cur_dir in [0, 1] and moved_chuzzles:
+                ref = moved_chuzzles[0]
+
+                if active_cur_dir == 1:
+                    requested_amount = int(round(ref.offset.x / float(self.chuzSize.x)))
+                else:
+                    requested_amount = int(round(ref.offset.y / float(self.chuzSize.y)))
+
+                if self.chuzzles.sectionHasFat(active_sects, active_cur_dir):
+                    applied_amount, clamp_info = self.chuzzles.clampSectionShiftCells(
+                        sects=active_sects,
+                        direction=active_cur_dir,
+                        amount=requested_amount
+                    )
+
+                    if clamp_info["clamped"]:
+                        self.chuzzles.onFatEdgeClamp(clamp_info)
+
+                    # THIS is the real fix.
+                    # Fat pieces stay bounded, normals in same moved line still wrap.
+                    self.chuzzles.applySectionShiftMixed(
+                        sects=active_sects,
+                        direction=active_cur_dir,
+                        amount=applied_amount
+                    )
+                else:
+                    applied_amount = requested_amount
+
+                    self.chuzzles.applySectionShiftWrap(
+                        sects=active_sects,
+                        direction=active_cur_dir,
+                        amount=applied_amount
+                    )
+
+                for chuzzle in self.chuzzles:
+                    chuzzle.offset.clear()
+                    chuzzle.last = chuzzle.offset.copy()
+                    chuzzle.delta.clear()
+                    chuzzle.velocity.clear()
+                    chuzzle.motionSpeed = 0.0
+                    chuzzle.motionSpeedSmoothed = 0.0
+
+                if applied_amount != 0:
+                    committed_move = {
+                        "axis": "R" if active_cur_dir == 1 else "C",
+                        "selected_line": int(active_mouse_down_pos.get(active_cur_dir)),
+                        "displacement": int(applied_amount),
+                        "sects_to_move": [int(v) for v in active_sects],
+                    }
+                else:
+                    committed_move = None
+            else:
+                for chuzzle in self.chuzzles:
+                    chuzzle.offset.clear()
+                    chuzzle.last = chuzzle.offset.copy()
+                    chuzzle.delta.clear()
+                    chuzzle.velocity.clear()
+                    chuzzle.motionSpeed = 0.0
+                    chuzzle.motionSpeedSmoothed = 0.0
+        else:
+            for chuzzle in self.chuzzles:
+                chuzzle.snapToBoard()
+
+        # NOW clear drag state.
         self.mouseDown = False
         self.cursorDragging = False
         self.game.cursorIndex = 0
@@ -468,95 +676,71 @@ class Board(spriteObject):
         self.directionLocked = False
         self._dirTieFlip = False
 
-        # places the chuzzles where they are currently at
-        if self.gamemode == "mindbender":
-
-            if self.movedMouse:
-                self.game.sounds.playSound(self.game.sounds.Click)
-                self.movedMouse = False
-
-            for chuzzle in self.chuzzles:
-                new_pos = self.convertToPosition(chuzzle.getXY(), mode="nearest") % self.chuzCount
-                chuzzle.offset.clear()
-                chuzzle.position = new_pos
-        else:
-            for chuzzle in self.chuzzles:
-                chuzzle.snapToBoard()
-
         if committed_move is not None and hasattr(self.menu, "onBoardMoveCommitted"):
             self.menu.onBoardMoveCommitted(committed_move)
 
-
-
     def render(self, screen):
-
         # wash out the background
         self.surface.fill((0, 0, 0, 0))
 
+        board_w = self.boardSizePx.x
+        board_h = self.boardSizePx.y
 
         # draw drag rainbow behind the chuzzles
-        if self.mouseDown:
+        if self.mouseDown and self.curDir in [0, 1] and self.sectsToMove:
             offset = abs(self.pointPos - self.centerPos)
-            texture = [self.DragRainbowV, self.DragRainbowH][self.curDir]
+            texture, span_rect = self._build_drag_rainbow_surface()
 
-            point = Point()
-            opacity = 210
+            if texture is not None and span_rect is not None:
+                opacity = 154
 
-            if self.curDir == 0:
-                point.x = self.convertFromPosition(self.convertToPosition(self.initialMouseDown.x), 0)
-                point.y = self.boardOffset.y
+                if self.curDir == 0:
+                    # vertical drag on one or more columns
+                    if offset.y < self.chuzSize.y * 2:
+                        opacity *= (offset.y / float(self.chuzSize.y * 2))
+                else:
+                    # horizontal drag on one or more rows
+                    if offset.x < self.chuzSize.x * 2:
+                        opacity *= (offset.x / float(self.chuzSize.x * 2))
 
-                if offset.y < self.chuzSize.y * 2:
-                    opacity *= (offset.y / (self.chuzSize.y * 2))
+                blit_alpha(
+                    self.surface,
+                    texture,
+                    self._surface_blit_pos(Point(span_rect.x, span_rect.y)),
+                    opacity
+                )
 
-                # X: this moves it up, so it isn't cut off
-                # Y: this centers the dragRainbow
-                point += ((self.chuzSize.x - texture.get_size()[0]) / 2, -60)
-
-                blit_alpha(self.surface, texture, point, opacity)
-
-            elif self.curDir == 1:
-                point.x = self.boardOffset.x
-                point.y = self.convertFromPosition(self.convertToPosition(self.initialMouseDown.y), 0)
-
-                if offset.x < self.chuzSize.x * 2:
-                    opacity *= offset.x / (self.chuzSize.x * 2)
-
-                # X: this moves it left, so it isn't cut off
-                # Y: this centers the dragRainbow
-                point += (-260, (self.chuzSize.y - texture.get_size()[1]) / 2)
-
-                blit_alpha(self.surface, texture, point, opacity)
-
-
-        # render each chuzzle to screen
+        # render each chuzzle to padded surface
         for chuzzle in self.chuzzles:
             chuzzle.incrementAnimation()
 
-            coord = Point(chuzzle.getX(), chuzzle.getY()) % (self.chuzSize * self.game.settings.boardSize)
+            coord = Point(chuzzle.getX(), chuzzle.getY()) % board_w
+            coord.y = coord.y % board_h
 
-            # make it figure out which chuzzle is, "real"
             surf = chuzzle.getSurface()
             if surf is None:
                 continue
 
-
             if chuzzle.fatTL:
-                coord = coord - (8, 10)
+                coord = coord - (10, 12)
 
-            # main chuzzle?
-            self.surface.blit(surf, coord.tuple())
+            main_coord = self._surface_blit_pos(coord)
 
-            # might need to re-add direction specific if statements, draws the others outside
-            self.surface.blit(surf, (coord.x - (self.game.settings.boardSize * self.chuzSize.x), coord.y - (self.game.settings.boardSize * self.chuzSize.y)))
-            self.surface.blit(surf, (coord.x - (self.game.settings.boardSize * self.chuzSize.x), coord.y))
-            self.surface.blit(surf, (coord.x, coord.y - (self.game.settings.boardSize * self.chuzSize.y)))
+            # main chuzzle
+            self.surface.blit(surf, main_coord.tuple())
 
-        screen.blit(self.surface, self.boardOffset.tuple())
+            # Only normal chuzzles get wrap helper copies.
+            # Fats are now bounded and should never appear on the opposite side.
+            if chuzzle.isNormal():
+                self.surface.blit(surf, (main_coord.x - board_w, main_coord.y))
+                self.surface.blit(surf, (main_coord.x, main_coord.y - board_h))
+                self.surface.blit(surf, (main_coord.x - board_w, main_coord.y - board_h))
+
+        # shift back by pad so the visible board still starts at boardOffset
+        screen.blit(self.surface, (self.boardOffset - self.surfacePad).tuple())
 
         # render border frame
-        screen.blit(self.textures.Border, (229, 30))
-
+        screen.blit(self.textures.Border, (229, 29))
 
         # render locks
         lock_texture, lock_texture_fat = self._get_lock_textures()
@@ -576,12 +760,3 @@ class Board(spriteObject):
                 elif chuzzle.fatTL:
                     coords = coord - 25 * (lock_texture_fat.get_size()[0] / 128) - 10
                     screen.blit(lock_texture_fat, (coords + self.boardOffset).tuple())
-
-
-
-
-
-
-
-
-        # screen.blit(self.surface, self.boardOffset.tuple())

@@ -120,7 +120,7 @@ class Chuzzle:
         self.motionSpeed = raw_speed
         # Smoothing reduces flicker between neighboring velocity frames.
         self.motionSpeedSmoothed = (self.motionSpeedSmoothed * 0.65) + (raw_speed * 0.35)
-
+    
     def isFatCorner(self):
         return any([self.fatBL, self.fatTR, self.fatBR])
 
@@ -138,6 +138,19 @@ class Chuzzle:
         self.swayFrame = 0
         self.swayFrameCap = 20
 
+    def stopMotionKeepOffset(self, decay=0.50):
+        # Offset stays where the clamp pinned it.
+        # Raw instantaneous movement becomes zero this frame.
+        # Smoothed speed decays over time so velocity textures ramp down naturally.
+        self.delta.clear()
+        self.velocity.clear()
+        self.motionSpeed = 0.0
+        self.last = self.offset.copy()
+
+        self.motionSpeedSmoothed *= decay
+        if self.motionSpeedSmoothed < 0.05:
+            self.motionSpeedSmoothed = 0.0
+    
     # def setEyeBallDirection(self, mousePos):
     #     dx = self.getX() + 0.5 * self.game.currentMenu().board.chuzSize.x - mousePos.x
     #     dy = self.getY() + 0.5 * self.game.currentMenu().board.chuzSize.y - mousePos.y
@@ -270,9 +283,11 @@ class Chuzzle:
             1: 3,  # up
         }
 
-        moving = (abs(self.offset.x) > 0.0) or (abs(self.offset.y) > 0.0)
-        if moving and self.direction in dir_to_segment:
+        speed_animating = self.motionSpeedSmoothed > 0.05
+
+        if speed_animating and self.direction in dir_to_segment:
             board = self.game.currentMenu().board
+
             # Lower normalization target so upper cells are reachable in normal fast drags.
             max_speed = max(1.0, float(board.chuzSize.x) * 0.10)
             speed = float(self.motionSpeedSmoothed)
@@ -282,8 +297,8 @@ class Chuzzle:
                 speed *= 0.5
 
             t = min(max(speed / max_speed, 0.0), 1.0)
-            # Ease-out response: keeps low speed nuanced but reaches high cells sooner.
             t = math.sqrt(t)
+
             speed_index = int(round(t * (dir_count - 1)))
             segment = dir_to_segment[self.direction]
             frame_index = sway_count + segment * dir_count + speed_index

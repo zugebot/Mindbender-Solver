@@ -11,6 +11,8 @@ class Menu:
         self.game = game
         self.textures = self.game.textures
         self.display_under = display_under
+        self.mousePos = None
+        self.mouseState = None
         self.sprites = []
 
         self.buttonSound = {
@@ -31,8 +33,13 @@ class Menu:
     def onKeyDown(self, event_key):
         pass
 
+    def onRightClickDown(self, mousePos):
+        pass
 
     def run(self, mousePos, mouseState):
+        self.mousePos = mousePos
+        self.mouseState = mouseState
+
         for sprite in self.sprites:
             sprite.testMouseStates(mousePos.tuple(), mouseState)
 

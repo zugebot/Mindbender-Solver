@@ -13,6 +13,10 @@ import pygame as p
 # custom imports
 from tools.sprite_object import spriteObject
 
+HARDCODED_PROMPT_GUIDE_RECT = p.Rect(315, 317, 363, 31)
+
+PROMPT_GUIDE_MAX_WIDTH = 120
+PROMPT_GUIDE_MIN_WIDTH = 120
 
 EPSILON = 1e-6
 
@@ -25,6 +29,13 @@ MINI_PANEL_TARGETS = {
     (-0.98, 3.1125): 4,  # level 5
 }
 NEXT_WORLD_STAR_TARGET = (-1.22, 4.73)
+
+PROMPT_CLICK_TARGETS = {
+    (1.0, 3.0),
+    (2.0, 3.0),
+    (3.0, 3.0),
+    (4.0, 3.0),
+}
 
 GROUP_COLORS = [
     (255, 74, 176),   # pink
@@ -430,10 +441,45 @@ class MindBenderRouteGuide:
             return False
         return abs(a[0] - b[0]) < 0.025 and abs(a[1] - b[1]) < 0.025
 
+    def _is_prompt_symbolic_target(self, point: tuple[float, float] | None) -> bool:
+        if point is None:
+            return False
+        for prompt_point in PROMPT_CLICK_TARGETS:
+            if self._approx_equal_point(point, prompt_point):
+                return True
+        return False
+
+    def _get_prompt_target_rect(self) -> p.Rect | None:
+        if HARDCODED_PROMPT_GUIDE_RECT is not None:
+            return HARDCODED_PROMPT_GUIDE_RECT.copy()
+
+        popup = self.menu.popup
+        if popup is None:
+            return None
+
+        # New popup API: use the active button's rect.
+        if hasattr(popup, "_active_prompt_button"):
+            btn = popup._active_prompt_button()
+            if btn is not None and hasattr(btn, "rect"):
+                rect = btn.rect
+                if rect.width > 1 and rect.height > 1:
+                    return rect.copy()
+
+        # Fallback for older popup API.
+        if hasattr(popup, "prompt_rect"):
+            rect = popup.prompt_rect
+            if rect.width > 1 and rect.height > 1:
+                return rect.copy()
+
+        return None
+
     def _resolve_post_target_rect_for_step(self, step: GuideRouteStep) -> p.Rect | None:
         target = step.post_end_click_target
         if target is None:
             return None
+
+        if self._is_prompt_symbolic_target(target):
+            return self._get_prompt_target_rect()
 
         for point, mini_index in MINI_PANEL_TARGETS.items():
             if self._approx_equal_point(target, point):
@@ -446,27 +492,150 @@ class MindBenderRouteGuide:
 
         return None
 
+    def _is_prompt_rect_action(self, action: GuideQueuedAction) -> bool:
+        if action.target_rect is None:
+            return False
+
+        if action.kind == "mouse_travel" and self._is_prompt_symbolic_target(action.step_ref.final_mouse_target):
+            return True
+
+        if action.kind == "target_click" and self._is_prompt_symbolic_target(action.step_ref.post_end_click_target):
+            return True
+
+        return False
+
     def _screen_point_from_board_or_rect(
         self,
         board_point: tuple[float, float] | None,
         target_rect: p.Rect | None,
+        *,
+        rect_anchor: str = "center",
     ) -> tuple[int, int] | None:
         if board_point is not None:
             return self._board_point_to_screen(board_point)
+
         if target_rect is not None:
+            if rect_anchor == "left_center":
+                return target_rect.left, target_rect.centery
+            if rect_anchor == "right_center":
+                return target_rect.right, target_rect.centery
+            if rect_anchor == "top_center":
+                return target_rect.centerx, target_rect.top
+            if rect_anchor == "bottom_center":
+                return target_rect.centerx, target_rect.bottom
             return target_rect.center
+
         return None
+
+    def _get_action_anchor_point(
+            self,
+            action: GuideQueuedAction,
+            actions: list[GuideQueuedAction],
+            action_index: int,
+    ) -> tuple[int, int] | None:
+        if action.kind == "move" and action.move_ref is not None:
+            return self._board_point_to_screen(action.move_ref.path_points[0])
+
+        if action.kind == "mouse_travel":
+            if action.from_point is not None:
+                return self._board_point_to_screen(action.from_point)
+            return None
+
+        if action.kind == "target_click":
+            if action.from_point is not None:
+                return self._board_point_to_screen(action.from_point)
+            return None
+
+        return None
+
+    def _get_next_non_prompt_anchor_x(
+            self,
+            actions: list[GuideQueuedAction],
+            start_index: int,
+    ) -> int | None:
+        for i in range(start_index + 1, len(actions)):
+            candidate = actions[i]
+
+            if self._is_prompt_rect_action(candidate):
+                continue
+
+            pt = None
+            if candidate.kind == "move" and candidate.move_ref is not None:
+                pt = self._board_point_to_screen(candidate.move_ref.path_points[0])
+            elif candidate.kind in ("mouse_travel", "target_click"):
+                if candidate.to_point is not None:
+                    pt = self._board_point_to_screen(candidate.to_point)
+                elif candidate.target_rect is not None:
+                    pt = candidate.target_rect.center
+
+            if pt is not None:
+                return pt[0]
+
+        return None
+
+    def _get_prompt_display_rect(
+            self,
+            action: GuideQueuedAction,
+            actions: list[GuideQueuedAction],
+            action_index: int,
+    ) -> p.Rect:
+        base = action.target_rect.copy()
+
+        prev_pt = self._get_action_anchor_point(action, actions, action_index)
+        next_x = self._get_next_non_prompt_anchor_x(actions, action_index)
+
+        if prev_pt is None or next_x is None:
+            return base
+
+        prev_x = prev_pt[0]
+        center_x = int(round((prev_x + next_x) * 0.5))
+        
+        max_width = min(PROMPT_GUIDE_MAX_WIDTH, base.width)
+        desired_width = min(max_width, abs(next_x - prev_x))
+        desired_width = max(PROMPT_GUIDE_MIN_WIDTH, desired_width)
+
+        x = center_x - desired_width // 2
+        x = max(base.left, min(x, base.right - desired_width))
+
+        return p.Rect(x, base.y, desired_width, base.height)
+
+    def _get_rect_edge_point_toward_source(
+            self,
+            source_pt: tuple[int, int],
+            rect: p.Rect,
+    ) -> tuple[int, int]:
+        cx = rect.centerx
+        cy = rect.centery
+        dx = source_pt[0] - cx
+        dy = source_pt[1] - cy
+
+        hw = rect.width / 2.0
+        hh = rect.height / 2.0
+
+        if abs(dx) < EPSILON and abs(dy) < EPSILON:
+            return rect.center
+
+        if abs(dx) < EPSILON:
+            return cx, rect.bottom if dy > 0 else rect.top
+
+        if abs(dy) < EPSILON:
+            return rect.right if dx > 0 else rect.left, cy
+
+        scale = max(abs(dx) / hw, abs(dy) / hh)
+        edge_x = cx + dx / scale
+        edge_y = cy + dy / scale
+        return int(round(edge_x)), int(round(edge_y))
 
     # -------------------------------------------------------------------------
     # action building
     # -------------------------------------------------------------------------
 
     def _build_step_actions(
-        self,
-        step: GuideRouteStep,
-        color_index: int,
-        start_move_index: int,
-        is_current_puzzle: bool,
+            self,
+            step: GuideRouteStep,
+            color_index: int,
+            start_move_index: int,
+            is_current_puzzle: bool,
     ) -> list[GuideQueuedAction]:
         actions: list[GuideQueuedAction] = []
         combo_number = start_move_index + 1
@@ -490,6 +659,10 @@ class MindBenderRouteGuide:
             )
             combo_number += 1
 
+        prompt_rect_from_final_target = None
+        if self._is_prompt_symbolic_target(step.final_mouse_target):
+            prompt_rect_from_final_target = self._get_prompt_target_rect()
+
         if step.final_mouse_target is not None:
             from_point = step.overlay_moves[-1].release if step.overlay_moves else None
             actions.append(
@@ -499,8 +672,8 @@ class MindBenderRouteGuide:
                     step_ref=step,
                     move_ref=None,
                     from_point=from_point,
-                    to_point=step.final_mouse_target,
-                    target_rect=None,
+                    to_point=step.final_mouse_target if prompt_rect_from_final_target is None else None,
+                    target_rect=prompt_rect_from_final_target,
                     combo_number=combo_number,
                     color_index=color_index,
                     is_current_puzzle=is_current_puzzle,
@@ -538,6 +711,7 @@ class MindBenderRouteGuide:
             return []
 
         actions: list[GuideQueuedAction] = []
+        target_count = self.lookahead_actions + 1
 
         for route_index in range(current_route_index, len(self.ordered_steps)):
             step = self.ordered_steps[route_index]
@@ -553,13 +727,29 @@ class MindBenderRouteGuide:
 
             for action in step_actions:
                 actions.append(action)
-                if len(actions) >= self.lookahead_actions:
+                if len(actions) >= target_count:
                     return actions
 
         return actions
 
     def _get_visual_state_key(self):
         board = self.menu.board
+        popup = self.menu.popup
+
+        prompt_rect_key = None
+        if popup is not None:
+            # New popup API: use the active button rect.
+            if hasattr(popup, "_active_prompt_button"):
+                btn = popup._active_prompt_button()
+                if btn is not None and hasattr(btn, "rect"):
+                    rect = btn.rect
+                    prompt_rect_key = (rect.x, rect.y, rect.width, rect.height)
+
+            # Fallback for older popup API.
+            elif hasattr(popup, "prompt_rect"):
+                rect = popup.prompt_rect
+                prompt_rect_key = (rect.x, rect.y, rect.width, rect.height)
+
         return (
             self.enabled,
             self.current_puzzle_id,
@@ -577,6 +767,7 @@ class MindBenderRouteGuide:
             self.head_length_scale,
             self.head_half_width_scale,
             tuple(self.game.screenSize.tuple()),
+            prompt_rect_key,
         )
 
     def _ensure_visual_cache(self):
@@ -586,9 +777,11 @@ class MindBenderRouteGuide:
 
         self._state_cache_key = key
         self._cached_actions = self._collect_lookahead_actions()
+        visible_actions = self._cached_actions[:self.lookahead_actions]
+
         self._cached_completed_layer = self._build_completed_layer()
-        self._cached_body_layer = self._build_body_layer(self._cached_actions)
-        self._cached_static_circle_layer = self._build_static_circle_layer(self._cached_actions)
+        self._cached_body_layer = self._build_body_layer(visible_actions)
+        self._cached_static_circle_layer = self._build_static_circle_layer(visible_actions)
 
     # -------------------------------------------------------------------------
     # drawing helpers
@@ -767,30 +960,15 @@ class MindBenderRouteGuide:
         p.draw.polygon(surface, (*color, alpha), [inner_tip, inner_left, inner_right])
 
     def _draw_hit_circle_on_surface(
-            self,
-            surface: p.Surface,
-            center: tuple[int, int],
-            color: tuple[int, int, int],
-            combo_number: int,
-            alpha: int,
-            current: bool,
-            base_radius: int,
+        self,
+        surface: p.Surface,
+        center: tuple[int, int],
+        color: tuple[int, int, int],
+        combo_number: int,
+        alpha: int,
+        current: bool,
+        base_radius: int,
     ):
-        # Softer outer glow, stronger inner glow.
-        # glow_specs = (
-        #     (14, max(4, alpha // 14), 2),
-        #     (8, max(7, alpha // 11), 2),
-        #     (4, max(12, alpha // 8), 3),
-        # )
-        # for extra, glow_alpha, glow_width in glow_specs:
-        #     p.draw.circle(
-        #         surface,
-        #         (*color, glow_alpha),
-        #         center,
-        #         base_radius + extra,
-        #         width=glow_width,
-        #     )
-
         ring_width = 4
         p.draw.circle(surface, (*color, alpha), center, base_radius, width=ring_width)
 
@@ -806,6 +984,25 @@ class MindBenderRouteGuide:
         number = self.small_font.render(str(combo_number), True, (25, 25, 30))
         number_rect = number.get_rect(center=center)
         surface.blit(number, number_rect)
+
+    def _draw_prompt_target_on_surface(
+            self,
+            surface: p.Surface,
+            target_rect: p.Rect,
+            color: tuple[int, int, int],
+            alpha: int,
+            animated: bool,
+            combo_number: int | None = None,
+    ):
+        rect = target_rect.copy()
+
+        p.draw.rect(surface, (255, 255, 255, min(255, alpha)), rect, border_radius=8)
+        p.draw.rect(surface, (*color, alpha), rect, width=4, border_radius=8)
+
+        if combo_number is not None:
+            number = self.small_font.render(str(combo_number), True, (0, 0, 0))
+            number_rect = number.get_rect(center=rect.center)
+            surface.blit(number, number_rect)
 
     def _draw_target_highlight_on_surface(
         self,
@@ -883,6 +1080,7 @@ class MindBenderRouteGuide:
 
     def _build_body_layer(self, actions: list[GuideQueuedAction]) -> p.Surface:
         layer = p.Surface(self.game.screenSize.tuple(), p.SRCALPHA)
+        all_actions = self._cached_actions if self._cached_actions else actions
 
         for queue_index in range(len(actions) - 1, -1, -1):
             action = actions[queue_index]
@@ -927,7 +1125,13 @@ class MindBenderRouteGuide:
                     continue
 
                 self._draw_glow_path(layer, body_points, color, width, alpha, round_last=False)
-                self._draw_path_body(layer, body_points, (0, 0, 0, min(160, alpha)), width + self.line_outline_extra, round_last=False)
+                self._draw_path_body(
+                    layer,
+                    body_points,
+                    (0, 0, 0, min(160, alpha)),
+                    width + self.line_outline_extra,
+                    round_last=False,
+                )
                 self._draw_path_body(layer, body_points, (*color, alpha), width, round_last=False)
                 self._draw_arrow_head(
                     layer,
@@ -939,21 +1143,34 @@ class MindBenderRouteGuide:
                     head_w=head_w,
                     outline=self.arrow_outline,
                 )
+                continue
 
-            else:
-                end_pt = self._screen_point_from_board_or_rect(action.to_point, action.target_rect)
-                start_pt = self._screen_point_from_board_or_rect(action.from_point, None)
-                if end_pt is None or start_pt is None:
-                    continue
+            start_pt = self._screen_point_from_board_or_rect(action.from_point, None)
+            if start_pt is None:
+                continue
 
-                alpha = 255 if queue_index == 0 else max(90, 205 - queue_index * 24)
+            alpha = 255 if queue_index == 0 else max(90, 205 - queue_index * 24)
+
+            if self._is_prompt_rect_action(action) and action.target_rect is not None:
+                display_rect = self._get_prompt_display_rect(action, all_actions, queue_index)
+                end_pt = self._get_rect_edge_point_toward_source(start_pt, display_rect)
+
                 p.draw.line(layer, (0, 0, 0, min(100, alpha)), start_pt, end_pt, 5)
                 p.draw.line(layer, (*color, max(60, alpha - 100)), start_pt, end_pt, 2)
+                continue
+
+            end_pt = self._screen_point_from_board_or_rect(action.to_point, action.target_rect)
+            if end_pt is None:
+                continue
+
+            p.draw.line(layer, (0, 0, 0, min(100, alpha)), start_pt, end_pt, 5)
+            p.draw.line(layer, (*color, max(60, alpha - 100)), start_pt, end_pt, 2)
 
         return layer
 
     def _build_static_circle_layer(self, actions: list[GuideQueuedAction]) -> p.Surface:
         layer = p.Surface(self.game.screenSize.tuple(), p.SRCALPHA)
+        all_actions = self._cached_actions if self._cached_actions else actions
 
         for queue_index in range(len(actions) - 1, -1, -1):
             action = actions[queue_index]
@@ -980,32 +1197,46 @@ class MindBenderRouteGuide:
                     current=False,
                     base_radius=radius,
                 )
-            else:
-                end_pt = self._screen_point_from_board_or_rect(action.to_point, action.target_rect)
-                if end_pt is None:
-                    continue
+                continue
 
-                alpha = max(90, 205 - queue_index * 24)
-                radius = max(16, 20 - queue_index)
+            alpha = max(90, 205 - queue_index * 24)
 
-                self._draw_hit_circle_on_surface(
+            if self._is_prompt_rect_action(action) and action.target_rect is not None:
+                display_rect = self._get_prompt_display_rect(action, all_actions, queue_index)
+                self._draw_prompt_target_on_surface(
                     layer,
-                    center=end_pt,
+                    target_rect=display_rect,
                     color=color,
-                    combo_number=action.combo_number,
                     alpha=alpha,
-                    current=False,
-                    base_radius=radius,
+                    animated=False,
+                    combo_number=action.combo_number,
                 )
+                continue
 
-                if action.target_rect is not None:
-                    self._draw_target_highlight_on_surface(
-                        layer,
-                        target_rect=action.target_rect,
-                        color=color,
-                        alpha=alpha,
-                        animated=False,
-                    )
+            end_pt = self._screen_point_from_board_or_rect(action.to_point, action.target_rect)
+            if end_pt is None:
+                continue
+
+            radius = max(16, 20 - queue_index)
+
+            self._draw_hit_circle_on_surface(
+                layer,
+                center=end_pt,
+                color=color,
+                combo_number=action.combo_number,
+                alpha=alpha,
+                current=False,
+                base_radius=radius,
+            )
+
+            if action.target_rect is not None:
+                self._draw_target_highlight_on_surface(
+                    layer,
+                    target_rect=action.target_rect,
+                    color=color,
+                    alpha=alpha,
+                    animated=False,
+                )
 
         return layer
 
@@ -1063,8 +1294,8 @@ class MindBenderRouteGuide:
         surf.blit(shadow, (pad_x + 1, pad_y + 1))
         surf.blit(label, (pad_x, pad_y))
 
-        x = self.game.screenSize.x - surf.get_width() - 12
-        y = 8
+        x = self.game.screenSize.x - surf.get_width()
+        y = 0
 
         self._text_cache_key = key
         self._text_cache_surface = surf
@@ -1080,6 +1311,7 @@ class MindBenderRouteGuide:
 
         current_action = actions[0]
         color = self._group_color(current_action.color_index)
+        all_actions = self._cached_actions if self._cached_actions else actions
 
         if current_action.kind == "move":
             move = current_action.move_ref
@@ -1096,29 +1328,42 @@ class MindBenderRouteGuide:
                 current=True,
                 base_radius=22,
             )
-        else:
-            end_pt = self._screen_point_from_board_or_rect(current_action.to_point, current_action.target_rect)
-            if end_pt is None:
-                return
+            return
 
-            self._draw_hit_circle_on_surface(
+        if self._is_prompt_rect_action(current_action) and current_action.target_rect is not None:
+            display_rect = self._get_prompt_display_rect(current_action, all_actions, 0)
+            self._draw_prompt_target_on_surface(
                 screen,
-                center=end_pt,
+                target_rect=display_rect,
                 color=color,
-                combo_number=current_action.combo_number,
                 alpha=255,
-                current=True,
-                base_radius=22,
+                animated=False,
+                combo_number=current_action.combo_number,
             )
+            return
 
-            if current_action.target_rect is not None:
-                self._draw_target_highlight_on_surface(
-                    screen,
-                    target_rect=current_action.target_rect,
-                    color=color,
-                    alpha=255,
-                    animated=True,
-                )
+        end_pt = self._screen_point_from_board_or_rect(current_action.to_point, current_action.target_rect)
+        if end_pt is None:
+            return
+
+        self._draw_hit_circle_on_surface(
+            screen,
+            center=end_pt,
+            color=color,
+            combo_number=current_action.combo_number,
+            alpha=255,
+            current=True,
+            base_radius=22,
+        )
+
+        if current_action.target_rect is not None:
+            self._draw_target_highlight_on_surface(
+                screen,
+                target_rect=current_action.target_rect,
+                color=color,
+                alpha=255,
+                animated=True,
+            )
 
     # -------------------------------------------------------------------------
     # public draw
@@ -1149,7 +1394,8 @@ class MindBenderRouteGuide:
             return
 
         self._ensure_visual_cache()
-        self._ensure_text_cache(self._cached_actions)
+        visible_actions = self._cached_actions[:self.lookahead_actions]
+        self._ensure_text_cache(visible_actions)
 
         screen.blit(self._get_dim_mask(), (0, 0))
 
@@ -1162,7 +1408,7 @@ class MindBenderRouteGuide:
         if self._cached_static_circle_layer is not None:
             screen.blit(self._cached_static_circle_layer, (0, 0))
 
-        self._draw_current_action(screen, self._cached_actions)
+        self._draw_current_action(screen, visible_actions)
 
         if self._text_cache_surface is not None:
             screen.blit(self._text_cache_surface, self._text_cache_pos)

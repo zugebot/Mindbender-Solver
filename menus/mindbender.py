@@ -40,9 +40,15 @@ class MindBender(Menu):
         self.solution_board = ChuzzleList(game=self.game)
         self.solution_board.fill()
         self.matchBoard = MatchBoard(menu=self, board=self.solution_board)
+
         self.left_world_star_btn = None
+        self.left_world_star_hidden_btn = None
         self.center_world_star = None
         self.right_world_star_btn = None
+        self.right_world_star_locked_btn = None
+
+        self._left_world_star_slot = None
+        self._right_world_star_slot = None
 
         self.level_font = p.font.SysFont("arial", 26, bold=True)
         self.star_number_font = p.font.SysFont("arial", 36, bold=True)
@@ -77,15 +83,17 @@ class MindBender(Menu):
             Path(__file__).resolve().parent.parent / "data" / "puzzler.export.json",
         )
 
-        self.populate()
-
         self._hidden_left_star = p.Surface(self.textures.MindBenderSmallStarLeft[0].get_size(), p.SRCALPHA)
         self._dim_alpha_locked = 128
-        self._dim_right_star = [self._with_alpha(tex, self._dim_alpha_locked)
-                                for tex in self.textures.MindBenderSmallStarRight]
-        self._show_left_world_star = True
+        self._dim_right_star = [
+            self._with_alpha(tex, self._dim_alpha_locked)
+            for tex in self.textures.MindBenderSmallStarRight
+        ]
+
+        self._show_left_world_star = False
         self._can_go_next_world = False
 
+        self.populate()
         self.updatePuzzle()
 
     def _now(self):
@@ -157,21 +165,20 @@ class MindBender(Menu):
         )
         self.current_puzzle_recorded = True
 
-    def _record_world_exit_if_needed(self, old_level, new_level, reason):
+    def _record_world_thresholds_if_needed(self, reason):
         if self.current_world_timer is None:
             return
-        if self.current_world_timer["level"] != old_level:
+        if self.current_world_timer["level"] != self.level:
             return
-        if new_level <= old_level:
+        if self.current_world_timer["world_number"] != self.world_number:
             return
 
         elapsed = self._now() - self.current_world_timer["started_at"]
-        solved_count = self._solved_count_in_world(old_level)
-        world_number = old_level + 1
+        solved_count = self._solved_count_in_world(self.level)
 
-        if reason == "right_star" and solved_count >= 3 and not self.current_world_any3_recorded:
+        if solved_count >= 3 and not self.current_world_any3_recorded:
             self.stats.record_world_any3(
-                world_number=world_number,
+                world_number=self.world_number,
                 solved_count_when_leaving=solved_count,
                 reason=reason,
                 elapsed_seconds=elapsed
@@ -180,13 +187,22 @@ class MindBender(Menu):
 
         if solved_count >= 5 and not self.current_world_all5_recorded:
             self.stats.record_world_all5(
-                world_number=world_number,
+                world_number=self.world_number,
                 solved_count_when_leaving=solved_count,
                 reason=reason,
                 elapsed_seconds=elapsed
             )
             self.current_world_all5_recorded = True
 
+    def _record_world_exit_if_needed(self, old_level, new_level, reason):
+        if self.current_world_timer is None:
+            return
+        if self.current_world_timer["level"] != old_level:
+            return
+        if new_level <= old_level:
+            return
+
+        self._record_world_thresholds_if_needed(reason)
         self._reset_current_world_timer()
 
     def _solved_count_in_world(self, level):
@@ -273,8 +289,15 @@ class MindBender(Menu):
 
     def _board_signature(self, chuzzle_list):
         return tuple(sorted(
-            (int(ch.position.x), int(ch.position.y), int(ch.color),
-             int(ch.fatTL), int(ch.fatTR), int(ch.fatBL), int(ch.fatBR))
+            (
+                int(ch.position.x),
+                int(ch.position.y),
+                int(ch.color),
+                int(ch.fatTL),
+                int(ch.fatTR),
+                int(ch.fatBL),
+                int(ch.fatBR),
+            )
             for ch in chuzzle_list
         ))
 
@@ -286,48 +309,27 @@ class MindBender(Menu):
         tinted.set_alpha(alpha)
         return tinted
 
+    def _apply_world_star_slots(self):
+        if self._left_world_star_slot is not None:
+            if self._show_left_world_star:
+                self.sprites[self._left_world_star_slot] = self.left_world_star_btn
+            else:
+                self.sprites[self._left_world_star_slot] = self.left_world_star_hidden_btn
+
+        if self._right_world_star_slot is not None:
+            if self._can_go_next_world:
+                self.sprites[self._right_world_star_slot] = self.right_world_star_btn
+            else:
+                self.sprites[self._right_world_star_slot] = self.right_world_star_locked_btn
+
     def _sync_world_star_state(self):
         self._show_left_world_star = self.level > 0
         self._can_go_next_world = self.level < 19 and self.can_advance_world()
-
-        if self._show_left_world_star:
-            self.left_world_star_btn.clickable = True
-            self.left_world_star_btn.data["sounds"] = self.buttonSoundLow
-            self.left_world_star_btn.data["textures"]["default"] = self.textures.MindBenderSmallStarLeft[0]
-            self.left_world_star_btn.data["textures"]["hover"] = self.textures.MindBenderSmallStarLeft[1]
-            self.left_world_star_btn.data["textures"]["clickdown"] = self.textures.MindBenderSmallStarLeft[2]
-            self.left_world_star_btn.data["hitbox"] = self.textures.MindBenderSmallStarLeft_Alpha[0]
-            if self.left_world_star_btn.image is self._hidden_left_star:
-                self.left_world_star_btn.image = self.textures.MindBenderSmallStarLeft[0]
-        else:
-            self.left_world_star_btn.clickable = False
-            self.left_world_star_btn.data["sounds"] = self.buttonSoundLow
-            self.left_world_star_btn.data["textures"]["default"] = self._hidden_left_star
-            self.left_world_star_btn.data["textures"]["hover"] = self._hidden_left_star
-            self.left_world_star_btn.data["textures"]["clickdown"] = self._hidden_left_star
-            self.left_world_star_btn.data["hitbox"] = self._hidden_left_star
-            self.left_world_star_btn.image = self._hidden_left_star
-
-        if self._can_go_next_world:
-            self.right_world_star_btn.clickable = True
-            self.right_world_star_btn.data["sounds"] = self.buttonSoundLow
-            self.right_world_star_btn.data["textures"]["default"] = self.textures.MindBenderSmallStarRight[0]
-            self.right_world_star_btn.data["textures"]["hover"] = self.textures.MindBenderSmallStarRight[1]
-            self.right_world_star_btn.data["textures"]["clickdown"] = self.textures.MindBenderSmallStarRight[2]
-            self.right_world_star_btn.data["hitbox"] = self.textures.MindBenderSmallStarRight_Alpha[0]
-            self.right_world_star_btn.image = self.textures.MindBenderSmallStarRight[0]
-        else:
-            self.right_world_star_btn.clickable = False
-            self.right_world_star_btn.data["sounds"] = self.buttonSoundLow
-            self.right_world_star_btn.data["textures"]["default"] = self._dim_right_star[0]
-            self.right_world_star_btn.data["textures"]["hover"] = self._dim_right_star[0]
-            self.right_world_star_btn.data["textures"]["clickdown"] = self._dim_right_star[0]
-            self.right_world_star_btn.data["hitbox"] = self.textures.MindBenderSmallStarRight_Alpha[0]
-            self.right_world_star_btn.image = self._dim_right_star[0]
+        self._apply_world_star_slots()
 
     def _reset_route_guide_for_current_puzzle(self):
         self.route_guide.reset_for_puzzle(self.world_number, self.level_number)
-    
+
     def _draw_world_star_numbers(self, screen):
         current_world = self.level + 1
         prev_world = current_world - 1
@@ -391,9 +393,9 @@ class MindBender(Menu):
             if index not in self.solved_indices:
                 self.popup.replaying_solved_puzzle = False
 
-        self._sync_world_star_state()
         self.popup.suppress_replay_popup_once = False
         self.route_guide.on_puzzle_changed(self.world_number, self.level_number)
+        self._sync_world_star_state()
 
     def _available_world_count(self):
         total = len(self.puzzles.puzzles)
@@ -405,6 +407,11 @@ class MindBender(Menu):
         self.puzzleIndex = 0
         self.popup.clear_transient_state()
         self.updatePuzzle()
+
+    def _jump_to_world(self, world_number):
+        self._reset_all_active_timers()
+        self._go_to_world_first_puzzle(world_number)
+        self._reset_route_guide_for_current_puzzle()
 
     def _reset_current_puzzle(self):
         self.solved_indices.discard(self.current_index)
@@ -433,15 +440,13 @@ class MindBender(Menu):
         self.updatePuzzle()
         self._reset_route_guide_for_current_puzzle()
 
-    def _jump_world_and_clear_all_progress(self, world_number):
-        self.solved_indices.clear()
-        self._reset_all_active_timers()
-        self._go_to_world_first_puzzle(world_number)
-        self._reset_route_guide_for_current_puzzle()
-
     def onBoardMoveCommitted(self, move_data: dict):
         self.route_guide.on_board_move_committed(move_data)
 
+    def onRightClickDown(self, mousePos):
+        if hasattr(self, "board") and self.board is not None:
+            self.board.onRightClickDown(mousePos)
+    
     def onKeyDown(self, event):
         e = event.key
         mods = event.mod
@@ -449,12 +454,12 @@ class MindBender(Menu):
         left_ctrl_held = bool(mods & p.KMOD_LCTRL)
 
         if e == p.K_q:
-            if self.left_world_star_btn.clickable:
+            if self._show_left_world_star:
                 self.decrementLevel()
             return
 
         if e == p.K_e:
-            if self.right_world_star_btn.clickable:
+            if self._can_go_next_world:
                 self.incrementLevel()
             return
 
@@ -466,6 +471,7 @@ class MindBender(Menu):
             if self.current_index not in self.solved_indices:
                 self.solved_indices.add(self.current_index)
                 self._record_current_puzzle_if_needed()
+                self._record_world_thresholds_if_needed(reason="solve")
                 self.popup.start_popup_animation()
             return
 
@@ -506,7 +512,7 @@ class MindBender(Menu):
                     world_key = 20
                 else:
                     world_key += 10
-            self._jump_world_and_clear_all_progress(world_key)
+            self._jump_to_world(world_key)
             return
 
         if e == p.K_b:
@@ -531,12 +537,14 @@ class MindBender(Menu):
 
     def run(self, mousePos, mouseState):
         self._ensure_timers_started_from_board_click(mousePos, mouseState)
+        self._sync_world_star_state()
 
         if self.popup.visible:
             for sprite in self.sprites:
                 if sprite is self.board:
                     continue
-                sprite.testMouseStates(mousePos.tuple(), mouseState)
+                if hasattr(sprite, "testMouseStates"):
+                    sprite.testMouseStates(mousePos.tuple(), mouseState)
         else:
             super().run(mousePos, mouseState)
 
@@ -551,56 +559,103 @@ class MindBender(Menu):
 
         self.sprites.append(self.board)
 
-        self.sprites.append(Button(game=self.game, coords=(0, 553),
-                                   textures=self.textures.MainMenuButton, data={
-            "hitbox": self.textures.MainMenuButton_Alpha[0],
-            "func": {"clickup": self.saveGame},
-            "sounds": self.buttonSoundLow
-        }))
+        self.sprites.append(Button(
+            game=self.game,
+            coords=(0, 551),
+            textures=self.textures.MainMenuButton,
+            data={
+                "hitbox": "all",
+                "func": {"clickup": self.saveGame},
+                "sounds": self.buttonSoundLow
+            }
+        ))
 
-        self.sprites.append(Image((0, 125), self.textures.MindBenderGadget))
+        self.sprites.append(Image((2, 124), self.textures.MindBenderGadget))
 
         for btn in self.mini_panel.build_buttons():
             self.sprites.append(btn)
 
-        self.sprites.append(Image(image=self.textures.MindBenderMarquee))
+        self.sprites.append(Image((1, 1), image=self.textures.MindBenderMarquee))
         self.sprites.append(self.matchBoard)
 
-        self.left_world_star_btn = Button(game=self.game, coords=(23, 455),
-                                          textures=self.textures.MindBenderSmallStarLeft, data={
-            "hitbox": self.textures.MindBenderSmallStarLeft_Alpha[0],
-            "sounds": self.buttonSoundLow,
-            "func": {"clickup": self.decrementLevel}
-        })
-        self.sprites.append(self.left_world_star_btn)
+        self.left_world_star_btn = Button(
+            game=self.game,
+            coords=(23, 453),
+            textures=self.textures.MindBenderSmallStarLeft,
+            data={
+                "hitbox": self.textures.MindBenderSmallStarLeft_Alpha[0],
+                "sounds": self.buttonSoundLow,
+                "func": {"clickup": self.decrementLevel}
+            }
+        )
 
-        self.center_world_star = Image((78, 410), self.textures.MindBenderBigStar)
+        self.left_world_star_hidden_btn = Button(
+            game=self.game,
+            coords=(23, 455),
+            clickable=False,
+            data={
+                "textures": {
+                    "default": self._hidden_left_star,
+                    "hover": self._hidden_left_star,
+                    "clickdown": self._hidden_left_star,
+                },
+                "hitbox": self._hidden_left_star,
+                "sounds": self.buttonSoundLow,
+            }
+        )
+
+        self._left_world_star_slot = len(self.sprites)
+        self.sprites.append(self.left_world_star_hidden_btn)
+
+        self.center_world_star = Image((79, 409), self.textures.MindBenderBigStar)
         self.sprites.append(self.center_world_star)
 
-        self.right_world_star_btn = Button(game=self.game, coords=(170, 455),
-                                           textures=self.textures.MindBenderSmallStarRight, data={
-            "hitbox": self.textures.MindBenderSmallStarRight_Alpha[0],
-            "sounds": self.buttonSoundLow,
-            "func": {"clickup": self.incrementLevel}
-        })
-        self.sprites.append(self.right_world_star_btn)
+        self.right_world_star_btn = Button(
+            game=self.game,
+            coords=(170, 453),
+            textures=self.textures.MindBenderSmallStarRight,
+            data={
+                "hitbox": self.textures.MindBenderSmallStarRight_Alpha[0],
+                "sounds": self.buttonSoundLow,
+                "func": {"clickup": self.incrementLevel}
+            }
+        )
+
+        self.right_world_star_locked_btn = Button(
+            game=self.game,
+            coords=(170, 453),
+            clickable=False,
+            data={
+                "textures": {
+                    "default": self._dim_right_star[0],
+                    "hover": self._dim_right_star[0],
+                    "clickdown": self._dim_right_star[0],
+                },
+                "hitbox": self.textures.MindBenderSmallStarRight_Alpha[0],
+                "sounds": self.buttonSoundLow,
+            }
+        )
+
+        self._right_world_star_slot = len(self.sprites)
+        self.sprites.append(self.right_world_star_locked_btn)
 
         self.sprites.append(self.route_guide.toggle_button)
 
     def update(self, screen, default=False):
-        super().update(screen, default=default)
-
         if self.current_index not in self.solved_indices and self._is_board_solved():
             self.solved_indices.add(self.current_index)
             self._record_current_puzzle_if_needed()
+            self._record_world_thresholds_if_needed(reason="solve")
             self.popup.start_popup_animation()
 
         if self.popup.replaying_solved_puzzle and self._is_board_solved():
             self.popup.replaying_solved_puzzle = False
             self._record_current_puzzle_if_needed()
+            self._record_world_thresholds_if_needed(reason="solve")
             self.popup.start_popup_animation()
 
         self._sync_world_star_state()
+        super().update(screen, default=default)
 
         self.mini_panel.draw(screen)
         self.popup.draw(screen)
@@ -613,7 +668,7 @@ class MindBender(Menu):
 
     def can_advance_world(self):
         return self._solved_count_in_current_world() >= 3
-    
+
     def _sum_best_world_any3_times(self, start_world: int, end_world: int):
         total = 0.0
         found_any = False

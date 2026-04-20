@@ -14,17 +14,27 @@ class MindBenderMiniPanel:
         self.textures = menu.textures
 
         self.mini_coords = [
-            (20, 325),
-            (61, 353),
-            (107, 363),
-            (153, 353),
-            (195, 330),
+            (20, 323),
+            (61, 352),
+            (107, 360),
+            (154, 351),
+            (196, 327),
         ]
 
         self._mini_solution_cache = {}
-        self._mini_scaled_textures = None
-        self._mini_scaled_cell_size = None
         self.buttons = []
+
+        # flat colors for the 8 puzzle colors
+        self._mini_solution_colors = {
+            0: (178, 8, 8),       # red
+            1: (8, 174, 8),       # green
+            2: (8, 8, 255),       # blue
+            3: (255, 105, 2),     # orange
+            4: (255, 230, 0),     # yellow
+            5: (207, 7, 207),     # purple
+            6: (255, 255, 255),   # white
+            7: (87, 197, 221),    # cyan
+        }
 
     def build_buttons(self):
         self.buttons = []
@@ -44,16 +54,8 @@ class MindBenderMiniPanel:
 
         return self.buttons
 
-    def _get_mini_scaled_textures(self, cell_size):
-        if self._mini_scaled_textures is not None and self._mini_scaled_cell_size == cell_size:
-            return self._mini_scaled_textures
-
-        self._mini_scaled_cell_size = cell_size
-        self._mini_scaled_textures = [
-            p.transform.smoothscale(tex, (cell_size, cell_size))
-            for tex in self.textures.MiniChuzzles
-        ]
-        return self._mini_scaled_textures
+    def _color_for_cell(self, color_index):
+        return self._mini_solution_colors.get(int(color_index), (255, 0, 255))
 
     def _build_mini_solution_surface(self, puzzle_index):
         if puzzle_index < 0 or puzzle_index >= len(self.menu.puzzles.puzzles):
@@ -61,21 +63,70 @@ class MindBenderMiniPanel:
 
         mini_w = self.textures.MindBenderMini[0].get_width()
         mini_h = self.textures.MindBenderMini[0].get_height()
+
         preview_size = max(12, int(min(mini_w, mini_h) * 0.62))
-        cell_size = max(1, preview_size // 6)
-        grid_size = cell_size * 6
+
+        # padding only on right/bottom
+        pad_left = 0
+        pad_top = 0
+        pad_right = 1
+        pad_bottom = 1
+
+        gap = 1
+
+        inner_w = preview_size - pad_left - pad_right
+        inner_h = preview_size - pad_top - pad_bottom
+        if inner_w <= 0 or inner_h <= 0:
+            return None
+
+        cell_size = max(1, min(
+            (inner_w - gap * (6 - 1)) // 6,
+            (inner_h - gap * (6 - 1)) // 6
+        ))
+
+        grid_w = cell_size * 6 + gap * (6 - 1)
+        grid_h = cell_size * 6 + gap * (6 - 1)
 
         preview = p.Surface((preview_size, preview_size), p.SRCALPHA)
         puzzle = self.menu.puzzles.puzzles[puzzle_index]
-        textures = self._get_mini_scaled_textures(cell_size)
 
-        offset_x = (preview_size - grid_size) // 2
-        offset_y = (preview_size - grid_size) // 2
+        offset_x = pad_left + (inner_w - grid_w) // 2
+        offset_y = pad_top + (inner_h - grid_h) // 2
+
+        fat_tl = getattr(puzzle, "end_fat", None)
 
         for y in range(6):
             for x in range(6):
-                color = puzzle.solved_cells[y][x]
-                preview.blit(textures[color], (offset_x + x * cell_size, offset_y + y * cell_size))
+                color_index = puzzle.solved_cells[y][x]
+                color = self._color_for_cell(color_index)
+
+                draw_x = offset_x + x * (cell_size + gap)
+                draw_y = offset_y + y * (cell_size + gap)
+                draw_w = cell_size
+                draw_h = cell_size
+
+                if fat_tl is not None:
+                    fat_x, fat_y = fat_tl
+
+                    # TL
+                    if x == fat_x and y == fat_y:
+                        draw_w += gap
+                        draw_h += gap
+
+                    # TR
+                    elif x == fat_x + 1 and y == fat_y:
+                        draw_h += gap
+
+                    # BL
+                    elif x == fat_x and y == fat_y + 1:
+                        draw_w += gap
+
+                    # BR
+                    elif x == fat_x + 1 and y == fat_y + 1:
+                        pass
+
+                cell_rect = p.Rect(draw_x, draw_y, draw_w, draw_h)
+                p.draw.rect(preview, (*color, 174), cell_rect)
 
         return preview
 
@@ -113,6 +164,6 @@ class MindBenderMiniPanel:
                 screen.blit(check_texture, check_rect)
 
         if self.menu.current_index in self.menu.solved_indices and not self.menu.popup.replaying_solved_puzzle:
-            preview_center = (75 + 54 + 2, 203 + 56)
+            preview_center = (132, 256)
             preview_rect = solved_texture.get_rect(center=preview_center)
             screen.blit(solved_texture, preview_rect)

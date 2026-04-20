@@ -114,7 +114,8 @@ class Button:
         if isinstance(self.data["hitbox"], str):
             return self.data["hitbox"] == "all"
 
-        return bool(self.data["hitbox"].get_at(pos_in_mask))
+        px = self.data["hitbox"].get_at(pos_in_mask)
+        return px[0] != 0 or px[1] != 0 or px[2] != 0
 
     def testMouseStates(self, mousePos, mouseState):
         if not self.clickable:
@@ -251,4 +252,33 @@ class Button:
             elif render["type"] is None:
                 screen.blit(image, rect)
 
+        # p.draw.rect(screen, (0, 255, 0), self.rect, 2)
+        # self.drawHitboxDebug(screen)
         return image
+
+    def drawHitboxDebug(self, screen):
+        if not self.clickable:
+            return
+
+        hitbox = self.data.get("hitbox")
+        if hitbox is None:
+            return
+
+        if isinstance(hitbox, str):
+            debug_surface = p.Surface((self.rect.width, self.rect.height), p.SRCALPHA)
+            debug_surface.fill((0, 255, 0, 255))
+            screen.blit(debug_surface, self.rect.topleft)
+            return
+
+        debug_surface = p.Surface(hitbox.get_size(), p.SRCALPHA)
+
+        w, h = hitbox.get_size()
+        for y in range(h):
+            for x in range(w):
+                px = hitbox.get_at((x, y))
+
+                # treat any non-black / non-zero pixel as solid
+                if px[0] != 0 or px[1] != 0 or px[2] != 0 or px[3] != 0:
+                    debug_surface.set_at((x, y), (0, 255, 0, 255))
+
+        screen.blit(debug_surface, self.rect.topleft)

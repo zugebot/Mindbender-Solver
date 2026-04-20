@@ -43,8 +43,10 @@ class Textures:
         self.ChuzzOutline = self.loadTexture("textures/ChuzzOutline_Alpha.png", alphaOnly=True)
         self.ClassicChuzzle_Menu = self.loadTexture("textures/ClassicChuzzle_Menu.png")
         self.ClickHereNextPuzzle = self.loadTexture("textures/ClickHereNextPuzzle.png", split=3)
+        self.ClickHereNextPuzzle_Alpha = self.loadTexture("textures/ClickHereNextPuzzle_Alpha.png", alphaOnly=True, split=3)
         self.ClickHereToPlay = self.loadTexture("textures/ClickHereToPlay.png", split=3)
         self.ClickHereToPlayAgain = self.loadTexture("textures/ClickHereToPlayAgain.png", split=3)
+        self.ClickHereToPlayAgain_Alpha = self.loadTexture("textures/ClickHereToPlayAgain_Alpha.png", alphaOnly=True, split=3)
         self.ClickToContinue = self.loadTexture("textures/ClickToContinue.png")
         self.ColorblindSymbols = self.loadTexture("textures/ColorblindSymbols.png", split=8)
         self.ColorblindSymbolsSmall = self.loadTexture("textures/ColorblindSymbolsSmall.png", split=7)
@@ -67,7 +69,7 @@ class Textures:
         self.GameButton = self.loadTexture("textures/GameButton.png", split=3)
         self.GameButton_Alpha = self.loadTexture("textures/GameButton_Alpha.png", split=3, alphaOnly=True)
         self.GameCredits = self.loadTexture("textures/GameCredits.png")
-        self.GameModeTitle = self.loadTexture("textures/GameModeTitle.png")
+        self.GameModeTitle = self.loadTexture("textures/GameModeTitle.png", split=5, split_vertical=True)
         self.GameOptions = self.loadTexture("textures/GameOptions.png")
         self.GameOver = self.loadTexture("textures/GameOver.png")
         self.GameOverCircle = self.loadTexture("textures/GameOverCircle.png")
@@ -128,7 +130,7 @@ class Textures:
         self.MindBenderMini_Check = self.loadTexture("textures/MindBenderMini_Check.png")
         self.MindBenderMini_Select_Alpha = self.loadTexture("textures/MindBenderMini_Select_Alpha.png", alphaOnly=True)
         self.MindBenderSmallStarLeft = self.loadTexture("textures/MindBenderSmallStarLeft.png", split=3)
-        self.MindBenderSmallStarLeft_Alpha = self.loadTexture("textures/MindBenderSmallStarLeft.png", split=3, alphaOnly=True)
+        self.MindBenderSmallStarLeft_Alpha = self.loadTexture("textures/MindBenderSmallStarLeft_Alpha.png", split=3, alphaOnly=True)
         self.MindBenderSmallStarRight = self.loadTexture("textures/MindBenderSmallStarRight.png", split=3)
         self.MindBenderSmallStarRight_Alpha = self.loadTexture("textures/MindBenderSmallStarRight_Alpha.png", split=3, alphaOnly=True)
         self.MindBenderSolvedSmall = self.loadTexture("textures/MindBenderSolvedSmall.png")
@@ -220,7 +222,13 @@ class Textures:
             "1": {"color": (8, 174, 8)},  # green
             "2": {"color": (8, 8, 255)},  # blue
             "3": {"color": (255, 105, 2)},  # orange
-            "4": {"texture": {"base": "textures/Chuzzle-Yellow.png", "alpha": "cached/Chuzzle-Base_Alpha.png"}},
+            "4": {
+                "texture": {
+                    "base": "textures/Chuzzle-Yellow.png",
+                    "alpha": "cached/Chuzzle-Base_Alpha.png"
+                },
+                "fat_color": (255, 255, 0)
+            },
             # yellow
             "5": {"color": (207, 7, 207)},  # purple
             "6": {"color": (255, 255, 255)},  # white
@@ -258,8 +266,7 @@ class Textures:
         self.loadChuzzleTextures()
         self.loadChuzzleTexturesFat()
 
-
-    def loadTexture(self, filename, alphaOnly=False, pngOnly=False, split=-1):
+    def loadTexture(self, filename, alphaOnly=False, pngOnly=False, split=-1, split_vertical=False):
 
         if "_Alpha" in filename:
             alphaOnly = True
@@ -282,9 +289,25 @@ class Textures:
             surface.blit(base_alpha, (0, 0), None, p.BLEND_RGBA_MULT)
 
         if split != -1:
-            return splitTexture(surface, split)
-        else:
-            return surface
+            if not split_vertical:
+                return splitTexture(surface, split)
+
+            # vertical split
+            piece_h = surface.get_height() // split
+            pieces = []
+            for i in range(split):
+                piece = p.Surface((surface.get_width(), piece_h), p.SRCALPHA)
+                piece.fill((0, 0, 0, 0))
+                piece.blit(
+                    surface,
+                    (0, 0),
+                    (0, i * piece_h, surface.get_width(), piece_h),
+                    p.BLEND_RGBA_ADD
+                )
+                pieces.append(piece)
+            return pieces
+
+        return surface
 
 
     def loadChuzzleTextures(self):
@@ -341,9 +364,6 @@ class Textures:
 
             self.ChuzzleBase[color] = surfaces
 
-
-
-
     def loadChuzzleTexturesFat(self):
 
         createAlpha("textures/ChuzzleHuge-Base_Alpha.png")
@@ -356,15 +376,32 @@ class Textures:
         surface = p.Surface((5370, 183), p.SRCALPHA)
         surface.fill((0, 0, 0, 255))
 
-
-
         for color in range(9):
             colorObj = self.colorsMain[str(color)]
 
             print(colorObj)
             base = None
-            if "color" in colorObj.keys():
+
+            # Fat-specific solid color override.
+            # This is required for yellow because the normal yellow texture strip
+            # does not map correctly onto the huge/fat sheet layout.
+            if "fat_color" in colorObj:
                 base = BaseImage.copy()
+
+                color1 = surface.copy()
+                color1.fill(colorObj["fat_color"])
+
+                color2 = surface.copy()
+                color2.fill((60, 60, 60, 60))
+                color2.blit(HiliteImage, (0, 0), None, p.BLEND_RGBA_MULT)
+
+                base.blit(color1, (0, 0), None, p.BLEND_RGBA_MULT)
+                base.blit(color2, (0, 0), None, p.BLEND_RGB_ADD)
+                base.blit(AlphaImage, (0, 0), None, p.BLEND_RGBA_MULT)
+
+            elif "color" in colorObj:
+                base = BaseImage.copy()
+
                 color1 = surface.copy()
                 color1.fill(colorObj["color"])
 
@@ -376,7 +413,7 @@ class Textures:
                 base.blit(color2, (0, 0), None, p.BLEND_RGB_ADD)
                 base.blit(AlphaImage, (0, 0), None, p.BLEND_RGBA_MULT)
 
-            elif "texture" in colorObj.keys():
+            elif "texture" in colorObj:
                 base = surface.copy()
                 baseImage = p.image.load(colorObj["texture"]["base"]).convert_alpha()
                 alphaImage = p.image.load(colorObj["texture"]["alpha"]).convert_alpha()
