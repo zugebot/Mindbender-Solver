@@ -3,6 +3,7 @@
 # native imports
 import json
 import random
+from typing import List
 
 # custom imports
 from tools.point import Point
@@ -10,7 +11,7 @@ from tools.game import Game
 from engine.chuzzle import Chuzzle
 
 
-class ChuzzleList(list):
+class ChuzzleList(List[Chuzzle]):
     def __init__(self, game: Game, count=None, *args):
         super().__init__(args)
         if count is None:
@@ -61,27 +62,47 @@ class ChuzzleList(list):
     def placeFatChuzzle(self, x=0, y=0):
         if x >= self.chuzCount.x or y >= self.chuzCount.y:
             return
-        self.getPos((x, y)).setFatTL()
+        chuzzle: Chuzzle = self.getPos((x, y))
+        if chuzzle is None:
+            return
+
+        chuzzle.setFatTL()
 
         # this should remove fats from corners of new fat?
         for i in [(0, 1), (1, 0), (1, 1)]:
             point = Point(x, y) + i
-            if self.getPos(point.tuple()).fatTL:
+            _chuzzle = self.getPos(point.tuple())
+            if _chuzzle is None:
+                continue
+            if _chuzzle.fatTL:
                 self.deleteFatChuzzle(point.x, point.y)
 
-        self.getPos(x + 1, y).fatTR = True
-        self.getPos(x, y + 1).fatBL = True
-        self.getPos(x + 1, y + 1).fatBR = True
+        tr = self.getPos(x + 1, y)
+        if tr is not None:
+            tr.fatTR = True
+        bl = self.getPos(x, y + 1)
+        if bl is not None:
+            bl.fatBL = True
+        br = self.getPos(x + 1, y + 1)
+        if br is not None:
+            br.fatBR = True
 
     def deleteFatChuzzle(self, x=0, y=0):
         if x >= self.chuzCount.x or y >= self.chuzCount.y:
             return
-
-        self.getPos(x, y).delFatTL()
-        self.getPos(x + 1, y).fatTR = False
-        self.getPos(x, y + 1).fatBL = False
-        self.getPos(x + 1, y + 1).fatBR = False
-
+        tl = self.getPos(x, y)
+        if tl is not None:
+            tl.delFatTL()
+        tr = self.getPos(x + 1, y)
+        if tr is not None:
+            tr.fatTR = False
+        bl = self.getPos(x, y + 1)
+        if bl is not None:
+            bl.fatBL = False
+        br = self.getPos(x + 1, y + 1)
+        if br is not None:
+            br.fatBR = False
+        
     def placeRandomLock(self):
         pass
 
@@ -188,7 +209,9 @@ class ChuzzleList(list):
                 return True
         return False
 
-    def _fat_anchor_from_chuzzle(self, chuzzle):
+    def _fat_anchor_from_chuzzle(self, chuzzle: Chuzzle):
+        if chuzzle is None:
+            return None
         if chuzzle.fatTL:
             return chuzzle.position.copy()
         if chuzzle.fatTR:

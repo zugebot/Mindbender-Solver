@@ -1,17 +1,5 @@
 # Jerrin Shirks
-
-import ctypes
-
-from menus.mindbender import MindBender
-
-try:
-    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = ctypes.c_void_p(-4)
-    ctypes.windll.user32.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
-except Exception:
-    try:
-        ctypes.windll.user32.SetProcessDPIAware()
-    except Exception:
-        pass
+# chuzzleDeluxe.py
 
 # native imports
 import pygame as p
@@ -26,6 +14,7 @@ from engine.sound import Sounds
 from engine.settings import Settings
 
 # menus
+from menus.mindbender import MindBender
 
 
 class ChuzzleDeluxe(Game):
@@ -54,7 +43,6 @@ class ChuzzleDeluxe(Game):
             self.instance.mouse.set_visible(True)
             return
 
-        # Prefer hardware cursors so the OS updates the pointer independently of frame time.
         try:
             hotspot = (32, 32)
             self._hardwareCursors = [p.cursors.Cursor(hotspot, surf) for surf in self.textures.customCursors]
@@ -72,13 +60,10 @@ class ChuzzleDeluxe(Game):
             self.screen.fill(EMPTY_SCREEN)
             self.currentMenu().run(self.mousePos, self.mouseState)
 
-            # used to get snapshot of previous menu
             if len(self.menus) != self.lastMenuSize:
                 self.currentMenu().update(self.screen, default=True)
                 self.lastMenuImage = self.screen.copy()
                 self.lastMenuSize = len(self.menus)
-
-            # otherwise, do the normal blit operations
             else:
                 self.currentMenu().update(self.screen)
 
@@ -99,13 +84,11 @@ class ChuzzleDeluxe(Game):
                         print(e)
 
             elif self.settings.customCursor:
-                # Draw software cursor in INTERNAL resolution space.
                 mouse = self.mousePos - (32, 32)
                 self.screen.blit(self.textures.customCursors[self.cursorIndex], mouse.tuple())
 
             self._presentScreen()
 
-            # display to screen
             self.instance.display.flip()
             self.clock.tick(self.fps)
 

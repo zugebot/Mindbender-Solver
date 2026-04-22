@@ -1,7 +1,5 @@
 # Jerrin Shirks
-
-# native imports
-import ctypes
+# tools/game.py
 
 # custom imports
 import pygame as p
@@ -9,29 +7,24 @@ from engine.constants import *
 from tools.point import Point
 from tools.menu import Menu
 from engine.settings import Settings
+from tools.input_state import InputState
+from tools.platform_factory import create_platform
 
 
 class Game:
-    class _POINT(ctypes.Structure):
-        _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
-
-    class _RECT(ctypes.Structure):
-        _fields_ = [
-            ("left", ctypes.c_long),
-            ("top", ctypes.c_long),
-            ("right", ctypes.c_long),
-            ("bottom", ctypes.c_long),
-        ]
-
     def __init__(self, settings: Settings):
 
         # settings
         self.settings = settings
         self.internalSize = Point(self.settings.internalWindowSize)
-        self.outputSize = Point(self.settings.outputWindowSize)  # actual game area only, e.g. 800x600
+        self.outputSize = Point(self.settings.outputWindowSize)
         self.screenSize = Point(self.settings.internalWindowSize)
         self.fps = self.settings.fps
         self.debug = self.settings.debug
+
+        # platform
+        self.platform = create_platform()
+        self.platform.setup_process()
 
         # measured outer metrics from original game
         self.chromeEnabled = True
@@ -72,10 +65,9 @@ class Game:
 
         # running
         self.running = True
-        self.mouseState = 0
+        self.mouseState = MOUSE_HOVER
         self.mousePos = Point()
-        self._mouseButtonDown = False
-        self._rightMouseButtonDown = False
+        self.inputState = InputState()
         self.hasWindowFocus = True
 
         # menus
@@ -176,61 +168,16 @@ class Game:
         return Point(mapped_x, mapped_y)
 
     def _get_window_client_mouse_pos(self):
-        """
-        Returns mouse position relative to the borderless pygame window,
-        even if the cursor is outside the window. Works on Windows.
-        """
-        try:
-            hwnd = self.instance.display.get_wm_info().get("window")
-            if not hwnd:
-                return self.instance.mouse.get_pos()
-
-            pt = self._POINT()
-            ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
-            ctypes.windll.user32.ScreenToClient(hwnd, ctypes.byref(pt))
-            return pt.x, pt.y
-        except Exception:
-            return self.instance.mouse.get_pos()
+        return self.platform.get_window_client_mouse_pos(self.instance)
 
     def _get_window_rect(self):
-        try:
-            hwnd = self.instance.display.get_wm_info().get("window")
-            if not hwnd:
-                return None
-            rect = self._RECT()
-            ok = ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
-            if not ok:
-                return None
-            return rect
-        except Exception:
-            return None
+        return self.platform.get_window_rect(self.instance)
 
     def _set_window_pos(self, x, y):
-        try:
-            hwnd = self.instance.display.get_wm_info().get("window")
-            if not hwnd:
-                return
-            SWP_NOSIZE = 0x0001
-            SWP_NOZORDER = 0x0004
-            SWP_NOACTIVATE = 0x0010
-            ctypes.windll.user32.SetWindowPos(
-                hwnd, None, int(x), int(y), 0, 0,
-                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE
-            )
-        except Exception as e:
-            if self.debug:
-                print("SetWindowPos failed:", e)
+        self.platform.set_window_pos(self.instance, x, y)
 
     def _minimize_window(self):
-        try:
-            hwnd = self.instance.display.get_wm_info().get("window")
-            if not hwnd:
-                return
-            SW_MINIMIZE = 6
-            ctypes.windll.user32.ShowWindow(hwnd, SW_MINIMIZE)
-        except Exception as e:
-            if self.debug:
-                print("minimize failed:", e)
+        self.platform.minimize_window(self.instance)
 
     def _close_button_rect(self):
         return p.Rect(
@@ -264,32 +211,34 @@ class Game:
         return True
 
     def _start_window_drag(self):
-        try:
-            rect = self._get_window_rect()
-            if rect is None:
-                return
+        rect = self._get_window_rect()
+        if rect is None:
+            return
 
-            pt = self._POINT()
-            ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+        raw_mouse = self._get_window_client_mouse_pos()
+        cursor_screen_x = rect.left + raw_mouse[0]
+        cursor_screen_y = rect.top + raw_mouse[1]
 
-            self._draggingWindow = True
-            self._dragOffsetX = pt.x - rect.left
-            self._dragOffsetY = pt.y - rect.top
-        except Exception as e:
-            if self.debug:
-                print("drag start failed:", e)
+        self._draggingWindow = True
+        self._dragOffsetX = cursor_screen_x - rect.left
+        self._dragOffsetY = cursor_screen_y - rect.top
 
     def _update_window_drag(self):
         if not self._draggingWindow:
             return
 
-        try:
-            pt = self._POINT()
-            ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
-            self._set_window_pos(pt.x - self._dragOffsetX, pt.y - self._dragOffsetY)
-        except Exception as e:
-            if self.debug:
-                print("drag update failed:", e)
+        rect = self._get_window_rect()
+        if rect is None:
+            return
+
+        raw_mouse = self._get_window_client_mouse_pos()
+        cursor_screen_x = rect.left + raw_mouse[0]
+        cursor_screen_y = rect.top + raw_mouse[1]
+
+        self._set_window_pos(
+            cursor_screen_x - self._dragOffsetX,
+            cursor_screen_y - self._dragOffsetY
+        )
 
     def _stop_window_drag(self):
         self._draggingWindow = False
@@ -359,10 +308,6 @@ class Game:
             self._draw_close_glyph(close_rect)
 
     def _blit_edge_gutters(self, scaled):
-        """
-        Fill the 3px side/bottom gutters by extending edge pixels from the
-        scaled game image so they do not look like visible bars.
-        """
         x0 = self.borderLeft
         y0 = self.borderTop
         w = self.outputSize.x
@@ -416,6 +361,10 @@ class Game:
         p.quit()
         exit()
 
+    def _handle_focus_loss(self):
+        self.inputState.reset_buttons()
+        self.mouseState = MOUSE_HOVER
+
     def eventLoop(self):
         raw_mouse = self._get_window_client_mouse_pos()
 
@@ -446,33 +395,36 @@ class Game:
             elif event.type == p.WINDOWFOCUSLOST:
                 self.hasWindowFocus = False
                 if self.settings.needsWindowFocus:
-                    self._mouseButtonDown = False
-                    self._rightMouseButtonDown = False
-                    self.mouseState = MOUSE_HOVER
+                    self._handle_focus_loss()
 
             elif event.type == p.ACTIVEEVENT:
                 if hasattr(event, "state") and hasattr(event, "gain"):
                     if event.state & 2:
                         self.hasWindowFocus = bool(event.gain)
                         if self.settings.needsWindowFocus and not self.hasWindowFocus:
-                            self._mouseButtonDown = False
-                            self._rightMouseButtonDown = False
-                            self.mouseState = MOUSE_HOVER
+                            self._handle_focus_loss()
 
         self._update_window_drag()
 
         try:
-            focused = bool(self.instance.key.get_focused())
+            pygame_focused = bool(self.instance.key.get_focused())
         except Exception:
-            focused = True
+            pygame_focused = True
+
+        platform_focused = True
+        if hasattr(self.platform, "has_focus"):
+            try:
+                platform_focused = bool(self.platform.has_focus())
+            except Exception:
+                platform_focused = True
+
+        focused = pygame_focused and platform_focused
 
         if self.settings.needsWindowFocus:
             self.hasWindowFocus = self.hasWindowFocus and focused if not focused else focused
 
             if not self.hasWindowFocus:
-                self._mouseButtonDown = False
-                self._rightMouseButtonDown = False
-                self.mouseState = MOUSE_HOVER
+                self._handle_focus_loss()
                 return
         else:
             self.hasWindowFocus = True
@@ -480,54 +432,23 @@ class Game:
         client_rect = self._client_rect()
         over_non_client = not client_rect.collidepoint(raw_mouse[0], raw_mouse[1])
 
-        try:
-            left_button_down = (ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000) != 0
-            right_button_down = (ctypes.windll.user32.GetAsyncKeyState(0x02) & 0x8000) != 0
-        except Exception:
-            pressed = p.mouse.get_pressed(3)
-            left_button_down = pressed[0]
-            right_button_down = pressed[2]
-
+        left_button_down, right_button_down = self.platform.get_global_mouse_buttons(self.instance)
         mapped_mouse = self._mapMouseToInternal(raw_mouse)
 
-        if self._draggingWindow:
-            self.mouseState = MOUSE_HOVER
-            self._mouseButtonDown = False
-            self._rightMouseButtonDown = right_button_down
-        else:
-            # CRITICAL: never reintroduce edge-cutoff behavior for gameplay dragging.
-            # Once a left-click drag begins inside the client area, it MUST continue to
-            # report HELD_DOWN and CLICK_UP even if the cursor leaves the window, goes
-            # off-screen, or moves to another monitor. Removing this breaks board drag
-            # behavior and makes legal long drags impossible.
-            if left_button_down and not self._mouseButtonDown:
-                if over_non_client:
-                    self.mouseState = MOUSE_HOVER
-                    self._mouseButtonDown = False
-                else:
-                    self.mouseState = MOUSE_CLICK_DOWN
-                    self._mouseButtonDown = True
+        right_click_down = self.inputState.update_mouse_state(
+            left_button_down=left_button_down,
+            right_button_down=right_button_down,
+            over_non_client=over_non_client,
+            dragging_window=self._draggingWindow,
+        )
 
-            elif left_button_down and self._mouseButtonDown:
-                self.mouseState = MOUSE_HELD_DOWN
-
-            elif (not left_button_down) and self._mouseButtonDown:
-                self.mouseState = MOUSE_CLICK_UP
-                self._mouseButtonDown = False
-
-            else:
-                self.mouseState = MOUSE_HOVER
-                self._mouseButtonDown = False
-
-            right_click_down = right_button_down and not self._rightMouseButtonDown
-            self._rightMouseButtonDown = right_button_down
-
-            if right_click_down:
-                current_menu = self.currentMenu()
-                if current_menu is not None and hasattr(current_menu, "onRightClickDown"):
-                    current_menu.onRightClickDown(mapped_mouse)
-
+        self.mouseState = self.inputState.mouse_state
         self.mousePos = mapped_mouse
+
+        if right_click_down:
+            current_menu = self.currentMenu()
+            if current_menu is not None and hasattr(current_menu, "onRightClickDown"):
+                current_menu.onRightClickDown(mapped_mouse)
 
     def run(self, running=True):
         while running:

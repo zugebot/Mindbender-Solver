@@ -533,13 +533,9 @@ class Board(spriteObject):
             if self.chuzzles.sectionHasFat(self.sectsToMove, self.curDir):
 
                 proposed_offset, clamp_info = self.chuzzles.clampSectionOffsetPixels(
-
                     sects=self.sectsToMove,
-
                     direction=self.curDir,
-
                     offset_pixels=proposed_offset
-
                 )
 
                 if clamp_info["clamped"]:
@@ -551,13 +547,9 @@ class Board(spriteObject):
                     chuzzle.endSwayAnim()
 
                 chuzzle.offset.y = proposed_offset
-
                 if clamp_info is not None and clamp_info["clamped"]:
-
                     chuzzle.stopMotionKeepOffset()
-
                 else:
-
                     chuzzle.calculateVelocity(self.curDir)
 
         self.lastPos = self.pointPos
@@ -592,73 +584,69 @@ class Board(spriteObject):
                         "sects_to_move": [int(v) for v in active_sects],
                     }
 
-        if self.gamemode == "mindbender":
-            if self.movedMouse:
-                self.game.sounds.playSound(self.game.sounds.Click)
-                self.movedMouse = False
+        
+        if self.movedMouse:
+            self.game.sounds.playSound(self.game.sounds.Click)
+            self.movedMouse = False
 
-            if active_cur_dir in [0, 1] and moved_chuzzles:
-                ref = moved_chuzzles[0]
+        if active_cur_dir in [0, 1] and moved_chuzzles:
+            ref = moved_chuzzles[0]
 
-                if active_cur_dir == 1:
-                    requested_amount = int(round(ref.offset.x / float(self.chuzSize.x)))
-                else:
-                    requested_amount = int(round(ref.offset.y / float(self.chuzSize.y)))
-
-                if self.chuzzles.sectionHasFat(active_sects, active_cur_dir):
-                    applied_amount, clamp_info = self.chuzzles.clampSectionShiftCells(
-                        sects=active_sects,
-                        direction=active_cur_dir,
-                        amount=requested_amount
-                    )
-
-                    if clamp_info["clamped"]:
-                        self.chuzzles.onFatEdgeClamp(clamp_info)
-
-                    # THIS is the real fix.
-                    # Fat pieces stay bounded, normals in same moved line still wrap.
-                    self.chuzzles.applySectionShiftMixed(
-                        sects=active_sects,
-                        direction=active_cur_dir,
-                        amount=applied_amount
-                    )
-                else:
-                    applied_amount = requested_amount
-
-                    self.chuzzles.applySectionShiftWrap(
-                        sects=active_sects,
-                        direction=active_cur_dir,
-                        amount=applied_amount
-                    )
-
-                for chuzzle in self.chuzzles:
-                    chuzzle.offset.clear()
-                    chuzzle.last = chuzzle.offset.copy()
-                    chuzzle.delta.clear()
-                    chuzzle.velocity.clear()
-                    chuzzle.motionSpeed = 0.0
-                    chuzzle.motionSpeedSmoothed = 0.0
-
-                if applied_amount != 0:
-                    committed_move = {
-                        "axis": "R" if active_cur_dir == 1 else "C",
-                        "selected_line": int(active_mouse_down_pos.get(active_cur_dir)),
-                        "displacement": int(applied_amount),
-                        "sects_to_move": [int(v) for v in active_sects],
-                    }
-                else:
-                    committed_move = None
+            if active_cur_dir == 1:
+                requested_amount = int(round(ref.offset.x / float(self.chuzSize.x)))
             else:
-                for chuzzle in self.chuzzles:
-                    chuzzle.offset.clear()
-                    chuzzle.last = chuzzle.offset.copy()
-                    chuzzle.delta.clear()
-                    chuzzle.velocity.clear()
-                    chuzzle.motionSpeed = 0.0
-                    chuzzle.motionSpeedSmoothed = 0.0
+                requested_amount = int(round(ref.offset.y / float(self.chuzSize.y)))
+
+            if self.chuzzles.sectionHasFat(active_sects, active_cur_dir):
+                applied_amount, clamp_info = self.chuzzles.clampSectionShiftCells(
+                    sects=active_sects,
+                    direction=active_cur_dir,
+                    amount=requested_amount
+                )
+
+                if clamp_info["clamped"]:
+                    self.chuzzles.onFatEdgeClamp(clamp_info)
+
+                self.chuzzles.applySectionShiftMixed(
+                    sects=active_sects,
+                    direction=active_cur_dir,
+                    amount=applied_amount
+                )
+            else:
+                applied_amount = requested_amount
+
+                self.chuzzles.applySectionShiftWrap(
+                    sects=active_sects,
+                    direction=active_cur_dir,
+                    amount=applied_amount
+                )
+
+            for chuzzle in self.chuzzles:
+                chuzzle.offset.clear()
+                chuzzle.last = chuzzle.offset.copy()
+                chuzzle.delta.clear()
+                chuzzle.velocity.clear()
+                chuzzle.motionSpeed = 0.0
+                chuzzle.motionSpeedSmoothed = 0.0
+
+            if applied_amount != 0:
+                committed_move = {
+                    "axis": "R" if active_cur_dir == 1 else "C",
+                    "selected_line": int(active_mouse_down_pos.get(active_cur_dir)),
+                    "displacement": int(applied_amount),
+                    "sects_to_move": [int(v) for v in active_sects],
+                }
+            else:
+                committed_move = None
         else:
             for chuzzle in self.chuzzles:
-                chuzzle.snapToBoard()
+                chuzzle.offset.clear()
+                chuzzle.last = chuzzle.offset.copy()
+                chuzzle.delta.clear()
+                chuzzle.velocity.clear()
+                chuzzle.motionSpeed = 0.0
+                chuzzle.motionSpeedSmoothed = 0.0
+                
 
         # NOW clear drag state.
         self.mouseDown = False

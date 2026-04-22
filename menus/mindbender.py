@@ -9,6 +9,7 @@ import pygame as p
 
 # custom imports
 from engine.constants import MOUSE_CLICK_UP, MOUSE_CLICK_DOWN
+from objects.speedbar import SpeedBar
 from tools.menu import Menu
 from tools.button import Button
 from tools.image import Image
@@ -20,6 +21,8 @@ from engine.mindbender_stats import MindBenderStats
 from objects.mindbender_mini_panel import MindBenderMiniPanel
 from objects.mindbender_solved_popup import MindBenderSolvedPopup
 from objects.mindbender_route_guide import MindBenderRouteGuide
+from objects.select_box import SelectBox
+from objects.scrambles import Scrambles
 
 
 class MindBender(Menu):
@@ -57,6 +60,12 @@ class MindBender(Menu):
         self.stats_shadow_color = (40, 20, 60)
         self.stats_text_color = (230, 255, 210)
 
+        self.speedrun_font = p.font.SysFont("arial", 24, bold=True)
+        self.speedrun_shadow_color = (0, 0, 0)
+        self.speedrun_text_color = (255, 255, 255)
+        self.speedrun_started_at = None
+        self.speedrun_finished_at = None
+
         self.solved_indices = set()
         self.current_index = 0
 
@@ -78,9 +87,26 @@ class MindBender(Menu):
         self.popup = MindBenderSolvedPopup(self)
         self.mini_panel = MindBenderMiniPanel(self)
 
+        self.route_dir = Path(__file__).resolve().parent.parent / "data" / "routes"
+        self.route_files = self._discover_route_files()
+        self.route_file_by_name = {path.name: path for path in self.route_files}
+
+        preferred_name = "puzzler.route.json"
+        if preferred_name in self.route_file_by_name:
+            self.selected_route_name = preferred_name
+            self.selected_route_path = self.route_file_by_name[preferred_name]
+        elif self.route_files:
+            self.selected_route_path = self.route_files[0]
+            self.selected_route_name = self.selected_route_path.name
+        else:
+            self.selected_route_name = preferred_name
+            self.selected_route_path = self.route_dir / preferred_name
+
+        self.route_select_box = None
+
         self.route_guide = MindBenderRouteGuide(
             self,
-            Path(__file__).resolve().parent.parent / "data" / "puzzler.export.json",
+            self.selected_route_path,
         )
 
         self._hidden_left_star = p.Surface(self.textures.MindBenderSmallStarLeft[0].get_size(), p.SRCALPHA)
@@ -144,9 +170,18 @@ class MindBender(Menu):
                 "started_at": now,
                 "world_number": self.world_number,
                 "level": self.level,
+                "starting_solved_count": self._solved_count_in_world(self.level),
             }
             self.current_world_any3_recorded = False
             self.current_world_all5_recorded = False
+
+        if (
+                self.speedrun_started_at is None
+                and self.speedrun_finished_at is None
+                and self.world_number == 1
+                and len(self.solved_indices) == 0
+        ):
+            self.speedrun_started_at = now
 
     def _record_current_puzzle_if_needed(self):
         if self.current_puzzle_timer is None:
@@ -174,21 +209,24 @@ class MindBender(Menu):
             return
 
         elapsed = self._now() - self.current_world_timer["started_at"]
-        solved_count = self._solved_count_in_world(self.level)
 
-        if solved_count >= 3 and not self.current_world_any3_recorded:
+        starting_solved_count = self.current_world_timer.get("starting_solved_count", 0)
+        current_solved_count = self._solved_count_in_world(self.level)
+        solved_during_run = max(0, current_solved_count - starting_solved_count)
+
+        if solved_during_run >= 3 and not self.current_world_any3_recorded:
             self.stats.record_world_any3(
                 world_number=self.world_number,
-                solved_count_when_leaving=solved_count,
+                solved_count_when_leaving=solved_during_run,
                 reason=reason,
                 elapsed_seconds=elapsed
             )
             self.current_world_any3_recorded = True
 
-        if solved_count >= 5 and not self.current_world_all5_recorded:
+        if solved_during_run >= 5 and not self.current_world_all5_recorded:
             self.stats.record_world_all5(
                 world_number=self.world_number,
-                solved_count_when_leaving=solved_count,
+                solved_count_when_leaving=solved_during_run,
                 reason=reason,
                 elapsed_seconds=elapsed
             )
@@ -397,6 +435,13 @@ class MindBender(Menu):
         self.route_guide.on_puzzle_changed(self.world_number, self.level_number)
         self._sync_world_star_state()
 
+        if (
+                self.speedrun_started_at is not None
+                and self.speedrun_finished_at is None
+                and self.world_number >= 10
+        ):
+            self.speedrun_finished_at = self._now()
+
     def _available_world_count(self):
         total = len(self.puzzles.puzzles)
         return max(1, (total + 4) // 5)
@@ -435,23 +480,61 @@ class MindBender(Menu):
         self.solved_indices.clear()
         self.level = 0
         self.puzzleIndex = 0
+        self.speedrun_started_at = None
+        self.speedrun_finished_at = None
         self._reset_all_active_timers()
         self.popup.clear_transient_state()
         self.updatePuzzle()
         self._reset_route_guide_for_current_puzzle()
 
+    def _discover_route_files(self):
+        if not self.route_dir.exists():
+            return []
+
+        files = [path for path in self.route_dir.glob("*") if path.is_file()]
+        files.sort(key=lambda path: path.name.lower())
+
+        preferred_name = "puzzler.export.json"
+        preferred = [path for path in files if path.name == preferred_name]
+        others = [path for path in files if path.name != preferred_name]
+
+        return preferred + others
+
+    def _on_route_selected(self, selected_value, selected_index):
+        if selected_value not in self.route_file_by_name:
+            return
+
+        new_path = self.route_file_by_name[selected_value]
+        if new_path == self.selected_route_path:
+            return
+
+        self.selected_route_name = selected_value
+        self.selected_route_path = new_path
+
+        self.route_guide.set_json_path(new_path)
+        self._reset_route_guide_for_current_puzzle()
+    
     def onBoardMoveCommitted(self, move_data: dict):
         self.route_guide.on_board_move_committed(move_data)
 
     def onRightClickDown(self, mousePos):
         if hasattr(self, "board") and self.board is not None:
             self.board.onRightClickDown(mousePos)
-    
+
     def onKeyDown(self, event):
         e = event.key
         mods = event.mod
         shift_held = bool(mods & p.KMOD_SHIFT)
         left_ctrl_held = bool(mods & p.KMOD_LCTRL)
+
+        if e == p.K_g:
+            self.route_guide.enabled = not self.route_guide.enabled
+            self.route_guide.status_flash = (
+                "Route guide enabled" if self.route_guide.enabled else "Route guide disabled"
+            )
+            self.route_guide.status_flash_timer = 120
+            self.route_guide._invalidate_text_cache()
+            return
 
         if e == p.K_q:
             if self._show_left_world_star:
@@ -558,6 +641,11 @@ class MindBender(Menu):
         self.sprites.append(Image(image=bkg))
 
         self.sprites.append(self.board)
+        
+        # self.speedbar = SpeedBar(self)
+        # self.sprites.append(self.speedbar)
+        # self.scrambles = Scrambles(self)
+        # self.sprites.append(self.scrambles)
 
         self.sprites.append(Button(
             game=self.game,
@@ -577,6 +665,26 @@ class MindBender(Menu):
 
         self.sprites.append(Image((1, 1), image=self.textures.MindBenderMarquee))
         self.sprites.append(self.matchBoard)
+
+        route_options = [path.name for path in self.route_files]
+        if not route_options:
+            route_options = [self.selected_route_name]
+
+        selected_index = 0
+        if self.selected_route_name in route_options:
+            selected_index = route_options.index(self.selected_route_name)
+
+        self.route_select_box = SelectBox(
+            menu=self,
+            coords=(0, 25),
+            size=(235, 32),
+            options=route_options,
+            selected_index=selected_index,
+            max_visible_options=10,
+            on_change=self._on_route_selected,
+            placeholder="No route files found"
+        )
+        self.sprites.append(self.route_select_box)
 
         self.left_world_star_btn = Button(
             game=self.game,
@@ -662,6 +770,43 @@ class MindBender(Menu):
         self._draw_world_star_numbers(screen)
         self._draw_bottom_stats(screen)
         self.route_guide.draw(screen)
+        self._draw_speedrun_timer(screen)
+
+    def _get_speedrun_elapsed_seconds(self):
+        if self.speedrun_started_at is None:
+            return 0.0
+
+        if self.speedrun_finished_at is not None:
+            return max(0.0, self.speedrun_finished_at - self.speedrun_started_at)
+
+        return max(0.0, self._now() - self.speedrun_started_at)
+
+    def _format_speedrun_time(self, elapsed_seconds):
+        total_ms = max(0, int(round(elapsed_seconds * 1000.0)))
+
+        hours = total_ms // 3600000
+        total_ms %= 3600000
+
+        minutes = total_ms // 60000
+        total_ms %= 60000
+
+        seconds = total_ms // 1000
+        milliseconds = total_ms % 1000
+
+        return f"{hours}:{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+
+    def _draw_speedrun_timer(self, screen):
+        elapsed = self._get_speedrun_elapsed_seconds()
+        text_value = self._format_speedrun_time(elapsed)
+
+        shadow = self.speedrun_font.render(text_value, True, self.speedrun_shadow_color)
+        text = self.speedrun_font.render(text_value, True, self.speedrun_text_color)
+
+        x = 443
+        y = 30
+
+        screen.blit(shadow, (x + 2, y + 2))
+        screen.blit(text, (x, y))
 
     def _solved_count_in_current_world(self):
         return self._solved_count_in_world(self.level)

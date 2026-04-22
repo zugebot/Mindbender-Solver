@@ -7,6 +7,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path
 
 import pygame as p
 
@@ -167,6 +168,7 @@ class MindBenderRouteGuideToggle(spriteObject):
 
 
 class MindBenderRouteGuide:
+
     def __init__(self, menu, json_path: Path):
         self.menu = menu
         self.game = menu.game
@@ -199,7 +201,6 @@ class MindBenderRouteGuide:
             rect=p.Rect(10, 528, 150, 34),
         )
 
-        # geometry tuning
         self.current_line_width = 12
         self.future_line_width = 10
         self.completed_line_width = 8
@@ -208,7 +209,6 @@ class MindBenderRouteGuide:
         self.head_length_scale = 1.70
         self.head_half_width_scale = 1.05
 
-        # caches
         self._dim_mask_surface: p.Surface | None = None
         self._dim_mask_size: tuple[int, int] | None = None
 
@@ -262,6 +262,19 @@ class MindBenderRouteGuide:
 
         self._invalidate_all_cache()
 
+    def set_json_path(self, json_path: Path):
+        self.json_path = Path(json_path)
+        self.current_step = None
+        self.current_move_index = 0
+        self.current_puzzle_id = ""
+        self.last_result = ""
+        self.status_flash = f"Loaded route file: {self.json_path.name}"
+        self.status_flash_timer = 90
+        self._load_json()
+
+        if self.menu is not None:
+            self.reset_for_puzzle(self.menu.world_number, self.menu.level_number)
+    
     def _load_json(self):
         self.steps_by_puzzle_id.clear()
         self.ordered_steps.clear()
@@ -368,20 +381,19 @@ class MindBenderRouteGuide:
     def on_puzzle_changed(self, world_number: int, puzzle_number: int):
         puzzle_id = f"{world_number}-{puzzle_number}"
 
-        if puzzle_id != self.current_puzzle_id:
-            self.current_puzzle_id = puzzle_id
-            self.current_step = self.steps_by_puzzle_id.get(puzzle_id)
-            self.current_move_index = 0
-            self.last_result = ""
+        self.current_puzzle_id = puzzle_id
+        self.current_step = self.steps_by_puzzle_id.get(puzzle_id)
+        self.current_move_index = 0
+        self.last_result = ""
 
-            if self.current_step is None:
-                self.status_flash = f"No route step for {puzzle_id}"
-                self.status_flash_timer = 90
-            else:
-                self.status_flash = f"Loaded route for {puzzle_id}"
-                self.status_flash_timer = 90
+        if self.current_step is None:
+            self.status_flash = f"No route step for {puzzle_id}"
+            self.status_flash_timer = 90
+        else:
+            self.status_flash = f"Loaded route for {puzzle_id}"
+            self.status_flash_timer = 90
 
-            self._invalidate_all_cache()
+        self._invalidate_all_cache()
 
     def has_route_for_current_puzzle(self) -> bool:
         return self.current_step is not None

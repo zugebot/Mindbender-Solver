@@ -59,7 +59,10 @@ class MatchBoard(spriteObject):
         for y in range(self.board.chuzCount.y):
             for x in range(self.board.chuzCount.x):
                 point = Point(x, y) * 18 + Point(1, 2)
-                chuzzle = self.board[y * self.game.settings.boardSize + x]
+                chuzzle = self.board.getPos(Point(x, y))
+                if chuzzle is None:
+                    continue
+                    
                 color = chuzzle.color
 
                 # Fat chuzzles should always show the mini fat texture.

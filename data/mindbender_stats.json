@@ -1,0 +1,932 @@
+{
+  "puzzles": {
+    "world_11_puzzle_3": {
+      "average_seconds": 17.053073406219482,
+      "best_run": {
+        "elapsed_seconds": 17.053073406219482,
+        "level_number": 3,
+        "puzzle_index": 52,
+        "timestamp": 1776665841,
+        "world_number": 11
+      },
+      "best_seconds": 17.053073406219482,
+      "count": 1,
+      "latest_seconds": 17.053073406219482,
+      "total_seconds": 17.053073406219482
+    },
+    "world_12_puzzle_2": {
+      "average_seconds": 38.67086386680603,
+      "best_run": {
+        "elapsed_seconds": 38.67086386680603,
+        "level_number": 2,
+        "puzzle_index": 56,
+        "timestamp": 1776889396,
+        "world_number": 12
+      },
+      "best_seconds": 38.67086386680603,
+      "count": 1,
+      "latest_seconds": 38.67086386680603,
+      "total_seconds": 38.67086386680603
+    },
+    "world_14_puzzle_2": {
+      "average_seconds": 30.97870397567749,
+      "best_run": {
+        "elapsed_seconds": 30.97870397567749,
+        "level_number": 2,
+        "puzzle_index": 66,
+        "timestamp": 1776890008,
+        "world_number": 14
+      },
+      "best_seconds": 30.97870397567749,
+      "count": 1,
+      "latest_seconds": 30.97870397567749,
+      "total_seconds": 30.97870397567749
+    },
+    "world_1_puzzle_1": {
+      "average_seconds": 1.4444633966204763,
+      "best_run": {
+        "elapsed_seconds": 0.25874781608581543,
+        "level_number": 1,
+        "puzzle_index": 0,
+        "timestamp": 1776665753,
+        "world_number": 1
+      },
+      "best_seconds": 0.25874781608581543,
+      "count": 870,
+      "latest_seconds": 11.916241645812988,
+      "total_seconds": 1256.6831550598145
+    },
+    "world_1_puzzle_2": {
+      "average_seconds": 0.6702314652357584,
+      "best_run": {
+        "elapsed_seconds": 0.3028268814086914,
+        "level_number": 2,
+        "puzzle_index": 1,
+        "timestamp": 1776665640,
+        "world_number": 1
+      },
+      "best_seconds": 0.3028268814086914,
+      "count": 514,
+      "latest_seconds": 0.5611867904663086,
+      "total_seconds": 344.4989731311798
+    },
+    "world_1_puzzle_3": {
+      "average_seconds": 0.39903202242919794,
+      "best_run": {
+        "elapsed_seconds": 0.04977536201477051,
+        "level_number": 3,
+        "puzzle_index": 2,
+        "timestamp": 1776665699,
+        "world_number": 1
+      },
+      "best_seconds": 0.04977536201477051,
+      "count": 487,
+      "latest_seconds": 0.2964305877685547,
+      "total_seconds": 194.3285949230194
+    },
+    "world_1_puzzle_4": {
+      "average_seconds": 1.9645238211660674,
+      "best_run": {
+        "elapsed_seconds": 0.8931372165679932,
+        "level_number": 4,
+        "puzzle_index": 3,
+        "timestamp": 1776736743,
+        "world_number": 1
+      },
+      "best_seconds": 0.8931372165679932,
+      "count": 33,
+      "latest_seconds": 2.056574821472168,
+      "total_seconds": 64.82928609848022
+    },
+    "world_1_puzzle_5": {
+      "average_seconds": 1.734368582566579,
+      "best_run": {
+        "elapsed_seconds": 0.7949967384338379,
+        "level_number": 5,
+        "puzzle_index": 4,
+        "timestamp": 1776477248,
+        "world_number": 1
+      },
+      "best_seconds": 0.7949967384338379,
+      "count": 24,
+      "latest_seconds": 1.3224554061889648,
+      "total_seconds": 41.6248459815979
+    },
+    "world_20_puzzle_1": {
+      "average_seconds": 27.566715478897095,
+      "best_run": {
+        "elapsed_seconds": 27.566715478897095,
+        "level_number": 1,
+        "puzzle_index": 95,
+        "timestamp": 1776889933,
+        "world_number": 20
+      },
+      "best_seconds": 27.566715478897095,
+      "count": 1,
+      "latest_seconds": 27.566715478897095,
+      "total_seconds": 27.566715478897095
+    },
+    "world_2_puzzle_1": {
+      "average_seconds": 1.989658055332421,
+      "best_run": {
+        "elapsed_seconds": 0.5676038265228271,
+        "level_number": 1,
+        "puzzle_index": 5,
+        "timestamp": 1776736244,
+        "world_number": 2
+      },
+      "best_seconds": 0.5676038265228271,
+      "count": 177,
+      "latest_seconds": 0.7600641250610352,
+      "total_seconds": 352.1694757938385
+    },
+    "world_2_puzzle_2": {
+      "average_seconds": 4.174559593200684,
+      "best_run": {
+        "elapsed_seconds": 1.4013631343841553,
+        "level_number": 2,
+        "puzzle_index": 6,
+        "timestamp": 1776736793,
+        "world_number": 2
+      },
+      "best_seconds": 1.4013631343841553,
+      "count": 20,
+      "latest_seconds": 2.9683644771575928,
+      "total_seconds": 83.49119186401367
+    },
+    "world_2_puzzle_3": {
+      "average_seconds": 3.5719946225484214,
+      "best_run": {
+        "elapsed_seconds": 1.6969425678253174,
+        "level_number": 3,
+        "puzzle_index": 7,
+        "timestamp": 1776736775,
+        "world_number": 2
+      },
+      "best_seconds": 1.6969425678253174,
+      "count": 15,
+      "latest_seconds": 1.7674391269683838,
+      "total_seconds": 53.57991933822632
+    },
+    "world_2_puzzle_4": {
+      "average_seconds": 2.082048822140348,
+      "best_run": {
+        "elapsed_seconds": 0.9708144664764404,
+        "level_number": 4,
+        "puzzle_index": 8,
+        "timestamp": 1776736152,
+        "world_number": 2
+      },
+      "best_seconds": 0.9708144664764404,
+      "count": 138,
+      "latest_seconds": 1.7045783996582031,
+      "total_seconds": 287.32273745536804
+    },
+    "world_2_puzzle_5": {
+      "average_seconds": 1.5292237108403985,
+      "best_run": {
+        "elapsed_seconds": 0.5116238594055176,
+        "level_number": 5,
+        "puzzle_index": 9,
+        "timestamp": 1776736204,
+        "world_number": 2
+      },
+      "best_seconds": 0.5116238594055176,
+      "count": 110,
+      "latest_seconds": 0.6783938407897949,
+      "total_seconds": 168.21460819244385
+    },
+    "world_3_puzzle_1": {
+      "average_seconds": 1.6201210517387885,
+      "best_run": {
+        "elapsed_seconds": 0.8458340167999268,
+        "level_number": 1,
+        "puzzle_index": 10,
+        "timestamp": 1776400081,
+        "world_number": 3
+      },
+      "best_seconds": 0.8458340167999268,
+      "count": 77,
+      "latest_seconds": 1.4540956020355225,
+      "total_seconds": 124.74932098388672
+    },
+    "world_3_puzzle_2": {
+      "average_seconds": 2.0955012048993793,
+      "best_run": {
+        "elapsed_seconds": 1.1102724075317383,
+        "level_number": 2,
+        "puzzle_index": 11,
+        "timestamp": 1776400033,
+        "world_number": 3
+      },
+      "best_seconds": 1.1102724075317383,
+      "count": 70,
+      "latest_seconds": 1.1236298084259033,
+      "total_seconds": 146.68508434295654
+    },
+    "world_3_puzzle_3": {
+      "average_seconds": 2.119916517343094,
+      "best_run": {
+        "elapsed_seconds": 1.1344950199127197,
+        "level_number": 3,
+        "puzzle_index": 12,
+        "timestamp": 1776484158,
+        "world_number": 3
+      },
+      "best_seconds": 1.1344950199127197,
+      "count": 67,
+      "latest_seconds": 7.047590732574463,
+      "total_seconds": 142.0344066619873
+    },
+    "world_3_puzzle_4": {
+      "average_seconds": 5.296528127458361,
+      "best_run": {
+        "elapsed_seconds": 2.7902276515960693,
+        "level_number": 4,
+        "puzzle_index": 13,
+        "timestamp": 1776736850,
+        "world_number": 3
+      },
+      "best_seconds": 2.7902276515960693,
+      "count": 9,
+      "latest_seconds": 3.3671655654907227,
+      "total_seconds": 47.668753147125244
+    },
+    "world_3_puzzle_5": {
+      "average_seconds": 1.9435720046361287,
+      "best_run": {
+        "elapsed_seconds": 1.4601891040802002,
+        "level_number": 5,
+        "puzzle_index": 14,
+        "timestamp": 1776736852,
+        "world_number": 3
+      },
+      "best_seconds": 1.4601891040802002,
+      "count": 6,
+      "latest_seconds": 1.4601891040802002,
+      "total_seconds": 11.661432027816772
+    },
+    "world_4_puzzle_1": {
+      "average_seconds": 1.574663794229901,
+      "best_run": {
+        "elapsed_seconds": 0.7903509140014648,
+        "level_number": 1,
+        "puzzle_index": 15,
+        "timestamp": 1776648861,
+        "world_number": 4
+      },
+      "best_seconds": 0.7903509140014648,
+      "count": 63,
+      "latest_seconds": 1.929042100906372,
+      "total_seconds": 99.20381903648376
+    },
+    "world_4_puzzle_2": {
+      "average_seconds": 10.599501729011536,
+      "best_run": {
+        "elapsed_seconds": 4.919399976730347,
+        "level_number": 2,
+        "puzzle_index": 16,
+        "timestamp": 1776719340,
+        "world_number": 4
+      },
+      "best_seconds": 4.919399976730347,
+      "count": 6,
+      "latest_seconds": 5.086742639541626,
+      "total_seconds": 63.597010374069214
+    },
+    "world_4_puzzle_3": {
+      "average_seconds": 3.789531606215018,
+      "best_run": {
+        "elapsed_seconds": 1.9989440441131592,
+        "level_number": 3,
+        "puzzle_index": 17,
+        "timestamp": 1776648851,
+        "world_number": 4
+      },
+      "best_seconds": 1.9989440441131592,
+      "count": 54,
+      "latest_seconds": 2.105729579925537,
+      "total_seconds": 204.63470673561096
+    },
+    "world_4_puzzle_4": {
+      "average_seconds": 5.8976196413454804,
+      "best_run": {
+        "elapsed_seconds": 2.5807366371154785,
+        "level_number": 4,
+        "puzzle_index": 18,
+        "timestamp": 1776648841,
+        "world_number": 4
+      },
+      "best_seconds": 2.5807366371154785,
+      "count": 46,
+      "latest_seconds": 2.9738454818725586,
+      "total_seconds": 271.2905035018921
+    },
+    "world_4_puzzle_5": {
+      "average_seconds": 40.08751920859019,
+      "best_run": {
+        "elapsed_seconds": 3.5062999725341797,
+        "level_number": 5,
+        "puzzle_index": 19,
+        "timestamp": 1776736873,
+        "world_number": 4
+      },
+      "best_seconds": 3.5062999725341797,
+      "count": 6,
+      "latest_seconds": 3.5062999725341797,
+      "total_seconds": 240.52511525154114
+    },
+    "world_5_puzzle_1": {
+      "average_seconds": 4.3958083174445415,
+      "best_run": {
+        "elapsed_seconds": 2.469702959060669,
+        "level_number": 1,
+        "puzzle_index": 20,
+        "timestamp": 1776648881,
+        "world_number": 5
+      },
+      "best_seconds": 2.469702959060669,
+      "count": 44,
+      "latest_seconds": 3.5969398021698,
+      "total_seconds": 193.41556596755981
+    },
+    "world_5_puzzle_2": {
+      "average_seconds": 5.461725241429097,
+      "best_run": {
+        "elapsed_seconds": 2.8509252071380615,
+        "level_number": 2,
+        "puzzle_index": 21,
+        "timestamp": 1776736881,
+        "world_number": 5
+      },
+      "best_seconds": 2.8509252071380615,
+      "count": 37,
+      "latest_seconds": 5.1882500648498535,
+      "total_seconds": 202.0838339328766
+    },
+    "world_5_puzzle_3": {
+      "average_seconds": 4.277857416205936,
+      "best_run": {
+        "elapsed_seconds": 2.63714861869812,
+        "level_number": 3,
+        "puzzle_index": 22,
+        "timestamp": 1776891825,
+        "world_number": 5
+      },
+      "best_seconds": 2.63714861869812,
+      "count": 36,
+      "latest_seconds": 2.63714861869812,
+      "total_seconds": 154.0028669834137
+    },
+    "world_5_puzzle_4": {
+      "average_seconds": 4.2171266078948975,
+      "best_run": {
+        "elapsed_seconds": 2.84199857711792,
+        "level_number": 4,
+        "puzzle_index": 23,
+        "timestamp": 1776736901,
+        "world_number": 5
+      },
+      "best_seconds": 2.84199857711792,
+      "count": 5,
+      "latest_seconds": 2.84199857711792,
+      "total_seconds": 21.085633039474487
+    },
+    "world_5_puzzle_5": {
+      "average_seconds": 5.96284761428833,
+      "best_run": {
+        "elapsed_seconds": 4.459933757781982,
+        "level_number": 5,
+        "puzzle_index": 24,
+        "timestamp": 1776719378,
+        "world_number": 5
+      },
+      "best_seconds": 4.459933757781982,
+      "count": 5,
+      "latest_seconds": 4.482104063034058,
+      "total_seconds": 29.81423807144165
+    },
+    "world_6_puzzle_1": {
+      "average_seconds": 7.339185525389278,
+      "best_run": {
+        "elapsed_seconds": 3.7316696643829346,
+        "level_number": 1,
+        "puzzle_index": 25,
+        "timestamp": 1776891241,
+        "world_number": 6
+      },
+      "best_seconds": 3.7316696643829346,
+      "count": 68,
+      "latest_seconds": 4.876155138015747,
+      "total_seconds": 499.06461572647095
+    },
+    "world_6_puzzle_2": {
+      "average_seconds": 7.74254331296804,
+      "best_run": {
+        "elapsed_seconds": 4.287192344665527,
+        "level_number": 2,
+        "puzzle_index": 26,
+        "timestamp": 1776485914,
+        "world_number": 6
+      },
+      "best_seconds": 4.287192344665527,
+      "count": 49,
+      "latest_seconds": 5.441326856613159,
+      "total_seconds": 379.38462233543396
+    },
+    "world_6_puzzle_3": {
+      "average_seconds": 10.156663588115148,
+      "best_run": {
+        "elapsed_seconds": 5.856773614883423,
+        "level_number": 3,
+        "puzzle_index": 27,
+        "timestamp": 1776719399,
+        "world_number": 6
+      },
+      "best_seconds": 5.856773614883423,
+      "count": 7,
+      "latest_seconds": 6.789555072784424,
+      "total_seconds": 71.09664511680603
+    },
+    "world_6_puzzle_4": {
+      "average_seconds": 71.1331969499588,
+      "best_run": {
+        "elapsed_seconds": 55.305676221847534,
+        "level_number": 4,
+        "puzzle_index": 28,
+        "timestamp": 1776719456,
+        "world_number": 6
+      },
+      "best_seconds": 55.305676221847534,
+      "count": 4,
+      "latest_seconds": 55.305676221847534,
+      "total_seconds": 284.5327877998352
+    },
+    "world_6_puzzle_5": {
+      "average_seconds": 6.495142991726215,
+      "best_run": {
+        "elapsed_seconds": 3.062067985534668,
+        "level_number": 5,
+        "puzzle_index": 29,
+        "timestamp": 1776736989,
+        "world_number": 6
+      },
+      "best_seconds": 3.062067985534668,
+      "count": 39,
+      "latest_seconds": 4.52750039100647,
+      "total_seconds": 253.3105766773224
+    },
+    "world_7_puzzle_1": {
+      "average_seconds": 6.487889505922794,
+      "best_run": {
+        "elapsed_seconds": 3.9973299503326416,
+        "level_number": 1,
+        "puzzle_index": 30,
+        "timestamp": 1776487557,
+        "world_number": 7
+      },
+      "best_seconds": 3.9973299503326416,
+      "count": 32,
+      "latest_seconds": 4.879146575927734,
+      "total_seconds": 207.61246418952942
+    },
+    "world_7_puzzle_2": {
+      "average_seconds": 6.828384037675528,
+      "best_run": {
+        "elapsed_seconds": 4.610460042953491,
+        "level_number": 2,
+        "puzzle_index": 31,
+        "timestamp": 1776890908,
+        "world_number": 7
+      },
+      "best_seconds": 4.610460042953491,
+      "count": 29,
+      "latest_seconds": 5.90582799911499,
+      "total_seconds": 198.02313709259033
+    },
+    "world_7_puzzle_3": {
+      "average_seconds": 4.984917140007019,
+      "best_run": {
+        "elapsed_seconds": 3.3293039798736572,
+        "level_number": 3,
+        "puzzle_index": 32,
+        "timestamp": 1776487574,
+        "world_number": 7
+      },
+      "best_seconds": 3.3293039798736572,
+      "count": 30,
+      "latest_seconds": 3.484513521194458,
+      "total_seconds": 149.54751420021057
+    },
+    "world_7_puzzle_4": {
+      "average_seconds": 7.251244592666626,
+      "best_run": {
+        "elapsed_seconds": 6.218419790267944,
+        "level_number": 4,
+        "puzzle_index": 33,
+        "timestamp": 1776719484,
+        "world_number": 7
+      },
+      "best_seconds": 6.218419790267944,
+      "count": 5,
+      "latest_seconds": 6.552730321884155,
+      "total_seconds": 36.25622296333313
+    },
+    "world_7_puzzle_5": {
+      "average_seconds": 6.960720443725586,
+      "best_run": {
+        "elapsed_seconds": 5.109185218811035,
+        "level_number": 5,
+        "puzzle_index": 34,
+        "timestamp": 1776718577,
+        "world_number": 7
+      },
+      "best_seconds": 5.109185218811035,
+      "count": 5,
+      "latest_seconds": 10.4341721534729,
+      "total_seconds": 34.80360221862793
+    },
+    "world_8_puzzle_1": {
+      "average_seconds": 5.659696054458618,
+      "best_run": {
+        "elapsed_seconds": 5.030988931655884,
+        "level_number": 1,
+        "puzzle_index": 35,
+        "timestamp": 1776719497,
+        "world_number": 8
+      },
+      "best_seconds": 5.030988931655884,
+      "count": 5,
+      "latest_seconds": 6.252187490463257,
+      "total_seconds": 28.29848027229309
+    },
+    "world_8_puzzle_2": {
+      "average_seconds": 4.930609424908956,
+      "best_run": {
+        "elapsed_seconds": 3.3476500511169434,
+        "level_number": 2,
+        "puzzle_index": 36,
+        "timestamp": 1776483976,
+        "world_number": 8
+      },
+      "best_seconds": 3.3476500511169434,
+      "count": 30,
+      "latest_seconds": 3.4043731689453125,
+      "total_seconds": 147.91828274726868
+    },
+    "world_8_puzzle_3": {
+      "average_seconds": 8.46717095375061,
+      "best_run": {
+        "elapsed_seconds": 5.676909446716309,
+        "level_number": 3,
+        "puzzle_index": 37,
+        "timestamp": 1776719011,
+        "world_number": 8
+      },
+      "best_seconds": 5.676909446716309,
+      "count": 5,
+      "latest_seconds": 18.14410138130188,
+      "total_seconds": 42.33585476875305
+    },
+    "world_8_puzzle_4": {
+      "average_seconds": 14.530926337608925,
+      "best_run": {
+        "elapsed_seconds": 3.2903590202331543,
+        "level_number": 4,
+        "puzzle_index": 38,
+        "timestamp": 1776735794,
+        "world_number": 8
+      },
+      "best_seconds": 3.2903590202331543,
+      "count": 26,
+      "latest_seconds": 3.4491612911224365,
+      "total_seconds": 377.80408477783203
+    },
+    "world_8_puzzle_5": {
+      "average_seconds": 5.035165433530454,
+      "best_run": {
+        "elapsed_seconds": 3.031649589538574,
+        "level_number": 5,
+        "puzzle_index": 39,
+        "timestamp": 1776487917,
+        "world_number": 8
+      },
+      "best_seconds": 3.031649589538574,
+      "count": 27,
+      "latest_seconds": 3.219684362411499,
+      "total_seconds": 135.94946670532227
+    },
+    "world_9_puzzle_1": {
+      "average_seconds": 3.520830649595994,
+      "best_run": {
+        "elapsed_seconds": 2.4139153957366943,
+        "level_number": 1,
+        "puzzle_index": 40,
+        "timestamp": 1776735803,
+        "world_number": 9
+      },
+      "best_seconds": 2.4139153957366943,
+      "count": 26,
+      "latest_seconds": 3.2830653190612793,
+      "total_seconds": 91.54159688949585
+    },
+    "world_9_puzzle_2": {
+      "average_seconds": 13.519140073231288,
+      "best_run": {
+        "elapsed_seconds": 5.541727304458618,
+        "level_number": 2,
+        "puzzle_index": 41,
+        "timestamp": 1776719527,
+        "world_number": 9
+      },
+      "best_seconds": 5.541727304458618,
+      "count": 7,
+      "latest_seconds": 6.992086887359619,
+      "total_seconds": 94.63398051261902
+    },
+    "world_9_puzzle_3": {
+      "average_seconds": 10.096808385848998,
+      "best_run": {
+        "elapsed_seconds": 7.754821538925171,
+        "level_number": 3,
+        "puzzle_index": 42,
+        "timestamp": 1776719040,
+        "world_number": 9
+      },
+      "best_seconds": 7.754821538925171,
+      "count": 5,
+      "latest_seconds": 16.083035707473755,
+      "total_seconds": 50.484041929244995
+    },
+    "world_9_puzzle_4": {
+      "average_seconds": 3.862532595793406,
+      "best_run": {
+        "elapsed_seconds": 2.530750036239624,
+        "level_number": 4,
+        "puzzle_index": 43,
+        "timestamp": 1776891882,
+        "world_number": 9
+      },
+      "best_seconds": 2.530750036239624,
+      "count": 24,
+      "latest_seconds": 2.530750036239624,
+      "total_seconds": 92.70078229904175
+    },
+    "world_9_puzzle_5": {
+      "average_seconds": 5.211217614320608,
+      "best_run": {
+        "elapsed_seconds": 2.9288856983184814,
+        "level_number": 5,
+        "puzzle_index": 44,
+        "timestamp": 1776891886,
+        "world_number": 9
+      },
+      "best_seconds": 2.9288856983184814,
+      "count": 26,
+      "latest_seconds": 2.9288856983184814,
+      "total_seconds": 135.49165797233582
+    }
+  },
+  "worlds_all5": {
+    "world_1": {
+      "average_seconds": 10.66175320148468,
+      "best_run": {
+        "elapsed_seconds": 6.520700931549072,
+        "reason": "solve",
+        "solved_count_when_leaving": 5,
+        "timestamp": 1776736826,
+        "world_number": 1
+      },
+      "best_seconds": 6.520700931549072,
+      "count": 10,
+      "latest_seconds": 23.716901063919067,
+      "total_seconds": 106.6175320148468
+    },
+    "world_2": {
+      "average_seconds": 14.663481712341309,
+      "best_run": {
+        "elapsed_seconds": 10.348300457000732,
+        "reason": "solve",
+        "solved_count_when_leaving": 5,
+        "timestamp": 1776736800,
+        "world_number": 2
+      },
+      "best_seconds": 10.348300457000732,
+      "count": 5,
+      "latest_seconds": 11.095031976699829,
+      "total_seconds": 73.31740856170654
+    },
+    "world_3": {
+      "average_seconds": 12.891543865203857,
+      "best_run": {
+        "elapsed_seconds": 11.726758480072021,
+        "reason": "solve",
+        "solved_count_when_leaving": 5,
+        "timestamp": 1776736852,
+        "world_number": 3
+      },
+      "best_seconds": 11.726758480072021,
+      "count": 2,
+      "latest_seconds": 11.726758480072021,
+      "total_seconds": 25.783087730407715
+    },
+    "world_4": {
+      "average_seconds": 19.695768117904663,
+      "best_run": {
+        "elapsed_seconds": 19.695768117904663,
+        "reason": "solve",
+        "solved_count_when_leaving": 5,
+        "timestamp": 1776736873,
+        "world_number": 4
+      },
+      "best_seconds": 19.695768117904663,
+      "count": 1,
+      "latest_seconds": 19.695768117904663,
+      "total_seconds": 19.695768117904663
+    },
+    "world_5": {
+      "average_seconds": 36.87698173522949,
+      "best_run": {
+        "elapsed_seconds": 36.87698173522949,
+        "reason": "solve",
+        "solved_count_when_leaving": 5,
+        "timestamp": 1776736911,
+        "world_number": 5
+      },
+      "best_seconds": 36.87698173522949,
+      "count": 1,
+      "latest_seconds": 36.87698173522949,
+      "total_seconds": 36.87698173522949
+    },
+    "world_7": {
+      "average_seconds": 34.822487354278564,
+      "best_run": {
+        "elapsed_seconds": 34.822487354278564,
+        "reason": "solve",
+        "solved_count_when_leaving": 5,
+        "timestamp": 1776890931,
+        "world_number": 7
+      },
+      "best_seconds": 34.822487354278564,
+      "count": 1,
+      "latest_seconds": 34.822487354278564,
+      "total_seconds": 34.822487354278564
+    },
+    "world_8": {
+      "average_seconds": 47.48363471031189,
+      "best_run": {
+        "elapsed_seconds": 47.48363471031189,
+        "reason": "solve",
+        "solved_count_when_leaving": 5,
+        "timestamp": 1776890980,
+        "world_number": 8
+      },
+      "best_seconds": 47.48363471031189,
+      "count": 1,
+      "latest_seconds": 47.48363471031189,
+      "total_seconds": 47.48363471031189
+    },
+    "world_9": {
+      "average_seconds": 39.65474891662598,
+      "best_run": {
+        "elapsed_seconds": 39.65474891662598,
+        "reason": "solve",
+        "solved_count_when_leaving": 5,
+        "timestamp": 1776891021,
+        "world_number": 9
+      },
+      "best_seconds": 39.65474891662598,
+      "count": 1,
+      "latest_seconds": 39.65474891662598,
+      "total_seconds": 39.65474891662598
+    }
+  },
+  "worlds_any3": {
+    "world_1": {
+      "average_seconds": 3.8168374243236722,
+      "best_run": {
+        "elapsed_seconds": 1.9178731441497803,
+        "reason": "solve",
+        "solved_count_when_leaving": 3,
+        "timestamp": 1776889494,
+        "world_number": 1
+      },
+      "best_seconds": 1.9178731441497803,
+      "count": 42,
+      "latest_seconds": 17.25776243209839,
+      "total_seconds": 160.30717182159424
+    },
+    "world_2": {
+      "average_seconds": 7.444902694225311,
+      "best_run": {
+        "elapsed_seconds": 4.365613222122192,
+        "reason": "solve",
+        "solved_count_when_leaving": 3,
+        "timestamp": 1776891765,
+        "world_number": 2
+      },
+      "best_seconds": 4.365613222122192,
+      "count": 20,
+      "latest_seconds": 9.649592638015747,
+      "total_seconds": 148.89805388450623
+    },
+    "world_3": {
+      "average_seconds": 6.996731837590535,
+      "best_run": {
+        "elapsed_seconds": 4.717812538146973,
+        "reason": "solve",
+        "solved_count_when_leaving": 3,
+        "timestamp": 1776891803,
+        "world_number": 3
+      },
+      "best_seconds": 4.717812538146973,
+      "count": 12,
+      "latest_seconds": 12.041354656219482,
+      "total_seconds": 83.96078205108643
+    },
+    "world_4": {
+      "average_seconds": 17.32918232679367,
+      "best_run": {
+        "elapsed_seconds": 7.8488147258758545,
+        "reason": "solve",
+        "solved_count_when_leaving": 3,
+        "timestamp": 1776891812,
+        "world_number": 4
+      },
+      "best_seconds": 7.8488147258758545,
+      "count": 8,
+      "latest_seconds": 7.8488147258758545,
+      "total_seconds": 138.63345861434937
+    },
+    "world_5": {
+      "average_seconds": 12.560259024302164,
+      "best_run": {
+        "elapsed_seconds": 9.584887266159058,
+        "reason": "solve",
+        "solved_count_when_leaving": 3,
+        "timestamp": 1776891621,
+        "world_number": 5
+      },
+      "best_seconds": 9.584887266159058,
+      "count": 6,
+      "latest_seconds": 12.41348648071289,
+      "total_seconds": 75.36155414581299
+    },
+    "world_6": {
+      "average_seconds": 29.813923060894012,
+      "best_run": {
+        "elapsed_seconds": 16.101054430007935,
+        "reason": "solve",
+        "solved_count_when_leaving": 3,
+        "timestamp": 1776891474,
+        "world_number": 6
+      },
+      "best_seconds": 16.101054430007935,
+      "count": 8,
+      "latest_seconds": 16.9206120967865,
+      "total_seconds": 238.5113844871521
+    },
+    "world_7": {
+      "average_seconds": 19.69603172938029,
+      "best_run": {
+        "elapsed_seconds": 14.742351770401001,
+        "reason": "solve",
+        "solved_count_when_leaving": 3,
+        "timestamp": 1776891654,
+        "world_number": 7
+      },
+      "best_seconds": 14.742351770401001,
+      "count": 6,
+      "latest_seconds": 16.016172885894775,
+      "total_seconds": 118.17619037628174
+    },
+    "world_8": {
+      "average_seconds": 16.755926275253294,
+      "best_run": {
+        "elapsed_seconds": 11.830108404159546,
+        "reason": "solve",
+        "solved_count_when_leaving": 3,
+        "timestamp": 1776891875,
+        "world_number": 8
+      },
+      "best_seconds": 11.830108404159546,
+      "count": 5,
+      "latest_seconds": 11.830108404159546,
+      "total_seconds": 83.77963137626648
+    },
+    "world_9": {
+      "average_seconds": 15.79603977203369,
+      "best_run": {
+        "elapsed_seconds": 10.149734258651733,
+        "reason": "solve",
+        "solved_count_when_leaving": 3,
+        "timestamp": 1776891886,
+        "world_number": 9
+      },
+      "best_seconds": 10.149734258651733,
+      "count": 5,
+      "latest_seconds": 10.149734258651733,
+      "total_seconds": 78.98019886016846
+    }
+  }
+}
