@@ -5875,8 +5875,8 @@ int Context::run() {
             p->cout = &fstr;
             if (!fstr.is_open()) {
                 // clang-format off
-                std::cerr << Color::Cyan << "[doctest] " << Color::None << "Could not open " << p->out << " for writing!" << std::endl;
-                std::cerr << Color::Cyan << "[doctest] " << Color::None << "Defaulting to std::cout instead" << std::endl;
+                std::cerr << Color::Cyan << "[doctest] " << Color::None << "Could not open " << p->out << " for writing!" << "\n";
+                std::cerr << Color::Cyan << "[doctest] " << Color::None << "Defaulting to std::cout instead" << "\n";
                 p->cout = &std::cout;
                 // clang-format on
             }
@@ -7161,7 +7161,7 @@ void ConsoleReporter::test_run_end(const TestRunStats &p) {
       << Color::None << " |\n";
     s << Color::Cyan << "[doctest] " << Color::None
       << "Status: " << (p.numTestCasesFailed > 0 ? Color::Red : Color::Green)
-      << ((p.numTestCasesFailed > 0) ? "FAILURE!" : "SUCCESS!") << Color::None << std::endl;
+      << ((p.numTestCasesFailed > 0) ? "FAILURE!" : "SUCCESS!") << Color::None << "\n";
 }
 
 void ConsoleReporter::test_case_start(const TestCaseData &in) {
@@ -7539,7 +7539,7 @@ void JUnitReporter::log_assert(const AssertData &rb) {
 
     std::ostringstream os;
     os << skipPathFromFilename(rb.m_file) << (opt.gnu_file_line ? ":" : "(") << line(rb.m_line)
-       << (opt.gnu_file_line ? ":" : "):") << std::endl;
+       << (opt.gnu_file_line ? ":" : "):") << "\n";
 
     fulltext_log_assert_to_stream(os, rb);
     log_contexts(os);
@@ -7554,7 +7554,7 @@ void JUnitReporter::log_message(const MessageData &mb) {
 
     std::ostringstream os;
     os << skipPathFromFilename(mb.m_file) << (opt.gnu_file_line ? ":" : "(") << line(mb.m_line)
-       << (opt.gnu_file_line ? ":" : "):") << std::endl;
+       << (opt.gnu_file_line ? ":" : "):") << "\n";
 
     os << mb.m_string.c_str() << "\n";
     log_contexts(os);
@@ -7575,7 +7575,7 @@ void JUnitReporter::log_contexts(std::ostringstream &s) {
         for (int i = 0; i < num_contexts; ++i) {
             s << (i == 0 ? "" : "          ");
             contexts[i]->stringify(&s);
-            s << std::endl;
+            s << "\n";
         }
     }
 }
@@ -9035,7 +9035,7 @@ using uchar = unsigned char;
         else {
             m_os << m_indent << "</" << m_tags.back() << ">";
         }
-        m_os << std::endl;
+        m_os << "\n";
         m_tags.pop_back();
         return *this;
     }
@@ -9088,7 +9088,7 @@ using uchar = unsigned char;
 
     void XmlWriter::ensureTagClosed() {
         if( m_tagIsOpen ) {
-            m_os << ">" << std::endl;
+            m_os << ">" << "\n";
             m_tagIsOpen = false;
         }
     }
@@ -9099,7 +9099,7 @@ using uchar = unsigned char;
 
     void XmlWriter::newlineIfNecessary() {
         if( m_needsNewline ) {
-            m_os << std::endl;
+            m_os << "\n";
             m_needsNewline = false;
         }
     }

@@ -12,7 +12,7 @@
     do { cudaError_t err = call; \
         if (err != cudaSuccess) { \
             std::cerr << "CUDA error in " << __FILE__ << ":" << __LINE__ << " : " \
-                      << cudaGetErrorString(err) << std::endl; \
+                      << cudaGetErrorString(err) << "\n"; \
             exit(EXIT_FAILURE); } \
     } while(0)
 #define CUDA_MALLOC(type, ptr, size) CUDA_CHECK(cudaMalloc(ptr, (size) * sizeof(type)))
@@ -196,7 +196,7 @@ int main() {
             if (i != 2 * ARRAY_SIZE - 1) tcout << ", ";
             if (i % 10 == 9 && i != 2 * ARRAY_SIZE - 1) { tcout << "\n              "; }
         }
-        tcout << "]" << std::endl;
+        tcout << "]" << "\n";
         delete[] h_boards_out;
     */
     //}

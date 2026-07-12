@@ -169,10 +169,10 @@ int main() {
     Timer timer;
     auto [board, cost] = solvePuzzle(board1, board2);
 
-    tcout << "Cost: " << cost << std::endl;
-    tcout << "Time: " << timer.getSeconds() << std::endl;
-    tcout << board.memory.asmStringForwards() << std::endl;
-    tcout << board1.toString(board) << std::endl;
+    tcout << "Cost: " << cost << "\n";
+    tcout << "Time: " << timer.getSeconds() << "\n";
+    tcout << board.memory.asmStringForwards() << "\n";
+    tcout << board1.toString(board) << "\n";
 
 
 

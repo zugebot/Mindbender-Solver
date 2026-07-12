@@ -97,18 +97,18 @@ int main() {
     const Board board = BoardLookup::getBoardPair("9-2")->getStartState();
     const Board solve = BoardLookup::getBoardPair("9-2")->getEndState();
 
-    tcout << BoardLookup::getBoardPair("9-2")->toString() << std::endl;
+    tcout << BoardLookup::getBoardPair("9-2")->toString() << "\n";
 
     static constexpr u32 DEPTH = 5;
     BoardDFS<DEPTH> dfs(board, solve);
     const double time = dfs.recursive();
 
-    tcout << "Time: " << time << std::endl;
-    tcout << "Depth: " << DEPTH << std::endl;
-    tcout << "Solves: " << dfs.myCount << std::endl;
-    tcout << "Traversed: " << dfs.myStatesTraversed << std::endl;
-    tcout << "Total States: " << pow(60, DEPTH) << std::endl;
-    tcout << "GetScore3: " << GET_SCORE_3_CALLS << std::endl;
+    tcout << "Time: " << time << "\n";
+    tcout << "Depth: " << DEPTH << "\n";
+    tcout << "Solves: " << dfs.myCount << "\n";
+    tcout << "Traversed: " << dfs.myStatesTraversed << "\n";
+    tcout << "Total States: " << pow(60, DEPTH) << "\n";
+    tcout << "GetScore3: " << GET_SCORE_3_CALLS << "\n";
 
 
 

@@ -7,6 +7,7 @@ option(USE_CUDA "Enable CUDA support" OFF)
 option(USE_SIMT_ROTATIONS "Use a SIMT-friendly rotation implementation with smaller GPU code size" OFF)
 option(USE_BOARD_HASH "Enable board hashing" OFF)
 option(ENABLE_ALLOC_COUNTERS "Enable global allocation counters and malloc/free wrap hooks" ON)
+option(STATIC_MINGW_RUNTIME "Statically link MinGW libgcc and libstdc++ into executables" ON)
 
 # ------------------------------------------------------------
 # Project declaration
@@ -198,6 +199,13 @@ function(add_solver_program target_name main_file)
         endif()
     endif()
 
+    if (STATIC_MINGW_RUNTIME AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_link_options(${target_name} PRIVATE
+                -static-libgcc
+                -static-libstdc++
+        )
+    endif()
+
     if (USE_CUDA)
         set_target_properties(${target_name} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
     endif()
@@ -231,3 +239,4 @@ add_solver_program(debughIntersection4_4  "${CMAKE_SOURCE_DIR}/programs/debug_in
 add_solver_program(generateMLTrainingData "${CMAKE_SOURCE_DIR}/programs/generate_ml_training_data.cpp")
 add_solver_program(analyzeLevelsFinalHeuristic "${CMAKE_SOURCE_DIR}/programs/analyzeLevelsFinalHeuristic.cpp")
 add_solver_program(testHeuristicsOnLeftSeed "${CMAKE_SOURCE_DIR}/programs/testHeuristicsOnLeftSeed.cpp")
+add_solver_program(decompMindbenderScramble "${CMAKE_SOURCE_DIR}/programs/DecompMindbenderScramble.cpp")

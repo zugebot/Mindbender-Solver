@@ -2,9 +2,9 @@
   "outDirectory": "C:\\Users\\jerrin\\CLionProjects\\Mindbender-Solver",
   "searchDirection": "Auto",
   "debug": true,
-  "puzzle": "19-5",
-  "estimatedDepth": 12,
-  "threads": 12, 
+  "puzzle": "20-2",
+  "estimatedDepth": 13,
+  "threads": 80, 
   "unsolvedPuzzles": [
     "6-4",
             "10-2", "10-3",

@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import ctypes
 import os
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
+
+from chuzzle_mouse_domain import FileScoreResult, ScoredMove, ScoredSolution
 
 GRID_SIZE = 6
 DEFAULT_LOCK_THRESHOLD = 1.0
@@ -18,41 +19,6 @@ DEFAULT_NEXT_PUZZLE_TARGETS: tuple[tuple[float, float], ...] = (
 )
 
 CHUZZLE_OK = 0
-
-
-@dataclass(slots=True)
-class ScoredMove:
-    move: str
-    click_down: list[float]
-    lock_point: list[float]
-    release: list[float]
-    path_points: list[list[float]]
-    selected_line: int
-    displacement: int
-    free_drag: bool
-    drag_distance: float
-    move_distance: float
-    total_distance_to_here: float
-
-
-@dataclass(slots=True)
-class ScoredSolution:
-    move_string: str
-    total_drag: float
-    total_move: float
-    total_cost: float
-    move_data: list[ScoredMove]
-    initial_mouse_position: tuple[float, float] | None = None
-    initial_move_distance: float = 0.0
-    inter_move_distance: float = 0.0
-    final_mouse_target: tuple[float, float] | None = None
-    final_move_distance: float = 0.0
-
-
-@dataclass(slots=True)
-class FileScoreResult:
-    path: Path
-    solutions: list[ScoredSolution]
 
 
 class ChuzzleMouseBackendUnavailableError(RuntimeError):
@@ -212,7 +178,7 @@ def _convert_solution(native: ChuzzleSolution) -> ScoredSolution:
 
     for i in range(native.step_count):
         step = native.steps[i]
-        move = bytes(step.move).split(b"\\0", 1)[0].decode("utf-8")
+        move = bytes(step.move).split(b"\0", 1)[0].decode("utf-8")
 
         click_down = [step.click_down.x, step.click_down.y]
         lock_point = [step.lock_point.x, step.lock_point.y]
@@ -263,15 +229,15 @@ def _convert_solution(native: ChuzzleSolution) -> ScoredSolution:
 
 
 def solve_sequence(
-    move_string: str | Sequence[str],
-    *,
-    start_mouse_position: Sequence[float] | None = None,
-    has_fat: bool = False,
-    initial_fat_position: Sequence[float] | None = None,
-    end_positions: Iterable[Sequence[float]] | None = None,
-    end_next_puzzle: bool = False,
-    lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
-    free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
+        move_string: str | Sequence[str],
+        *,
+        start_mouse_position: Sequence[float] | None = None,
+        has_fat: bool = False,
+        initial_fat_position: Sequence[float] | None = None,
+        end_positions: Iterable[Sequence[float]] | None = None,
+        end_next_puzzle: bool = False,
+        lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
+        free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
 ) -> ScoredSolution:
     if _CHUZZLE_MOUSE_LIB is None:
         raise ChuzzleMouseBackendUnavailableError("Chuzzle Mouse backend library is not available")
@@ -338,9 +304,9 @@ def solve_sequence(
 
 
 def read_solution_lines(
-    path: str | Path,
-    *,
-    dedupe: bool = False,
+        path: str | Path,
+        *,
+        dedupe: bool = False,
 ) -> list[str]:
     file_path = Path(path)
     raw_lines = file_path.read_text(encoding="utf-8").splitlines()
@@ -358,15 +324,15 @@ def read_solution_lines(
 
 
 def score_sequences(
-    sequences: Iterable[str | Sequence[str]],
-    *,
-    start_mouse_position: Sequence[float] | None = None,
-    has_fat: bool = False,
-    initial_fat_position: Sequence[float] | None = None,
-    end_positions: Iterable[Sequence[float]] | None = None,
-    end_next_puzzle: bool = False,
-    lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
-    free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
+        sequences: Iterable[str | Sequence[str]],
+        *,
+        start_mouse_position: Sequence[float] | None = None,
+        has_fat: bool = False,
+        initial_fat_position: Sequence[float] | None = None,
+        end_positions: Iterable[Sequence[float]] | None = None,
+        end_next_puzzle: bool = False,
+        lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
+        free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
 ) -> list[ScoredSolution]:
     scored: list[ScoredSolution] = []
 
@@ -389,16 +355,16 @@ def score_sequences(
 
 
 def score_file(
-    path: str | Path,
-    dedupe: bool = False,
-    *,
-    start_mouse_position: Sequence[float] | None = None,
-    has_fat: bool = False,
-    initial_fat_position: Sequence[float] | None = None,
-    end_positions: Iterable[Sequence[float]] | None = None,
-    end_next_puzzle: bool = False,
-    lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
-    free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
+        path: str | Path,
+        dedupe: bool = False,
+        *,
+        start_mouse_position: Sequence[float] | None = None,
+        has_fat: bool = False,
+        initial_fat_position: Sequence[float] | None = None,
+        end_positions: Iterable[Sequence[float]] | None = None,
+        end_next_puzzle: bool = False,
+        lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
+        free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
 ) -> FileScoreResult:
     file_path = Path(path)
     lines = read_solution_lines(file_path, dedupe=dedupe)
@@ -418,15 +384,15 @@ def score_file(
 class DpMouseSolver:
     @staticmethod
     def solve_sequence(
-        move_string: str | Sequence[str],
-        *,
-        start_mouse_position: Sequence[float] | None = None,
-        has_fat: bool = False,
-        initial_fat_position: Sequence[float] | None = None,
-        end_positions: Iterable[Sequence[float]] | None = None,
-        end_next_puzzle: bool = False,
-        lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
-        free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
+            move_string: str | Sequence[str],
+            *,
+            start_mouse_position: Sequence[float] | None = None,
+            has_fat: bool = False,
+            initial_fat_position: Sequence[float] | None = None,
+            end_positions: Iterable[Sequence[float]] | None = None,
+            end_next_puzzle: bool = False,
+            lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
+            free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
     ) -> ScoredSolution:
         return solve_sequence(
             move_string,
@@ -441,16 +407,16 @@ class DpMouseSolver:
 
     @staticmethod
     def score_file(
-        path: str | Path,
-        dedupe: bool = False,
-        *,
-        start_mouse_position: Sequence[float] | None = None,
-        has_fat: bool = False,
-        initial_fat_position: Sequence[float] | None = None,
-        end_positions: Iterable[Sequence[float]] | None = None,
-        end_next_puzzle: bool = False,
-        lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
-        free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
+            path: str | Path,
+            dedupe: bool = False,
+            *,
+            start_mouse_position: Sequence[float] | None = None,
+            has_fat: bool = False,
+            initial_fat_position: Sequence[float] | None = None,
+            end_positions: Iterable[Sequence[float]] | None = None,
+            end_next_puzzle: bool = False,
+            lock_threshold: float = DEFAULT_LOCK_THRESHOLD,
+            free_drag_min_displacement: int = DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
     ) -> FileScoreResult:
         return score_file(
             path,
@@ -467,5 +433,3 @@ class DpMouseSolver:
     @staticmethod
     def backend_name() -> str:
         return _BACKEND_NAME
-
-

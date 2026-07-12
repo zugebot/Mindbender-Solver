@@ -207,7 +207,7 @@ int runSingleFindSolution(const FindSolutionConfig& config) {
     
     const auto pair = BoardLookup::getBoardPair(puzzle);
 
-    tcout << pair->toString() << std::endl;
+    tcout << pair->toString() << "\n";
 
     BoardSolverFrontier solver(pair);
     solver.setWriteDirectory(outDirectory);
@@ -221,6 +221,10 @@ int runSingleFindSolution(const FindSolutionConfig& config) {
 
 
 int runMultiFindSolution(const FindSolutionConfig& config) {
+    std::ios::sync_with_stdio(false);
+    std::cin.tie(nullptr);
+    std::cout.tie(nullptr);
+    
     const std::string outDirectory = config.outDirectory;
     const auto SEARCH_DIRECTION = config.searchDirection;
     int estimatedDepth = config.estimatedDepth;
@@ -230,14 +234,14 @@ int runMultiFindSolution(const FindSolutionConfig& config) {
     for (auto puzzle : config.unsolvedPuzzles) {
         
         
-        tcout << "Solving puzzle: " << puzzle << std::endl;
+        tcout << "Solving puzzle: " << puzzle << "\n";
         
         const auto pair = BoardLookup::getBoardPair(puzzle);
         if (pair->getStartState().getFatBool()) {
             continue;
         }
     
-        tcout << pair->toString() << std::endl;
+        tcout << pair->toString() << "\n";
         
         BoardSolverFrontier solver(pair);
         solver.setWriteDirectory(outDirectory);
@@ -257,7 +261,7 @@ int main() {
     if (!hasAtLeastGBMemoryTotal(GB_NEEDED)) {
         tcout << "Program requires more RAM, exiting...\n";
         const u64 mem = getTotalSystemMemory();
-        tcout << bytesFormatted(mem) << "/" << GB_NEEDED << ".000GB" << std::endl;
+        tcout << bytesFormatted(mem) << "/" << GB_NEEDED << ".000GB" << "\n";
         return -1;
     }
 
@@ -291,7 +295,7 @@ int main() {
     const auto hasher = HashMem::getHashFunc(board);
     make_fat_perm_list<1>(board, boards_out, hasher);
 
-    tcout << board.toString() << std::endl;
+    tcout << board.toString() << "\n";
 
     int index = 10;
     int funcIndex = fatActionsIndexes[board.getFatXY()][index];
@@ -307,7 +311,7 @@ int main() {
 
     temp.getMemory().setNextNMove<1>(funcIndex);
     // applyMoves(temp, boards_out[index]);
-    tcout << temp.toString() << std::endl;
+    tcout << temp.toString() << "\n";
 
     tcout << boards_out[index].getMemory().asmFatStringForwards(board.getFatXY());
 
@@ -329,12 +333,12 @@ int main() {
     Timer timer_new;
     // make_fat_perm_list<depth>(board, boards_new, hasher);
     make_fat_perm_list<depth>(board, boards_new, hasher);
-    tcout << "New: " << timer_new.getSeconds() << " size: " << boards_new.size() << std::endl;
+    tcout << "New: " << timer_new.getSeconds() << " size: " << boards_new.size() << "\n";
 
 
     Timer timer_old;
     Perms::getDepthFunc(board, boards_old, depth, true);
-    tcout << "Old: " << timer_old.getSeconds() << " size: " << boards_old.size() << std::endl;
+    tcout << "Old: " << timer_old.getSeconds() << " size: " << boards_old.size() << "\n";
 
 
     MU volatile int x = 0;
@@ -345,12 +349,12 @@ int main() {
     solver.setDepthParams(6, 10, 11);
     solver.preAllocateMemory(6);
 
-    tcout << pair->toString() << std::endl;
+    tcout << pair->toString() << "\n";
     solver.findSolutions<true>();
     return 0;
     */
     /*
-    tcout << board1.toString() << std::endl;
+    tcout << board1.toString() << "\n";
 
     bool intersection[5];
 
@@ -373,7 +377,7 @@ int main() {
         u8 mask = 1 << i;
         bool val = intersection2 & mask;
         std::string valStr = val ? "true" : "false";
-        tcout << "3 Colors at [" << i << "]: " << valStr << std::endl;
+        tcout << "3 Colors at [" << i << "]: " << valStr << "\n";
     }
 
 

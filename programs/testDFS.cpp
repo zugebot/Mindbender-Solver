@@ -13,7 +13,7 @@
         cudaError_t err = call; \
         if (err != cudaSuccess) { \
             std::cerr << "CUDA error in " << __FILE__ << ":" << __LINE__ << " : " \
-                      << cudaGetErrorString(err) << std::endl; \
+                      << cudaGetErrorString(err) << "\n"; \
             exit(EXIT_FAILURE); \
         } \
     } while(0)
@@ -178,14 +178,14 @@ int main() {
 
 
     // Step 11: Print results for verification
-    tcout << "\nPermuted Boards:" << std::endl;
+    tcout << "\nPermuted Boards:" << "\n";
     for(int i = 0; i < numBoards; ++i) {
         char str[5] = {0};
         memcpy(str, &allActStructList[i + 30].name, 4);
         tcout << str << "\n";
         Board temp = h_boards[i];
         tcout << temp.toStringSingle({}) << "\n";
-        // tcout << "Board " << i << ": b1 = " << h_boards[i].b1 << ", b2 = " << h_boards[i].b2 << std::endl;
+        // tcout << "Board " << i << ": b1 = " << h_boards[i].b1 << ", b2 = " << h_boards[i].b2 << "\n";
     }
 
     // Step 12: Free device memory
@@ -196,7 +196,7 @@ int main() {
 
 
 
-    tcout << "starting" << std::endl;
+    tcout << "starting" << "\n";
     // 13-1
     const Board board = BoardLookup::getBoardPair("4-4")->getStartState();
     Board solve = board;
@@ -220,8 +220,8 @@ int main() {
     cpu_state.end = static_cast<B1B2>(board);
     recursive_helper<0, DEPTH, true>(cpu_state, cpu_state.start, 0);
     tcout << "cpu only time: " << cpu_only.getSeconds() << "\n";
-    tcout << "Solves: " << cpu_state.count << std::endl;
-    tcout << "Traversed: " << cpu_state.states_traversed << std::endl;
+    tcout << "Solves: " << cpu_state.count << "\n";
+    tcout << "Traversed: " << cpu_state.states_traversed << "\n";
     for (int i = 0; i < DEPTH + 1; ++i) {
         tcout << cpu_state.DEPTHS_COUNT[i];
         if (i != DEPTH) {  tcout << ", "; }
@@ -229,7 +229,7 @@ int main() {
     tcout << "\n";
 
 
-    tcout << "Total Threads: " << NUM_THREADS << std::endl;
+    tcout << "Total Threads: " << NUM_THREADS << "\n";
     // Host-side setup
     auto* h_states = new RefState<DEPTH>[NUM_THREADS];
     size_t STATE_SIZE = NUM_THREADS * sizeof(RefState<DEPTH>);
@@ -244,7 +244,7 @@ int main() {
     RefState<DEPTH>* d_states;
     const Timer allocT;
     CUDA_CHECK(cudaMalloc(&d_states, STATE_SIZE));
-    tcout << "Alloc: " << allocT.getSeconds() << std::endl;
+    tcout << "Alloc: " << allocT.getSeconds() << "\n";
 
     // Copy states to device
     CUDA_CHECK(cudaMemcpy(d_states, h_states, STATE_SIZE, cudaMemcpyHostToDevice));
@@ -258,7 +258,7 @@ int main() {
 
     const Timer syncT;
     CUDA_CHECK(cudaDeviceSynchronize());
-    tcout << "Synchronize: " << syncT.getSeconds() << std::endl;
+    tcout << "Synchronize: " << syncT.getSeconds() << "\n";
 
     // Copy states back to host
     CUDA_CHECK(cudaMemcpy(h_states, d_states, STATE_SIZE, cudaMemcpyDeviceToHost));
@@ -266,9 +266,9 @@ int main() {
 
 
 
-    tcout << "Time: " << syncT.getSeconds() << std::endl;
-    tcout << "Solves: " << h_states[0].count << std::endl;
-    tcout << "Traversed: " << h_states[0].states_traversed << std::endl;
+    tcout << "Time: " << syncT.getSeconds() << "\n";
+    tcout << "Solves: " << h_states[0].count << "\n";
+    tcout << "Traversed: " << h_states[0].states_traversed << "\n";
     for (int i = 0; i < DEPTH + 1; ++i) {
         tcout << h_states[0].DEPTHS_COUNT[i];
         if (i != DEPTH) {  tcout << ", "; }
@@ -308,25 +308,25 @@ int main() {
     JVec<Board> boards;
     Perms<Board>::reserveForDepth(board, boards, 5);
     Perms<Board>::toDepthFromLeft::funcPtrs[5](board, boards, board.getHashFunc());
-    tcout << "[Arr] Length: " << boards.size() << std::endl;
+    tcout << "[Arr] Length: " << boards.size() << "\n";
     std::set<Board> boardSet;
     for (int i = 0; i < boards.size(); i++) {
         Board bi = boards[i];
         boardSet.insert(bi);
     }
-    tcout << "[Set] Length: " << boardSet.size() << std::endl;
+    tcout << "[Set] Length: " << boardSet.size() << "\n";
 
 
 
     double timeTaken;
     recursive<DEPTH>(state, timeTaken);
 
-    tcout << "Time: " << timeTaken << std::endl;
-    tcout << "Depth: " << DEPTH << std::endl;
-    tcout << "Solves: " << state.count << std::endl;
-    tcout << "Traversed: " << state.states_traversed << std::endl;
-    tcout << "Total States: " << pow(60, DEPTH) << std::endl;
-    // tcout << "GetScore3: " << GET_SCORE_3_CALLS << std::endl;
+    tcout << "Time: " << timeTaken << "\n";
+    tcout << "Depth: " << DEPTH << "\n";
+    tcout << "Solves: " << state.count << "\n";
+    tcout << "Traversed: " << state.states_traversed << "\n";
+    tcout << "Total States: " << pow(60, DEPTH) << "\n";
+    // tcout << "GetScore3: " << GET_SCORE_3_CALLS << "\n";
 
     tcout << "Depths: [";
     for (int i = 0; i < DEPTH + 1; ++i) {

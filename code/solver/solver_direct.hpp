@@ -182,10 +182,10 @@ public:
             ++currentDepth;
         }
 
-        tcout << "Total Time: " << totalTime.getSeconds() << std::endl;
+        tcout << "Total Time: " << totalTime.getSeconds() << "\n";
 
         const std::string allocMemory = getMemorySize();
-        tcout << "Alloc Memory: " << allocMemory << std::endl;
+        tcout << "Alloc Memory: " << allocMemory << "\n";
 
         if (!resultSet.empty()) {
             expandRawSolutionsIntoFinalSet();

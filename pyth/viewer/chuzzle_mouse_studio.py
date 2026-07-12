@@ -3,168 +3,58 @@ from __future__ import annotations
 
 import colorsys
 import math
-import re
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
-from tkinter import ttk
-from enum import Enum
+from tkinter import filedialog, simpledialog, ttk
 
 from chuzzle_mouse_adapter import (
     DEFAULT_FREE_DRAG_MIN_DISPLACEMENT,
     DEFAULT_LOCK_THRESHOLD,
-    DEFAULT_NEXT_PUZZLE_TARGETS,
     DpMouseSolver,
     FileScoreResult,
-    GRID_SIZE,
     ScoredSolution,
 )
-
-APP_TITLE = "Chuzzle DP Studio"
-DEFAULT_FOLDER = "../../build/levels_final"
-FILE_PATTERN = re.compile(r"^(\d+)-(\d+)_.*\.txt$")
-
-BOARD_CELL_SIZE = 96
-BOARD_GRID_X = 1.5
-BOARD_GRID_Y = 0.8
-BOARD_GRID_W = GRID_SIZE
-BOARD_GRID_H = GRID_SIZE
-CANVAS_W = 900
-CANVAS_H = 600
-EPSILON = 1e-9
-
-LEFT_X_MARKERS: tuple[tuple[str, tuple[float, float]], ...] = (
-    ("1", (-3.18, 3.0475)),
-    ("2", (-2.67, 3.4205)),
-    ("3", (-2.11, 3.5125)),
-    ("4", (-1.52, 3.4205)),
-    ("5", (-0.98, 3.1125)),
-)
-NEXT_LEVEL_MARKER_POSITION: tuple[float, float] = (-1.22, 4.73)
-
-# X-N marker diameter is 4/7 of one board cell.
-LEFT_X_MARKER_RADIUS = BOARD_CELL_SIZE * (2.0 / 7.0)
-# Star is approximately one board-cell tall.
-NEXT_LEVEL_STAR_OUTER_RADIUS = BOARD_CELL_SIZE * 0.5
-NEXT_LEVEL_STAR_INNER_RADIUS = NEXT_LEVEL_STAR_OUTER_RADIUS * 0.47
-# Opposite direction and 2x magnitude from the original +7 clockwise.
-NEXT_LEVEL_STAR_ROTATION_CW_DEG = -14.0
-
-# Top-left fat start positions by level key, sourced from `levels.hpp`.
-FAT_START_BY_LEVEL: dict[str, tuple[float, float]] = {
-    "4-2": (4.0, 4.0),
-    "4-4": (2.0, 2.0),
-    "5-1": (0.0, 2.0),
-    "6-1": (4.0, 4.0),
-    "6-2": (1.0, 3.0),
-    "6-3": (0.0, 1.0),
-    "6-4": (3.0, 3.0),
-    "6-5": (3.0, 0.0),
-    "8-2": (4.0, 4.0),
-    "8-4": (3.0, 4.0),
-    "9-1": (1.0, 3.0),
-    "12-2": (1.0, 3.0),
-    "13-4": (1.0, 4.0),
-    "13-5": (2.0, 4.0),
-    "15-2": (3.0, 4.0),
-    "15-3": (1.0, 0.0),
-    "15-4": (1.0, 4.0),
-    "16-1": (3.0, 4.0),
-    "16-5": (2.0, 0.0),
-    "17-2": (4.0, 4.0),
-    "17-4": (2.0, 1.0),
-    "18-1": (1.0, 4.0),
-    "18-2": (0.0, 0.0),
-    "18-4": (1.0, 2.0),
-    "18-5": (4.0, 3.0),
-    "19-2": (0.0, 3.0),
-    "19-4": (1.0, 4.0),
-    "20-3": (2.0, 2.0),
-}
-
-
-def star_polygon_points(
-    center_x: float,
-    center_y: float,
-    outer_radius: float,
-    inner_radius: float,
-    rotation_cw_deg: float,
-    points: int = 5,
-) -> list[float]:
-    coords: list[float] = []
-    step = math.pi / points
-    start = math.radians(-90.0 - rotation_cw_deg)
-    for i in range(points * 2):
-        radius = outer_radius if i % 2 == 0 else inner_radius
-        angle = start + i * step
-        coords.extend((center_x + radius * math.cos(angle), center_y + radius * math.sin(angle)))
-    return coords
-
-@dataclass(frozen=True)
-class MousePreset:
-    title: str
-    positions: tuple[tuple[float, float], ...] | None = None
-    next_puzzle_banner: bool = False
-    allow_custom_positions: bool = False
-    description: str = "none"
-    
-class SharedMousePresets(Enum):
-    NONE = MousePreset(title="None", positions=None, description="none")
-    NEXT_WORLD_STAR = MousePreset(title="Next World Star", positions=((-1.22, 4.73),), description="next world star")
-    LEVEL_1 = MousePreset(title="Level 1", positions=((-3.18, 3.0475),), description="level 1")
-    LEVEL_2 = MousePreset(title="Level 2", positions=((-2.67, 3.4205),), description="level 2")
-    LEVEL_3 = MousePreset(title="Level 3", positions=((-2.11, 3.5125),), description="level 3")
-    LEVEL_4 = MousePreset(title="Level 4", positions=((-1.52, 3.4205),), description="level 4")
-    LEVEL_5 = MousePreset(title="Level 5", positions=((-0.98, 3.1125),), description="level 5")
-    CUSTOM = MousePreset(title="Custom", allow_custom_positions=True, description="custom")
-
-# Add/edit presets here. The UI and resolver logic consume these lists directly.
-START_PRESETS: tuple[MousePreset, ...] = (
-    SharedMousePresets.NONE.value,
-    SharedMousePresets.LEVEL_1.value,
-    SharedMousePresets.LEVEL_2.value,
-    SharedMousePresets.LEVEL_3.value,
-    SharedMousePresets.LEVEL_4.value,
-    SharedMousePresets.LEVEL_5.value,
-    SharedMousePresets.NEXT_WORLD_STAR.value,
-    SharedMousePresets.CUSTOM.value
-)
-
-END_PRESETS: tuple[MousePreset, ...] = (
-    SharedMousePresets.NONE.value,
-    MousePreset(title="Next Puzzle Banner", positions=None, next_puzzle_banner=True, description="next puzzle banner"),
-    SharedMousePresets.LEVEL_1.value,
-    SharedMousePresets.LEVEL_2.value,
-    SharedMousePresets.LEVEL_3.value,
-    SharedMousePresets.LEVEL_4.value,
-    SharedMousePresets.LEVEL_5.value,
-    SharedMousePresets.NEXT_WORLD_STAR.value,
-    SharedMousePresets.CUSTOM.value
-)
-
-START_PRESETS_BY_TITLE = {preset.title: preset for preset in START_PRESETS}
-END_PRESETS_BY_TITLE = {preset.title: preset for preset in END_PRESETS}
-START_PRESET_TITLES = [preset.title for preset in START_PRESETS]
-END_PRESET_TITLES = [preset.title for preset in END_PRESETS]
-DEFAULT_START_PRESET_TITLE = START_PRESETS[0].title
-DEFAULT_END_PRESET_TITLE = END_PRESETS[0].title
-
-POST_END_CLICK_NONE = "None"
-POST_END_CLICK_TARGETS = [
+from chuzzle_mouse_cache import ChuzzleMouseCache
+from chuzzle_mouse_domain import CachedScoreFile, RouteProfile, RouteStep
+from chuzzle_mouse_export import write_profile_json
+from chuzzle_mouse_presets import (
+    APP_TITLE,
+    BOARD_CELL_SIZE,
+    BOARD_GRID_H,
+    BOARD_GRID_W,
+    BOARD_GRID_X,
+    BOARD_GRID_Y,
+    CANVAS_H,
+    CANVAS_W,
+    DEFAULT_END_PRESET_TITLE,
+    DEFAULT_FOLDER,
+    DEFAULT_NEXT_PUZZLE_TARGETS,
+    DEFAULT_START_PRESET_TITLE,
+    END_PRESETS,
+    END_PRESETS_BY_TITLE,
+    END_PRESET_TITLES,
+    EPSILON,
+    FAT_START_BY_LEVEL,
+    LEFT_X_MARKERS,
+    LEFT_X_MARKER_RADIUS,
+    MousePreset,
+    NEXT_LEVEL_MARKER_POSITION,
+    NEXT_LEVEL_STAR_INNER_RADIUS,
+    NEXT_LEVEL_STAR_OUTER_RADIUS,
+    NEXT_LEVEL_STAR_ROTATION_CW_DEG,
+    POST_END_CLICK_BY_TITLE,
     POST_END_CLICK_NONE,
-    SharedMousePresets.LEVEL_1.value.title,
-    SharedMousePresets.LEVEL_2.value.title,
-    SharedMousePresets.LEVEL_3.value.title,
-    SharedMousePresets.LEVEL_4.value.title,
-    SharedMousePresets.LEVEL_5.value.title,
-]
-POST_END_CLICK_BY_TITLE: dict[str, tuple[float, float]] = {
-    SharedMousePresets.LEVEL_1.value.title: SharedMousePresets.LEVEL_1.value.positions[0],
-    SharedMousePresets.LEVEL_2.value.title: SharedMousePresets.LEVEL_2.value.positions[0],
-    SharedMousePresets.LEVEL_3.value.title: SharedMousePresets.LEVEL_3.value.positions[0],
-    SharedMousePresets.LEVEL_4.value.title: SharedMousePresets.LEVEL_4.value.positions[0],
-    SharedMousePresets.LEVEL_5.value.title: SharedMousePresets.LEVEL_5.value.positions[0],
-}
+    POST_END_CLICK_TARGETS,
+    START_PRESETS,
+    START_PRESETS_BY_TITLE,
+    START_PRESET_TITLES,
+    format_point,
+    parse_point_list_text,
+    parse_point_text,
+    star_polygon_points,
+)
+from chuzzle_mouse_routes import FILE_PATTERN, RouteProfileManager
 
 
 @dataclass(frozen=True)
@@ -184,13 +74,6 @@ class StepView:
     drag_distance: float
     move_distance: float
     cumulative_cost: float
-
-
-def board_to_canvas(x: float, y: float) -> tuple[float, float]:
-    return (
-        (BOARD_GRID_X + x + 0.5) * BOARD_CELL_SIZE,
-        (BOARD_GRID_Y + y + 0.5) * BOARD_CELL_SIZE,
-    )
 
 
 def hex_color_from_hsv(h: float, s: float, v: float) -> str:
@@ -287,11 +170,12 @@ def collapse_duplicate_points(points: list[tuple[float, float]]) -> list[tuple[f
             out.append((x, y))
     return out
 
+
 def offset_points(
-    points: list[tuple[float, float]],
-    slot: int,
-    total_slots: int,
-    max_offset: float = 12.0,
+        points: list[tuple[float, float]],
+        slot: int,
+        total_slots: int,
+        max_offset: float = 12.0,
 ) -> list[tuple[float, float]]:
     if len(points) < 2 or total_slots <= 1:
         return points
@@ -313,48 +197,20 @@ def offset_points(
     return [(x + px * amount, y + py * amount) for x, y in points]
 
 
-def parse_point_text(text: str) -> tuple[float, float]:
-    text = text.strip()
-    if not text:
-        raise ValueError("Expected a point like x,y")
-    if "," in text:
-        parts = [p.strip() for p in text.split(",")]
-    else:
-        parts = text.split()
-    if len(parts) != 2:
-        raise ValueError(f"Invalid point: {text!r}. Use x,y")
-    return float(parts[0]), float(parts[1])
-
-
-def parse_point_list_text(text: str) -> list[tuple[float, float]]:
-    text = text.strip()
-    if not text:
-        return []
-    out: list[tuple[float, float]] = []
-    chunks = text.replace("\n", ";").split(";")
-    for chunk in chunks:
-        chunk = chunk.strip()
-        if not chunk:
-            continue
-        out.append(parse_point_text(chunk))
-    return out
-
-
-def format_point(point: tuple[float, float] | None) -> str:
-    if point is None:
-        return "none"
-    return f"({point[0]:g}, {point[1]:g})"
-
-
 class StudioApp:
     def __init__(self, folder: str = DEFAULT_FOLDER):
         self.folder = folder
         self.solver = DpMouseSolver()
+        self.cache = ChuzzleMouseCache(Path(__file__).resolve().parent / "cache")
+        self.profile_manager = RouteProfileManager(Path(__file__).resolve().parent / "profiles")
+
         self.current_result: FileScoreResult | None = None
         self.current_solution_index = 0
         self.current_step_index: int | None = None
         self.filtered_files: list[str] = []
         self.step_views: list[StepView] = []
+        self.current_profile: RouteProfile | None = None
+
         self._suppress_solution_select = False
         self._suppress_step_select = False
         self._options_window: tk.Toplevel | None = None
@@ -364,10 +220,10 @@ class StudioApp:
         self.root.title(APP_TITLE)
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
-        window_w = min(1700, max(1180, screen_w - 40))
-        window_h = min(940, max(720, screen_h - 80))
+        window_w = min(1840, max(1260, screen_w - 40))
+        window_h = min(1000, max(760, screen_h - 80))
         self.root.geometry(f"{window_w}x{window_h}+10+10")
-        self.root.minsize(980, 620)
+        self.root.minsize(1120, 700)
 
         self.dedupe_var = tk.BooleanVar(value=False)
         self.show_numbers_var = tk.BooleanVar(value=True)
@@ -392,9 +248,24 @@ class StudioApp:
         self.free_drag_min_disp_var = tk.StringVar(value=str(DEFAULT_FREE_DRAG_MIN_DISPLACEMENT))
         self.active_options_var = tk.StringVar(value="")
 
+        self.route_summary_var = tk.StringVar(value="No route profile loaded")
+
+        # route editor vars
+        self.route_name_var = tk.StringVar(value="")
+        self.route_description_var = tk.StringVar(value="")
+        self.route_category_var = tk.StringVar(value="custom")
+        self.route_step_notes_var = tk.StringVar(value="")
+        self.route_step_start_var = tk.StringVar(value="")
+        self.route_step_end_var = tk.StringVar(value="")
+        self.route_step_end_next_var = tk.BooleanVar(value=False)
+        self.route_step_post_var = tk.StringVar(value="")
+        self.route_step_has_fat_var = tk.BooleanVar(value=False)
+        self.route_step_fat_pos_var = tk.StringVar(value="")
+
         self._build_ui()
         self._update_active_options_summary()
         self._load_file_list(initial=True)
+        self._refresh_profile_list()
 
     def _build_ui(self) -> None:
         style = ttk.Style()
@@ -403,7 +274,28 @@ class StudioApp:
         except tk.TclError:
             pass
 
-        root_pane = ttk.Panedwindow(self.root, orient=tk.HORIZONTAL)
+        notebook = ttk.Notebook(self.root)
+        notebook.pack(fill=tk.BOTH, expand=True)
+
+        explorer_tab = ttk.Frame(notebook, padding=8)
+        route_tab = ttk.Frame(notebook, padding=8)
+        notebook.add(explorer_tab, text="Puzzle Explorer")
+        notebook.add(route_tab, text="Route Builder")
+
+        self._build_explorer_tab(explorer_tab)
+        self._build_route_tab(route_tab)
+
+        status_bar = ttk.Label(
+            self.root,
+            textvariable=self.status_var,
+            anchor="w",
+            relief=tk.SUNKEN,
+            padding=(8, 4),
+        )
+        status_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
+    def _build_explorer_tab(self, parent: ttk.Frame) -> None:
+        root_pane = ttk.Panedwindow(parent, orient=tk.HORIZONTAL)
         root_pane.pack(fill=tk.BOTH, expand=True)
 
         left = ttk.Frame(root_pane, padding=10)
@@ -417,14 +309,117 @@ class StudioApp:
         self._build_center_panel(center)
         self._build_right_panel(right)
 
-        status_bar = ttk.Label(
-            self.root,
-            textvariable=self.status_var,
-            anchor="w",
-            relief=tk.SUNKEN,
-            padding=(8, 4),
+    def _build_route_tab(self, parent: ttk.Frame) -> None:
+        root_pane = ttk.Panedwindow(parent, orient=tk.HORIZONTAL)
+        root_pane.pack(fill=tk.BOTH, expand=True)
+
+        left = ttk.Frame(root_pane, padding=8)
+        center = ttk.Frame(root_pane, padding=8)
+        right = ttk.Frame(root_pane, padding=8)
+        root_pane.add(left, weight=1)
+        root_pane.add(center, weight=3)
+        root_pane.add(right, weight=2)
+
+        # left: profile list
+        ttk.Label(left, text="Route Profiles", font=("Segoe UI", 14, "bold")).pack(anchor="w")
+
+        profile_buttons = ttk.Frame(left)
+        profile_buttons.pack(fill=tk.X, pady=(8, 8))
+        ttk.Button(profile_buttons, text="New", command=self._new_profile).pack(side=tk.LEFT)
+        ttk.Button(profile_buttons, text="Load", command=self._load_selected_profile).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(profile_buttons, text="Save", command=self._save_current_profile).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(profile_buttons, text="Delete", command=self._delete_selected_profile).pack(side=tk.LEFT, padx=(6, 0))
+
+        profile_frame = ttk.Frame(left)
+        profile_frame.pack(fill=tk.BOTH, expand=True)
+        self.profile_listbox = tk.Listbox(profile_frame, exportselection=False, activestyle="none")
+        self.profile_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        profile_scroll = ttk.Scrollbar(profile_frame, orient=tk.VERTICAL, command=self.profile_listbox.yview)
+        profile_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.profile_listbox.config(yscrollcommand=profile_scroll.set)
+        self.profile_listbox.bind("<Double-1>", lambda _e: self._load_selected_profile())
+
+        # center: route steps
+        ttk.Label(center, text="Current Route", font=("Segoe UI", 14, "bold")).pack(anchor="w")
+        ttk.Label(center, textvariable=self.route_summary_var, justify=tk.LEFT).pack(anchor="w", pady=(6, 8))
+
+        route_buttons = ttk.Frame(center)
+        route_buttons.pack(fill=tk.X, pady=(0, 8))
+        ttk.Button(route_buttons, text="Add current solution", command=self._add_current_solution_to_profile).pack(side=tk.LEFT)
+        ttk.Button(route_buttons, text="Remove selected", command=self._remove_selected_route_step).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(route_buttons, text="Move up", command=lambda: self._move_selected_route_step(-1)).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(route_buttons, text="Move down", command=lambda: self._move_selected_route_step(1)).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(route_buttons, text="Export JSON", command=self._export_current_profile).pack(side=tk.LEFT, padx=(12, 0))
+
+        route_tree_frame = ttk.Frame(center)
+        route_tree_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.route_tree = ttk.Treeview(
+            route_tree_frame,
+            columns=("idx", "puzzle", "cost", "start", "end", "post", "fat"),
+            show="headings",
+            height=18,
         )
-        status_bar.pack(fill=tk.X, side=tk.BOTTOM)
+        columns = [
+            ("idx", "#", 48),
+            ("puzzle", "Puzzle", 76),
+            ("cost", "Total", 76),
+            ("start", "Start", 110),
+            ("end", "End", 130),
+            ("post", "Post End", 100),
+            ("fat", "Fat", 54),
+        ]
+        for col, text, width in columns:
+            self.route_tree.heading(col, text=text)
+            self.route_tree.column(col, width=width, anchor=tk.CENTER, stretch=False)
+        self.route_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        route_scroll = ttk.Scrollbar(route_tree_frame, orient=tk.VERTICAL, command=self.route_tree.yview)
+        route_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.route_tree.config(yscrollcommand=route_scroll.set)
+        self.route_tree.bind("<<TreeviewSelect>>", self._on_route_step_select)
+
+        # right: route step editor
+        ttk.Label(right, text="Route Step Editor", font=("Segoe UI", 14, "bold")).pack(anchor="w")
+
+        meta_box = ttk.LabelFrame(right, text="Profile Metadata", padding=10)
+        meta_box.pack(fill=tk.X, pady=(8, 8))
+
+        ttk.Label(meta_box, text="Name").grid(row=0, column=0, sticky="w")
+        ttk.Entry(meta_box, textvariable=self.route_name_var, width=28).grid(row=1, column=0, sticky="we", pady=(2, 8))
+
+        ttk.Label(meta_box, text="Description").grid(row=2, column=0, sticky="w")
+        ttk.Entry(meta_box, textvariable=self.route_description_var, width=28).grid(row=3, column=0, sticky="we", pady=(2, 8))
+
+        ttk.Label(meta_box, text="Category").grid(row=4, column=0, sticky="w")
+        ttk.Entry(meta_box, textvariable=self.route_category_var, width=28).grid(row=5, column=0, sticky="we", pady=(2, 0))
+
+        step_box = ttk.LabelFrame(right, text="Selected Step", padding=10)
+        step_box.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(step_box, text="Start mouse").grid(row=0, column=0, sticky="w")
+        ttk.Entry(step_box, textvariable=self.route_step_start_var, width=28).grid(row=1, column=0, sticky="we", pady=(2, 8))
+
+        ttk.Label(step_box, text="End positions").grid(row=2, column=0, sticky="w")
+        ttk.Entry(step_box, textvariable=self.route_step_end_var, width=28).grid(row=3, column=0, sticky="we", pady=(2, 8))
+
+        ttk.Checkbutton(step_box, text="End next puzzle banner", variable=self.route_step_end_next_var).grid(row=4, column=0, sticky="w", pady=(0, 8))
+
+        ttk.Label(step_box, text="Post-end click target").grid(row=5, column=0, sticky="w")
+        ttk.Entry(step_box, textvariable=self.route_step_post_var, width=28).grid(row=6, column=0, sticky="we", pady=(2, 8))
+
+        ttk.Checkbutton(step_box, text="Has fat", variable=self.route_step_has_fat_var).grid(row=7, column=0, sticky="w", pady=(0, 8))
+
+        ttk.Label(step_box, text="Fat top-left position").grid(row=8, column=0, sticky="w")
+        ttk.Entry(step_box, textvariable=self.route_step_fat_pos_var, width=28).grid(row=9, column=0, sticky="we", pady=(2, 8))
+
+        ttk.Label(step_box, text="Notes").grid(row=10, column=0, sticky="w")
+        ttk.Entry(step_box, textvariable=self.route_step_notes_var, width=28).grid(row=11, column=0, sticky="we", pady=(2, 12))
+
+        editor_buttons = ttk.Frame(step_box)
+        editor_buttons.grid(row=12, column=0, sticky="we")
+        ttk.Button(editor_buttons, text="Apply step changes", command=self._apply_selected_route_step_changes).pack(side=tk.LEFT)
+        ttk.Button(editor_buttons, text="Apply profile metadata", command=self._apply_route_profile_metadata).pack(side=tk.LEFT, padx=(8, 0))
 
     def _build_left_panel(self, parent: ttk.Frame) -> None:
         ttk.Label(parent, text="Puzzles", font=("Segoe UI", 14, "bold")).pack(anchor="w")
@@ -520,20 +515,6 @@ class StudioApp:
             pady=2,
         )
         self.step_details_row.pack(fill=tk.X, pady=(1, 0))
-
-    def _on_canvas_pan_start(self, event: tk.Event) -> None:
-        self.canvas.scan_mark(event.x, event.y)
-
-    def _on_canvas_pan_drag(self, event: tk.Event) -> None:
-        self.canvas.scan_dragto(event.x, event.y, gain=1)
-
-    def _on_canvas_mouse_wheel(self, event: tk.Event) -> None:
-        base_size = self._resolve_grid_cell_size(allow_empty_fallback=True)
-        factor = 1.08 if event.delta > 0 else (1.0 / 1.08)
-        new_size = max(36.0, min(220.0, base_size * factor))
-        self.grid_cell_size_var.set(f"{new_size:.3g}")
-        self._canvas_zoom_scale = new_size / BOARD_CELL_SIZE
-        self._refresh_solution_view(reset_status=False)
 
     def _build_right_panel(self, parent: ttk.Frame) -> None:
         ttk.Label(parent, text="Ranked solutions", font=("Segoe UI", 14, "bold")).pack(anchor="w")
@@ -709,7 +690,7 @@ class StudioApp:
             return
 
         win = tk.Toplevel(self.root)
-        win.title("Studio 2 Options")
+        win.title("Studio Options")
         win.resizable(False, False)
         self._options_window = win
 
@@ -761,8 +742,7 @@ class StudioApp:
             solver_box,
             text=(
                 "Custom point format: x,y\n"
-                "Multiple end points: x,y; x,y; x,y\n"
-                "Adapter routes to the active solver backend."
+                "Multiple end points: x,y; x,y; x,y"
             ),
             justify=tk.LEFT,
         ).grid(row=9, column=0, columnspan=2, sticky="w", pady=(8, 0))
@@ -796,20 +776,6 @@ class StudioApp:
             width=18,
         ).grid(row=6, column=0, sticky="w")
 
-        legend_box = ttk.LabelFrame(outer, text="Legend", padding=10)
-        legend_box.pack(fill=tk.X, pady=(12, 0))
-        ttk.Label(
-            legend_box,
-            text=(
-                "chain: same color until the cursor must reposition\n"
-                "sequence: color ramps by step order\n"
-                "axis: rows vs columns, fat moves get distinct hues\n\n"
-                "Solid path uses click -> lock -> release.\n"
-                "Dashed gray lines show pure mouse travel."
-            ),
-            justify=tk.LEFT,
-        ).pack(anchor="w")
-
         buttons = ttk.Frame(outer)
         buttons.pack(fill=tk.X, pady=(12, 0))
         ttk.Button(buttons, text="Apply", command=self._apply_options_from_window).pack(side=tk.RIGHT)
@@ -835,7 +801,6 @@ class StudioApp:
             return
 
         self._canvas_zoom_scale = grid_cell_size / BOARD_CELL_SIZE
-
         self._update_active_options_summary()
 
         if self.current_result is not None:
@@ -843,6 +808,319 @@ class StudioApp:
         else:
             self._refresh_solution_view(reset_status=False)
             self.status_var.set("Options applied")
+
+    def _refresh_profile_list(self) -> None:
+        names = self.profile_manager.list_profiles()
+        self.profile_listbox.delete(0, tk.END)
+        for name in names:
+            self.profile_listbox.insert(tk.END, name)
+
+    def _new_profile(self) -> None:
+        name = simpledialog.askstring("New Profile", "Profile name:", parent=self.root)
+        if not name:
+            return
+        description = simpledialog.askstring("New Profile", "Description:", parent=self.root) or ""
+        category = simpledialog.askstring("New Profile", "Category:", parent=self.root) or "custom"
+        self.current_profile = self.profile_manager.empty_profile(name=name, description=description, category=category)
+        self.route_name_var.set(self.current_profile.name)
+        self.route_description_var.set(self.current_profile.description)
+        self.route_category_var.set(self.current_profile.category)
+        self._refresh_route_tree()
+        self.status_var.set(f"Created in-memory profile: {name}")
+
+    def _load_selected_profile(self) -> None:
+        selected = self.profile_listbox.curselection()
+        if not selected:
+            self.status_var.set("Select a route profile first")
+            return
+        name = self.profile_listbox.get(selected[0])
+        try:
+            self.current_profile = self.profile_manager.load_profile(name)
+        except Exception as exc:
+            self.status_var.set(f"Failed to load profile: {exc}")
+            return
+        self.route_name_var.set(self.current_profile.name)
+        self.route_description_var.set(self.current_profile.description)
+        self.route_category_var.set(self.current_profile.category)
+        self._refresh_route_tree()
+        self.status_var.set(f"Loaded profile: {self.current_profile.name}")
+
+    def _save_current_profile(self) -> None:
+        if self.current_profile is None:
+            self.status_var.set("No current route profile to save")
+            return
+        self._apply_route_profile_metadata()
+        path = self.profile_manager.save_profile(self.current_profile)
+        self._refresh_profile_list()
+        self.status_var.set(f"Saved profile: {path.name}")
+
+    def _delete_selected_profile(self) -> None:
+        selected = self.profile_listbox.curselection()
+        if not selected:
+            self.status_var.set("Select a route profile first")
+            return
+        name = self.profile_listbox.get(selected[0])
+        self.profile_manager.delete_profile(name)
+        if self.current_profile is not None and self.current_profile.name == name:
+            self.current_profile = None
+            self._refresh_route_tree()
+        self._refresh_profile_list()
+        self.status_var.set(f"Deleted profile: {name}")
+
+    def _route_summary_text(self) -> str:
+        if self.current_profile is None:
+            return "No route profile loaded"
+        total_cost = RouteProfileManager.route_total_cost(self.current_profile)
+        total_move = RouteProfileManager.route_total_move(self.current_profile)
+        total_drag = RouteProfileManager.route_total_drag(self.current_profile)
+        worlds = RouteProfileManager.world_summary(self.current_profile)
+        world_text = " | ".join(f"W{world}: {value:.3f}" for world, value in sorted(worlds.items()))
+        if not world_text:
+            world_text = "no worlds yet"
+        return (
+            f"{self.current_profile.name} | "
+            f"{len(self.current_profile.steps)} steps | "
+            f"cost {total_cost:.3f} | move {total_move:.3f} | drag {total_drag:.3f} | "
+            f"{world_text}"
+        )
+
+    def _refresh_route_tree(self) -> None:
+        for item in self.route_tree.get_children():
+            self.route_tree.delete(item)
+
+        if self.current_profile is None:
+            self.route_summary_var.set("No route profile loaded")
+            self._clear_route_step_editor()
+            return
+
+        total_overlay_moves = 0
+
+        for idx, step in enumerate(self.current_profile.steps):
+            total_overlay_moves += len(step.overlay_moves)
+
+            if step.end_next_puzzle:
+                end_text = "next banner"
+            elif step.end_positions:
+                end_text = "; ".join(format_point(point) for point in step.end_positions)
+            else:
+                end_text = "none"
+
+            post_text = format_point(step.post_end_click_target)
+            fat_text = "yes" if step.has_fat else "no"
+
+            self.route_tree.insert(
+                "",
+                tk.END,
+                iid=f"route_{idx}",
+                values=(
+                    idx + 1,
+                    step.puzzle_id,
+                    f"{step.total_cost:.3f}",
+                    format_point(step.start_mouse_position),
+                    end_text,
+                    post_text,
+                    fat_text,
+                ),
+            )
+
+        self.route_summary_var.set(
+            f"{self._route_summary_text()} | overlay moves {total_overlay_moves}"
+        )
+
+    def _selected_route_index(self) -> int | None:
+        selection = self.route_tree.selection()
+        if not selection:
+            return None
+        return int(selection[0].split("_")[1])
+
+    def _add_current_solution_to_profile(self) -> None:
+        if self.current_profile is None:
+            self.status_var.set("Create or load a route profile first")
+            return
+        if self.current_result is None or not self.current_result.solutions:
+            self.status_var.set("Load a puzzle and select a solution first")
+            return
+
+        solution = self.current_result.solutions[self.current_solution_index]
+        source_file = self.current_result.path.name
+
+        start_mouse_position = self._resolve_start_mouse_position()
+        end_positions, end_next_puzzle = self._resolve_end_config()
+        post_end_click_target = self._resolve_post_end_click_target()
+        has_fat, initial_fat_position = self._resolve_level_start_fat(source_file)
+
+        step = RouteProfileManager.build_route_step_from_solution(
+            source_file=source_file,
+            solution=solution,
+            start_mouse_position=start_mouse_position,
+            end_positions=end_positions or (),
+            end_next_puzzle=end_next_puzzle,
+            post_end_click_target=post_end_click_target,
+            has_fat=has_fat,
+            initial_fat_position=initial_fat_position,
+            notes="added from studio",
+        )
+
+        self.current_profile.steps.append(step)
+        self._refresh_route_tree()
+        self.status_var.set(
+            f"Added {step.puzzle_id} to route {self.current_profile.name} "
+            f"with {len(step.overlay_moves)} baked overlay move(s)"
+        )
+
+    def _remove_selected_route_step(self) -> None:
+        if self.current_profile is None:
+            return
+        index = self._selected_route_index()
+        if index is None:
+            self.status_var.set("Select a route step first")
+            return
+        removed = self.current_profile.steps.pop(index)
+        self._refresh_route_tree()
+        self.status_var.set(f"Removed {removed.puzzle_id} from route")
+
+    def _move_selected_route_step(self, delta: int) -> None:
+        if self.current_profile is None:
+            return
+        index = self._selected_route_index()
+        if index is None:
+            self.status_var.set("Select a route step first")
+            return
+        new_index = index + delta
+        RouteProfileManager.move_step(self.current_profile, index, new_index)
+        self._refresh_route_tree()
+        new_index = max(0, min(len(self.current_profile.steps) - 1, new_index))
+        iid = f"route_{new_index}"
+        if self.route_tree.exists(iid):
+            self.route_tree.selection_set(iid)
+            self.route_tree.focus(iid)
+            self.route_tree.see(iid)
+            self._load_route_step_into_editor(new_index)
+
+    def _export_current_profile(self) -> None:
+        if self.current_profile is None:
+            self.status_var.set("No current route profile to export")
+            return
+        default_name = f"{self.current_profile.name}.export.json"
+        out_path = filedialog.asksaveasfilename(
+            parent=self.root,
+            title="Export Route JSON",
+            defaultextension=".json",
+            initialfile=default_name,
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+        )
+        if not out_path:
+            return
+        path = write_profile_json(self.current_profile, out_path)
+        self.status_var.set(f"Exported route JSON: {path.name}")
+
+    def _apply_route_profile_metadata(self) -> None:
+        if self.current_profile is None:
+            self.status_var.set("No current profile")
+            return
+        new_name = self.route_name_var.get().strip()
+        if not new_name:
+            self.status_var.set("Profile name cannot be empty")
+            return
+        self.current_profile.name = new_name
+        self.current_profile.description = self.route_description_var.get().strip()
+        self.current_profile.category = self.route_category_var.get().strip() or "custom"
+        self._refresh_route_tree()
+        self.status_var.set("Applied profile metadata")
+
+    def _clear_route_step_editor(self) -> None:
+        self.route_step_start_var.set("")
+        self.route_step_end_var.set("")
+        self.route_step_end_next_var.set(False)
+        self.route_step_post_var.set("")
+        self.route_step_has_fat_var.set(False)
+        self.route_step_fat_pos_var.set("")
+        self.route_step_notes_var.set("")
+
+    def _load_route_step_into_editor(self, index: int) -> None:
+        if self.current_profile is None or not (0 <= index < len(self.current_profile.steps)):
+            self._clear_route_step_editor()
+            return
+        step = self.current_profile.steps[index]
+        self.route_step_start_var.set("" if step.start_mouse_position is None else f"{step.start_mouse_position[0]},{step.start_mouse_position[1]}")
+        self.route_step_end_var.set("; ".join(f"{p[0]},{p[1]}" for p in step.end_positions))
+        self.route_step_end_next_var.set(step.end_next_puzzle)
+        self.route_step_post_var.set("" if step.post_end_click_target is None else f"{step.post_end_click_target[0]},{step.post_end_click_target[1]}")
+        self.route_step_has_fat_var.set(step.has_fat)
+        self.route_step_fat_pos_var.set("" if step.initial_fat_position is None else f"{step.initial_fat_position[0]},{step.initial_fat_position[1]}")
+        self.route_step_notes_var.set(step.notes)
+
+    def _on_route_step_select(self, _event=None) -> None:
+        index = self._selected_route_index()
+        if index is None:
+            self._clear_route_step_editor()
+            return
+        self._load_route_step_into_editor(index)
+
+    def _apply_selected_route_step_changes(self) -> None:
+        if self.current_profile is None:
+            self.status_var.set("No current profile")
+            return
+        index = self._selected_route_index()
+        if index is None:
+            self.status_var.set("Select a route step first")
+            return
+
+        old_step = self.current_profile.steps[index]
+
+        try:
+            start_mouse = None
+            if self.route_step_start_var.get().strip():
+                start_mouse = parse_point_text(self.route_step_start_var.get())
+
+            end_positions = ()
+            if self.route_step_end_var.get().strip():
+                end_positions = tuple(parse_point_list_text(self.route_step_end_var.get()))
+
+            post_end = None
+            if self.route_step_post_var.get().strip():
+                post_end = parse_point_text(self.route_step_post_var.get())
+
+            fat_pos = None
+            if self.route_step_fat_pos_var.get().strip():
+                fat_pos = parse_point_text(self.route_step_fat_pos_var.get())
+        except Exception as exc:
+            self.status_var.set(f"Step edit error: {exc}")
+            self.root.bell()
+            return
+
+        new_step = RouteStep(
+            step_id=old_step.step_id,
+            world_number=old_step.world_number,
+            puzzle_number=old_step.puzzle_number,
+            puzzle_id=old_step.puzzle_id,
+            source_file=old_step.source_file,
+            move_string=old_step.move_string,
+            total_cost=old_step.total_cost,
+            total_move=old_step.total_move,
+            total_drag=old_step.total_drag,
+            start_mouse_position=start_mouse,
+            end_positions=end_positions,
+            end_next_puzzle=bool(self.route_step_end_next_var.get()),
+            post_end_click_target=post_end,
+            has_fat=bool(self.route_step_has_fat_var.get()),
+            initial_fat_position=fat_pos,
+            notes=self.route_step_notes_var.get().strip(),
+            initial_move_distance=old_step.initial_move_distance,
+            inter_move_distance=old_step.inter_move_distance,
+            final_mouse_target=old_step.final_mouse_target,
+            final_move_distance=old_step.final_move_distance,
+            overlay_moves=list(old_step.overlay_moves),
+        )
+
+        RouteProfileManager.replace_step(self.current_profile, index, new_step)
+        self._refresh_route_tree()
+        iid = f"route_{index}"
+        if self.route_tree.exists(iid):
+            self.route_tree.selection_set(iid)
+            self.route_tree.focus(iid)
+            self.route_tree.see(iid)
+        self.status_var.set(f"Updated route step {index + 1}")
 
     def _load_file_list(self, initial: bool = False) -> None:
         query = self.file_filter_var.get().strip().lower()
@@ -915,7 +1193,6 @@ class StudioApp:
                 pass
             self._pending_load_after_id = None
         self.status_var.set(f"Loading {filename}...")
-        self.root.update_idletasks()
         self._pending_load_after_id = self.root.after(10, lambda: self._load_puzzle_file(filename))
 
     def _load_puzzle_file(self, filename: str) -> None:
@@ -929,17 +1206,42 @@ class StudioApp:
             free_drag_min_disp = self._resolve_free_drag_min_disp()
             has_fat, initial_fat_position = self._resolve_level_start_fat(filename)
 
-            self.current_result = self.solver.score_file(
-                full_path,
-                dedupe=self.dedupe_var.get(),
-                start_mouse_position=start_mouse_position,
-                has_fat=has_fat,
-                initial_fat_position=initial_fat_position,
-                end_positions=end_positions,
-                end_next_puzzle=end_next_puzzle,
-                lock_threshold=lock_threshold,
-                free_drag_min_displacement=free_drag_min_disp,
-            )
+            options_dict = {
+                "dedupe": bool(self.dedupe_var.get()),
+                "start_mouse_position": start_mouse_position,
+                "end_positions": end_positions,
+                "end_next_puzzle": end_next_puzzle,
+                "lock_threshold": lock_threshold,
+                "free_drag_min_displacement": free_drag_min_disp,
+                "has_fat": has_fat,
+                "initial_fat_position": initial_fat_position,
+            }
+
+            cached = self.cache.load(full_path)
+            if cached is not None and self.cache.is_valid(cached, full_path, options_dict):
+                self.current_result = cached.result
+            else:
+                result = self.solver.score_file(
+                    full_path,
+                    dedupe=self.dedupe_var.get(),
+                    start_mouse_position=start_mouse_position,
+                    has_fat=has_fat,
+                    initial_fat_position=initial_fat_position,
+                    end_positions=end_positions,
+                    end_next_puzzle=end_next_puzzle,
+                    lock_threshold=lock_threshold,
+                    free_drag_min_displacement=free_drag_min_disp,
+                )
+                self.current_result = result
+
+                new_cached = CachedScoreFile(
+                    source_file=str(full_path),
+                    source_hash=self.cache.hash_file(full_path),
+                    options_hash=self.cache.hash_options(options_dict),
+                    result=result,
+                )
+                self.cache.save(new_cached)
+
         except Exception as exc:
             self.current_result = None
             self.status_var.set(f"Failed to load {filename}: {exc}")
@@ -1163,7 +1465,6 @@ class StudioApp:
         )
 
         self._update_step_details_line()
-
         self._draw_mouse_travel()
         self._draw_drag_paths()
         self._draw_start_and_end_markers(solution)
@@ -1251,7 +1552,6 @@ class StudioApp:
             self.canvas.configure(scrollregion=(bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad))
             self._ensure_initial_canvas_view()
 
-
     def _ensure_initial_canvas_view(self) -> None:
         if self._initial_canvas_view_set:
             return
@@ -1295,7 +1595,7 @@ class StudioApp:
                 fill="#ffffff",
                 outline="#2563eb",
                 width=2,
-            )
+                )
             self.canvas.create_text(
                 cx,
                 cy,
@@ -1324,30 +1624,6 @@ class StudioApp:
                 font=("Segoe UI", 11, "bold"),
                 fill=outline,
             )
-
-    def _draw_header_metrics(self, solution: ScoredSolution) -> None:
-        left = (BOARD_GRID_X + BOARD_GRID_W) * BOARD_CELL_SIZE + 36
-        top = BOARD_GRID_Y * BOARD_CELL_SIZE + 10
-        box_w = 150
-        box_h = 52
-
-        initial_move = getattr(solution, "initial_move_distance", 0.0)
-        inter_move = getattr(solution, "inter_move_distance", max(0.0, solution.total_move - getattr(solution, "final_move_distance", 0.0) - initial_move))
-        final_move = getattr(solution, "final_move_distance", 0.0)
-
-        metrics = [
-            ("Total", f"{solution.total_cost:.3f}", "#111827"),
-            ("Start", f"{initial_move:.3f}", "#6b7280"),
-            ("Between", f"{inter_move:.3f}", "#6b7280"),
-            ("Final", f"{final_move:.3f}", "#6b7280"),
-            ("Drag", f"{solution.total_drag:.3f}", "#6b7280"),
-        ]
-
-        for i, (label, value, value_color) in enumerate(metrics):
-            y = top + i * (box_h + 8)
-            self.canvas.create_rectangle(left, y, left + box_w, y + box_h, fill="#ffffff", outline="#d0d7de", width=2)
-            self.canvas.create_text(left + 12, y + 14, anchor="w", text=label, font=("Segoe UI", 9, "bold"), fill="#6b7280")
-            self.canvas.create_text(left + 12, y + 34, anchor="w", text=value, font=("Segoe UI", 13, "bold"), fill=value_color)
 
     def _step_color(self, step: StepView, total_steps: int) -> str:
         mode = self.color_mode_var.get()
@@ -1397,7 +1673,7 @@ class StudioApp:
                 fill="#22c55e",
                 outline="#14532d",
                 width=2,
-            )
+                )
             self.canvas.create_text(end_x, end_y - 15, text="END", font=("Segoe UI", 8, "bold"), fill="#14532d")
 
             post_end_target = self._resolve_post_end_click_target()
@@ -1481,12 +1757,11 @@ class StudioApp:
                 self.canvas.create_oval(tx - nr, ty - nr, tx + nr, ty + nr, fill="#ffffff", outline=color, width=2)
                 self.canvas.create_text(tx, ty, text=str(step.step_index + 1), font=("Segoe UI", 8, "bold"), fill=text_fill)
 
-
     def _choose_move_number_position(
-        self,
-        sx: float,
-        sy: float,
-        used_positions: list[tuple[float, float]],
+            self,
+            sx: float,
+            sy: float,
+            used_positions: list[tuple[float, float]],
     ) -> tuple[float, float]:
         zoom = self._canvas_zoom_scale
         candidates = [
@@ -1515,6 +1790,20 @@ class StudioApp:
         angle = fallback_index * 0.9
         radius = (30.0 + 5.0 * min(8, fallback_index)) * zoom
         return sx + radius * math.cos(angle), sy + radius * math.sin(angle)
+
+    def _on_canvas_pan_start(self, event: tk.Event) -> None:
+        self.canvas.scan_mark(event.x, event.y)
+
+    def _on_canvas_pan_drag(self, event: tk.Event) -> None:
+        self.canvas.scan_dragto(event.x, event.y, gain=1)
+
+    def _on_canvas_mouse_wheel(self, event: tk.Event) -> None:
+        base_size = self._resolve_grid_cell_size(allow_empty_fallback=True)
+        factor = 1.08 if event.delta > 0 else (1.0 / 1.08)
+        new_size = max(36.0, min(220.0, base_size * factor))
+        self.grid_cell_size_var.set(f"{new_size:.3g}")
+        self._canvas_zoom_scale = new_size / BOARD_CELL_SIZE
+        self._refresh_solution_view(reset_status=False)
 
 
 def main() -> None:

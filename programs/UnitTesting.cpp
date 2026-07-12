@@ -107,12 +107,12 @@ std::string b1moves = board1.mem.assembleFatMoveStringBackwards(_xy1);
 std::string b2moves = board2.mem.assembleFatMoveStringForwards(_xy5);
 // std::string moveStr = board2.mem.assembleFatMoveString(_xy5, &board1.mem, _xy1);
 
-tcout << board1.toString() << std::endl;
+tcout << board1.toString() << "\n";
 
-tcout << b1moves << " " << b2moves << std::endl;
+tcout << b1moves << " " << b2moves << "\n";
 
 
-tcout << board2.toString() << std::endl;
+tcout << board2.toString() << "\n";
 
 */
 
@@ -132,27 +132,27 @@ int xy2 = board2.getFatXY();
 std::vector<Board> boards1 = makeFatPermutationListFuncs[4](board1, 4);
 std::vector<Board> boards2 = makeFatPermutationListFuncs[4](board2, 4);
 
-tcout << "did perms" << std::endl;
+tcout << "did perms" << "\n";
 
 std::sort(boards1.begin(), boards1.end(), [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); });
 std::sort(boards2.begin(), boards2.end(), [](const Board &a, const Board &b) { return a.getHash() < b.getHash(); });
 
-tcout << "did sorting" << std::endl;
+tcout << "did sorting" << "\n";
 
 auto results = intersection(boards1, boards2);
 
-tcout << "did intersection" << std::endl;
+tcout << "did intersection" << "\n";
 
-tcout << "solution count: " << results.size() << std::endl;
+tcout << "solution count: " << results.size() << "\n";
 
 if (!results.empty()) {
-    tcout << board1.toString() << std::endl;
-    tcout << results[0].first->mem.assembleFatMoveStringForwards(xy1) << std::endl;
-    tcout << results[0].first->toString() << std::endl;
-    // tcout << results[0].second->mem.assembleFatMoveStringBackwards(results[0].second->getFatXY()) << std::endl;
-    tcout << results[0].second->mem.assembleFatMoveStringBackwards(xy2) << std::endl;
+    tcout << board1.toString() << "\n";
+    tcout << results[0].first->mem.assembleFatMoveStringForwards(xy1) << "\n";
+    tcout << results[0].first->toString() << "\n";
+    // tcout << results[0].second->mem.assembleFatMoveStringBackwards(results[0].second->getFatXY()) << "\n";
+    tcout << results[0].second->mem.assembleFatMoveStringBackwards(xy2) << "\n";
 
-    tcout << board2.toString() << std::endl;
+    tcout << board2.toString() << "\n";
 }
 
 volatile int _ = 0;
@@ -202,7 +202,7 @@ int main() {
             allActStructList[action].action(board);
             if ((board.b1 & ~MASK) != VAL) {
                 tcout << "upper 10 bits changed... ("
-                          << action << ")" << std::endl;
+                          << action << ")" << "\n";
             }
         }
         board.precomputeHash();
@@ -238,16 +238,16 @@ int main() {
     if (solve.b1 != solved5_3.b1 || solve.b2 != solved5_3.b2) {
         tcout << "The permutations of a solution performed on the initial board state did not solve it.\n";
         tcout << "The board in question:\n";
-        tcout << solved5_3.toString() << std::endl;
+        tcout << solved5_3.toString() << "\n";
 
         uint64_t var1 = solve.b1;
         uint64_t var2 = solved5_3.b1;
         uint64_t var3 = solve.b2;
         uint64_t var4 = solved5_3.b2;
-        tcout << (var1 >> 54) << std::endl;
-        tcout << (var2 >> 54) << std::endl;
-        tcout << (var3 >> 54) << std::endl;
-        tcout << (var4 >> 54) << std::endl;
+        tcout << (var1 >> 54) << "\n";
+        tcout << (var2 >> 54) << "\n";
+        tcout << (var3 >> 54) << "\n";
+        tcout << (var4 >> 54) << "\n";
         return -1;
     }
 
@@ -276,24 +276,24 @@ int main() {
     if (board_left.b1 != board_right.b1 || board_left.b2 != board_right.b2) {
         tcout << "left and right should be the same but they aren't.";
         tcout << "The boards in question:\n";
-        tcout << board_left.toString() << std::endl;
+        tcout << board_left.toString() << "\n";
         tcout << board_right.toString() << "\n\n";
 
         uint64_t var1 = board_left.b1;
         uint64_t var2 = board_right.b1;
         uint64_t var3 = board_left.b2;
         uint64_t var4 = board_right.b2;
-        tcout << (var1 >> 54) << std::endl;
-        tcout << (var2 >> 54) << std::endl;
-        tcout << (var3 >> 54) << std::endl;
-        tcout << (var4 >> 54) << std::endl;
+        tcout << (var1 >> 54) << "\n";
+        tcout << (var2 >> 54) << "\n";
+        tcout << (var3 >> 54) << "\n";
+        tcout << (var4 >> 54) << "\n";
         return -1;
     }
 
     if (board_left.getHash() != board_right.getHash()) {
         tcout << "even if the boards are the same, the hashes do not match\n";
-        tcout << "left:  " << board_left.getHash() << std::endl;
-        tcout << "right: " << board_right.getHash() << std::endl;
+        tcout << "left:  " << board_left.getHash() << "\n";
+        tcout << "right: " << board_right.getHash() << "\n";
     }
 
 

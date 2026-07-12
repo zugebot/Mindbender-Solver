@@ -93,7 +93,7 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
     for (count_t pass = 0; pass < NUM_PASSES; ++pass) {
         if constexpr (DEBUG) {
             last_time = total_time.getSeconds();
-            std::cout << "Doing Pass #" << pass + 1 << std::endl;
+            std::cout << "Doing Pass #" << pass + 1 << "\n";
         }
         const uint64_t mask = masks[pass];
         const count_t shift = shifts[pass];
@@ -259,7 +259,7 @@ MU void radix_sort(JVec<T>& dataStates,
             std::cout << "Doing Pass #" << pass + 1
                       << " using " << activeBits[pass] << " bits"
                       << " and " << activeBuckets[pass] << " buckets"
-                      << std::endl;
+                      << "\n";
         }
 
         const u64 mask = masks[pass];

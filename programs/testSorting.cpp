@@ -40,30 +40,30 @@ int main() {
 
 
 
-    tcout << "Starting Sort1 now! (threaded radix)" << std::endl;
+    tcout << "Starting Sort1 now! (threaded radix)" << "\n";
     const Timer timer1;
 
     sorter.sortBoards(data1, 5, 3);
 
-    tcout << "Sort Time: " << timer1.getSeconds() << std::endl;
+    tcout << "Sort Time: " << timer1.getSeconds() << "\n";
     if (std::is_sorted(data1.begin(), data1.end())) {
-        tcout << "Sorting successful!" << std::endl;
+        tcout << "Sorting successful!" << "\n";
     } else {
-        tcout << "Sorting failed!" << std::endl;
+        tcout << "Sorting failed!" << "\n";
     }
 
 
 
-    tcout << "\nStarting Sort2 now! (boost::block_indirect)" << std::endl;
+    tcout << "\nStarting Sort2 now! (boost::block_indirect)" << "\n";
     const Timer timer2;
 
     boost::sort::block_indirect_sort(data2.begin(), data2.end());
 
-    tcout << "Sort Time: " << timer2.getSeconds() << std::endl;
+    tcout << "Sort Time: " << timer2.getSeconds() << "\n";
     if (std::is_sorted(data2.begin(), data2.end())) {
-        tcout << "Sorting successful!" << std::endl;
+        tcout << "Sorting successful!" << "\n";
     } else {
-        tcout << "Sorting failed!" << std::endl;
+        tcout << "Sorting failed!" << "\n";
     }
 
 

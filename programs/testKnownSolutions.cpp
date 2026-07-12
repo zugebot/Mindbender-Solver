@@ -99,7 +99,7 @@ int main() {
         Board startingBoard = pair->getStartState();
         Board realSolutionBoard = pair->getEndState();
 
-        // tcout << realSolutionBoard.toString(startingBoard) << std::endl;
+        // tcout << realSolutionBoard.toString(startingBoard) << "\n";
 
 
 

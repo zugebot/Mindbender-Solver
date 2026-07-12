@@ -711,7 +711,7 @@ int mainTestFuncs(int argc, char** argv) {
     const Timer total_timer;
 
     const auto pair = BoardLookup::getBoardPair(id);
-    tcout << pair->toString() << std::endl;
+    tcout << pair->toString() << "\n";
     Board start = pair->getStartState();
     const Board goal  = pair->getEndState();
 

@@ -28,7 +28,7 @@ std::vector<std::string> getFilesInDir(const std::string& path) {
             }
         }
     } catch (const fs::filesystem_error& e) {
-        std::cerr << "Error accessing directory: " << e.what() << std::endl;
+        std::cerr << "Error accessing directory: " << e.what() << "\n";
         return file_list;
     }
     return file_list;
@@ -54,7 +54,7 @@ void create6Depth(const Board& board, std::vector<Board>& boards_buffer, const s
 
     Timer timer;
     Perms<Board>::getDepthPlus1BufferedFunc(path, boards5, boards_buffer, 5);
-    tcout << timer.getSeconds() << std::endl;
+    tcout << timer.getSeconds() << "\n";
 }
 
 
@@ -65,7 +65,7 @@ int main() {
     const std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     const auto pair = BoardLookup::getBoardPair("7-1");
 
-    tcout << pair->toString() << std::endl;
+    tcout << pair->toString() << "\n";
     Board board = pair->getStartState();
     Board solve = pair->getEndState();
 
@@ -76,10 +76,10 @@ int main() {
 
     const std::string path = "E:\\" + pair->getName() + "_b\\";
     if (fs::create_directory(path)) {
-        tcout << "Created directory: " << path << std::endl;
+        tcout << "Created directory: " << path << "\n";
         create6Depth(board, boards_buffer, path);
     } else {
-        tcout << "Failed to create directory or it already exists." << std::endl;
+        tcout << "Failed to create directory or it already exists." << "\n";
     }
     auto boards5 = create5Depth(solve);
 
@@ -129,13 +129,13 @@ int main() {
         tcout << "Saving results to '" << filename << "'.\n";
         std::ofstream outfile(outDirectory + "\\levels\\" + filename);
         for (const auto& str: resultSet) {
-            outfile << str << std::endl;
+            outfile << str << "\n";
         }
         outfile.close();
     } else {
         tcout << "No solutions found...\n";
     }
-    tcout << "Total Time: " << timer.getSeconds() << std::endl;
+    tcout << "Total Time: " << timer.getSeconds() << "\n";
 
 
 
@@ -149,14 +149,14 @@ int main() {
     solver.setDepthParams(6, 10, 11);
     solver.preAllocateMemory(6);
 
-    tcout << pair->toString() << std::endl;
+    tcout << pair->toString() << "\n";
     solver.findSolutions<true>();
     return 0;
     */
 
 
     /*
-    tcout << board1.toString() << std::endl;
+    tcout << board1.toString() << "\n";
 
     bool intersection[5];
 
@@ -179,7 +179,7 @@ int main() {
         u8 mask = 1 << i;
         bool val = intersection2 & mask;
         std::string valStr = val ? "true" : "false";
-        tcout << "3 Colors at [" << i << "]: " << valStr << std::endl;
+        tcout << "3 Colors at [" << i << "]: " << valStr << "\n";
     }
 
 
