@@ -4,7 +4,7 @@
   "debug": true,
   "puzzle": "20-2",
   "estimatedDepth": 13,
-  "threads": 80, 
+  "threads": 10, 
   "unsolvedPuzzles": [
     "6-4",
             "10-2", "10-3",

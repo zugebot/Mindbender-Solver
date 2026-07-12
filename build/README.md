@@ -1,4 +1,4 @@
-To view current solutions in an interactive UI, run "pyth/main.py".
+To view current solutions in an interactive UI, run "python/viewer/chuzzle_mouse_studio.py".
 This is the best way to view results created from this codebase.
 
 This Google document gives a great outline to what this codebase includes.

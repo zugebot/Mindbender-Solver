@@ -26,9 +26,9 @@ if (USE_CUDA)
     find_package(CUDAToolkit REQUIRED)
 
     set(CUDA_SOURCE_FILES
-            "${CMAKE_SOURCE_DIR}/code/rotations.cpp"
-            "${CMAKE_SOURCE_DIR}/code/board.cpp"
-            "${CMAKE_SOURCE_DIR}/code/memory.cpp"
+            "${CMAKE_SOURCE_DIR}/src/chuzzles/rotations.cpp"
+            "${CMAKE_SOURCE_DIR}/src/chuzzles/rotations_cuda.cpp"
+            "${CMAKE_SOURCE_DIR}/src/chuzzles/board.cpp"
     )
 
     set_source_files_properties(${CUDA_SOURCE_FILES} PROPERTIES LANGUAGE CUDA)
@@ -87,14 +87,26 @@ endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-set(CHUZZLE_VIEWER_DIR "${CMAKE_SOURCE_DIR}/pyth/viewer-dp")
-set(CHUZZLE_STUDIO_FILE "${CHUZZLE_VIEWER_DIR}/chuzzle_mouse_dp_studio.py")
-set(CHUZZLE_VIEWER_PYTHON "${CMAKE_SOURCE_DIR}/venv/Scripts/python.exe")
+set(CHUZZLE_VIEWER_DIR "${CMAKE_SOURCE_DIR}/python/viewer")
+set(CHUZZLE_STUDIO_FILE "${CHUZZLE_VIEWER_DIR}/chuzzle_mouse_studio.py")
+if (WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/venv/Scripts/python.exe")
+    set(CHUZZLE_VIEWER_PYTHON "${CMAKE_SOURCE_DIR}/venv/Scripts/python.exe")
+else()
+    set(CHUZZLE_VIEWER_PYTHON "${Python3_EXECUTABLE}")
+endif()
 
 # ------------------------------------------------------------
 # Include directories
 # ------------------------------------------------------------
-include_directories("${CMAKE_SOURCE_DIR}")
+include_directories(
+        "${CMAKE_SOURCE_DIR}"
+        "${CMAKE_SOURCE_DIR}/src"
+        "${CMAKE_SOURCE_DIR}/src/chuzzles"
+        "${CMAKE_SOURCE_DIR}/src/solver"
+        "${CMAKE_SOURCE_DIR}/src/utils"
+        "${CMAKE_SOURCE_DIR}/include"
+        "${CMAKE_SOURCE_DIR}/mouse/include"
+)
 
 if (USE_CUDA)
     include_directories(${CUDAToolkit_INCLUDE_DIRS})
@@ -105,26 +117,29 @@ endif()
 # Source discovery
 # ------------------------------------------------------------
 set(COMMON_SOURCES
-        "${CMAKE_SOURCE_DIR}/code/board.cpp"
-        "${CMAKE_SOURCE_DIR}/code/perms.cpp"
-        "${CMAKE_SOURCE_DIR}/code/rotations.cpp"
-        "${CMAKE_SOURCE_DIR}/code/rotations_col.cpp"
-        "${CMAKE_SOURCE_DIR}/code/rotations_row.cpp"
+        "${CMAKE_SOURCE_DIR}/src/chuzzles/board.cpp"
+        "${CMAKE_SOURCE_DIR}/src/chuzzles/perms.cpp"
+        "${CMAKE_SOURCE_DIR}/src/chuzzles/rotations.cpp"
+        "${CMAKE_SOURCE_DIR}/src/chuzzles/rotations_col.cpp"
+        "${CMAKE_SOURCE_DIR}/src/chuzzles/rotations_row.cpp"
 
-        "${CMAKE_SOURCE_DIR}/utils/jvec.cpp"
+        "${CMAKE_SOURCE_DIR}/src/utils/jvec.cpp"
 )
 
 if (ENABLE_ALLOC_COUNTERS)
     list(APPEND COMMON_SOURCES
-            "${CMAKE_SOURCE_DIR}/utils/allocation_counter.cpp"
+            "${CMAKE_SOURCE_DIR}/src/utils/allocation_counter.cpp"
     )
 endif()
 
 if (USE_CUDA)
     file(GLOB_RECURSE CUDA_SOURCES
-            "${CMAKE_SOURCE_DIR}/code/*.cu"
+            "${CMAKE_SOURCE_DIR}/src/chuzzles/*.cu"
     )
-    list(APPEND COMMON_SOURCES ${CUDA_SOURCES})
+    list(APPEND COMMON_SOURCES
+            "${CMAKE_SOURCE_DIR}/src/chuzzles/rotations_cuda.cpp"
+            ${CUDA_SOURCES}
+    )
 endif()
 
 set(SHARED_SOURCES
@@ -225,18 +240,18 @@ endfunction()
 # ------------------------------------------------------------
 # Programs
 # ------------------------------------------------------------
-add_solver_program(testLayeredDFS         "${CMAKE_SOURCE_DIR}/programs/testLayeredDFS.cpp")
-add_solver_program(testKnownSolutions     "${CMAKE_SOURCE_DIR}/programs/testKnownSolutions.cpp")
-add_solver_program(testPuzzlesValid       "${CMAKE_SOURCE_DIR}/programs/testPuzzlesValid.cpp")
-add_solver_program(testRotations          "${CMAKE_SOURCE_DIR}/programs/testRotations.cpp")
-add_solver_program(testDepth4Direct       "${CMAKE_SOURCE_DIR}/programs/testDepth4Direct.cpp")
-add_solver_program(testDepth4DirectFat    "${CMAKE_SOURCE_DIR}/programs/testDepth4DirectFat.cpp")
-add_solver_program(findSolutions          "${CMAKE_SOURCE_DIR}/programs/findSolutions.cpp")
-add_solver_program(CFCC                   "${CMAKE_SOURCE_DIR}/programs/CFCC.cpp")
-add_solver_program(expandAllLevels        "${CMAKE_SOURCE_DIR}/programs/expandAllLevels.cpp")
-add_solver_program(benchmarkMatchingBound "${CMAKE_SOURCE_DIR}/programs/benchmarkMatchingBound.cpp")
-add_solver_program(debughIntersection4_4  "${CMAKE_SOURCE_DIR}/programs/debug_intersection_4_4.cpp")
-add_solver_program(generateMLTrainingData "${CMAKE_SOURCE_DIR}/programs/generate_ml_training_data.cpp")
-add_solver_program(analyzeLevelsFinalHeuristic "${CMAKE_SOURCE_DIR}/programs/analyzeLevelsFinalHeuristic.cpp")
-add_solver_program(testHeuristicsOnLeftSeed "${CMAKE_SOURCE_DIR}/programs/testHeuristicsOnLeftSeed.cpp")
-add_solver_program(decompMindbenderScramble "${CMAKE_SOURCE_DIR}/programs/DecompMindbenderScramble.cpp")
+add_solver_program(testLayeredDFS         "${CMAKE_SOURCE_DIR}/src/programs/testLayeredDFS.cpp")
+add_solver_program(testKnownSolutions     "${CMAKE_SOURCE_DIR}/src/programs/testKnownSolutions.cpp")
+add_solver_program(testPuzzlesValid       "${CMAKE_SOURCE_DIR}/src/programs/testPuzzlesValid.cpp")
+add_solver_program(testRotations          "${CMAKE_SOURCE_DIR}/src/programs/testRotations.cpp")
+add_solver_program(testDepth4Direct       "${CMAKE_SOURCE_DIR}/src/programs/testDepth4Direct.cpp")
+add_solver_program(testDepth4DirectFat    "${CMAKE_SOURCE_DIR}/src/programs/testDepth4DirectFat.cpp")
+add_solver_program(findSolutions          "${CMAKE_SOURCE_DIR}/src/programs/findSolutions.cpp")
+add_solver_program(CFCC                   "${CMAKE_SOURCE_DIR}/src/programs/CFCC.cpp")
+add_solver_program(expandAllLevels        "${CMAKE_SOURCE_DIR}/src/programs/expandAllLevels.cpp")
+add_solver_program(benchmarkMatchingBound "${CMAKE_SOURCE_DIR}/src/programs/benchmarkMatchingBound.cpp")
+add_solver_program(debughIntersection4_4  "${CMAKE_SOURCE_DIR}/src/programs/debug_intersection_4_4.cpp")
+add_solver_program(generateMLTrainingData "${CMAKE_SOURCE_DIR}/src/programs/generate_ml_training_data.cpp")
+add_solver_program(analyzeLevelsFinalHeuristic "${CMAKE_SOURCE_DIR}/src/programs/analyzeLevelsFinalHeuristic.cpp")
+add_solver_program(testHeuristicsOnLeftSeed "${CMAKE_SOURCE_DIR}/src/programs/testHeuristicsOnLeftSeed.cpp")
+add_solver_program(decompMindbenderScramble "${CMAKE_SOURCE_DIR}/src/programs/DecompMindbenderScramble.cpp")

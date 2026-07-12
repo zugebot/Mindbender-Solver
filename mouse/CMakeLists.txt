@@ -18,7 +18,7 @@ endif()
 
 set_target_properties(ChuzzleMouse PROPERTIES
         OUTPUT_NAME "chuzzle_mouse"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/pyth/viewer"
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/pyth/viewer"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/python/viewer"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/python/viewer"
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/mouse"
 )

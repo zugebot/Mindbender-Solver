@@ -1,0 +1,258 @@
+#pragma once
+// src/perms.hpp
+
+#include "../utils/jvec.hpp"
+#include "../utils/processor.hpp"
+#include "board.hpp"
+#include "rotations.hpp"
+
+#include <array>
+#include <span>
+#include <type_traits>
+#include <utility>
+
+#ifdef USE_CUDA
+// const++17 version because my GPU is ASS
+template<typename T>
+struct IsAllowedPermsType {
+    static constexpr bool value =
+            std::is_same_v<T, Board>  ||
+            std::is_same_v<T, B1B2>;
+};
+
+template<typename T>
+constexpr bool AllowedPermsType = IsAllowedPermsType<T>::value;
+#else
+// const++20 concept implementation
+template<typename T>
+concept AllowedPermsType =
+        std::is_same_v<T, Board>  ||
+        std::is_same_v<T, B1B2>;
+#endif
+
+
+MU static constexpr u64 BOARD_PRE_MAX_MALLOC_SIZES[8] = {
+        1, 60, 2550, 104000, 4245000, 173325000, 7076687500, 288933750000,
+};
+
+MU static constexpr u64 BOARD_SECT_NONE_PRE_MAX_MALLOC_SIZES[8] = {
+        1, 
+        60ULL, 
+        60ULL * 60, 
+        60ULL * 60 * 60, 
+        60ULL * 60 * 60 * 60, 
+        60ULL * 60 * 60 * 60 * 60, 
+        60ULL * 60 * 60 * 60 * 60 * 60, 
+        60ULL * 60 * 60 * 60 * 60 * 60 * 60,
+};
+
+MU static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
+        1, 48, 1320, 36402, 1001168, 27513569, 0, 0,
+};
+
+enum class eSequenceDir {
+    ASCENDING,
+    DESCENDING,
+    NONE
+};
+
+namespace perms_detail {
+
+    template<typename T, i32 MAX_DEPTH>
+    struct PermBuildState {
+        static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
+
+        std::array<i32, MAX_DEPTH> dirSeq{};
+        std::array<i32, MAX_DEPTH> sectSeq{};
+        std::array<i32, MAX_DEPTH> baseSeq{};
+        std::array<u64, MAX_DEPTH> curSeq{};
+        std::array<bool, MAX_DEPTH> checkRCSeq{};
+        std::array<u8, MAX_DEPTH> intersectSeq{};
+    };
+
+    // ============================================================
+    // Normal board permutation generation
+    // ============================================================
+
+    template<typename T,
+             i32 CUR_DEPTH, i32 MAX_DEPTH,
+             bool CHECK_CROSS, bool CHECK_SIM>
+    static void make_perm_list_inner(
+            const Board& board_in,
+            JVec<T>& boards_out,
+            JVec<u64>& hashes_out,
+            PermBuildState<T, MAX_DEPTH>& state,
+            u64 move_prev,
+            i32& count);
+    
+    template<typename T,
+             i32 CUR_DEPTH, i32 MAX_DEPTH,
+             bool CHECK_CROSS, bool CHECK_SIM,
+             bool CHANGE_SECT_START, eSequenceDir SECT_DIR>
+    static void make_perm_list_outer(
+            const Board& board_in,
+            JVec<T>& boards_out,
+            JVec<u64>& hashes_out,
+            PermBuildState<T, MAX_DEPTH>& state,
+            i32& count);
+    
+    template<typename T,
+             i32 MAX_DEPTH,
+             bool CHECK_CROSS, bool CHECK_SIM,
+             bool CHANGE_SECT_START, eSequenceDir SECT_DIR>
+    static void make_perm_list(
+            const Board& board_in,
+            JVec<T>& boards_out,
+            JVec<u64>& hashes_out);
+
+    // ============================================================
+    // Fat board permutation generation
+    // ============================================================
+
+    template<typename T,
+             i32 CUR_DEPTH, i32 MAX_DEPTH,
+             eSequenceDir SECT_DIR, bool DIRECTION>
+    static void make_fat_perm_list_helper(
+            const Board& board,
+            JVec<T>& boards_out,
+            JVec<u64>& hashes_out,
+            u32& count,
+            u64 move,
+            const ActStruct& lastActStruct,
+            u8 startIndex,
+            u8 endIndex);
+    
+    template<typename T,
+             i32 DEPTH,
+             eSequenceDir SECT_DIR>
+    static void make_fat_perm_list(
+            const Board& board_in,
+            JVec<T>& boards_out,
+            JVec<u64>& hashes_out);
+
+} // namespace perms_detail
+
+
+template<typename T>
+class Perms {
+    static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
+
+public:
+    using ToDepthFuncPtr = void (*)(const Board&, JVec<T>&, JVec<u64>&);
+    using DepthPair = std::pair<u32, u32>;
+
+    struct DepthRange {
+        u8 offset;
+        u8 count;
+    };
+
+    static constexpr u32 PTR_LIST_SIZE = 6;
+    static constexpr u32 DEPTH_TABLE_MAX = 11;
+
+    inline static constexpr std::array<DepthPair, 36> depthPairs = {{
+            {1, 0}, {0, 1},
+            {1, 1}, {0, 2}, {2, 0},
+            {1, 2}, {2, 1}, {0, 3}, {3, 0},
+            {2, 2}, {3, 1}, {1, 3}, {4, 0}, {0, 4},
+            {3, 2}, {2, 3}, {4, 1}, {1, 4}, {5, 0}, {0, 5},
+            {3, 3}, {4, 2}, {2, 4}, {5, 1}, {1, 5},
+            {4, 3}, {3, 4}, {5, 2}, {2, 5},
+            {4, 4}, {5, 3}, {3, 5},
+            {4, 5}, {5, 4},
+            {5, 5},
+            {6, 5},
+    }};
+
+    inline static constexpr std::array<DepthRange, DEPTH_TABLE_MAX + 1> depthRanges = {{
+            {0, 0},
+            {0, 2},
+            {2, 3},
+            {5, 4},
+            {9, 5},
+            {14, 6},
+            {20, 5},
+            {25, 4},
+            {29, 3},
+            {32, 2},
+            {34, 1},
+            {35, 1},
+    }};
+
+    MU static std::span<const DepthPair> getDepthPairs(u32 depth) noexcept {
+        if (depth > DEPTH_TABLE_MAX) {
+            return {};
+        }
+
+        const DepthRange range = depthRanges[depth];
+        return {depthPairs.data() + range.offset, range.count};
+    }
+
+    struct FromLeft {
+        static ToDepthFuncPtr funcPtrs[PTR_LIST_SIZE];
+        static ToDepthFuncPtr fatFuncPtrs[PTR_LIST_SIZE];
+    };
+    
+    struct FromNone {
+        static ToDepthFuncPtr funcPtrs[PTR_LIST_SIZE];
+        static ToDepthFuncPtr fatFuncPtrs[PTR_LIST_SIZE];
+    };
+
+    struct FromRight {
+        static ToDepthFuncPtr funcPtrs[PTR_LIST_SIZE];
+        static ToDepthFuncPtr fatFuncPtrs[PTR_LIST_SIZE];
+    };
+    
+    template<eSequenceDir SECT_DIR>
+    MU static void reserveForDepth(const Board& board_in,
+                                   JVec<T>& boards_out,
+                                   JVec<u64>& hashes_out,
+                                   u32 depth);
+    
+    template<eSequenceDir SECT_DIR>
+    MU static void getDepthFunc(const Board& board_in,
+                                JVec<T>& boards_out,
+                                JVec<u64>& hashes_out,
+                                u32 depth,
+                                bool shouldResize = true);
+};
+
+template<typename T>
+template<eSequenceDir SECT_DIR>
+void Perms<T>::getDepthFunc(
+        const Board& board_in,
+        JVec<T>& boards_out,
+        JVec<u64>& hashes_out,
+        const u32 depth,
+        const bool shouldResize) {
+    
+    if (depth >= PTR_LIST_SIZE) {
+        boards_out.clear();
+        hashes_out.clear();
+        return;
+    }
+
+    if (shouldResize) {
+        reserveForDepth<SECT_DIR>(board_in, boards_out, hashes_out, depth);
+    }
+
+    boards_out.resize(boards_out.capacity());
+    hashes_out.resize(hashes_out.capacity());
+
+    if (board_in.getFatBool()) {
+        constexpr auto table = SECT_DIR == eSequenceDir::ASCENDING ? FromLeft::fatFuncPtrs
+                               : SECT_DIR == eSequenceDir::DESCENDING ? FromRight::fatFuncPtrs
+                                                                      : FromNone::fatFuncPtrs;
+        table[depth](board_in, boards_out, hashes_out);
+    } else {
+        constexpr auto table = SECT_DIR == eSequenceDir::ASCENDING ? FromLeft::funcPtrs
+                               : SECT_DIR == eSequenceDir::DESCENDING ? FromRight::funcPtrs
+                                                                      : FromNone::funcPtrs;
+        table[depth](board_in, boards_out, hashes_out);
+    }
+}
+
+extern template class Perms<Board>;
+extern template class Perms<B1B2>;
+
+#include "perms_fat.tpp"
+#include "perms_nrm.tpp"

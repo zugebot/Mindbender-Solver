@@ -1,2 +1,7 @@
 cmake-build-*/
 /venv/
+/python/viewer/cache/
+/python/viewer/__pycache__/
+/python/__pycache__/
+*.pyc
+/project.zip
