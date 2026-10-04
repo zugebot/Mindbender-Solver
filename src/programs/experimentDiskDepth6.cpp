@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -516,44 +517,111 @@ namespace {
     // candidates are confirmed against the full states on disk, so false
     // fingerprint matches (~bucket size / 2^32 per probe) cost one tiny read.
 
+    // Split-block Bloom filter: each key maps to one 32-byte block (8 x u32,
+    // never straddling a cache line) and sets one bit in every word, so a
+    // lookup costs a single cache-line read.
+    constexpr u32 BLOOM_BITS_PER_STATE = 10;
+    constexpr u32 BLOOM_SALT[8] = {0x47b6137bU, 0x44974d91U, 0x8824ad5bU, 0xa2b7289dU,
+                                   0x705495c7U, 0x2df1424bU, 0x9efc4947U, 0x5c6bfb31U};
+
+    // Independent of the bucket (top) and fingerprint (low) bits of the key.
+    FORCEINLINE u64 bloomHash(const u64 key) {
+        return mixKey(key ^ 0x5851f42d4c957f2dULL);
+    }
+
+    struct BloomFilter {
+        u64 blockCount = 0;
+        std::vector<u32> storage;   // over-allocated so `words` can be 64-byte aligned
+        u32* words = nullptr;
+
+        void allocate(const u64 blocks) {
+            blockCount = blocks;
+            storage.assign(blocks * 8 + 16, 0);
+            const auto address = reinterpret_cast<std::uintptr_t>(storage.data());
+            words = reinterpret_cast<u32*>((address + 63) & ~static_cast<std::uintptr_t>(63));
+        }
+
+        FORCEINLINE const u32* block(const u64 h) const {
+            return words + (((h >> 32) * blockCount) >> 32) * 8;
+        }
+
+        void insertAtomic(const u64 h) {
+            u32* b = words + (((h >> 32) * blockCount) >> 32) * 8;
+            const u32 low = static_cast<u32>(h);
+            for (u32 i = 0; i < 8; ++i) {
+                __atomic_fetch_or(&b[i], 1U << ((low * BLOOM_SALT[i]) >> 27), __ATOMIC_RELAXED);
+            }
+        }
+
+        static FORCEINLINE bool test(const u32* b, const u64 h) {
+            const u32 low = static_cast<u32>(h);
+            u32 missing = 0;
+            for (u32 i = 0; i < 8; ++i) {
+                missing |= ~b[i] & (1U << ((low * BLOOM_SALT[i]) >> 27));
+            }
+            return missing == 0;
+        }
+    };
+
     struct FingerprintIndex {
         u32 bucketBits = 0;
         u32 shift = 0;
         u64 stateCount = 0;
         std::vector<u32> fingerprints;
         std::vector<u64> starts;   // bucketCount + 1
+        BloomFilter bloom;
 
-        // Prefetch bucket offsets, then fingerprint runs, then compare, so the
-        // DRAM misses of a whole group overlap.
-        void probeGroup(const B1B2* probes, const u64* keys, const u32 count,
-                        std::vector<KeyedState>& candidates) const {
-            u64 bucket[PROBE_GROUP], lo[PROBE_GROUP], hi[PROBE_GROUP];
+        // Stage 1 reads one Bloom block per probe; only survivors (~1%) pay
+        // the bucket-offset and fingerprint reads. Every stage prefetches the
+        // next one's lines for the whole group so DRAM misses overlap.
+        // Returns how many probes passed the Bloom filter.
+        u32 probeGroup(const B1B2* probes, const u64* keys, const u32 count,
+                       std::vector<KeyedState>& candidates) const {
+            u64 h[PROBE_GROUP];
+            const u32* blocks[PROBE_GROUP];
             for (u32 i = 0; i < count; ++i) {
-                bucket[i] = keys[i] >> shift;
-                __builtin_prefetch(&starts[bucket[i]]);
+                h[i] = bloomHash(keys[i]);
+                blocks[i] = bloom.block(h[i]);
+                __builtin_prefetch(blocks[i]);
             }
+            u32 pass[PROBE_GROUP];
+            u32 passCount = 0;
             for (u32 i = 0; i < count; ++i) {
-                lo[i] = starts[bucket[i]];
-                hi[i] = starts[bucket[i] + 1];
-                if (lo[i] < hi[i]) {
-                    __builtin_prefetch(&fingerprints[lo[i]]);
+                if (BloomFilter::test(blocks[i], h[i])) {
+                    pass[passCount++] = i;
                 }
             }
-            for (u32 i = 0; i < count; ++i) {
+
+            u64 bucket[PROBE_GROUP], lo[PROBE_GROUP], hi[PROBE_GROUP];
+            for (u32 j = 0; j < passCount; ++j) {
+                bucket[j] = keys[pass[j]] >> shift;
+                __builtin_prefetch(&starts[bucket[j]]);
+            }
+            for (u32 j = 0; j < passCount; ++j) {
+                lo[j] = starts[bucket[j]];
+                hi[j] = starts[bucket[j] + 1];
+                if (lo[j] < hi[j]) {
+                    __builtin_prefetch(&fingerprints[lo[j]]);
+                }
+            }
+            for (u32 j = 0; j < passCount; ++j) {
+                const u32 i = pass[j];
                 const u32 fp = static_cast<u32>(keys[i]);
-                for (u64 j = lo[i]; j < hi[i]; ++j) {
-                    if (fingerprints[j] == fp) {
+                for (u64 k = lo[j]; k < hi[j]; ++k) {
+                    if (fingerprints[k] == fp) {
                         candidates.push_back({keys[i], probes[i]});
                         break;
                     }
                 }
             }
+            return passCount;
         }
     };
 
     fs::path fpPath(const fs::path& dir) { return dir / "fp.bin"; }
     fs::path fpDirPath(const fs::path& dir) { return dir / "fpdir.bin"; }
     fs::path fpMetaPath(const fs::path& dir) { return dir / "fpmeta.txt"; }
+    fs::path bloomPath(const fs::path& dir) { return dir / "bloom.bin"; }
 
     void buildFingerprintIndex(const fs::path& dir, const std::vector<u64>& counts, const u32 threads) {
         Timer timer;
@@ -567,6 +635,8 @@ namespace {
         }
         const u32 shift = 64U - bucketBits;
         const u64 bucketCount = 1ULL << bucketBits;
+        BloomFilter bloom;
+        bloom.allocate((n * BLOOM_BITS_PER_STATE + 255) / 256);
 
         std::vector<u64> starts(bucketCount + 1, 0);
         std::FILE* fpOut = std::fopen(fpPath(dir).string().c_str(), "wb");
@@ -582,6 +652,7 @@ namespace {
                 const std::size_t end = std::min(states.size(), (c + 1) * 65536);
                 for (std::size_t i = c * 65536; i < end; ++i) {
                     keys[i] = keyOf(states[i]);
+                    bloom.insertAtomic(bloomHash(keys[i]));
                 }
             });
             std::vector<u32> fps(states.size());
@@ -602,19 +673,30 @@ namespace {
         }
         std::fclose(fpOut);
         writeAll(fpDirPath(dir), starts.data(), starts.size());
-        std::ofstream(fpMetaPath(dir)) << bucketBits << ' ' << n << '\n';
+        writeAll(bloomPath(dir), bloom.words, bloom.blockCount * 8);
+        std::ofstream(fpMetaPath(dir)) << bucketBits << ' ' << n << ' ' << bloom.blockCount << '\n';
 
         tcout << "BUILD fingerprint index: " << n << " fingerprints + 2^" << bucketBits << " buckets ("
-              << (n * 4.0 + (bucketCount + 1) * 8.0) / 1e9 << " GB) in " << timer.getSeconds() << "s\n";
+              << (n * 4.0 + (bucketCount + 1) * 8.0) / 1e9 << " GB) + Bloom filter ("
+              << bloom.blockCount * 32.0 / 1e9 << " GB, " << BLOOM_BITS_PER_STATE << " bits/state) in "
+              << timer.getSeconds() << "s\n";
     }
 
     FingerprintIndex loadFingerprintIndex(const fs::path& dir) {
         FingerprintIndex index;
         std::ifstream meta(fpMetaPath(dir));
-        meta >> index.bucketBits >> index.stateCount;
+        u64 bloomBlocks = 0;
+        meta >> index.bucketBits >> index.stateCount >> bloomBlocks;
         index.shift = 64U - index.bucketBits;
         index.fingerprints = readAll<u32>(fpPath(dir));
         index.starts = readAll<u64>(fpDirPath(dir));
+
+        index.bloom.allocate(bloomBlocks);
+        std::FILE* f = std::fopen(bloomPath(dir).string().c_str(), "rb");
+        if (f == nullptr || std::fread(index.bloom.words, sizeof(u32), bloomBlocks * 8, f) != bloomBlocks * 8) {
+            throw std::runtime_error("failed to read bloom.bin");
+        }
+        std::fclose(f);
         if (index.fingerprints.size() != index.stateCount
             || index.starts.size() != (1ULL << index.bucketBits) + 1) {
             throw std::runtime_error("fingerprint index files are inconsistent");
@@ -627,13 +709,14 @@ namespace {
                                        const std::vector<u64>& counts,
                                        const Config& cfg,
                                        const u32 threads) {
-        if (!fs::exists(fpMetaPath(dir)) || cfg.rebuild) {
+        if (!fs::exists(fpMetaPath(dir)) || !fs::exists(bloomPath(dir)) || cfg.rebuild) {
             buildFingerprintIndex(dir, counts, threads);
         }
 
         Timer loadTimer;
         const FingerprintIndex index = loadFingerprintIndex(dir);
-        const double gb = (index.fingerprints.size() * 4.0 + index.starts.size() * 8.0) / 1e9;
+        const double gb = (index.fingerprints.size() * 4.0 + index.starts.size() * 8.0
+                           + index.bloom.blockCount * 32.0) / 1e9;
         const double loadSeconds = loadTimer.getSeconds();
         tcout << "loaded fingerprint index: " << gb << " GB in " << loadSeconds << "s ("
               << gb / loadSeconds * 1000.0 << " MB/s)\n";
@@ -648,7 +731,7 @@ namespace {
         Timer probeTimer;
         std::mutex candidateLock;
         std::vector<KeyedState> candidates;
-        std::vector<u64> streamed(threads, 0);
+        std::vector<u64> streamed(threads, 0), bloomPasses(threads, 0);
         parallelFor(threads, seeds.size(), [&](const u32 t, const std::size_t s) {
             struct Sink {
                 const FingerprintIndex& index;
@@ -656,10 +739,10 @@ namespace {
                 u64 groupKeys[PROBE_GROUP];
                 u32 groupCount = 0;
                 std::vector<KeyedState> found;
-                u64 streamed = 0;
+                u64 streamed = 0, bloomPasses = 0;
 
                 void flush() {
-                    index.probeGroup(groupStates, groupKeys, groupCount, found);
+                    bloomPasses += index.probeGroup(groupStates, groupKeys, groupCount, found);
                     groupCount = 0;
                 }
 
@@ -673,21 +756,23 @@ namespace {
                         }
                     }
                 }
-            } sink{index, {}, {}, 0, {}, 0};
+            } sink{index, {}, {}, 0, {}, 0, 0};
 
             const Board seedBoard = makeBoardFromState(seeds[s]);
             PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH>(seedBoard, sink, 4096);
             sink.flush();
             streamed[t] += sink.streamed;
+            bloomPasses[t] += sink.bloomPasses;
             if (!sink.found.empty()) {
                 std::lock_guard<std::mutex> lock(candidateLock);
                 candidates.insert(candidates.end(), sink.found.begin(), sink.found.end());
             }
         });
         const double probeSeconds = probeTimer.getSeconds();
-        u64 streamedTotal = 0;
-        for (const u64 n : streamed) {
-            streamedTotal += n;
+        u64 streamedTotal = 0, bloomPassTotal = 0;
+        for (u32 t = 0; t < threads; ++t) {
+            streamedTotal += streamed[t];
+            bloomPassTotal += bloomPasses[t];
         }
         std::sort(candidates.begin(), candidates.end());
         candidates.erase(std::unique(candidates.begin(), candidates.end(),
@@ -696,8 +781,9 @@ namespace {
                                      }),
                          candidates.end());
         tcout << "stream+probe: " << streamedTotal << " left states in " << probeSeconds << "s ("
-              << static_cast<double>(streamedTotal) / probeSeconds / 1e6 << " M/s), "
-              << candidates.size() << " unique candidates\n";
+              << static_cast<double>(streamedTotal) / probeSeconds / 1e6 << " M/s), Bloom pass rate "
+              << 100.0 * static_cast<double>(bloomPassTotal) / static_cast<double>(std::max<u64>(1, streamedTotal))
+              << "%, " << candidates.size() << " unique candidates\n";
 
         // Confirm each candidate against the full states of its bucket on disk.
         Timer verifyTimer;
