@@ -271,74 +271,53 @@ private:
         buildBoardExactNoneFrontier(cache.root, cache.depth, cache);
     }
 
-    template<bool REVERSE_OUTPUT>
-    MU static void recoverExactSplit(const Board& leftRoot,
-                                     const u32 leftDepth,
-                                     const JVec<Board>& leftStates,
-                                     const JVec<u64>& leftHashes,
-                                     const Board& rightRoot,
-                                     const u32 rightDepth,
-                                     const JVec<Board>& rightStates,
-                                     const JVec<u64>& rightHashes,
-                                     std::set<std::string>& outPaths) {
+    // All exact-length path pairs meeting at a middle, where one side is a large
+    // frontier shared by every middle and the other a small per-middle one:
+    // each small entry binary-searches its hash run in the shared side, so the
+    // cost is O(small * log(shared)) instead of a full merge over both lanes.
+    template<bool REVERSE_OUTPUT, bool SMALL_IS_LEFT>
+    MU static void recoverSplitBySharedLookup(const Board& leftRoot,
+                                              const Board& rightRoot,
+                                              const RecoveryBoardFrontierCache& shared,
+                                              const RecoveryBoardFrontierCache& small,
+                                              std::set<std::string>& outPaths) {
         outPaths.clear();
-        
-        // Recovery must preserve every exact-length path history.  Even when
-        // one side has depth zero, use the all-pairs intersection rather than
-        // the old first-pair shortcut.
-        const auto matches = intersection_threaded(
-                leftStates,
-                leftHashes,
-                rightStates,
-                rightHashes
-        );
 
         const bool leftIsFat = leftRoot.getFatBool();
         const bool rightIsFat = rightRoot.getFatBool();
+        const u64* sharedHashBegin = shared.hashes.data();
+        const u64* sharedHashEnd = sharedHashBegin + shared.hashes.size();
 
-        for (const auto& [fst, snd] : matches) {
-            const Board temp1 = leftIsFat
-                                        ? makeBoardWithFatMoves(leftRoot, fst->memory)
-                                        : makeBoardWithMoves(leftRoot, fst->memory);
+        for (std::size_t i = 0; i < small.states.size(); ++i) {
+            const Board& smallBoard = small.states[i];
+            const auto [lo, hi] = std::equal_range(sharedHashBegin, sharedHashEnd, small.hashes[i]);
 
-            const Board temp2 = rightIsFat
-                                        ? makeBoardWithFatMoves(rightRoot, snd->memory)
-                                        : makeBoardWithMoves(rightRoot, snd->memory);
+            for (const u64* it = lo; it != hi; ++it) {
+                const Board& sharedBoard = shared.states[static_cast<std::size_t>(it - sharedHashBegin)];
+                if (!(sharedBoard == smallBoard)) {
+                    continue;
+                }
 
-            if (temp1 == temp2) {
-                outPaths.insert(buildRecoveredPathString<REVERSE_OUTPUT>(
-                        leftRoot,
-                        fst->memory,
-                        rightRoot,
-                        snd->memory
-                        ));
+                const Board& leftBoard = SMALL_IS_LEFT ? smallBoard : sharedBoard;
+                const Board& rightBoard = SMALL_IS_LEFT ? sharedBoard : smallBoard;
+
+                const Board temp1 = leftIsFat
+                                            ? makeBoardWithFatMoves(leftRoot, leftBoard.memory)
+                                            : makeBoardWithMoves(leftRoot, leftBoard.memory);
+                const Board temp2 = rightIsFat
+                                            ? makeBoardWithFatMoves(rightRoot, rightBoard.memory)
+                                            : makeBoardWithMoves(rightRoot, rightBoard.memory);
+
+                if (temp1 == temp2) {
+                    outPaths.insert(buildRecoveredPathString<REVERSE_OUTPUT>(
+                            leftRoot,
+                            leftBoard.memory,
+                            rightRoot,
+                            rightBoard.memory
+                            ));
+                }
             }
         }
-    }
-
-    template<bool REVERSE_SEARCH>
-    MU void recoverMiddleToGoal(const B1B2& middleState,
-                                const u32 middleLeftDepth,
-                                const u32 goalRightDepth,
-                                RecoveryBoardFrontierCache& middleLeftCache,
-                                std::set<std::string>& outPaths) {
-        Board middleBoard = makeBoardFromState(middleState);
-        Board& searchGoalRoot = getSearchGoalBoard<REVERSE_SEARCH>();
-
-        ensureCache(middleLeftCache, middleBoard, middleLeftDepth);
-        ensureCache(goalRightCache_, searchGoalRoot, goalRightDepth);
-
-        recoverExactSplit<REVERSE_SEARCH>(
-                middleBoard,
-                middleLeftDepth,
-                middleLeftCache.states,
-                middleLeftCache.hashes,
-                searchGoalRoot,
-                goalRightDepth,
-                goalRightCache_.states,
-                goalRightCache_.hashes,
-                outPaths
-        );
     }
 
     MU static void appendStates(JVec<B1B2>& dstStates,
@@ -514,9 +493,11 @@ private:
     MU void recoverMatchedMiddlesGlobally(
             JVec<B1B2>& middleMatches,
             JVec<u64>& middleMatchHashes,
-            GlobalRecoveryMetrics& metrics) {
+            GlobalRecoveryMetrics& metrics,
+            const int worker_count) {
         static_assert(TOTAL_LEFT_DEPTH >= 0 && TOTAL_LEFT_DEPTH <= 10);
-        static_assert(RIGHT_FRONTIER_DEPTH >= 0 && RIGHT_FRONTIER_DEPTH <= 5);
+        // Recovery splits each side in two halves of at most 5 moves.
+        static_assert(RIGHT_FRONTIER_DEPTH >= 0 && RIGHT_FRONTIER_DEPTH <= 10);
 
         metrics = {};
         if (middleMatches.empty()) {
@@ -537,93 +518,100 @@ private:
 
         Timer pathRecoveryTimer;
 
-        static constexpr u32 START_LEFT_DEPTH = TOTAL_LEFT_DEPTH / 2;
-        static constexpr u32 START_RIGHT_DEPTH = TOTAL_LEFT_DEPTH - START_LEFT_DEPTH;
-        static constexpr u32 GOAL_LEFT_DEPTH = RIGHT_FRONTIER_DEPTH / 2;
-        static constexpr u32 GOAL_RIGHT_DEPTH = RIGHT_FRONTIER_DEPTH - GOAL_LEFT_DEPTH;
+        // The larger half of each split is built once and shared read-only by
+        // every middle; each middle only builds the smaller half.
+        static constexpr u32 START_SHARED_DEPTH = (TOTAL_LEFT_DEPTH + 1) / 2;
+        static constexpr u32 START_PER_MIDDLE_DEPTH = TOTAL_LEFT_DEPTH - START_SHARED_DEPTH;
+        static constexpr u32 GOAL_PER_MIDDLE_DEPTH = RIGHT_FRONTIER_DEPTH / 2;
+        static constexpr u32 GOAL_SHARED_DEPTH = RIGHT_FRONTIER_DEPTH - GOAL_PER_MIDDLE_DEPTH;
 
         Board& searchStartRoot = getSearchStartBoard<REVERSE_SEARCH>();
         Board& searchGoalRoot = getSearchGoalBoard<REVERSE_SEARCH>();
 
-        RecoveryBoardFrontierCache startLeftCache;
-        RecoveryBoardFrontierCache middleFromStartRightCache;
-        RecoveryBoardFrontierCache middleToGoalLeftCache;
+        RecoveryBoardFrontierCache startSharedCache;
+        ensureCache(startSharedCache, searchStartRoot, START_SHARED_DEPTH);
+        ensureCache(goalRightCache_, searchGoalRoot, GOAL_SHARED_DEPTH);
+        const RecoveryBoardFrontierCache& goalSharedCache = goalRightCache_;
 
-        ensureCache(startLeftCache, searchStartRoot, START_LEFT_DEPTH);
-        ensureCache(goalRightCache_, searchGoalRoot, GOAL_RIGHT_DEPTH);
-
-        std::set<std::string> rootToMiddlePaths;
-        std::set<std::string> middleToGoalPaths;
+        // Each worker holds two per-middle frontiers (states + hashes + sort
+        // scratch); keep their combined worst case under ~6 GB.
+        const bool fat = searchStartRoot.getFatBool();
+        const double perWorkerBytes =
+                2.0 * static_cast<double>(sizeof(Board) + sizeof(u64))
+                * static_cast<double>(recoveryPathUpperBound(fat, START_PER_MIDDLE_DEPTH)
+                                      + recoveryPathUpperBound(fat, GOAL_PER_MIDDLE_DEPTH));
+        const std::size_t memoryWorkers = std::max<std::size_t>(
+                1, static_cast<std::size_t>(6.0e9 / std::max(1.0, perWorkerBytes)));
+        const std::size_t workerCount = std::min<std::size_t>(
+                {static_cast<std::size_t>(std::max(1, worker_count)), memoryWorkers, middleMatches.size()});
 
         if constexpr (debug) {
             tcout << "global exact recovery: " << middleMatches.size()
-                  << " unique middle states\n";
+                  << " unique middle states, " << workerCount << " workers\n";
         }
 
-        for (std::size_t i = 0; i < middleMatches.size(); ++i) {
-            const Board middleBoard = makeBoardFromState(middleMatches[i]);
+        std::atomic<std::size_t> nextMiddle = 0;
+        std::vector<std::vector<std::string>> workerSolutions(workerCount);
 
-            middleFromStartRightCache.valid = false;
-            middleToGoalLeftCache.valid = false;
+        auto recoverWorker = [&](const std::size_t workerId) {
+            RecoveryBoardFrontierCache middleFromStartCache;
+            RecoveryBoardFrontierCache middleToGoalCache;
+            std::set<std::string> rootToMiddlePaths;
+            std::set<std::string> middleToGoalPaths;
+            std::vector<std::string>& solutions = workerSolutions[workerId];
 
-            ensureCache(
-                    middleFromStartRightCache,
-                    middleBoard,
-                    START_RIGHT_DEPTH
-            );
+            for (std::size_t i; (i = nextMiddle.fetch_add(1)) < middleMatches.size();) {
+                const Board middleBoard = makeBoardFromState(middleMatches[i]);
 
-            recoverExactSplit<REVERSE_SEARCH>(
-                    searchStartRoot,
-                    START_LEFT_DEPTH,
-                    startLeftCache.states,
-                    startLeftCache.hashes,
-                    middleBoard,
-                    START_RIGHT_DEPTH,
-                    middleFromStartRightCache.states,
-                    middleFromStartRightCache.hashes,
-                    rootToMiddlePaths
-            );
+                middleFromStartCache.valid = false;
+                ensureCache(middleFromStartCache, middleBoard, START_PER_MIDDLE_DEPTH);
+                recoverSplitBySharedLookup<REVERSE_SEARCH, false>(
+                        searchStartRoot, middleBoard,
+                        startSharedCache, middleFromStartCache,
+                        rootToMiddlePaths);
+                if (rootToMiddlePaths.empty()) {
+                    continue;
+                }
 
-            if (rootToMiddlePaths.empty()) {
-                continue;
-            }
+                middleToGoalCache.valid = false;
+                ensureCache(middleToGoalCache, middleBoard, GOAL_PER_MIDDLE_DEPTH);
+                recoverSplitBySharedLookup<REVERSE_SEARCH, true>(
+                        middleBoard, searchGoalRoot,
+                        goalSharedCache, middleToGoalCache,
+                        middleToGoalPaths);
+                if (middleToGoalPaths.empty()) {
+                    continue;
+                }
 
-            recoverMiddleToGoal<REVERSE_SEARCH>(
-                    middleMatches[i],
-                    GOAL_LEFT_DEPTH,
-                    GOAL_RIGHT_DEPTH,
-                    middleToGoalLeftCache,
-                    middleToGoalPaths
-            );
-
-            if (middleToGoalPaths.empty()) {
-                continue;
-            }
-
-            if constexpr (REVERSE_SEARCH) {
-                for (const auto& startToMiddle : middleToGoalPaths) {
-                    for (const auto& middleToGoal : rootToMiddlePaths) {
-                        if (startToMiddle.empty()) {
-                            resultSet.insert(middleToGoal);
-                        } else if (middleToGoal.empty()) {
-                            resultSet.insert(startToMiddle);
+                // In reverse search the "start" side is the true goal, so the
+                // middle->goal half comes first in the forward move string.
+                const auto& firstHalf = REVERSE_SEARCH ? middleToGoalPaths : rootToMiddlePaths;
+                const auto& secondHalf = REVERSE_SEARCH ? rootToMiddlePaths : middleToGoalPaths;
+                for (const auto& first : firstHalf) {
+                    for (const auto& second : secondHalf) {
+                        if (first.empty()) {
+                            solutions.push_back(second);
+                        } else if (second.empty()) {
+                            solutions.push_back(first);
                         } else {
-                            resultSet.insert(startToMiddle + " " + middleToGoal);
+                            solutions.push_back(first + " " + second);
                         }
                     }
                 }
-            } else {
-                for (const auto& startToMiddle : rootToMiddlePaths) {
-                    for (const auto& middleToGoal : middleToGoalPaths) {
-                        if (startToMiddle.empty()) {
-                            resultSet.insert(middleToGoal);
-                        } else if (middleToGoal.empty()) {
-                            resultSet.insert(startToMiddle);
-                        } else {
-                            resultSet.insert(startToMiddle + " " + middleToGoal);
-                        }
-                    }
-                }
+            }
+        };
+
+        std::vector<std::thread> recoveryThreads;
+        recoveryThreads.reserve(workerCount);
+        for (std::size_t w = 0; w < workerCount; ++w) {
+            recoveryThreads.emplace_back(recoverWorker, w);
+        }
+        for (auto& thread : recoveryThreads) {
+            thread.join();
+        }
+        for (auto& solutions : workerSolutions) {
+            for (auto& solution : solutions) {
+                resultSet.insert(std::move(solution));
             }
         }
 
@@ -1043,7 +1031,8 @@ private:
                 debug>(
                 allMiddleMatches,
                 allMiddleMatchHashes,
-                recoveryMetrics
+                recoveryMetrics,
+                worker_count
         );
         const double globalRecoverySeconds = recoveryTimer.getSeconds();
 
@@ -1106,6 +1095,39 @@ private:
 
 public:
     using BoardSolverBase::BoardSolverBase;
+
+    // Turns middle states found by an external search (exactly TOTAL_LEFT_DEPTH
+    // moves from the search start, RIGHT_DEPTH moves from the search goal) into
+    // the full validated solution set, written like findSolutions' own output.
+    template<int TOTAL_LEFT_DEPTH, int RIGHT_DEPTH, bool REVERSE_SEARCH>
+    MU int recoverSolutionsFromMiddles(const std::vector<B1B2>& middles, const int worker_count) {
+        resultSet.clear();
+        expandedResultSet.clear();
+        goalRightCache_.valid = false;
+
+        JVec<B1B2> middleStates;
+        JVec<u64> middleHashes;
+        middleStates.resize(middles.size());
+        middleHashes.resize(middles.size());
+        for (std::size_t i = 0; i < middles.size(); ++i) {
+            middleStates[i] = middles[i];
+            middleHashes[i] = StateHash::computeHash(middles[i]);
+        }
+
+        GlobalRecoveryMetrics metrics{};
+        recoverMatchedMiddlesGlobally<TOTAL_LEFT_DEPTH, RIGHT_DEPTH, REVERSE_SEARCH, false>(
+                middleStates, middleHashes, metrics, worker_count);
+
+        if (resultSet.empty()) {
+            tcout << "No solutions found...\n";
+            return 0;
+        }
+        finalizeExactSolutionsIntoFinalSet();
+        if (shouldWriteSolutionsToFile()) {
+            writeExpandedSolutions(TOTAL_LEFT_DEPTH + RIGHT_DEPTH);
+        }
+        return getExpandedSolutionCount();
+    }
 
     template<
             int SEED_DEPTH = 1,

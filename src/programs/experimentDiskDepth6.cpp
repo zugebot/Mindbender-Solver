@@ -1,22 +1,25 @@
 // programs/experimentDiskDepth6.cpp
 //
-// Experiment: <3, 3, 6> meet-in-the-middle with the depth-6 right frontier on disk.
+// Experiment: <S, 3, 6> meet-in-the-middle with the depth-6 right frontier on disk
+// (S = --seed-depth, default 3: 12 moves; 4 gives 13 moves).
 //
 //   Build:  exact depth-5 frontier in RAM -> expand every state by one move ->
 //           route each child to one of 256 partition files by the top 8 bits of
 //           a mixed state key -> sort + de-dupe each partition independently.
 //   Probe:  load a contiguous range of sorted partitions that fits the RAM
-//           budget, index it with RightFrontierIndexB1B2, then regenerate the
-//           whole left side (exact depth-3 seeds, canonical depth-3 stream) and
-//           probe only states whose key falls in that range. Repeat per range.
+//           budget, index it with a direct-address bucket table, then regenerate
+//           the whole left side (exact depth-S seeds, canonical depth-3 stream)
+//           and probe only states whose key falls in that range. Repeat per range.
+//   Recover: full solutions through every middle via BoardSolverFrontier.
 //
-// All disk I/O is sequential. Found middle states are optionally validated
-// against a complete solution file: the state after the first 6 moves of every
-// optimal 12-move solution must be exactly the set of middles found.
+// All disk I/O is sequential. With --solutions, both the middle states and the
+// recovered solution set are checked against a complete known solution file.
 //
 // Usage:
-//   experimentDiskDepth6 <puzzle> [--out X:/mindbender_d6] [--batch 160000000]
-//                        [--threads N] [--reverse] [--rebuild] [--solutions file]
+//   experimentDiskDepth6 <puzzle> [--out X:/mindbender_d6] [--batch 320000000]
+//                        [--threads N] [--seed-depth S] [--reverse] [--rebuild]
+//                        [--no-recover] [--solutions file]
+//                        [--d7-sample N [--d7-pass-budget STATES]]
 
 #include "src/chuzzles/include.hpp"
 
@@ -25,6 +28,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -36,7 +40,6 @@ namespace {
     constexpr u32 PARTITION_COUNT = 1U << PARTITION_BITS;
     constexpr u32 PARTITION_SHIFT = 64U - PARTITION_BITS;
     constexpr std::size_t WRITE_BUFFER_STATES = 8192;
-    constexpr std::size_t PROBE_BUFFER_STATES = 1U << 16;
 
     // StateHash::computeHash keeps the board metadata (color count, fat
     // position) in its top bits, so partition on a fully mixed key instead.
@@ -56,11 +59,15 @@ namespace {
     struct Config {
         std::string puzzle = "6-2";
         fs::path outRoot = "X:/mindbender_d6";
-        u64 batchStates = 160'000'000ULL;
+        u64 batchStates = 320'000'000ULL;
         u32 threads = 0;
         bool reverse = false;
         bool rebuild = false;
         std::string solutionsFile;
+        u32 seedDepth = 3;
+        bool recover = true;
+        u32 d7Sample = 0;
+        u64 d7PassBudget = 375'000'000ULL;
     };
 
     struct KeyedState {
@@ -277,8 +284,93 @@ namespace {
     }
 
     // ------------------------------------------------------------------
-    // Probe: <3, 3> left side against batches of partitions
+    // Probe: <S, 3> left side against batches of partitions
     // ------------------------------------------------------------------
+
+    constexpr u32 LEFT_STREAM_DEPTH = 3;
+    constexpr u32 PROBE_GROUP = 32;
+
+    // Direct-address index over one batch of key-sorted partitions. Keys are
+    // uniform (mixKey), so a bucket is just the top bits of the key, sized for
+    // ~2 states per bucket, and the bucket starts are built in one linear pass.
+    struct BatchIndex {
+        JVec<B1B2> states;
+        std::vector<u32> starts;   // bucketCount + 1 offsets into states
+        u32 shift = 0;             // key >> shift = global bucket number
+        u64 firstBucket = 0;
+
+        void build(const u32 threads, const u32 pBegin, const u32 pEnd) {
+            const u64 n = states.size();
+            if (n >= (1ULL << 32)) {
+                throw std::runtime_error("batch too large for 32-bit bucket offsets");
+            }
+            const u64 partitions = pEnd - pBegin;
+            u32 extraBits = 0;
+            while (extraBits < PARTITION_SHIFT && (partitions << (extraBits + 1)) <= std::max<u64>(1, n / 2)) {
+                ++extraBits;
+            }
+            shift = PARTITION_SHIFT - extraBits;
+            firstBucket = static_cast<u64>(pBegin) << extraBits;
+            const u64 bucketCount = partitions << extraBits;
+
+            std::vector<u32> bucketOf(n);
+            parallelFor(threads, (n + 65535) / 65536, [&](u32, const std::size_t c) {
+                const u64 end = std::min<u64>(n, (c + 1) * 65536);
+                for (u64 i = c * 65536; i < end; ++i) {
+                    bucketOf[i] = static_cast<u32>((keyOf(states[i]) >> shift) - firstBucket);
+                }
+            });
+            starts.assign(bucketCount + 1, 0);
+            u64 next = 0;
+            for (u64 i = 0; i < n; ++i) {
+                while (next <= bucketOf[i]) {
+                    starts[next++] = static_cast<u32>(i);
+                }
+            }
+            while (next <= bucketCount) {
+                starts[next++] = static_cast<u32>(n);
+            }
+        }
+
+        // Probes a group of in-range states, prefetching the bucket offsets and
+        // then the bucket contents so the DRAM misses overlap.
+        void probeGroup(const B1B2* probes, const u64* keys, const u32 count, std::vector<B1B2>& found) const {
+            u64 bucket[PROBE_GROUP];
+            u32 lo[PROBE_GROUP], hi[PROBE_GROUP];
+            for (u32 i = 0; i < count; ++i) {
+                bucket[i] = (keys[i] >> shift) - firstBucket;
+                __builtin_prefetch(&starts[bucket[i]]);
+            }
+            for (u32 i = 0; i < count; ++i) {
+                lo[i] = starts[bucket[i]];
+                hi[i] = starts[bucket[i] + 1];
+                if (lo[i] < hi[i]) {
+                    __builtin_prefetch(&states[lo[i]]);
+                }
+            }
+            for (u32 i = 0; i < count; ++i) {
+                for (u32 j = lo[i]; j < hi[i]; ++j) {
+                    if (states[j] == probes[i]) {
+                        found.push_back(probes[i]);
+                        break;
+                    }
+                }
+            }
+        }
+    };
+
+    void buildSeeds(const Board& root, const u32 depth, JVec<B1B2>& seeds) {
+        JVec<u64> hashes;
+        switch (depth) {
+            case 1: buildUniqueNoneDepthFrontierB1B2<1>(root, seeds, hashes, false); return;
+            case 2: buildUniqueNoneDepthFrontierB1B2<2>(root, seeds, hashes, false); return;
+            case 3: buildUniqueNoneDepthFrontierB1B2<3>(root, seeds, hashes, false); return;
+            case 4: buildUniqueNoneDepthFrontierB1B2<4>(root, seeds, hashes, false); return;
+            case 5: buildUniqueNoneDepthFrontierB1B2<5>(root, seeds, hashes, false); return;
+            default: throw std::runtime_error("seed depth must be 1..5");
+        }
+    }
+
     std::vector<B1B2> probeAllBatches(const Board& leftRoot,
                                       const fs::path& dir,
                                       const std::vector<u64>& counts,
@@ -286,9 +378,9 @@ namespace {
                                       const u32 threads) {
         Timer seedTimer;
         JVec<B1B2> seeds;
-        JVec<u64> seedHashes;
-        buildUniqueNoneDepthFrontierB1B2<3>(leftRoot, seeds, seedHashes, false);
-        tcout << "left seeds (exact depth 3): " << seeds.size() << " in " << seedTimer.getSeconds() << "s\n";
+        buildSeeds(leftRoot, cfg.seedDepth, seeds);
+        tcout << "left seeds (exact depth " << cfg.seedDepth << "): " << seeds.size()
+              << " in " << seedTimer.getSeconds() << "s\n";
 
         std::vector<std::pair<u32, u32>> batches;
         for (u32 p = 0; p < PARTITION_COUNT;) {
@@ -314,53 +406,41 @@ namespace {
             for (u32 p = pBegin; p < pEnd; ++p) {
                 batchSize += counts[p];
             }
-            JVec<B1B2> states;
-            JVec<u64> keys;
-            states.resize(batchSize);
-            keys.resize(batchSize);
+            BatchIndex index;
+            index.states.resize(batchSize);
             u64 offset = 0;
             for (u32 p = pBegin; p < pEnd; ++p) {
                 std::FILE* f = std::fopen(sortedPath(dir, p).string().c_str(), "rb");
-                if (f == nullptr || std::fread(states.data() + offset, sizeof(B1B2), counts[p], f) != counts[p]) {
+                if (f == nullptr || std::fread(index.states.data() + offset, sizeof(B1B2), counts[p], f) != counts[p]) {
                     throw std::runtime_error("failed to read sorted partition");
                 }
                 std::fclose(f);
                 offset += counts[p];
             }
             const double readSeconds = loadTimer.getSeconds();
-            parallelFor(threads, (batchSize + 65535) / 65536, [&](u32, const std::size_t c) {
-                const u64 end = std::min<u64>(batchSize, (c + 1) * 65536);
-                for (u64 i = c * 65536; i < end; ++i) {
-                    keys[i] = keyOf(states[i]);
-                }
-            });
-            loadSeconds += loadTimer.getSeconds();
+            loadSeconds += readSeconds;
 
             Timer indexTimer;
-            RightFrontierIndexB1B2 index;
-            index.buildFromUniqueStates<false>(std::move(states), std::move(keys), leftRoot);
-            indexSeconds += indexTimer.getSeconds();
+            index.build(threads, pBegin, pEnd);
+            const double batchIndexSeconds = indexTimer.getSeconds();
+            indexSeconds += batchIndexSeconds;
 
             Timer probeTimer;
             std::mutex middleLock;
             std::vector<u64> streamed(threads, 0), inRange(threads, 0);
             parallelFor(threads, seeds.size(), [&](const u32 t, const std::size_t s) {
                 struct Sink {
-                    const RightFrontierIndexB1B2& index;
+                    const BatchIndex& index;
                     const u32 pBegin, pEnd;
-                    JVec<B1B2> probeStates, matches;
-                    JVec<u64> probeKeys, matchKeys;
+                    B1B2 groupStates[PROBE_GROUP];
+                    u64 groupKeys[PROBE_GROUP];
+                    u32 groupCount = 0;
                     std::vector<B1B2> found;
                     u64 streamed = 0, inRange = 0;
 
-                    void probe() {
-                        if (probeStates.size() == 0) {
-                            return;
-                        }
-                        index.collectMatches<6, false>(probeStates, probeKeys, matches, matchKeys, nullptr);
-                        found.insert(found.end(), matches.begin(), matches.end());
-                        probeStates.resize(0);
-                        probeKeys.resize(0);
+                    void flush() {
+                        index.probeGroup(groupStates, groupKeys, groupCount, found);
+                        groupCount = 0;
                     }
 
                     void operator()(JVec<B1B2>& chunkStates, JVec<u64>& chunkHashes, const u32 count) {
@@ -371,24 +451,19 @@ namespace {
                             if (p < pBegin || p >= pEnd) {
                                 continue;
                             }
-                            const std::size_t n = probeStates.size();
-                            probeStates.resize(n + 1);
-                            probeKeys.resize(n + 1);
-                            probeStates[n] = chunkStates[i];
-                            probeKeys[n] = key;
+                            groupStates[groupCount] = chunkStates[i];
+                            groupKeys[groupCount] = key;
                             ++inRange;
-                            if (n + 1 == PROBE_BUFFER_STATES) {
-                                probe();
+                            if (++groupCount == PROBE_GROUP) {
+                                flush();
                             }
                         }
                     }
-                } sink{index, pBegin, pEnd, {}, {}, {}, {}, {}, 0, 0};
-                sink.probeStates.reserve(PROBE_BUFFER_STATES);
-                sink.probeKeys.reserve(PROBE_BUFFER_STATES);
+                } sink{index, pBegin, pEnd, {}, {}, 0, {}, 0, 0};
 
                 const Board seedBoard = makeBoardFromState(seeds[s]);
-                PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, 3>(seedBoard, sink, 4096);
-                sink.probe();
+                PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH>(seedBoard, sink, 4096);
+                sink.flush();
 
                 streamed[t] += sink.streamed;
                 inRange[t] += sink.inRange;
@@ -410,7 +485,7 @@ namespace {
             tcout << "  batch " << (b + 1) << "/" << batches.size()
                   << " partitions [" << pBegin << "," << pEnd << ") " << batchSize << " states"
                   << ": read " << readSeconds << "s (" << gbOf(batchSize) / readSeconds * 1000.0 << " MB/s)"
-                  << ", index " << indexTimer.getSeconds() << "s"
+                  << ", index " << batchIndexSeconds << "s"
                   << ", stream+probe " << batchProbeSeconds << "s ("
                   << static_cast<double>(batchStreamed) / batchProbeSeconds / 1e6 << " M left states/s, "
                   << static_cast<double>(batchInRange) / batchProbeSeconds / 1e6 << " M probes/s)\n";
@@ -425,24 +500,157 @@ namespace {
         return allMiddles;
     }
 
-    // Middles expected from a complete 12-move solution file: the state after
-    // the first 6 moves of every solution (from the true start board).
-    std::vector<B1B2> expectedMiddles(const BoardPair& pair, const std::string& file) {
-        std::vector<B1B2> out;
+    // ------------------------------------------------------------------
+    // Depth-7 sample: one real pass over the depth-6 table, keeping N of the
+    // 1024 depth-7 key slices. A full depth-7 build would repeat this pass for
+    // every group of slices that fits in RAM; the raw depth-7 children (~1 TB
+    // for a fat goal) cannot be spilled to disk and sorted afterwards.
+    // ------------------------------------------------------------------
+    void sampleDepth7(const Board& root,
+                      const fs::path& d6Dir,
+                      const std::vector<u64>& d6Counts,
+                      const u32 threads,
+                      const u32 sampleSlices,
+                      const u64 passBudgetStates) {
+        constexpr u32 D7_BITS = 10;
+        constexpr u32 D7_SLICES = 1U << D7_BITS;
+        constexpr u32 D7_SHIFT = 64U - D7_BITS;
+        const fs::path d7Dir = d6Dir.parent_path() / (d6Dir.filename().string() + "_d7_sample");
+        fs::create_directories(d7Dir);
+
+        const bool isFat = root.getFatBool();
+        std::vector<std::vector<std::vector<B1B2>>> local(threads, std::vector<std::vector<B1B2>>(sampleSlices));
+
+        Timer passTimer;
+        double readWaitSeconds = 0.0, expandSeconds = 0.0;
+        u64 parents = 0, childrenTotal = 0;
+
+        auto load = [&](const u32 p) { return readAll<B1B2>(sortedPath(d6Dir, p)); };
+        std::future<std::vector<B1B2>> pending = std::async(std::launch::async, load, 0U);
+        for (u32 p = 0; p < PARTITION_COUNT; ++p) {
+            Timer waitTimer;
+            const std::vector<B1B2> parentsChunk = pending.get();
+            readWaitSeconds += waitTimer.getSeconds();
+            if (p + 1 < PARTITION_COUNT) {
+                pending = std::async(std::launch::async, load, p + 1);
+            }
+
+            Timer expandTimer;
+            std::vector<u64> perThreadChildren(threads, 0);
+            const std::size_t chunk = 1U << 14;
+            parallelFor(threads, (parentsChunk.size() + chunk - 1) / chunk, [&](const u32 t, const std::size_t c) {
+                B1B2 children[60];
+                u64 childHashes[60];
+                const std::size_t end = std::min(parentsChunk.size(), (c + 1) * chunk);
+                for (std::size_t i = c * chunk; i < end; ++i) {
+                    const std::size_t n = isFat
+                            ? frontier_recovery_detail::emitNoneChildren<true>(parentsChunk[i], children, childHashes)
+                            : frontier_recovery_detail::emitNoneChildren<false>(parentsChunk[i], children, childHashes);
+                    perThreadChildren[t] += n;
+                    for (std::size_t k = 0; k < n; ++k) {
+                        const u32 slice = static_cast<u32>(mixKey(childHashes[k]) >> D7_SHIFT);
+                        if (slice < sampleSlices) {
+                            local[t][slice].push_back(children[k]);
+                        }
+                    }
+                }
+            });
+            expandSeconds += expandTimer.getSeconds();
+            parents += parentsChunk.size();
+            for (const u64 n : perThreadChildren) {
+                childrenTotal += n;
+            }
+        }
+        const double scanSeconds = passTimer.getSeconds();
+        tcout << "depth-7 pass over depth-6 table: " << parents << " parents, " << childrenTotal
+              << " children (" << gbOf(childrenTotal) / 1000.0 << " TB raw) in " << scanSeconds
+              << "s (expand " << expandSeconds << "s, waiting on SSD " << readWaitSeconds << "s)\n";
+
+        // Sort + de-dupe the sampled slices, two at a time to bound peak RAM.
+        const u32 sortConcurrency = std::min(2U, sampleSlices);
+        Timer sortTimer;
+        std::vector<u64> rawCounts(sampleSlices, 0), uniqueCounts(sampleSlices, 0);
+        parallelFor(sortConcurrency, sampleSlices, [&](u32, const std::size_t s) {
+            std::vector<KeyedState> keyed;
+            u64 raw = 0;
+            for (u32 t = 0; t < threads; ++t) {
+                raw += local[t][s].size();
+            }
+            keyed.reserve(raw);
+            for (u32 t = 0; t < threads; ++t) {
+                for (const B1B2& state : local[t][s]) {
+                    keyed.push_back({keyOf(state), state});
+                }
+                std::vector<B1B2>{}.swap(local[t][s]);
+            }
+            std::sort(keyed.begin(), keyed.end());
+            std::vector<B1B2> unique;
+            unique.reserve(keyed.size());
+            for (std::size_t i = 0; i < keyed.size(); ++i) {
+                if (i == 0 || keyed[i].key != keyed[i - 1].key || !(keyed[i].state == keyed[i - 1].state)) {
+                    unique.push_back(keyed[i].state);
+                }
+            }
+            writeAll(sortedPath(d7Dir, static_cast<u32>(s)), unique.data(), unique.size());
+            rawCounts[s] = raw;
+            uniqueCounts[s] = unique.size();
+        });
+        const double sortSeconds = sortTimer.getSeconds();
+
+        u64 rawSample = 0, uniqueSample = 0;
+        for (u32 s = 0; s < sampleSlices; ++s) {
+            rawSample += rawCounts[s];
+            uniqueSample += uniqueCounts[s];
+            tcout << "  slice " << s << ": raw " << rawCounts[s] << ", unique " << uniqueCounts[s] << '\n';
+        }
+
+        const double scale = static_cast<double>(D7_SLICES) / sampleSlices;
+        const double uniqueTotal = static_cast<double>(uniqueSample) * scale;
+        const double rawPerSlice = static_cast<double>(rawSample) / sampleSlices;
+        const u32 slicesPerPass = std::max<u32>(1, static_cast<u32>(static_cast<double>(passBudgetStates) / rawPerSlice));
+        const u32 passes = (D7_SLICES + slicesPerPass - 1) / slicesPerPass;
+        const double sortPerSlice = sortSeconds * sortConcurrency / sampleSlices;
+        const double passSeconds = scanSeconds + sortPerSlice * slicesPerPass / sortConcurrency;
+
+        tcout << "sample: " << sampleSlices << "/" << D7_SLICES << " slices, raw " << rawSample
+              << ", unique " << uniqueSample << ", sort+dedupe+write " << sortSeconds << "s\n";
+        tcout << "PROJECTED full depth-7 table: ~" << static_cast<u64>(uniqueTotal) << " unique states, ~"
+              << gbOf(static_cast<u64>(uniqueTotal)) << " GB on disk\n";
+        tcout << "PROJECTED full build: " << passes << " passes of " << slicesPerPass
+              << " slices (RAM budget " << passBudgetStates << " raw states/pass) x ~" << passSeconds
+              << "s = ~" << passes * passSeconds / 3600.0 << " h\n";
+    }
+
+    std::vector<std::string> readSolutionLines(const std::string& file) {
+        std::vector<std::string> lines;
         std::ifstream in(file);
         std::string line;
-        const bool isFat = pair.getStartState().getFatBool();
         while (std::getline(in, line)) {
-            if (line.find_first_not_of(" \t\r\n") == std::string::npos) {
-                continue;
+            while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
+                line.pop_back();
             }
+            if (!line.empty()) {
+                lines.push_back(line);
+            }
+        }
+        return lines;
+    }
+
+    // Middles implied by a complete optimal solution file: the board after the
+    // first `prefixMoves` moves of every solution, applied to the true start.
+    std::vector<B1B2> expectedMiddles(const BoardPair& pair,
+                                      const std::vector<std::string>& solutions,
+                                      const std::size_t prefixMoves) {
+        std::vector<B1B2> out;
+        const bool isFat = pair.getStartState().getFatBool();
+        for (const std::string& line : solutions) {
             const std::vector<u8> moves = isFat ? Memory::parseFatMoveString(line)
                                                 : Memory::parseNormMoveString(line);
-            if (moves.size() != 12) {
-                throw std::runtime_error("expected 12-move solutions in " + file);
+            if (moves.size() < prefixMoves) {
+                throw std::runtime_error("solution shorter than the middle depth: " + line);
             }
             Board board = pair.getStartState();
-            for (std::size_t i = 0; i < 6; ++i) {
+            for (std::size_t i = 0; i < prefixMoves; ++i) {
                 allActStructList[moves[i]].action(board);
             }
             out.push_back(board.asB1B2());
@@ -450,6 +658,27 @@ namespace {
         std::sort(out.begin(), out.end());
         out.erase(std::unique(out.begin(), out.end()), out.end());
         return out;
+    }
+
+    template<int TOTAL_LEFT_DEPTH>
+    int recoverWithLeftDepth(BoardSolverFrontier& solver, const bool reverse,
+                             const std::vector<B1B2>& middles, const u32 threads) {
+        constexpr int TABLE_DEPTH = 6;
+        if (reverse) {
+            return solver.recoverSolutionsFromMiddles<TOTAL_LEFT_DEPTH, TABLE_DEPTH, true>(middles, static_cast<int>(threads));
+        }
+        return solver.recoverSolutionsFromMiddles<TOTAL_LEFT_DEPTH, TABLE_DEPTH, false>(middles, static_cast<int>(threads));
+    }
+
+    int recoverSolutions(BoardSolverFrontier& solver, const Config& cfg, const std::vector<B1B2>& middles) {
+        switch (cfg.seedDepth + LEFT_STREAM_DEPTH) {
+            case 4: return recoverWithLeftDepth<4>(solver, cfg.reverse, middles, cfg.threads);
+            case 5: return recoverWithLeftDepth<5>(solver, cfg.reverse, middles, cfg.threads);
+            case 6: return recoverWithLeftDepth<6>(solver, cfg.reverse, middles, cfg.threads);
+            case 7: return recoverWithLeftDepth<7>(solver, cfg.reverse, middles, cfg.threads);
+            case 8: return recoverWithLeftDepth<8>(solver, cfg.reverse, middles, cfg.threads);
+            default: throw std::runtime_error("unsupported left depth for recovery");
+        }
     }
 
     Config parseArgs(const int argc, char** argv) {
@@ -465,9 +694,13 @@ namespace {
             if (a == "--out") cfg.outRoot = next();
             else if (a == "--batch") cfg.batchStates = std::stoull(next());
             else if (a == "--threads") cfg.threads = static_cast<u32>(std::stoul(next()));
+            else if (a == "--seed-depth") cfg.seedDepth = static_cast<u32>(std::stoul(next()));
             else if (a == "--reverse") cfg.reverse = true;
             else if (a == "--rebuild") cfg.rebuild = true;
+            else if (a == "--no-recover") cfg.recover = false;
             else if (a == "--solutions") cfg.solutionsFile = next();
+            else if (a == "--d7-sample") cfg.d7Sample = static_cast<u32>(std::stoul(next()));
+            else if (a == "--d7-pass-budget") cfg.d7PassBudget = std::stoull(next());
             else cfg.puzzle = a;
         }
         if (cfg.threads == 0) {
@@ -491,8 +724,11 @@ int main(const int argc, char** argv) {
     const Board& leftRoot = cfg.reverse ? goal : start;
     const Board& rightRoot = cfg.reverse ? start : goal;
     const fs::path dir = cfg.outRoot / (cfg.puzzle + (cfg.reverse ? "_start_d6" : "_goal_d6"));
+    const u32 leftDepth = cfg.seedDepth + LEFT_STREAM_DEPTH;
+    const u32 totalDepth = leftDepth + 6;
 
-    tcout << "puzzle " << cfg.puzzle << " <3,3,6>, " << (cfg.reverse ? "reverse" : "forward")
+    tcout << "puzzle " << cfg.puzzle << " <" << cfg.seedDepth << "," << LEFT_STREAM_DEPTH << ",6> = "
+          << totalDepth << " moves, " << (cfg.reverse ? "reverse" : "forward")
           << ", threads " << cfg.threads << ", table dir " << dir.string() << '\n';
 
     const Timer total;
@@ -509,25 +745,59 @@ int main(const int argc, char** argv) {
         tcout << "reusing depth-6 table: " << n << " states (" << gbOf(n) << " GB)\n";
     }
 
+    if (cfg.d7Sample > 0) {
+        sampleDepth7(rightRoot, dir, counts, cfg.threads, cfg.d7Sample, cfg.d7PassBudget);
+        return 0;
+    }
+
     const Timer probeTimer;
     const std::vector<B1B2> middles = probeAllBatches(leftRoot, dir, counts, cfg, cfg.threads);
     const double probeSeconds = probeTimer.getSeconds();
+    tcout << "unique middle states (" << leftDepth << " from left, 6 from table side): "
+          << middles.size() << '\n';
+    tcout << "PROBE phase: " << probeSeconds << "s\n";
 
-    tcout << "unique middle states at depth 6: " << middles.size() << '\n';
-    tcout << "PROBE phase: " << probeSeconds << "s, TOTAL: " << total.getSeconds()
-          << "s (build " << buildSeconds << "s)\n";
-
+    int status = 0;
+    std::vector<std::string> known;
     if (!cfg.solutionsFile.empty()) {
-        const std::vector<B1B2> expected = expectedMiddles(*pair, cfg.solutionsFile);
+        known = readSolutionLines(cfg.solutionsFile);
+        // The middle sits leftDepth moves from the left root; counted from the
+        // true start that is leftDepth (forward) or 6 (reverse) moves in.
+        const std::vector<B1B2> expected = expectedMiddles(*pair, known, cfg.reverse ? 6 : leftDepth);
         std::vector<B1B2> missing, extra;
         std::set_difference(expected.begin(), expected.end(), middles.begin(), middles.end(),
                             std::back_inserter(missing));
         std::set_difference(middles.begin(), middles.end(), expected.begin(), expected.end(),
                             std::back_inserter(extra));
-        tcout << "validation vs " << cfg.solutionsFile << ": expected " << expected.size()
+        tcout << "middle validation vs " << cfg.solutionsFile << ": expected " << expected.size()
               << ", missing " << missing.size() << ", extra " << extra.size()
               << (missing.empty() && extra.empty() ? "  -> EXACT MATCH\n" : "  -> MISMATCH\n");
-        return missing.empty() && extra.empty() ? 0 : 2;
+        status = missing.empty() && extra.empty() ? 0 : 2;
     }
-    return 0;
+
+    double recoverSeconds = 0.0;
+    if (cfg.recover && !middles.empty()) {
+        const Timer recoverTimer;
+        BoardSolverFrontier solver(pair);
+        solver.setWriteDirectory((dir / "solutions").string());
+        const int found = recoverSolutions(solver, cfg, middles);
+        recoverSeconds = recoverTimer.getSeconds();
+        tcout << "RECOVERY: " << found << " solutions of " << totalDepth << " moves in "
+              << recoverSeconds << "s (written under " << (dir / "solutions" / "levels").string() << ")\n";
+
+        if (!known.empty()) {
+            const std::set<std::string> knownSet(known.begin(), known.end());
+            const bool same = knownSet == solver.getExpandedSolutions();
+            tcout << "solution validation: known " << knownSet.size() << ", recovered "
+                  << solver.getExpandedSolutions().size()
+                  << (same ? "  -> IDENTICAL SET\n" : "  -> SETS DIFFER\n");
+            if (!same) {
+                status = 2;
+            }
+        }
+    }
+
+    tcout << "TOTAL: " << total.getSeconds() << "s (build " << buildSeconds << "s, probe "
+          << probeSeconds << "s, recovery " << recoverSeconds << "s)\n";
+    return status;
 }
