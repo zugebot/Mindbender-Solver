@@ -62,7 +62,9 @@ std::vector<std::string> readFileLines(const fs::path&filepath) {
     std::string line;
 
     while (std::getline(file, line)) {
-        lines.push_back(line);
+        if (line.find_first_not_of(" \t\r\n") != std::string::npos) {
+            lines.push_back(line);
+        }
     }
 
     return lines;
@@ -76,13 +78,11 @@ int main() {
     auto files = getTxtFiles(outDirectory);
     std::sort(files.begin(), files.end(), compareFiles);
     for (const auto& file : files) {
-        auto [X, Y, M, N] = parseFileName(file);
-
-        if (X == 6 && Y < 5) { continue; }
+        auto [X, Y, moveCount, expectedSolutionCount] = parseFileName(file);
         std::string levelName = std::to_string(X) + "-" + std::to_string(Y);
         if (levelName.size() >= 5) {
             tcout << "[" << std::setw(4) << levelName
-                      << ", " << std::setw(3) << "c" + std::to_string(M)
+                      << ", " << std::setw(3) << "c" + std::to_string(moveCount)
                       << "] (invalid) skipping" << "...\n";
             continue;
         }
@@ -90,7 +90,7 @@ int main() {
         BoardPair const* pair = BoardLookup::getBoardPair(levelName);
         if (pair == nullptr) {
             tcout << "[" << std::setw(4) << levelName
-                      << ", " << std::setw(3) << "c" + std::to_string(M)
+                      << ", " << std::setw(3) << "c" + std::to_string(moveCount)
                       << "] (nullptr) skipping" << "...\n";
             continue;
         }
@@ -103,43 +103,47 @@ int main() {
 
 
 
-        auto solutions = readFileLines(file);
+        const auto solutions = readFileLines(file);
+        const bool isFatPuzzle = startingBoard.getFatBool();
 
         size_t realSolutionCount = 0;
-        size_t totalSolutionCount = solutions.size();
-        if (!startingBoard.getFatBool()) {
-            for (const auto& solution : solutions) {
-                std::vector<u8> action_numbers = Memory::parseNormMoveString(solution);
-                Board toCheckBoard = startingBoard;
-                for (const u8 action_number : action_numbers) {
-                    allActStructList[action_number].action(toCheckBoard);
-                }
-                if (toCheckBoard == realSolutionBoard) {
-                    realSolutionCount += 1;
-                }
+        size_t malformedSolutionCount = 0;
+
+        for (const auto& solution : solutions) {
+            const std::vector<u8> actionNumbers = isFatPuzzle
+                                                      ? Memory::parseFatMoveString(solution)
+                                                      : Memory::parseNormMoveString(solution);
+
+            // A malformed or partially parsed line must not be executed as if it
+            // were a complete known solution.
+            if (actionNumbers.size() != static_cast<size_t>(moveCount)) {
+                ++malformedSolutionCount;
+                continue;
             }
 
-            tcout << "--- [" << std::setw(4) << levelName << " / "
-                      << std::setw(3) << "c" + std::to_string(M) << "]: ";
-            tcout << realSolutionCount << "/" << totalSolutionCount << "\n";
-
-        } else {
-            for (const auto& solution : solutions) {
-                std::vector<u8> action_numbers = Memory::parseFatMoveString(solution);
-                Board toCheckBoard = startingBoard;
-                for (const u8 action_number : action_numbers) {
-                    allActStructList[action_number].action(toCheckBoard);
-                }
-
-                if (toCheckBoard == realSolutionBoard) {
-                    realSolutionCount += 1;
-                }
+            Board toCheckBoard = startingBoard;
+            for (const u8 actionNumber : actionNumbers) {
+                allActStructList[actionNumber].action(toCheckBoard);
             }
 
-            tcout << "FAT [" << std::setw(4) << levelName << " / "
-                      << std::setw(3) << "c" + std::to_string(M) << "]: ";
-            tcout << realSolutionCount << "/" << totalSolutionCount << "\n";
+            if (toCheckBoard == realSolutionBoard) {
+                ++realSolutionCount;
+            }
         }
+
+        tcout << (isFatPuzzle ? "FAT [" : "--- [")
+              << std::setw(4) << levelName << " / "
+              << std::setw(3) << "c" + std::to_string(moveCount) << "]: "
+              << realSolutionCount << "/" << solutions.size();
+
+        if (malformedSolutionCount != 0) {
+            tcout << " (" << malformedSolutionCount << " malformed)";
+        }
+        if (expectedSolutionCount != 0
+            && solutions.size() != static_cast<size_t>(expectedSolutionCount)) {
+            tcout << " (filename expects " << expectedSolutionCount << ")";
+        }
+        tcout << "\n";
 
 
     }

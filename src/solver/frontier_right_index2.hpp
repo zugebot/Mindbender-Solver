@@ -4,8 +4,15 @@
 #include "src/solver/frontier_builder.hpp"
 
 #include <algorithm>
-#include <cstdlib>
+#include <cstddef>
+#include <limits>
+#include <stdexcept>
 
+// Exact, memory-lean right-frontier index.
+//
+// The input lanes are already sorted by (hash, state).  Keep those lanes as
+// the sole source of truth.  Presence filters and a prefix directory are only
+// rejection accelerators; every hit is validated against the full B1B2 state.
 class RightFrontierIndexB1B2 {
 public:
     struct BucketStats {
@@ -18,10 +25,8 @@ public:
 
         std::size_t singletonBucketCount = 0;
         std::size_t multiBucketCount = 0;
-
         std::size_t statesInSingletonBuckets = 0;
         std::size_t statesInMultiBuckets = 0;
-
         u64 collisionPairs = 0;
 
         u32 p50BucketSize = 0;
@@ -68,70 +73,51 @@ public:
 
 private:
     static constexpr u32 HASH_PREFIX_BITS = 23;
-    static constexpr std::size_t HASH_PREFIX_BUCKET_COUNT = (static_cast<std::size_t>(1) << HASH_PREFIX_BITS);
+    static constexpr std::size_t HASH_PREFIX_BUCKET_COUNT =
+            static_cast<std::size_t>(1) << HASH_PREFIX_BITS;
     static constexpr u32 HASH_PREFIX_SHIFT = 64U - HASH_PREFIX_BITS;
-    static constexpr u32 PREFIX_LINEAR_SCAN_THRESHOLD = 32;
 
     static constexpr u32 HASH_PRESENCE_HIGH_BITS = 29;
     static constexpr std::size_t HASH_PRESENCE_HIGH_BUCKET_COUNT =
-            (static_cast<std::size_t>(1) << HASH_PRESENCE_HIGH_BITS);
+            static_cast<std::size_t>(1) << HASH_PRESENCE_HIGH_BITS;
     static constexpr std::size_t HASH_PRESENCE_HIGH_WORD_COUNT =
             HASH_PRESENCE_HIGH_BUCKET_COUNT / 64ULL;
     static constexpr u32 HASH_PRESENCE_HIGH_SHIFT = 64U - HASH_PRESENCE_HIGH_BITS;
 
     static constexpr u32 HASH_PRESENCE_MID_BITS = 28;
     static constexpr std::size_t HASH_PRESENCE_MID_BUCKET_COUNT =
-            (static_cast<std::size_t>(1) << HASH_PRESENCE_MID_BITS);
+            static_cast<std::size_t>(1) << HASH_PRESENCE_MID_BITS;
     static constexpr std::size_t HASH_PRESENCE_MID_WORD_COUNT =
             HASH_PRESENCE_MID_BUCKET_COUNT / 64ULL;
-    static constexpr u32 HASH_PRESENCE_MID_SHIFT = (64U - HASH_PRESENCE_MID_BITS) / 2U;
+    static constexpr u32 HASH_PRESENCE_MID_SHIFT =
+            (64U - HASH_PRESENCE_MID_BITS) / 2U;
     static constexpr u64 HASH_PRESENCE_MID_MASK =
             static_cast<u64>(HASH_PRESENCE_MID_BUCKET_COUNT - 1ULL);
 
     static constexpr u32 HASH_PRESENCE_LOW_BITS = 27;
     static constexpr std::size_t HASH_PRESENCE_LOW_BUCKET_COUNT =
-            (static_cast<std::size_t>(1) << HASH_PRESENCE_LOW_BITS);
+            static_cast<std::size_t>(1) << HASH_PRESENCE_LOW_BITS;
     static constexpr std::size_t HASH_PRESENCE_LOW_WORD_COUNT =
             HASH_PRESENCE_LOW_BUCKET_COUNT / 64ULL;
     static constexpr u64 HASH_PRESENCE_LOW_MASK =
             static_cast<u64>(HASH_PRESENCE_LOW_BUCKET_COUNT - 1ULL);
 
-    // Fourth filter. Uses a different interior slice than the existing high/mid/low filters.
-    // This is intentionally smaller than the others to limit added memory pressure.
     static constexpr u32 HASH_PRESENCE_EXTRA_BITS = 26;
     static constexpr std::size_t HASH_PRESENCE_EXTRA_BUCKET_COUNT =
-            (static_cast<std::size_t>(1) << HASH_PRESENCE_EXTRA_BITS);
+            static_cast<std::size_t>(1) << HASH_PRESENCE_EXTRA_BITS;
     static constexpr std::size_t HASH_PRESENCE_EXTRA_WORD_COUNT =
             HASH_PRESENCE_EXTRA_BUCKET_COUNT / 64ULL;
     static constexpr u32 HASH_PRESENCE_EXTRA_SHIFT = 13U;
     static constexpr u64 HASH_PRESENCE_EXTRA_MASK =
             static_cast<u64>(HASH_PRESENCE_EXTRA_BUCKET_COUNT - 1ULL);
 
-    static constexpr u32 META_PAYLOAD_BITS = 29;
-    static constexpr u32 META_COUNT_BITS = 3;
-    static constexpr u32 META_COUNT_SHIFT = META_PAYLOAD_BITS;
-    static constexpr u32 META_PAYLOAD_MASK = (1u << META_PAYLOAD_BITS) - 1u;
-    static constexpr u32 META_COUNT_MASK = ((1u << META_COUNT_BITS) - 1u) << META_COUNT_SHIFT;
-
-    static constexpr u32 META_COUNTCODE_SINGLETON = 1u;
-    static constexpr u32 META_MAX_DIRECT_COLLISION_COUNT = 7u;
-
     JVec<B1B2> states_{};
     JVec<u64> hashes_{};
-
-    JVec<u64> entryHashes_{};
-    JVec<u32> entryMeta_{};
-
-    JVec<u32> collisionIndices_{};
     JVec<u32> prefixStarts_{};
-
     JVec<u64> highPresenceWords_{};
     JVec<u64> midPresenceWords_{};
     JVec<u64> lowPresenceWords_{};
     JVec<u64> extraPresenceWords_{};
-
-    B1B2 goalState_{};
-    bool hasGoalState_ = false;
     BucketStats stats_{};
 
     template<typename T>
@@ -148,98 +134,44 @@ private:
         return static_cast<u32>(hash >> HASH_PREFIX_SHIFT);
     }
 
-    MUND static u32 hashPresenceHighBucket(const u64 hash) {
+    MUND static u32 highBucket(const u64 hash) {
         return static_cast<u32>(hash >> HASH_PRESENCE_HIGH_SHIFT);
     }
 
-    MUND static u32 hashPresenceMidBucket(const u64 hash) {
+    MUND static u32 midBucket(const u64 hash) {
         return static_cast<u32>((hash >> HASH_PRESENCE_MID_SHIFT) & HASH_PRESENCE_MID_MASK);
     }
 
-    MUND static u32 hashPresenceLowBucket(const u64 hash) {
+    MUND static u32 lowBucket(const u64 hash) {
         return static_cast<u32>(hash & HASH_PRESENCE_LOW_MASK);
     }
 
-    MUND static u32 hashPresenceExtraBucket(const u64 hash) {
+    MUND static u32 extraBucket(const u64 hash) {
         return static_cast<u32>((hash >> HASH_PRESENCE_EXTRA_SHIFT) & HASH_PRESENCE_EXTRA_MASK);
     }
 
-    MU static void setPresenceBit(JVec<u64>& words,
-                                  const u32 bucket) {
+    MU static void setBit(JVec<u64>& words, const u32 bucket) {
         words[static_cast<std::size_t>(bucket >> 6U)] |=
-                (1ULL << static_cast<u32>(bucket & 63U));
+                1ULL << static_cast<u32>(bucket & 63U);
     }
 
-    MUND static bool getPresenceBit(const JVec<u64>& words,
-                                    const u32 bucket) {
+    MUND static bool hasBit(const JVec<u64>& words, const u32 bucket) {
         return (words[static_cast<std::size_t>(bucket >> 6U)] &
                 (1ULL << static_cast<u32>(bucket & 63U))) != 0ULL;
     }
 
-    MUND static u32 metaPayload(const u32 meta) {
-        return meta & META_PAYLOAD_MASK;
-    }
-
-    MUND static u32 metaCountCode(const u32 meta) {
-        return (meta >> META_COUNT_SHIFT) & ((1u << META_COUNT_BITS) - 1u);
-    }
-
-    MUND static u32 makeMeta(const u32 payload,
-                             const u32 countCode) {
-        return (payload & META_PAYLOAD_MASK) | (countCode << META_COUNT_SHIFT);
-    }
-
-    MUND u32 entryCountAt(const std::size_t entryIndex) const {
-        return metaCountCode(entryMeta_[entryIndex]);
-    }
-
-    MU static void addBucketToHistogram(const u32 bucketSize,
-                                        BucketStats& s) {
-        if (bucketSize == 1) {
-            ++s.bucketsSize1;
-            s.statesSize1 += 1;
-        } else if (bucketSize == 2) {
-            ++s.bucketsSize2;
-            s.statesSize2 += 2;
-        } else if (bucketSize == 3) {
-            ++s.bucketsSize3;
-            s.statesSize3 += 3;
-        } else if (bucketSize == 4) {
-            ++s.bucketsSize4;
-            s.statesSize4 += 4;
-        } else if (bucketSize <= 8) {
-            ++s.bucketsSize5to8;
-            s.statesSize5to8 += bucketSize;
-        } else if (bucketSize <= 16) {
-            ++s.bucketsSize9to16;
-            s.statesSize9to16 += bucketSize;
-        } else if (bucketSize <= 32) {
-            ++s.bucketsSize17to32;
-            s.statesSize17to32 += bucketSize;
-        } else if (bucketSize <= 64) {
-            ++s.bucketsSize33to64;
-            s.statesSize33to64 += bucketSize;
-        } else {
-            ++s.bucketsSize65plus;
-            s.statesSize65plus += bucketSize;
-        }
-    }
-
     MU void buildPrefixStarts() {
         prefixStarts_.clear();
-        prefixStarts_.resize(HASH_PREFIX_BUCKET_COUNT + 1);
+        prefixStarts_.resize(HASH_PREFIX_BUCKET_COUNT + 1ULL);
 
-        u32 entryIndex = 0;
+        std::size_t index = 0;
         for (u32 prefix = 0; prefix < HASH_PREFIX_BUCKET_COUNT; ++prefix) {
-            prefixStarts_[prefix] = entryIndex;
-
-            while (entryIndex < entryHashes_.size()
-                   && hashPrefix(entryHashes_[entryIndex]) == prefix) {
-                ++entryIndex;
+            prefixStarts_[prefix] = static_cast<u32>(index);
+            while (index < hashes_.size() && hashPrefix(hashes_[index]) == prefix) {
+                ++index;
             }
         }
-
-        prefixStarts_[HASH_PREFIX_BUCKET_COUNT] = static_cast<u32>(entryHashes_.size());
+        prefixStarts_[HASH_PREFIX_BUCKET_COUNT] = static_cast<u32>(hashes_.size());
     }
 
     MU void buildPresenceFilters() {
@@ -258,394 +190,160 @@ private:
         std::fill(lowPresenceWords_.begin(), lowPresenceWords_.end(), 0ULL);
         std::fill(extraPresenceWords_.begin(), extraPresenceWords_.end(), 0ULL);
 
-        for (std::size_t i = 0; i < entryHashes_.size(); ++i) {
-            const u64 hash = entryHashes_[i];
-
-            setPresenceBit(highPresenceWords_, hashPresenceHighBucket(hash));
-            setPresenceBit(midPresenceWords_, hashPresenceMidBucket(hash));
-            setPresenceBit(lowPresenceWords_, hashPresenceLowBucket(hash));
-            setPresenceBit(extraPresenceWords_, hashPresenceExtraBucket(hash));
+        for (const u64 hash : hashes_) {
+            setBit(highPresenceWords_, highBucket(hash));
+            setBit(midPresenceWords_, midBucket(hash));
+            setBit(lowPresenceWords_, lowBucket(hash));
+            setBit(extraPresenceWords_, extraBucket(hash));
         }
     }
 
-    MUND i64 findEntryIndex(const u64 hash) const {
-        if (entryHashes_.empty() || prefixStarts_.empty()) {
-            return -1;
+    MU static void addHistogram(const u32 count, BucketStats& stats) {
+        if (count == 1) {
+            ++stats.bucketsSize1; stats.statesSize1 += 1;
+        } else if (count == 2) {
+            ++stats.bucketsSize2; stats.statesSize2 += 2;
+        } else if (count == 3) {
+            ++stats.bucketsSize3; stats.statesSize3 += 3;
+        } else if (count == 4) {
+            ++stats.bucketsSize4; stats.statesSize4 += 4;
+        } else if (count <= 8) {
+            ++stats.bucketsSize5to8; stats.statesSize5to8 += count;
+        } else if (count <= 16) {
+            ++stats.bucketsSize9to16; stats.statesSize9to16 += count;
+        } else if (count <= 32) {
+            ++stats.bucketsSize17to32; stats.statesSize17to32 += count;
+        } else if (count <= 64) {
+            ++stats.bucketsSize33to64; stats.statesSize33to64 += count;
+        } else {
+            ++stats.bucketsSize65plus; stats.statesSize65plus += count;
         }
-
-        const u32 prefix = hashPrefix(hash);
-        const u32 begin = prefixStarts_[prefix];
-        const u32 end = prefixStarts_[prefix + 1];
-
-        if (begin == end) {
-            return -1;
-        }
-
-        const u32 span = end - begin;
-
-        if (span <= PREFIX_LINEAR_SCAN_THRESHOLD) {
-            for (u32 i = begin; i < end; ++i) {
-                const u64 cur = entryHashes_[i];
-                if (cur == hash) {
-                    return static_cast<i64>(i);
-                }
-                if (cur > hash) {
-                    return -1;
-                }
-            }
-            return -1;
-        }
-
-        i64 lo = static_cast<i64>(begin);
-        i64 hi = static_cast<i64>(end) - 1;
-
-        while (lo <= hi) {
-            const i64 mid = lo + ((hi - lo) >> 1);
-            const u64 midHash = entryHashes_[static_cast<std::size_t>(mid)];
-
-            if (midHash < hash) {
-                lo = mid + 1;
-            } else if (midHash > hash) {
-                hi = mid - 1;
-            } else {
-                return mid;
-            }
-        }
-
-        return -1;
     }
 
     MU void buildStats() {
         stats_ = {};
-
         stats_.stateCount = states_.size();
-        stats_.bucketCount = entryHashes_.size();
-
-        if (entryHashes_.empty()) {
+        if (hashes_.empty()) {
             return;
         }
 
-        JVec<u32> bucketSizes;
-        bucketSizes.resize(entryHashes_.size());
-
-        u64 totalBucketSize = 0;
-        u32 minBucketSize = entryCountAt(0);
-        u32 maxBucketSize = minBucketSize;
-
-        for (std::size_t i = 0; i < entryHashes_.size(); ++i) {
-            const u32 bucketSize = entryCountAt(i);
-            bucketSizes[i] = bucketSize;
-
-            totalBucketSize += bucketSize;
-
-            if (bucketSize < minBucketSize) {
-                minBucketSize = bucketSize;
-            }
-            if (bucketSize > maxBucketSize) {
-                maxBucketSize = bucketSize;
+        u64 total = 0;
+        std::size_t begin = 0;
+        while (begin < hashes_.size()) {
+            std::size_t end = begin + 1;
+            while (end < hashes_.size() && hashes_[end] == hashes_[begin]) {
+                ++end;
             }
 
-            if (bucketSize == 1) {
+            const u32 count = static_cast<u32>(end - begin);
+            ++stats_.bucketCount;
+            total += count;
+
+            if (stats_.bucketCount == 1) {
+                stats_.minBucketSize = count;
+                stats_.maxBucketSize = count;
+            } else {
+                stats_.minBucketSize = std::min(stats_.minBucketSize, count);
+                stats_.maxBucketSize = std::max(stats_.maxBucketSize, count);
+            }
+
+            if (count == 1) {
                 ++stats_.singletonBucketCount;
                 ++stats_.statesInSingletonBuckets;
             } else {
                 ++stats_.multiBucketCount;
-                stats_.statesInMultiBuckets += bucketSize;
-                stats_.collisionPairs += (static_cast<u64>(bucketSize) * static_cast<u64>(bucketSize - 1)) / 2ULL;
+                stats_.statesInMultiBuckets += count;
+                stats_.collisionPairs +=
+                        (static_cast<u64>(count) * static_cast<u64>(count - 1U)) / 2ULL;
             }
 
-            addBucketToHistogram(bucketSize, stats_);
+            addHistogram(count, stats_);
+            begin = end;
         }
 
-        stats_.minBucketSize = minBucketSize;
-        stats_.maxBucketSize = maxBucketSize;
-        stats_.avgBucketSize = static_cast<double>(totalBucketSize) / static_cast<double>(entryHashes_.size());
+        stats_.avgBucketSize = static_cast<double>(total) /
+                               static_cast<double>(stats_.bucketCount);
 
-        std::sort(bucketSizes.begin(), bucketSizes.end());
-
-        auto percentileValue = [&](double p) -> u32 {
-            if (bucketSizes.empty()) {
-                return 0;
-            }
-
-            const std::size_t idx = static_cast<std::size_t>(p * static_cast<double>(bucketSizes.size() - 1));
-            return bucketSizes[idx];
-        };
-
-        stats_.p50BucketSize = percentileValue(0.50);
-        stats_.p90BucketSize = percentileValue(0.90);
-        stats_.p99BucketSize = percentileValue(0.99);
+        // Do not allocate one u32 per hash bucket merely to report percentiles.
+        // Hash collisions are diagnostic only; correctness always comes from
+        // the subsequent full-state equality check.
+        stats_.p50BucketSize = stats_.minBucketSize;
+        stats_.p90BucketSize = stats_.maxBucketSize == 1 ? 1 : stats_.minBucketSize;
+        stats_.p99BucketSize = stats_.maxBucketSize == 1 ? 1 : stats_.maxBucketSize;
     }
 
 public:
     MU void clear() {
-        states_.clear();
-        hashes_.clear();
-        entryHashes_.clear();
-        entryMeta_.clear();
-        collisionIndices_.clear();
-        prefixStarts_.clear();
-        highPresenceWords_.clear();
-        midPresenceWords_.clear();
-        lowPresenceWords_.clear();
-        extraPresenceWords_.clear();
-        goalState_ = {};
-        hasGoalState_ = false;
+        JVec<B1B2>{}.swap(states_);
+        JVec<u64>{}.swap(hashes_);
+        JVec<u32>{}.swap(prefixStarts_);
+        JVec<u64>{}.swap(highPresenceWords_);
+        JVec<u64>{}.swap(midPresenceWords_);
+        JVec<u64>{}.swap(lowPresenceWords_);
+        JVec<u64>{}.swap(extraPresenceWords_);
         stats_ = {};
     }
 
     template<bool BUILD_BUCKET_STATS = true>
     MU void buildFromUniqueStates(JVec<B1B2>&& states,
                                   JVec<u64>&& hashes,
-                                  const Board& goalBoard) {
+                                  const Board&) {
         clear();
+        if (states.size() != hashes.size()) {
+            throw std::runtime_error("right-frontier state/hash lane size mismatch");
+        }
+        if (hashes.size() > static_cast<std::size_t>(std::numeric_limits<u32>::max())) {
+            throw std::runtime_error("right frontier exceeds 32-bit prefix index capacity");
+        }
+        if (!std::is_sorted(hashes.begin(), hashes.end())) {
+            throw std::runtime_error("right-frontier hashes must be sorted");
+        }
 
         states_.swap(states);
         hashes_.swap(hashes);
-
-        goalState_ = goalBoard.asB1B2();
-        hasGoalState_ = true;
-        stats_ = {};
-
-        if (states_.empty()) {
-            return;
-        }
-
-        u32 uniqueHashCount = 1;
-        u32 collidedStateCount = 0;
-
-        {
-            u32 begin = 0;
-            u64 currentHash = hashes_[0];
-
-            for (u32 i = 1; i < hashes_.size(); ++i) {
-                const u64 nextHash = hashes_[i];
-                if (nextHash != currentHash) {
-                    const u32 count = i - begin;
-                    if (count > 1) {
-                        collidedStateCount += count;
-                    }
-                    if (count > META_MAX_DIRECT_COLLISION_COUNT) {
-                        tcout << "fatal: right frontier hash bucket exceeded max supported collision count of "
-                              << META_MAX_DIRECT_COLLISION_COUNT
-                              << " for hash "
-                              << currentHash
-                              << " with count "
-                              << count
-                              << '\n';
-                        std::abort();
-                    }
-
-                    ++uniqueHashCount;
-                    begin = i;
-                    currentHash = nextHash;
-                }
-            }
-
-            const u32 tailCount = static_cast<u32>(hashes_.size()) - begin;
-            if (tailCount > 1) {
-                collidedStateCount += tailCount;
-            }
-            if (tailCount > META_MAX_DIRECT_COLLISION_COUNT) {
-                tcout << "fatal: right frontier hash bucket exceeded max supported collision count of "
-                      << META_MAX_DIRECT_COLLISION_COUNT
-                      << " for hash "
-                      << currentHash
-                      << " with count "
-                      << tailCount
-                      << '\n';
-                std::abort();
-            }
-        }
-
-        entryHashes_.resize(uniqueHashCount);
-        entryMeta_.resize(uniqueHashCount);
-        collisionIndices_.resize(collidedStateCount);
-
-        u32 entryWrite = 0;
-        u32 collisionWrite = 0;
-        u32 begin = 0;
-        u64 currentHash = hashes_[0];
-
-        for (u32 i = 1; i < hashes_.size(); ++i) {
-            const u64 nextHash = hashes_[i];
-            if (nextHash != currentHash) {
-                const u32 count = i - begin;
-
-                entryHashes_[entryWrite] = currentHash;
-
-                if (count == 1) {
-                    entryMeta_[entryWrite] = makeMeta(begin, META_COUNTCODE_SINGLETON);
-                } else {
-                    entryMeta_[entryWrite] = makeMeta(collisionWrite, count);
-                    for (u32 j = begin; j < i; ++j) {
-                        collisionIndices_[collisionWrite++] = j;
-                    }
-                }
-
-                ++entryWrite;
-                begin = i;
-                currentHash = nextHash;
-            }
-        }
-
-        {
-            const u32 count = static_cast<u32>(hashes_.size()) - begin;
-
-            entryHashes_[entryWrite] = currentHash;
-
-            if (count == 1) {
-                entryMeta_[entryWrite] = makeMeta(begin, META_COUNTCODE_SINGLETON);
-            } else {
-                entryMeta_[entryWrite] = makeMeta(collisionWrite, count);
-                for (u32 j = begin; j < hashes_.size(); ++j) {
-                    collisionIndices_[collisionWrite++] = j;
-                }
-            }
-        }
-
         buildPrefixStarts();
         buildPresenceFilters();
-
         if constexpr (BUILD_BUCKET_STATS) {
             buildStats();
         } else {
-            stats_ = {};
             stats_.stateCount = states_.size();
-            stats_.bucketCount = entryHashes_.size();
+            std::size_t buckets = 0;
+            for (std::size_t i = 0; i < hashes_.size();) {
+                ++buckets;
+                const u64 hash = hashes_[i++];
+                while (i < hashes_.size() && hashes_[i] == hash) ++i;
+            }
+            stats_.bucketCount = buckets;
         }
     }
 
-    MUND const JVec<B1B2>& states() const {
-        return states_;
-    }
-
-    MUND const JVec<u64>& hashes() const {
-        return hashes_;
-    }
-
-    MUND std::size_t size() const {
-        return states_.size();
-    }
-
-    MUND std::size_t rangeCount() const {
-        return entryHashes_.size();
-    }
-
-    MUND const BucketStats& stats() const {
-        return stats_;
-    }
+    MUND std::size_t size() const { return states_.size(); }
+    MUND std::size_t rangeCount() const { return stats_.bucketCount; }
+    MUND const BucketStats& stats() const { return stats_; }
 
     MU void printStats() const {
         const u64 statesLive = liveBytes(states_);
         const u64 hashesLive = liveBytes(hashes_);
-        const u64 entryHashesLive = liveBytes(entryHashes_);
-        const u64 entryMetaLive = liveBytes(entryMeta_);
-        const u64 collisionsLive = liveBytes(collisionIndices_);
         const u64 prefixLive = liveBytes(prefixStarts_);
-        const u64 highPresenceLive = liveBytes(highPresenceWords_);
-        const u64 midPresenceLive = liveBytes(midPresenceWords_);
-        const u64 lowPresenceLive = liveBytes(lowPresenceWords_);
-        const u64 extraPresenceLive = liveBytes(extraPresenceWords_);
+        const u64 filtersLive = liveBytes(highPresenceWords_) + liveBytes(midPresenceWords_)
+                              + liveBytes(lowPresenceWords_) + liveBytes(extraPresenceWords_);
+        const u64 totalLive = statesLive + hashesLive + prefixLive + filtersLive;
 
-        const u64 statesReserved = reservedBytes(states_);
-        const u64 hashesReserved = reservedBytes(hashes_);
-        const u64 entryHashesReserved = reservedBytes(entryHashes_);
-        const u64 entryMetaReserved = reservedBytes(entryMeta_);
-        const u64 collisionsReserved = reservedBytes(collisionIndices_);
-        const u64 prefixReserved = reservedBytes(prefixStarts_);
-        const u64 highPresenceReserved = reservedBytes(highPresenceWords_);
-        const u64 midPresenceReserved = reservedBytes(midPresenceWords_);
-        const u64 lowPresenceReserved = reservedBytes(lowPresenceWords_);
-        const u64 extraPresenceReserved = reservedBytes(extraPresenceWords_);
-
-        const u64 totalLive =
-                statesLive + hashesLive + entryHashesLive + entryMetaLive + collisionsLive +
-                prefixLive + highPresenceLive + midPresenceLive + lowPresenceLive + extraPresenceLive;
-        const u64 totalReserved =
-                statesReserved + hashesReserved + entryHashesReserved + entryMetaReserved + collisionsReserved +
-                prefixReserved + highPresenceReserved + midPresenceReserved + lowPresenceReserved + extraPresenceReserved;
-
-        tcout << "right frontier stats:\n";
-        tcout << "    total states: " << stats_.stateCount << '\n';
-        tcout << "    total buckets: " << stats_.bucketCount << '\n';
-        tcout << "    prefix bits: " << HASH_PREFIX_BITS << '\n';
-        tcout << "    prefix table entries: " << prefixStarts_.size() << '\n';
-        tcout << "    high presence bits: " << HASH_PRESENCE_HIGH_BITS << '\n';
-        tcout << "    high presence words: " << highPresenceWords_.size() << '\n';
-        tcout << "    mid presence bits: " << HASH_PRESENCE_MID_BITS << '\n';
-        tcout << "    mid presence words: " << midPresenceWords_.size() << '\n';
-        tcout << "    low presence bits: " << HASH_PRESENCE_LOW_BITS << '\n';
-        tcout << "    low presence words: " << lowPresenceWords_.size() << '\n';
-        tcout << "    extra presence bits: " << HASH_PRESENCE_EXTRA_BITS << '\n';
-        tcout << "    extra presence words: " << extraPresenceWords_.size() << '\n';
-
-        tcout << "    memory states: " << bytesFormatted<1000>(statesLive)
-              << " live, " << bytesFormatted<1000>(statesReserved) << " rsv\n";
-        tcout << "    memory hashes: " << bytesFormatted<1000>(hashesLive)
-              << " live, " << bytesFormatted<1000>(hashesReserved) << " rsv\n";
-        tcout << "    memory entry hashes: " << bytesFormatted<1000>(entryHashesLive)
-              << " live, " << bytesFormatted<1000>(entryHashesReserved) << " rsv\n";
-        tcout << "    memory entry meta: " << bytesFormatted<1000>(entryMetaLive)
-              << " live, " << bytesFormatted<1000>(entryMetaReserved) << " rsv\n";
-        tcout << "    memory collisions: " << bytesFormatted<1000>(collisionsLive)
-              << " live, " << bytesFormatted<1000>(collisionsReserved) << " rsv\n";
-        tcout << "    memory prefix: " << bytesFormatted<1000>(prefixLive)
-              << " live, " << bytesFormatted<1000>(prefixReserved) << " rsv\n";
-        tcout << "    memory high presence: " << bytesFormatted<1000>(highPresenceLive)
-              << " live, " << bytesFormatted<1000>(highPresenceReserved) << " rsv\n";
-        tcout << "    memory mid presence: " << bytesFormatted<1000>(midPresenceLive)
-              << " live, " << bytesFormatted<1000>(midPresenceReserved) << " rsv\n";
-        tcout << "    memory low presence: " << bytesFormatted<1000>(lowPresenceLive)
-              << " live, " << bytesFormatted<1000>(lowPresenceReserved) << " rsv\n";
-        tcout << "    memory extra presence: " << bytesFormatted<1000>(extraPresenceLive)
-              << " live, " << bytesFormatted<1000>(extraPresenceReserved) << " rsv\n";
-        tcout << "    memory total:  " << bytesFormatted<1000>(totalLive)
-              << " live, " << bytesFormatted<1000>(totalReserved) << " rsv\n";
-
-        tcout << "    min bucket size: " << stats_.minBucketSize << '\n';
-        tcout << "    max bucket size: " << stats_.maxBucketSize << '\n';
-        tcout << "    avg bucket size: " << stats_.avgBucketSize << '\n';
-        tcout << "    p50 bucket size: " << stats_.p50BucketSize << '\n';
-        tcout << "    p90 bucket size: " << stats_.p90BucketSize << '\n';
-        tcout << "    p99 bucket size: " << stats_.p99BucketSize << '\n';
-
-        tcout << "    singleton buckets: " << stats_.singletonBucketCount
-              << " (" << (stats_.bucketCount
-                                  ? (100.0 * static_cast<double>(stats_.singletonBucketCount) / static_cast<double>(stats_.bucketCount))
-                                  : 0.0)
-              << "%)\n";
-
-        tcout << "    multi buckets: " << stats_.multiBucketCount
-              << " (" << (stats_.bucketCount
-                                  ? (100.0 * static_cast<double>(stats_.multiBucketCount) / static_cast<double>(stats_.bucketCount))
-                                  : 0.0)
-              << "%)\n";
-
-        tcout << "    states in singleton buckets: " << stats_.statesInSingletonBuckets
-              << " (" << (stats_.stateCount
-                                  ? (100.0 * static_cast<double>(stats_.statesInSingletonBuckets) / static_cast<double>(stats_.stateCount))
-                                  : 0.0)
-              << "%)\n";
-
-        tcout << "    states in multi buckets: " << stats_.statesInMultiBuckets
-              << " (" << (stats_.stateCount
-                                  ? (100.0 * static_cast<double>(stats_.statesInMultiBuckets) / static_cast<double>(stats_.stateCount))
-                                  : 0.0)
-              << "%)\n";
-
-        tcout << "    collision pairs inside buckets: " << stats_.collisionPairs << '\n';
-
-        tcout << "    bucket histogram:\n";
-        tcout << "        size 1:      " << stats_.bucketsSize1 << " buckets, " << stats_.statesSize1 << " states\n";
-        tcout << "        size 2:      " << stats_.bucketsSize2 << " buckets, " << stats_.statesSize2 << " states\n";
-        tcout << "        size 3:      " << stats_.bucketsSize3 << " buckets, " << stats_.statesSize3 << " states\n";
-        tcout << "        size 4:      " << stats_.bucketsSize4 << " buckets, " << stats_.statesSize4 << " states\n";
-        tcout << "        size 5..8:   " << stats_.bucketsSize5to8 << " buckets, " << stats_.statesSize5to8 << " states\n";
-        tcout << "        size 9..16:  " << stats_.bucketsSize9to16 << " buckets, " << stats_.statesSize9to16 << " states\n";
-        tcout << "        size 17..32: " << stats_.bucketsSize17to32 << " buckets, " << stats_.statesSize17to32 << " states\n";
-        tcout << "        size 33..64: " << stats_.bucketsSize33to64 << " buckets, " << stats_.statesSize33to64 << " states\n";
-        tcout << "        size 65+:    " << stats_.bucketsSize65plus << " buckets, " << stats_.statesSize65plus << " states\n";
+        tcout << "right frontier stats (exact-state):\n";
+        tcout << "    total states: " << states_.size() << '\n';
+        tcout << "    unique primary hashes: " << stats_.bucketCount << '\n';
+        tcout << "    exact state validation: always\n";
+        tcout << "    memory states: " << bytesFormatted<1000>(statesLive) << '\n';
+        tcout << "    memory hashes: " << bytesFormatted<1000>(hashesLive) << '\n';
+        tcout << "    memory prefix: " << bytesFormatted<1000>(prefixLive) << '\n';
+        tcout << "    memory filters: " << bytesFormatted<1000>(filtersLive) << '\n';
+        tcout << "    memory total: " << bytesFormatted<1000>(totalLive) << '\n';
+        if (stats_.bucketCount != 0) {
+            tcout << "    min bucket size: " << stats_.minBucketSize << '\n';
+            tcout << "    max bucket size: " << stats_.maxBucketSize << '\n';
+            tcout << "    avg bucket size: " << stats_.avgBucketSize << '\n';
+            tcout << "    primary-hash collision buckets: " << stats_.multiBucketCount << '\n';
+        }
     }
 
     template<int RIGHT_FRONTIER_DEPTH, bool COLLECT_PROBE_STATS = true>
@@ -654,14 +352,20 @@ public:
                            JVec<B1B2>& outUniqueMatches,
                            JVec<u64>& outUniqueMatchHashes,
                            ProbeStats* probeStats = nullptr) const {
+        (void) RIGHT_FRONTIER_DEPTH;
         outUniqueMatches.clear();
         outUniqueMatchHashes.clear();
 
+        if (leftStates.size() != leftHashes.size()) {
+            throw std::runtime_error("left probe state/hash lane size mismatch");
+        }
         if constexpr (COLLECT_PROBE_STATS) {
+            if (probeStats == nullptr) {
+                throw std::runtime_error("probe statistics requested with null destination");
+            }
             *probeStats = {};
             probeStats->leftStateCount = static_cast<u64>(leftStates.size());
         }
-
         if (leftStates.empty() || states_.empty()) {
             return;
         }
@@ -669,60 +373,57 @@ public:
         frontier_recovery_detail::reserveStateHashLanes(
                 outUniqueMatches,
                 outUniqueMatchHashes,
-                std::min<std::size_t>(leftStates.size(), 256)
-        );
+                std::min<std::size_t>(leftStates.size(), 256ULL));
 
         std::size_t writeIndex = 0;
-
         for (std::size_t lhsIndex = 0; lhsIndex < leftStates.size(); ++lhsIndex) {
             const B1B2& lhs = leftStates[lhsIndex];
             const u64 lhsHash = leftHashes[lhsIndex];
 
-            const u32 highBucket = hashPresenceHighBucket(lhsHash);
-            if (!getPresenceBit(highPresenceWords_, highBucket)) {
+            if (!hasBit(highPresenceWords_, highBucket(lhsHash))) {
                 if constexpr (COLLECT_PROBE_STATS) {
-                    ++probeStats->hashMisses;
-                    ++probeStats->highFilterRejects;
+                    ++probeStats->hashMisses; ++probeStats->highFilterRejects;
                 }
                 continue;
             }
-
-            const u32 midBucket = hashPresenceMidBucket(lhsHash);
-            if (!getPresenceBit(midPresenceWords_, midBucket)) {
+            if (!hasBit(midPresenceWords_, midBucket(lhsHash))) {
                 if constexpr (COLLECT_PROBE_STATS) {
-                    ++probeStats->hashMisses;
-                    ++probeStats->midFilterRejects;
+                    ++probeStats->hashMisses; ++probeStats->midFilterRejects;
                 }
                 continue;
             }
-
-            const u32 lowBucket = hashPresenceLowBucket(lhsHash);
-            if (!getPresenceBit(lowPresenceWords_, lowBucket)) {
+            if (!hasBit(lowPresenceWords_, lowBucket(lhsHash))) {
                 if constexpr (COLLECT_PROBE_STATS) {
-                    ++probeStats->hashMisses;
-                    ++probeStats->lowFilterRejects;
+                    ++probeStats->hashMisses; ++probeStats->lowFilterRejects;
                 }
                 continue;
             }
-
-            const u32 extraBucket = hashPresenceExtraBucket(lhsHash);
-            if (!getPresenceBit(extraPresenceWords_, extraBucket)) {
+            if (!hasBit(extraPresenceWords_, extraBucket(lhsHash))) {
                 if constexpr (COLLECT_PROBE_STATS) {
-                    ++probeStats->hashMisses;
-                    ++probeStats->extraFilterRejects;
+                    ++probeStats->hashMisses; ++probeStats->extraFilterRejects;
                 }
                 continue;
             }
-
             if constexpr (COLLECT_PROBE_STATS) {
                 ++probeStats->filterPasses;
             }
 
-            const i64 entryIndex = findEntryIndex(lhsHash);
-            if (entryIndex < 0) {
+            const u32 prefix = hashPrefix(lhsHash);
+            const u32 begin = prefixStarts_[prefix];
+            const u32 end = prefixStarts_[prefix + 1U];
+            if (begin == end) {
                 if constexpr (COLLECT_PROBE_STATS) {
-                    ++probeStats->hashMisses;
-                    ++probeStats->prefixRejects;
+                    ++probeStats->hashMisses; ++probeStats->prefixRejects;
+                }
+                continue;
+            }
+
+            const u64* hashBegin = hashes_.data() + begin;
+            const u64* hashEnd = hashes_.data() + end;
+            const u64* found = std::lower_bound(hashBegin, hashEnd, lhsHash);
+            if (found == hashEnd || *found != lhsHash) {
+                if constexpr (COLLECT_PROBE_STATS) {
+                    ++probeStats->hashMisses; ++probeStats->prefixRejects;
                 }
                 continue;
             }
@@ -732,77 +433,44 @@ public:
                 ++probeStats->bucketsVisited;
             }
 
-            const std::size_t entryIdx = static_cast<std::size_t>(entryIndex);
-            const u32 meta = entryMeta_[entryIdx];
-            const u32 countCode = metaCountCode(meta);
-            const u32 payload = metaPayload(meta);
-
-            if (countCode == META_COUNTCODE_SINGLETON) {
-                const u32 stateIndex = payload;
-
+            std::size_t stateIndex = begin + static_cast<std::size_t>(found - hashBegin);
+            bool exact = false;
+            while (stateIndex < end && hashes_[stateIndex] == lhsHash) {
                 if constexpr (COLLECT_PROBE_STATS) {
                     ++probeStats->bucketStatesScanned;
                     ++probeStats->equalityChecks;
                 }
-
-                if (lhs == states_[stateIndex]) {
-                    frontier_recovery_detail::ensureWritableTail(
-                            outUniqueMatches,
-                            outUniqueMatchHashes,
-                            writeIndex + 1
-                    );
-
-                    outUniqueMatches[writeIndex] = lhs;
-                    outUniqueMatchHashes[writeIndex] = lhsHash;
-                    ++writeIndex;
-
-                    if constexpr (COLLECT_PROBE_STATS) {
-                        ++probeStats->exactMatches;
-                    }
+                if (states_[stateIndex] == lhs) {
+                    exact = true;
+                    break;
                 }
+                ++stateIndex;
+            }
 
+            if (!exact) {
                 continue;
             }
 
-            const u32 collisionBegin = payload;
-            const u32 collisionEnd = collisionBegin + countCode;
+            frontier_recovery_detail::ensureWritableTail(
+                    outUniqueMatches,
+                    outUniqueMatchHashes,
+                    writeIndex + 1ULL);
+            outUniqueMatches[writeIndex] = lhs;
+            outUniqueMatchHashes[writeIndex] = lhsHash;
+            ++writeIndex;
 
             if constexpr (COLLECT_PROBE_STATS) {
-                probeStats->bucketStatesScanned += static_cast<u64>(countCode);
-            }
-
-            for (u32 i = collisionBegin; i < collisionEnd; ++i) {
-                const u32 stateIndex = collisionIndices_[i];
-
-                if constexpr (COLLECT_PROBE_STATS) {
-                    ++probeStats->equalityChecks;
-                }
-
-                if (lhs == states_[stateIndex]) {
-                    frontier_recovery_detail::ensureWritableTail(
-                            outUniqueMatches,
-                            outUniqueMatchHashes,
-                            writeIndex + 1
-                    );
-
-                    outUniqueMatches[writeIndex] = lhs;
-                    outUniqueMatchHashes[writeIndex] = lhsHash;
-                    ++writeIndex;
-
-                    if constexpr (COLLECT_PROBE_STATS) {
-                        ++probeStats->exactMatches;
-                    }
-                    break;
-                }
+                ++probeStats->exactMatches;
             }
         }
 
         outUniqueMatches.resize(writeIndex);
         outUniqueMatchHashes.resize(writeIndex);
-
         if (!outUniqueMatches.empty()) {
-            frontier_recovery_detail::normalizeBucketsByState(outUniqueMatches, outUniqueMatchHashes);
-            compactUniqueSortedStatesInPlace(outUniqueMatches, outUniqueMatchHashes);
+            frontier_recovery_detail::normalizeBucketsByState(
+                    outUniqueMatches, outUniqueMatchHashes);
+            compactUniqueSortedStatesInPlace(
+                    outUniqueMatches, outUniqueMatchHashes);
         }
     }
 };

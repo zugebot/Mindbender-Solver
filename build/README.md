@@ -15,15 +15,17 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 
 
 
-# 36 puzzles remain unsolved:
- 6-4: at least 14 moves
+# 37 puzzles remain unsolved:
+ 6-4: not tried yet
 10-2: at least 13 moves
 10-3: at least 13 moves
 12-1: at least 13 moves
+12-3: not tried yet
 12-5: at least 13 moves
 13-1: at least 13 moves
 14-3: at least 13 moves
 14-4: at least 13 moves
+14-5: not tried yet
 15-1: at least 13 moves
 15-2: at least 13 moves
 15-3: at least 13 moves

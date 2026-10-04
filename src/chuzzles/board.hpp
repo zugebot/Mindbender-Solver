@@ -43,8 +43,10 @@ namespace b1b2 {
     
     template<typename T1, typename T2>
     FORCEINLINE u64 getShiftAmount(const T1 x, const T2 y) {
-        static constexpr u64 MAGIC = 0x33210F33210F;
-        return (MAGIC >> (y * 8)) - (x * 3);
+        // Row base by (y % 3): 51, 33, 15 -> bytes 0x33, 0x21, 0x0F from the low byte up.
+        // The & 0xFF keeps the count < 64 (defined behavior); GCC drops it since shrx masks anyway.
+        static constexpr u64 MAGIC = 0x0F21330F2133;
+        return ((MAGIC >> (y * 8)) & 0xFF) - (x * 3);
     }
 
 }
@@ -299,6 +301,7 @@ public:
 
     MUND HD bool doActISColMatch(u8 x1, u8 y1, u8 m, u8 n) const;
     MUND HD u8 doActISColMatchBatched(u8 x1, u8 y1, u8 m) const;
+    MUND HD u32 getFatNormalColThenRowCommutingMask(u8 previousGlobalAction) const;
     MUND HD static double getDuplicateEstimateAtDepth(u32 depth);
     MUND HD u64 getRowColIntersections(u32 x, u32 y) const;
 

@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <limits>
 #include <mutex>
 #include <set>
 #include <string>
@@ -12,7 +13,7 @@
 
 #include "../chuzzles/intersection.hpp"
 #include "../chuzzles/perm_stream.hpp"
-#include "frontier_right_index2.hpp"
+#include "src/solver/right_frontier/right_frontier_table.hpp"
 #include "solver_base.hpp"
 
 class MU BoardSolverFrontier : public BoardSolverBase {
@@ -35,27 +36,30 @@ private:
         BoardSorter<Board> sorter;
     };
 
-    RightFrontierIndexB1B2 rightFrontierIndex_;
-    RightFrontierIndexB1B2 rightFrontierCache_;
-    Board rightFrontierCacheRoot_{};
-    int rightFrontierCacheDepth_ = -1;
-    bool rightFrontierCacheValid_ = false;
-    bool enableRightFrontierCache_ = false;
-    RecoveryBoardFrontierCache prefixLeftCache_;
+    RightFrontierTableB1B2 rightFrontierIndex_;
     RecoveryBoardFrontierCache goalRightCache_;
 
     struct StreamProbeMetrics {
-        double permStreamSeconds = 0.0;
+        double streamWallSeconds = 0.0;
+        double permStreamSeconds = 0.0; // exclusive of synchronous probe/append work
         double probeSeconds = 0.0;
         double appendSeconds = 0.0;
         double finalSortSeconds = 0.0;
         double finalDedupeSeconds = 0.0;
+        double taskWallSeconds = 0.0;
 
         u64 chunkCount = 0;
         u64 streamedStateCount = 0;
         u64 preMergeMatchCount = 0;
 
-        RightFrontierIndexB1B2::ProbeStats probeStats{};
+        RightFrontierTableB1B2::ProbeStats probeStats{};
+    };
+
+    struct GlobalRecoveryMetrics {
+        double middleSortSeconds = 0.0;
+        double middleDedupeSeconds = 0.0;
+        double pathRecoverySeconds = 0.0;
+        std::size_t uniqueMiddleCount = 0;
     };
 
 private:
@@ -153,21 +157,105 @@ private:
         }
     }
 
-    MU static void buildBoardExactNoneFrontier(const Board& root,
-                                               const u32 depth,
-                                               RecoveryBoardFrontierCache& cache) {
+    MUND static std::size_t recoveryPathUpperBound(const bool fat,
+                                                   const u32 depth) {
+        const std::size_t branch = fat ? 48ULL : 60ULL;
+        std::size_t result = 1;
+        for (u32 i = 0; i < depth; ++i) {
+            if (result > std::numeric_limits<std::size_t>::max() / branch) {
+                return std::numeric_limits<std::size_t>::max();
+            }
+            result *= branch;
+        }
+        return result;
+    }
+
+    template<u32 DEPTH, u32 CUR_DEPTH = 0>
+    MU static void enumerateAllRecoveryPaths(const Board& board,
+                                             const u64 packedMoves,
+                                             JVec<Board>& states,
+                                             JVec<u64>& hashes,
+                                             std::size_t& count) {
+        if constexpr (CUR_DEPTH == DEPTH) {
+            Board stored = board;
+            if constexpr (DEPTH > 0) {
+                stored.memory.template setNextNMove<DEPTH>(packedMoves);
+            }
+            states[count] = stored;
+            hashes[count] = StateHash::computeHash(stored);
+            ++count;
+        } else {
+            if (board.getFatBool()) {
+                const u8* actionIndexes = fatActionsIndexes[board.getFatXY()];
+                for (u64 relativeIndex = 0; relativeIndex < 48ULL; ++relativeIndex) {
+                    Board next = board;
+                    allActStructList[actionIndexes[relativeIndex]].action(next);
+                    if (next == board) {
+                        continue;
+                    }
+
+                    const u64 nextPacked = packedMoves |
+                            (relativeIndex << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
+                    enumerateAllRecoveryPaths<DEPTH, CUR_DEPTH + 1>(
+                            next, nextPacked, states, hashes, count);
+                }
+            } else {
+                for (u64 direction = 0; direction < 2ULL; ++direction) {
+                    for (u64 section = 0; section < 6ULL; ++section) {
+                        const u64 base = (direction << 5ULL) + section * 5ULL;
+                        for (u64 shift = 0; shift < 5ULL; ++shift) {
+                            const u64 actionIndex = base + shift;
+                            Board next = board;
+                            allActStructList[actionIndex].action(next);
+                            if (next == board) {
+                                continue;
+                            }
+
+                            const u64 nextPacked = packedMoves |
+                                    (actionIndex << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
+                            enumerateAllRecoveryPaths<DEPTH, CUR_DEPTH + 1>(
+                                    next, nextPacked, states, hashes, count);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    template<u32 DEPTH>
+    MU static void buildBoardAllPathFrontier(const Board& root,
+                                             RecoveryBoardFrontierCache& cache) {
         cache.states.clear();
         cache.hashes.clear();
 
-        Perms<Board>::getDepthFunc<eSequenceDir::NONE>(
-                root,
-                cache.states,
-                cache.hashes,
-                depth,
-                true
-        );
+        const std::size_t upper = recoveryPathUpperBound(root.getFatBool(), DEPTH);
+        if (upper == std::numeric_limits<std::size_t>::max()) {
+            throw std::runtime_error("exact recovery frontier size overflow");
+        }
 
-        cache.sorter.sortBoards(cache.states, cache.hashes, depth, root.getColorCount());
+        cache.states.resize(upper);
+        cache.hashes.resize(upper);
+        std::size_t count = 0;
+        enumerateAllRecoveryPaths<DEPTH>(
+                root, 0ULL, cache.states, cache.hashes, count);
+        cache.states.resize(count);
+        cache.hashes.resize(count);
+        cache.sorter.sortBoards(cache.states, cache.hashes, DEPTH, root.getColorCount());
+    }
+
+    MU static void buildBoardExactNoneFrontier(const Board& root,
+                                               const u32 depth,
+                                               RecoveryBoardFrontierCache& cache) {
+        switch (depth) {
+            case 0: buildBoardAllPathFrontier<0>(root, cache); return;
+            case 1: buildBoardAllPathFrontier<1>(root, cache); return;
+            case 2: buildBoardAllPathFrontier<2>(root, cache); return;
+            case 3: buildBoardAllPathFrontier<3>(root, cache); return;
+            case 4: buildBoardAllPathFrontier<4>(root, cache); return;
+            case 5: buildBoardAllPathFrontier<5>(root, cache); return;
+            default:
+                throw std::runtime_error("exact recovery half-depth exceeds supported range 0..5");
+        }
     }
 
     MU void ensureCache(RecoveryBoardFrontierCache& cache,
@@ -195,9 +283,15 @@ private:
                                      std::set<std::string>& outPaths) {
         outPaths.clear();
         
-        const auto matches = (leftDepth != 0 && rightDepth != 0)
-                                     ? intersection_threaded(leftStates, leftHashes, rightStates, rightHashes)
-                                     : intersection(leftStates, leftHashes, rightStates, rightHashes);
+        // Recovery must preserve every exact-length path history.  Even when
+        // one side has depth zero, use the all-pairs intersection rather than
+        // the old first-pair shortcut.
+        const auto matches = intersection_threaded(
+                leftStates,
+                leftHashes,
+                rightStates,
+                rightHashes
+        );
 
         const bool leftIsFat = leftRoot.getFatBool();
         const bool rightIsFat = rightRoot.getFatBool();
@@ -223,64 +317,6 @@ private:
     }
 
     template<bool REVERSE_SEARCH>
-    MU void recoverSeedPrefixes(const Board& seedBoard,
-                                const u32 prefixLeftDepth,
-                                const u32 prefixRightDepth,
-                                std::set<std::string>& outPrefixes) {
-        outPrefixes.clear();
-
-        if (prefixLeftDepth == 0 && prefixRightDepth == 0) {
-            outPrefixes.insert("");
-            return;
-        }
-
-        Board& searchStartRoot = getSearchStartBoard<REVERSE_SEARCH>();
-
-        ensureCache(prefixLeftCache_, searchStartRoot, prefixLeftDepth);
-
-        RecoveryBoardFrontierCache seedPrefixRightCache;
-        ensureCache(seedPrefixRightCache, seedBoard, prefixRightDepth);
-
-        recoverExactSplit<REVERSE_SEARCH>(
-                searchStartRoot,
-                prefixLeftDepth,
-                prefixLeftCache_.states,
-                prefixLeftCache_.hashes,
-                seedBoard,
-                prefixRightDepth,
-                seedPrefixRightCache.states,
-                seedPrefixRightCache.hashes,
-                outPrefixes
-        );
-    }
-
-    template<bool REVERSE_OUTPUT>
-    MU void recoverSeedToMiddle(const Board& seedBoard,
-                                const B1B2& middleState,
-                                const u32 seedLeftDepth,
-                                const u32 middleRightDepth,
-                                RecoveryBoardFrontierCache& seedLeftCache,
-                                RecoveryBoardFrontierCache& middleRightCache,
-                                std::set<std::string>& outPaths) {
-        Board middleBoard = makeBoardFromState(middleState);
-
-        ensureCache(seedLeftCache, seedBoard, seedLeftDepth);
-        ensureCache(middleRightCache, middleBoard, middleRightDepth);
-
-        recoverExactSplit<REVERSE_OUTPUT>(
-                seedBoard,
-                seedLeftDepth,
-                seedLeftCache.states,
-                seedLeftCache.hashes,
-                middleBoard,
-                middleRightDepth,
-                middleRightCache.states,
-                middleRightCache.hashes,
-                outPaths
-        );
-    }
-
-    template<bool REVERSE_SEARCH>
     MU void recoverMiddleToGoal(const B1B2& middleState,
                                 const u32 middleLeftDepth,
                                 const u32 goalRightDepth,
@@ -303,84 +339,6 @@ private:
                 goalRightCache_.hashes,
                 outPaths
         );
-    }
-
-    MU static void appendJoinedSolutionsForward(const std::set<std::string>& prefixes,
-                                                const std::set<std::string>& middles,
-                                                const std::set<std::string>& suffixes,
-                                                std::unordered_set<std::string>& outRaw) {
-        for (const auto& p : prefixes) {
-            for (const auto& m : middles) {
-                std::string leftHalf;
-                if (p.empty()) {
-                    leftHalf = m;
-                } else if (m.empty()) {
-                    leftHalf = p;
-                } else {
-                    leftHalf = p + " " + m;
-                }
-
-                for (const auto& s : suffixes) {
-                    if (leftHalf.empty()) {
-                        outRaw.insert(s);
-                    } else if (s.empty()) {
-                        outRaw.insert(leftHalf);
-                    } else {
-                        outRaw.insert(leftHalf + " " + s);
-                    }
-                }
-            }
-        }
-    }
-
-    MU static void appendJoinedSolutionsReverse(const std::set<std::string>& seedToGoalPaths,
-                                                const std::set<std::string>& middleToSeedPaths,
-                                                const std::set<std::string>& startToMiddlePaths,
-                                                std::unordered_set<std::string>& outRaw) {
-        for (const auto& startToMiddle : startToMiddlePaths) {
-            for (const auto& middleToSeed : middleToSeedPaths) {
-                std::string leftHalf;
-                if (startToMiddle.empty()) {
-                    leftHalf = middleToSeed;
-                } else if (middleToSeed.empty()) {
-                    leftHalf = startToMiddle;
-                } else {
-                    leftHalf = startToMiddle + " " + middleToSeed;
-                }
-
-                for (const auto& seedToGoal : seedToGoalPaths) {
-                    if (leftHalf.empty()) {
-                        outRaw.insert(seedToGoal);
-                    } else if (seedToGoal.empty()) {
-                        outRaw.insert(leftHalf);
-                    } else {
-                        outRaw.insert(leftHalf + " " + seedToGoal);
-                    }
-                }
-            }
-        }
-    }
-
-    template<bool REVERSE_SEARCH>
-    MU static void appendJoinedSolutions(const std::set<std::string>& prefixes,
-                                         const std::set<std::string>& middles,
-                                         const std::set<std::string>& suffixes,
-                                         std::unordered_set<std::string>& outRaw) {
-        if constexpr (REVERSE_SEARCH) {
-            appendJoinedSolutionsReverse(
-                    prefixes,
-                    middles,
-                    suffixes,
-                    outRaw
-            );
-        } else {
-            appendJoinedSolutionsForward(
-                    prefixes,
-                    middles,
-                    suffixes,
-                    outRaw
-            );
-        }
     }
 
     MU static void appendStates(JVec<B1B2>& dstStates,
@@ -411,7 +369,7 @@ private:
         metrics = {};
 
         struct Sink {
-            const RightFrontierIndexB1B2& rightIndex;
+            const RightFrontierTableB1B2& rightIndex;
             JVec<B1B2>& allMatches;
             JVec<u64>& allMatchHashes;
             StreamProbeMetrics& metrics;
@@ -419,7 +377,7 @@ private:
             JVec<B1B2> chunkMatches;
             JVec<u64> chunkMatchHashes;
 
-            MU Sink(const RightFrontierIndexB1B2& rightIndexIn,
+            MU Sink(const RightFrontierTableB1B2& rightIndexIn,
                     JVec<B1B2>& allMatchesIn,
                     JVec<u64>& allMatchHashesIn,
                     StreamProbeMetrics& metricsIn)
@@ -444,7 +402,7 @@ private:
                     ++metrics.chunkCount;
                     metrics.streamedStateCount += static_cast<u64>(count);
 
-                    RightFrontierIndexB1B2::ProbeStats localProbeStats{};
+                    RightFrontierTableB1B2::ProbeStats localProbeStats{};
 
                     {
                         Timer timerProbe;
@@ -468,6 +426,7 @@ private:
                     metrics.probeStats.highFilterRejects += localProbeStats.highFilterRejects;
                     metrics.probeStats.midFilterRejects += localProbeStats.midFilterRejects;
                     metrics.probeStats.lowFilterRejects += localProbeStats.lowFilterRejects;
+                    metrics.probeStats.extraFilterRejects += localProbeStats.extraFilterRejects;
                     metrics.probeStats.prefixRejects += localProbeStats.prefixRejects;
                     metrics.probeStats.filterPasses += localProbeStats.filterPasses;
 
@@ -511,13 +470,17 @@ private:
 
         if constexpr (COLLECT_PROBE_STATS) {
             {
-                Timer timerPermStream;
+                Timer timerStream;
                 PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, LEFT_FRONTIER_DEPTH>(
                         seedBoard,
                         sink,
                         LEFT_STREAM_CHUNK_SIZE
                 );
-                metrics.permStreamSeconds = timerPermStream.getSeconds();
+                metrics.streamWallSeconds = timerStream.getSeconds();
+                metrics.permStreamSeconds = std::max(
+                        0.0,
+                        metrics.streamWallSeconds - metrics.probeSeconds - metrics.appendSeconds
+                );
             }
 
             if (!outMiddleMatches.empty()) {
@@ -544,6 +507,131 @@ private:
                 sortStatesByHash(outMiddleMatches, outMiddleMatchHashes);
                 compactUniqueSortedStatesInPlace(outMiddleMatches, outMiddleMatchHashes);
             }
+        }
+    }
+
+    template<int TOTAL_LEFT_DEPTH, int RIGHT_FRONTIER_DEPTH, bool REVERSE_SEARCH, bool debug>
+    MU void recoverMatchedMiddlesGlobally(
+            JVec<B1B2>& middleMatches,
+            JVec<u64>& middleMatchHashes,
+            GlobalRecoveryMetrics& metrics) {
+        static_assert(TOTAL_LEFT_DEPTH >= 0 && TOTAL_LEFT_DEPTH <= 10);
+        static_assert(RIGHT_FRONTIER_DEPTH >= 0 && RIGHT_FRONTIER_DEPTH <= 5);
+
+        metrics = {};
+        if (middleMatches.empty()) {
+            return;
+        }
+
+        {
+            Timer timer;
+            sortStatesByHash(middleMatches, middleMatchHashes);
+            metrics.middleSortSeconds = timer.getSeconds();
+        }
+        {
+            Timer timer;
+            compactUniqueSortedStatesInPlace(middleMatches, middleMatchHashes);
+            metrics.middleDedupeSeconds = timer.getSeconds();
+        }
+        metrics.uniqueMiddleCount = middleMatches.size();
+
+        Timer pathRecoveryTimer;
+
+        static constexpr u32 START_LEFT_DEPTH = TOTAL_LEFT_DEPTH / 2;
+        static constexpr u32 START_RIGHT_DEPTH = TOTAL_LEFT_DEPTH - START_LEFT_DEPTH;
+        static constexpr u32 GOAL_LEFT_DEPTH = RIGHT_FRONTIER_DEPTH / 2;
+        static constexpr u32 GOAL_RIGHT_DEPTH = RIGHT_FRONTIER_DEPTH - GOAL_LEFT_DEPTH;
+
+        Board& searchStartRoot = getSearchStartBoard<REVERSE_SEARCH>();
+        Board& searchGoalRoot = getSearchGoalBoard<REVERSE_SEARCH>();
+
+        RecoveryBoardFrontierCache startLeftCache;
+        RecoveryBoardFrontierCache middleFromStartRightCache;
+        RecoveryBoardFrontierCache middleToGoalLeftCache;
+
+        ensureCache(startLeftCache, searchStartRoot, START_LEFT_DEPTH);
+        ensureCache(goalRightCache_, searchGoalRoot, GOAL_RIGHT_DEPTH);
+
+        std::set<std::string> rootToMiddlePaths;
+        std::set<std::string> middleToGoalPaths;
+
+        if constexpr (debug) {
+            tcout << "global exact recovery: " << middleMatches.size()
+                  << " unique middle states\n";
+        }
+
+        for (std::size_t i = 0; i < middleMatches.size(); ++i) {
+            const Board middleBoard = makeBoardFromState(middleMatches[i]);
+
+            middleFromStartRightCache.valid = false;
+            middleToGoalLeftCache.valid = false;
+
+            ensureCache(
+                    middleFromStartRightCache,
+                    middleBoard,
+                    START_RIGHT_DEPTH
+            );
+
+            recoverExactSplit<REVERSE_SEARCH>(
+                    searchStartRoot,
+                    START_LEFT_DEPTH,
+                    startLeftCache.states,
+                    startLeftCache.hashes,
+                    middleBoard,
+                    START_RIGHT_DEPTH,
+                    middleFromStartRightCache.states,
+                    middleFromStartRightCache.hashes,
+                    rootToMiddlePaths
+            );
+
+            if (rootToMiddlePaths.empty()) {
+                continue;
+            }
+
+            recoverMiddleToGoal<REVERSE_SEARCH>(
+                    middleMatches[i],
+                    GOAL_LEFT_DEPTH,
+                    GOAL_RIGHT_DEPTH,
+                    middleToGoalLeftCache,
+                    middleToGoalPaths
+            );
+
+            if (middleToGoalPaths.empty()) {
+                continue;
+            }
+
+            if constexpr (REVERSE_SEARCH) {
+                for (const auto& startToMiddle : middleToGoalPaths) {
+                    for (const auto& middleToGoal : rootToMiddlePaths) {
+                        if (startToMiddle.empty()) {
+                            resultSet.insert(middleToGoal);
+                        } else if (middleToGoal.empty()) {
+                            resultSet.insert(startToMiddle);
+                        } else {
+                            resultSet.insert(startToMiddle + " " + middleToGoal);
+                        }
+                    }
+                }
+            } else {
+                for (const auto& startToMiddle : rootToMiddlePaths) {
+                    for (const auto& middleToGoal : middleToGoalPaths) {
+                        if (startToMiddle.empty()) {
+                            resultSet.insert(middleToGoal);
+                        } else if (middleToGoal.empty()) {
+                            resultSet.insert(startToMiddle);
+                        } else {
+                            resultSet.insert(startToMiddle + " " + middleToGoal);
+                        }
+                    }
+                }
+            }
+        }
+
+        metrics.pathRecoverySeconds = pathRecoveryTimer.getSeconds();
+
+        if constexpr (debug) {
+            tcout << "global exact recovery raw solutions: "
+                  << resultSet.size() << '\n';
         }
     }
 
@@ -622,49 +710,30 @@ private:
 
     template<int RIGHT_FRONTIER_DEPTH, bool debug>
     MU void prepareRightFrontierIndex(const Board& searchGoalRoot) {
-        bool usedCache = false;
-
-        if (enableRightFrontierCache_
-            && rightFrontierCacheValid_
-            && rightFrontierCacheDepth_ == RIGHT_FRONTIER_DEPTH
-            && rightFrontierCacheRoot_ == searchGoalRoot) {
-            rightFrontierIndex_ = rightFrontierCache_;
-            usedCache = true;
-            tcout << "right frontier(" << RIGHT_FRONTIER_DEPTH << ") reused from cache\n";
-        }
-
-        if (usedCache) {
-            tcout << "right frontier ranges built for "
-                  << rightFrontierIndex_.size()
-                  << " states across "
-                  << rightFrontierIndex_.rangeCount()
-                  << " hash buckets\n";
-            return;
-        }
-
         JVec<B1B2> rightFrontierStates;
         JVec<u64> rightFrontierHashes;
-        buildUniqueNoneDepthFrontierB1B2<RIGHT_FRONTIER_DEPTH>(searchGoalRoot, rightFrontierStates, rightFrontierHashes, debug);
-        tcout << "right frontier(" << RIGHT_FRONTIER_DEPTH << ") final unique size: "
-              << rightFrontierStates.size() << '\n';
+
+        buildUniqueNoneDepthFrontierB1B2<RIGHT_FRONTIER_DEPTH>(
+                searchGoalRoot,
+                rightFrontierStates,
+                rightFrontierHashes,
+                debug
+        );
+
+        tcout << "right frontier(" << RIGHT_FRONTIER_DEPTH
+              << ") exact unique size: " << rightFrontierStates.size() << '\n';
 
         rightFrontierIndex_.template buildFromUniqueStates<debug>(
                 std::move(rightFrontierStates),
                 std::move(rightFrontierHashes),
                 searchGoalRoot
         );
-        tcout << "right frontier ranges built for "
+
+        tcout << "right frontier exact index built for "
               << rightFrontierIndex_.size()
               << " states across "
               << rightFrontierIndex_.rangeCount()
               << " hash buckets\n";
-
-        if (enableRightFrontierCache_) {
-            rightFrontierCache_ = rightFrontierIndex_;
-            rightFrontierCacheRoot_ = searchGoalRoot;
-            rightFrontierCacheDepth_ = RIGHT_FRONTIER_DEPTH;
-            rightFrontierCacheValid_ = true;
-        }
     }
 
     template<
@@ -742,184 +811,9 @@ private:
             bool debug,
             bool REVERSE_SEARCH
             >
-    MU int findSolutionsFrontierImpl() {
-        static constexpr int TOTAL_DEPTH = SEED_DEPTH + LEFT_FRONTIER_DEPTH + RIGHT_FRONTIER_DEPTH;
-
-        static constexpr u32 PREFIX_LEFT_DEPTH  = SEED_DEPTH / 2;
-        static constexpr u32 PREFIX_RIGHT_DEPTH = SEED_DEPTH - PREFIX_LEFT_DEPTH;
-
-        static constexpr u32 SEED_LEFT_DEPTH    = LEFT_FRONTIER_DEPTH / 2;
-        static constexpr u32 SEED_RIGHT_DEPTH   = LEFT_FRONTIER_DEPTH - SEED_LEFT_DEPTH;
-
-        static constexpr u32 GOAL_LEFT_DEPTH    = RIGHT_FRONTIER_DEPTH / 2;
-        static constexpr u32 GOAL_RIGHT_DEPTH   = RIGHT_FRONTIER_DEPTH - GOAL_LEFT_DEPTH;
-
-        resultSet.clear();
-        expandedResultSet.clear();
-
-        prefixLeftCache_.valid = false;
-        goalRightCache_.valid = false;
-        rightFrontierIndex_.clear();
-
-        Board& searchStartRoot = getSearchStartBoard<REVERSE_SEARCH>();
-        Board& searchGoalRoot = getSearchGoalBoard<REVERSE_SEARCH>();
-
-        const Timer totalTime;
-
-        JVec<B1B2> leftSeeds;
-        JVec<u64> leftSeedHashes;
-        buildUniqueNoneDepthFrontierB1B2<SEED_DEPTH>(searchStartRoot, leftSeeds, leftSeedHashes, debug);
-        tcout << "seed(" << SEED_DEPTH << ") final unique size: " << leftSeeds.size() << '\n';
-
-        prepareRightFrontierIndex<RIGHT_FRONTIER_DEPTH, debug>(searchGoalRoot);
-
-        if constexpr (debug) {
-            rightFrontierIndex_.printStats();
-        }
-
-        JVec<B1B2> middleMatches;
-        JVec<u64> middleMatchHashes;
-
-        RecoveryBoardFrontierCache seedLeftCache;
-        RecoveryBoardFrontierCache middleRightCache;
-        RecoveryBoardFrontierCache middleLeftCache;
-
-        std::set<std::string> prefixPaths;
-        std::set<std::string> seedToMiddlePaths;
-        std::set<std::string> middleToGoalPaths;
-
-        for (std::size_t i = 0; i < leftSeeds.size(); ++i) {
-            if constexpr (debug) {
-                tcout << "[seed " << (i + 1) << "/" << leftSeeds.size()
-                      << "] streaming left seed(" << SEED_DEPTH << ") +" 
-                      << LEFT_FRONTIER_DEPTH << "\n" << std::flush;
-            }
-
-            Board seedBoard = makeBoardFromState(leftSeeds[i]);
-
-            StreamProbeMetrics metrics;
-            collectLeftFrontierMiddleMatchesStreamed<LEFT_FRONTIER_DEPTH, RIGHT_FRONTIER_DEPTH, debug>(
-                    seedBoard,
-                    middleMatches,
-                    middleMatchHashes,
-                    metrics
-            );
-
-            if constexpr (debug) {
-                tcout << "    middle matches: " << middleMatches.size()
-                      << "\n    streamed states: " << metrics.streamedStateCount
-                      << "\n    permstream time: " << metrics.permStreamSeconds
-                      << "\n    probe time: " << metrics.probeSeconds
-                      << '\n';
-            }
-
-            if (middleMatches.empty()) {
-                if constexpr (debug) {
-                    tcout << "    unique raw solutions so far: " << resultSet.size() << '\n';
-                }
-                continue;
-            }
-
-            prefixPaths.clear();
-            if constexpr (SEED_DEPTH == 0) {
-                prefixPaths.insert("");
-            } else {
-                recoverSeedPrefixes<REVERSE_SEARCH>(
-                        seedBoard,
-                        PREFIX_LEFT_DEPTH,
-                        PREFIX_RIGHT_DEPTH,
-                        prefixPaths
-                );
-            }
-
-            ensureCache(seedLeftCache, seedBoard, SEED_LEFT_DEPTH);
-
-            for (std::size_t m = 0; m < middleMatches.size(); ++m) {
-                middleRightCache.valid = false;
-                middleLeftCache.valid = false;
-
-                recoverSeedToMiddle<REVERSE_SEARCH>(
-                        seedBoard,
-                        middleMatches[m],
-                        SEED_LEFT_DEPTH,
-                        SEED_RIGHT_DEPTH,
-                        seedLeftCache,
-                        middleRightCache,
-                        seedToMiddlePaths
-                );
-
-                if (seedToMiddlePaths.empty()) {
-                    continue;
-                }
-
-                if constexpr (SEED_RIGHT_DEPTH == GOAL_LEFT_DEPTH) {
-                    middleLeftCache = middleRightCache;
-                    middleLeftCache.valid = true;
-                }
-
-                recoverMiddleToGoal<REVERSE_SEARCH>(
-                        middleMatches[m],
-                        GOAL_LEFT_DEPTH,
-                        GOAL_RIGHT_DEPTH,
-                        middleLeftCache,
-                        middleToGoalPaths
-                );
-
-                if (middleToGoalPaths.empty()) {
-                    continue;
-                }
-
-                appendJoinedSolutions<REVERSE_SEARCH>(
-                        prefixPaths,
-                        seedToMiddlePaths,
-                        middleToGoalPaths,
-                        resultSet
-                );
-            }
-
-            if constexpr (debug) {
-                tcout << "    unique raw solutions so far: " << resultSet.size() << '\n';
-            }
-        }
-
-        tcout << "\nPuzzle: " << pair->getName() << '\n';
-        tcout << "Total Depth: " << TOTAL_DEPTH << '\n';
-        tcout << "Total Time: " << totalTime.getSeconds() << '\n';
-        tcout << "Left Seed depth: " << SEED_DEPTH << '\n';
-        tcout << "Left frontier depth: " << LEFT_FRONTIER_DEPTH << '\n';
-        tcout << "Right frontier depth: " << RIGHT_FRONTIER_DEPTH << '\n';
-        tcout << "Search direction: " << directionNameTemplated<REVERSE_SEARCH>() << '\n';
-
-        if (!resultSet.empty()) {
-            expandRawSolutionsIntoFinalSet();
-            if (shouldWriteSolutionsToFile()) {
-                writeExpandedSolutions(TOTAL_DEPTH);
-            }
-        } else {
-            tcout << "No solutions found...\n";
-        }
-
-        return getExpandedSolutionCount();
-    }
-
-    template<
-            int SEED_DEPTH,
-            int LEFT_FRONTIER_DEPTH,
-            int RIGHT_FRONTIER_DEPTH,
-            bool debug,
-            bool REVERSE_SEARCH
-            >
     MU int findSolutionsFrontierThreadedImpl(int worker_count) {
-        static constexpr int TOTAL_DEPTH = SEED_DEPTH + LEFT_FRONTIER_DEPTH + RIGHT_FRONTIER_DEPTH;
-
-        static constexpr u32 PREFIX_LEFT_DEPTH  = SEED_DEPTH / 2;
-        static constexpr u32 PREFIX_RIGHT_DEPTH = SEED_DEPTH - PREFIX_LEFT_DEPTH;
-
-        static constexpr u32 SEED_LEFT_DEPTH    = LEFT_FRONTIER_DEPTH / 2;
-        static constexpr u32 SEED_RIGHT_DEPTH   = LEFT_FRONTIER_DEPTH - SEED_LEFT_DEPTH;
-
-        static constexpr u32 GOAL_LEFT_DEPTH    = RIGHT_FRONTIER_DEPTH / 2;
-        static constexpr u32 GOAL_RIGHT_DEPTH   = RIGHT_FRONTIER_DEPTH - GOAL_LEFT_DEPTH;
+        static constexpr int TOTAL_LEFT_DEPTH = SEED_DEPTH + LEFT_FRONTIER_DEPTH;
+        static constexpr int TOTAL_DEPTH = TOTAL_LEFT_DEPTH + RIGHT_FRONTIER_DEPTH;
 
         resultSet.clear();
         expandedResultSet.clear();
@@ -928,7 +822,6 @@ private:
             worker_count = 1;
         }
 
-        prefixLeftCache_.valid = false;
         goalRightCache_.valid = false;
         rightFrontierIndex_.clear();
 
@@ -939,6 +832,7 @@ private:
 
         JVec<B1B2> leftSeeds;
         JVec<u64> leftSeedHashes;
+        double leftFrontierGenSeconds = 0.0;
 
         if constexpr (debug) {
             tcout << "#####################################\n";
@@ -946,45 +840,51 @@ private:
             tcout << "#####################################\n\n";
         }
 
-        buildUniqueNoneDepthFrontierB1B2<SEED_DEPTH>(searchStartRoot, leftSeeds, leftSeedHashes, debug);
-        
-        tcout << "seed(" << SEED_DEPTH << ") final unique size: " << leftSeeds.size() << '\n';
-        
         {
-            Timer sortTimer;
+            Timer timer;
+            buildUniqueNoneDepthFrontierB1B2<SEED_DEPTH>(
+                    searchStartRoot,
+                    leftSeeds,
+                    leftSeedHashes,
+                    debug
+            );
+
             struct SeedAndHash {
                 B1B2 seed;
                 u64 hash;
             };
-    
+
             std::vector<SeedAndHash> scoredSeeds;
             scoredSeeds.reserve(leftSeeds.size());
-    
             for (std::size_t i = 0; i < leftSeeds.size(); ++i) {
                 scoredSeeds.push_back({leftSeeds[i], leftSeedHashes[i]});
             }
-    
+
             const B1B2 goalState = searchGoalRoot.asB1B2();
-    
-            std::sort(scoredSeeds.begin(), scoredSeeds.end(), 
+            std::sort(scoredSeeds.begin(), scoredSeeds.end(),
                       [&](const SeedAndHash& a, const SeedAndHash& b) {
                 const u64 sa = a.seed.getScore1(goalState);
                 const u64 sb = b.seed.getScore1(goalState);
-    
                 if (sa != sb) {
                     return sa < sb;
                 }
-    
-                return a.hash < b.hash;
+                if (a.hash != b.hash) {
+                    return a.hash < b.hash;
+                }
+                return a.seed < b.seed;
             });
-    
+
             for (std::size_t i = 0; i < scoredSeeds.size(); ++i) {
                 leftSeeds[i] = scoredSeeds[i].seed;
                 leftSeedHashes[i] = scoredSeeds[i].hash;
             }
-            
-            tcout << "sort time: " << sortTimer.getSeconds() << '\n';
+
+            leftFrontierGenSeconds = timer.getSeconds();
         }
+
+        const std::size_t seedTaskCount = leftSeeds.size();
+        tcout << "seed(" << SEED_DEPTH << ") exact unique task count: "
+              << seedTaskCount << '\n';
 
         if constexpr (debug) {
             tcout << "\n#####################################\n";
@@ -992,36 +892,58 @@ private:
             tcout << "#####################################\n\n";
         }
 
-        prepareRightFrontierIndex<RIGHT_FRONTIER_DEPTH, debug>(searchGoalRoot);
+        double rightFrontierGenSeconds = 0.0;
+        {
+            Timer timer;
+            prepareRightFrontierIndex<RIGHT_FRONTIER_DEPTH, debug>(searchGoalRoot);
+            rightFrontierGenSeconds = timer.getSeconds();
+        }
 
         if constexpr (debug) {
-            tcout << "\n";
+            tcout << '\n';
             rightFrontierIndex_.printStats();
-            tcout << "\n";
+            tcout << '\n';
         }
-
-        if constexpr (SEED_DEPTH != 0) {
-            ensureCache(prefixLeftCache_, searchStartRoot, PREFIX_LEFT_DEPTH);
-        }
-        ensureCache(goalRightCache_, searchGoalRoot, GOAL_RIGHT_DEPTH);
 
         std::atomic<std::size_t> nextIndex = 0;
         std::mutex printMutex;
-        std::mutex resultMutex;
+        std::mutex middleMutex;
+
+        JVec<B1B2> allMiddleMatches;
+        JVec<u64> allMiddleMatchHashes;
+        std::vector<StreamProbeMetrics> workerTotals(
+                static_cast<std::size_t>(worker_count));
+
+        auto addMetrics = [](StreamProbeMetrics& dst, const StreamProbeMetrics& src) {
+            dst.streamWallSeconds += src.streamWallSeconds;
+            dst.permStreamSeconds += src.permStreamSeconds;
+            dst.probeSeconds += src.probeSeconds;
+            dst.appendSeconds += src.appendSeconds;
+            dst.finalSortSeconds += src.finalSortSeconds;
+            dst.finalDedupeSeconds += src.finalDedupeSeconds;
+            dst.taskWallSeconds += src.taskWallSeconds;
+            dst.chunkCount += src.chunkCount;
+            dst.streamedStateCount += src.streamedStateCount;
+            dst.preMergeMatchCount += src.preMergeMatchCount;
+
+            dst.probeStats.leftStateCount += src.probeStats.leftStateCount;
+            dst.probeStats.hashHits += src.probeStats.hashHits;
+            dst.probeStats.hashMisses += src.probeStats.hashMisses;
+            dst.probeStats.bucketsVisited += src.probeStats.bucketsVisited;
+            dst.probeStats.bucketStatesScanned += src.probeStats.bucketStatesScanned;
+            dst.probeStats.equalityChecks += src.probeStats.equalityChecks;
+            dst.probeStats.exactMatches += src.probeStats.exactMatches;
+            dst.probeStats.highFilterRejects += src.probeStats.highFilterRejects;
+            dst.probeStats.midFilterRejects += src.probeStats.midFilterRejects;
+            dst.probeStats.lowFilterRejects += src.probeStats.lowFilterRejects;
+            dst.probeStats.extraFilterRejects += src.probeStats.extraFilterRejects;
+            dst.probeStats.prefixRejects += src.probeStats.prefixRejects;
+            dst.probeStats.filterPasses += src.probeStats.filterPasses;
+        };
 
         auto worker = [&](const std::size_t workerId) {
             JVec<B1B2> middleMatches;
             JVec<u64> middleMatchHashes;
-
-            RecoveryBoardFrontierCache seedLeftCache;
-            RecoveryBoardFrontierCache seedPrefixRightCache;
-            RecoveryBoardFrontierCache middleRightCache;
-            RecoveryBoardFrontierCache middleLeftCache;
-
-            std::set<std::string> prefixPaths;
-            std::set<std::string> seedToMiddlePaths;
-            std::set<std::string> middleToGoalPaths;
-            std::unordered_set<std::string> localRecovered;
 
             while (true) {
                 const std::size_t i = nextIndex.fetch_add(1);
@@ -1032,143 +954,152 @@ private:
                 if constexpr (debug) {
                     std::lock_guard<std::mutex> lock(printMutex);
                     tcout << "[seed " << (i + 1) << "/" << leftSeeds.size()
-                          << "] streaming left seed(" << SEED_DEPTH << ") +" 
+                          << "] streaming exact-state seed(" << SEED_DEPTH << ") +"
                           << LEFT_FRONTIER_DEPTH << "\n" << std::flush;
                 }
 
                 Board seedBoard = makeBoardFromState(leftSeeds[i]);
-
                 StreamProbeMetrics metrics;
-                collectLeftFrontierMiddleMatchesStreamed<LEFT_FRONTIER_DEPTH, RIGHT_FRONTIER_DEPTH, debug>(
-                        seedBoard,
-                        middleMatches,
-                        middleMatchHashes,
-                        metrics
-                );
+
+                {
+                    Timer taskTimer;
+                    collectLeftFrontierMiddleMatchesStreamed<
+                            LEFT_FRONTIER_DEPTH,
+                            RIGHT_FRONTIER_DEPTH,
+                            true>(
+                            seedBoard,
+                            middleMatches,
+                            middleMatchHashes,
+                            metrics
+                    );
+                    metrics.taskWallSeconds = taskTimer.getSeconds();
+                }
+
+                if (!middleMatches.empty()) {
+                    std::lock_guard<std::mutex> lock(middleMutex);
+                    appendStates(
+                            allMiddleMatches,
+                            allMiddleMatchHashes,
+                            middleMatches,
+                            middleMatchHashes
+                    );
+                }
+
+                addMetrics(workerTotals[workerId], metrics);
 
                 if constexpr (debug) {
                     std::lock_guard<std::mutex> lock(printMutex);
                     tcout << "[worker " << workerId << "]"
-                             "\n  middle  matches: " << middleMatches.size()
+                          << "\n  exact middle matches: " << middleMatches.size()
                           << "\n  streamed states: " << metrics.streamedStateCount
-                          << "\n  permstream time: " << metrics.permStreamSeconds
-                          << "\n  probe      time: " << metrics.probeSeconds
+                          << "\n  high filter rejects: " << metrics.probeStats.highFilterRejects
+                          << "\n  mid filter rejects: " << metrics.probeStats.midFilterRejects
+                          << "\n  low filter rejects: " << metrics.probeStats.lowFilterRejects
+                          << "\n  extra filter rejects: " << metrics.probeStats.extraFilterRejects
+                          << "\n  filter passes: " << metrics.probeStats.filterPasses
+                          << "\n  prefix rejects: " << metrics.probeStats.prefixRejects
+                          << "\n  primary hash hits: " << metrics.probeStats.hashHits
+                          << "\n  full-state equality checks: " << metrics.probeStats.equalityChecks
+                          << "\n  exact matches: " << metrics.probeStats.exactMatches
+                          << "\n  permstream time (exclusive): " << metrics.permStreamSeconds
+                          << "\n  probe time: " << metrics.probeSeconds
+                          << "\n  append/post-probe time: "
+                          << (metrics.appendSeconds + metrics.finalSortSeconds + metrics.finalDedupeSeconds)
                           << '\n';
-                }
-
-                if (middleMatches.empty()) {
-                    continue;
-                }
-
-                prefixPaths.clear();
-                if constexpr (SEED_DEPTH == 0) {
-                    prefixPaths.insert("");
-                } else {
-                    ensureCache(seedPrefixRightCache, seedBoard, PREFIX_RIGHT_DEPTH);
-
-                    Board& searchStartRootLocal = getSearchStartBoard<REVERSE_SEARCH>();
-
-                    recoverExactSplit<REVERSE_SEARCH>(
-                            searchStartRootLocal,
-                            PREFIX_LEFT_DEPTH,
-                            prefixLeftCache_.states,
-                            prefixLeftCache_.hashes,
-                            seedBoard,
-                            PREFIX_RIGHT_DEPTH,
-                            seedPrefixRightCache.states,
-                            seedPrefixRightCache.hashes,
-                            prefixPaths
-                    );
-                }
-
-                ensureCache(seedLeftCache, seedBoard, SEED_LEFT_DEPTH);
-
-                localRecovered.clear();
-
-                for (std::size_t m = 0; m < middleMatches.size(); ++m) {
-                    middleRightCache.valid = false;
-                    middleLeftCache.valid = false;
-
-                    recoverSeedToMiddle<REVERSE_SEARCH>(
-                            seedBoard,
-                            middleMatches[m],
-                            SEED_LEFT_DEPTH,
-                            SEED_RIGHT_DEPTH,
-                            seedLeftCache,
-                            middleRightCache,
-                            seedToMiddlePaths
-                    );
-
-                    if (seedToMiddlePaths.empty()) {
-                        continue;
-                    }
-
-                    if constexpr (SEED_RIGHT_DEPTH == GOAL_LEFT_DEPTH) {
-                        middleLeftCache = middleRightCache;
-                        middleLeftCache.valid = true;
-                    }
-
-                    recoverMiddleToGoal<REVERSE_SEARCH>(
-                            middleMatches[m],
-                            GOAL_LEFT_DEPTH,
-                            GOAL_RIGHT_DEPTH,
-                            middleLeftCache,
-                            middleToGoalPaths
-                    );
-
-                    if (middleToGoalPaths.empty()) {
-                        continue;
-                    }
-
-                    appendJoinedSolutions<REVERSE_SEARCH>(
-                            prefixPaths,
-                            seedToMiddlePaths,
-                            middleToGoalPaths,
-                            localRecovered
-                    );
-                }
-
-                {
-                    std::lock_guard<std::mutex> lock(resultMutex);
-                    for (const auto& s : localRecovered) {
-                        resultSet.insert(s);
-                    }
-                }
-
-                if constexpr (debug) {
-                    std::lock_guard<std::mutex> lock(printMutex);
-                    tcout << "    [worker " << workerId
-                          << "] unique raw solutions so far: " << resultSet.size() << '\n';
                 }
             }
         };
 
+        Timer workerWallTimer;
         std::vector<std::thread> workers;
         workers.reserve(static_cast<std::size_t>(worker_count));
-
-        for (std::size_t workerId = 0; workerId < static_cast<std::size_t>(worker_count); ++workerId) {
+        for (std::size_t workerId = 0;
+             workerId < static_cast<std::size_t>(worker_count);
+             ++workerId) {
             workers.emplace_back(worker, workerId);
         }
+        for (auto& thread : workers) {
+            thread.join();
+        }
+        const double workerWallSeconds = workerWallTimer.getSeconds();
 
-        for (auto& t : workers) {
-            t.join();
+        StreamProbeMetrics aggregate{};
+        for (const auto& workerMetrics : workerTotals) {
+            addMetrics(aggregate, workerMetrics);
         }
 
-        tcout << "\nTotal Time: " << totalTime.getSeconds() << '\n';
-        tcout << "Puzzle: " << pair->getName() << '\n';
-        tcout << "Left Seed depth: " << SEED_DEPTH << '\n';
-        tcout << "Left frontier depth: " << LEFT_FRONTIER_DEPTH << '\n';
-        tcout << "Right frontier depth: " << RIGHT_FRONTIER_DEPTH << '\n';
-        tcout << "Search direction: " << directionNameTemplated<REVERSE_SEARCH>() << '\n';
+        // Probing is complete. Release the multi-gigabyte exact index before
+        // constructing recovery frontiers.
+        rightFrontierIndex_.clear();
+        JVec<B1B2>{}.swap(leftSeeds);
+        JVec<u64>{}.swap(leftSeedHashes);
 
+        GlobalRecoveryMetrics recoveryMetrics{};
+        Timer recoveryTimer;
+        recoverMatchedMiddlesGlobally<
+                TOTAL_LEFT_DEPTH,
+                RIGHT_FRONTIER_DEPTH,
+                REVERSE_SEARCH,
+                debug>(
+                allMiddleMatches,
+                allMiddleMatchHashes,
+                recoveryMetrics
+        );
+        const double globalRecoverySeconds = recoveryTimer.getSeconds();
+
+        double finalDedupeSeconds = 0.0;
         if (!resultSet.empty()) {
-            expandRawSolutionsIntoFinalSet();
+            Timer timer;
+            finalizeExactSolutionsIntoFinalSet();
+            finalDedupeSeconds = timer.getSeconds();
             if (shouldWriteSolutionsToFile()) {
                 writeExpandedSolutions(TOTAL_DEPTH);
             }
         } else {
             tcout << "No solutions found...\n";
         }
+
+        const double leftSeedTotalSeconds = workerWallSeconds + globalRecoverySeconds;
+        const double postProbeSeconds = aggregate.appendSeconds
+                                      + aggregate.finalSortSeconds
+                                      + aggregate.finalDedupeSeconds;
+
+        tcout << "\nTotal Time: " << totalTime.getSeconds() << '\n';
+        tcout << "Puzzle: " << pair->getName() << '\n';
+        tcout << "Total depth: " << TOTAL_DEPTH << '\n';
+        tcout << "Left seed depth: " << SEED_DEPTH << '\n';
+        tcout << "Left stream depth: " << LEFT_FRONTIER_DEPTH << '\n';
+        tcout << "Right exact frontier depth: " << RIGHT_FRONTIER_DEPTH << '\n';
+        tcout << "Search direction: " << directionNameTemplated<REVERSE_SEARCH>() << '\n';
+
+        tcout << "\n========== TIMING SUMMARY (COPY/PASTE) ==========\n";
+        tcout << "right frontier gen time: " << rightFrontierGenSeconds << "s\n";
+        tcout << "left frontier gen time: " << leftFrontierGenSeconds << "s\n";
+        tcout << "left seed permstream time: " << aggregate.permStreamSeconds
+              << "s (aggregate CPU, exclusive of probe/append)\n";
+        tcout << "left seed probe time: " << aggregate.probeSeconds
+              << "s (aggregate CPU, exact full-state lookup)\n";
+        tcout << "left seed total time: " << leftSeedTotalSeconds
+              << "s (worker wall time + global exact recovery)\n";
+        tcout << "left seed worker time: " << workerWallSeconds
+              << "s (thread launch through final worker join)\n";
+        tcout << "de-dupe at end time: " << finalDedupeSeconds
+              << "s (validation and final exact set ordering)\n";
+        tcout << "left seed post-probe time: " << postProbeSeconds
+              << "s (aggregate CPU; append + per-task middle sort/de-dupe)\n";
+        tcout << "left seed aggregate task time: " << aggregate.taskWallSeconds
+              << "s (aggregate CPU across all seed tasks)\n";
+        tcout << "global recovery time: " << globalRecoverySeconds << "s\n";
+        tcout << "global middle sort time: " << recoveryMetrics.middleSortSeconds << "s\n";
+        tcout << "global middle de-dupe time: " << recoveryMetrics.middleDedupeSeconds << "s\n";
+        tcout << "global path recovery time: " << recoveryMetrics.pathRecoverySeconds << "s\n";
+        tcout << "left seed tasks: " << seedTaskCount << '\n';
+        tcout << "left streamed states: " << aggregate.streamedStateCount << '\n';
+        tcout << "left primary hash hits: " << aggregate.probeStats.hashHits << '\n';
+        tcout << "left full-state equality checks: " << aggregate.probeStats.equalityChecks << '\n';
+        tcout << "left exact candidate matches: " << aggregate.probeStats.exactMatches << '\n';
+        tcout << "unique exact middle states: " << recoveryMetrics.uniqueMiddleCount << '\n';
+        tcout << "=================================================\n";
 
         return getExpandedSolutionCount();
     }
@@ -1183,32 +1114,11 @@ public:
             bool debug = true
             >
     MU int findSolutionsFrontier(SearchDirection direction = SearchDirection::Auto) {
-        SearchDirection resolvedDirection = direction;
-
-        if (resolvedDirection == SearchDirection::Auto) {
-            resolvedDirection = chooseAutoSearchDirection<SEED_DEPTH, LEFT_FRONTIER_DEPTH, RIGHT_FRONTIER_DEPTH, debug>();
-            tcout << "search direction: auto -> " << directionName(resolvedDirection) << '\n';
-        } else {
-            tcout << "search direction: forced " << directionName(resolvedDirection) << '\n';
-        }
-
-        if (resolvedDirection == SearchDirection::Reverse) {
-            return findSolutionsFrontierImpl<
-                    SEED_DEPTH,
-                    LEFT_FRONTIER_DEPTH,
-                    RIGHT_FRONTIER_DEPTH,
-                    debug,
-                    true
-                    >();
-        } else {
-            return findSolutionsFrontierImpl<
-                    SEED_DEPTH,
-                    LEFT_FRONTIER_DEPTH,
-                    RIGHT_FRONTIER_DEPTH,
-                    debug,
-                    false
-                    >();
-        }
+        return findSolutionsFrontierThreaded<
+                SEED_DEPTH,
+                LEFT_FRONTIER_DEPTH,
+                RIGHT_FRONTIER_DEPTH,
+                debug>(1, direction);
     }
 
     template<
@@ -1223,7 +1133,10 @@ public:
                                          const bool enableDepth5RightCache = false) {
         static constexpr int TARGET_TOTAL_DEPTH = SEED_DEPTH + LEFT_FRONTIER_DEPTH + RIGHT_FRONTIER_DEPTH;
 
-        enableRightFrontierCache_ = enableDepth5RightCache;
+        // Kept for source compatibility with the training-data driver.  The
+        // former copied-index cache was removed because copying a multi-GB
+        // exact index is both wasteful and unsafe under memory pressure.
+        (void) enableDepth5RightCache;
 
         SearchDirection rampDirection = direction;
         if (ensureNoLowerSolutions && rampDirection == SearchDirection::Auto) {

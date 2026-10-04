@@ -11,58 +11,34 @@ namespace perm_stream_detail {
             const Board& board,
             StreamChunk<T>& chunk,
             const u64 move,
-            const ActStruct& lastActStruct,
+            const u8 previousGlobalAction,
             const u8 startIndex,
             const u8 endIndex,
             Sink& sink) {
         static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
-        bool lastActIsRow = false;
-        bool lastActIsCol = false;
-
-        if constexpr (DIRECTION) {
-            lastActIsRow = (lastActStruct.isColNotFat & 2) != 0;
-        } else {
-            lastActIsCol = (lastActStruct.isColNotFat & 1) != 0;
-        }
-
+        // A normal C followed by a normal R that commutes on this board is
+        // skipped; the same state is kept through the R -> C order.
         const u8* funcIndexes = fatActionsIndexes[board.getFatXY()];
+        const u32 crossMask = DIRECTION
+                ? board.getFatNormalColThenRowCommutingMask(previousGlobalAction)
+                : 0;
 
         for (u8 actn_i = startIndex; actn_i < endIndex; ++actn_i) {
+            if (crossMask & (u32{1} << actn_i)) {
+                continue;
+            }
             const ActStruct& actStruct = allActStructList[funcIndexes[actn_i]];
 
             Board board_next = board;
             actStruct.action(board_next);
 
-            if constexpr (CUR_DEPTH != 0) {
-                if constexpr (SECT_DIR != eSequenceDir::NONE) {
-                    if constexpr (DIRECTION) {
-                        if (lastActIsRow && ((actStruct.isColNotFat & 2) != 0)) {
-                            if constexpr (SECT_DIR == eSequenceDir::ASCENDING) {
-                                if (lastActStruct.index <= actStruct.index) {
-                                    continue;
-                                }
-                            } else if constexpr (SECT_DIR == eSequenceDir::DESCENDING) {
-                                if (lastActStruct.index >= actStruct.index) {
-                                    continue;
-                                }
-                            }
-                        }
-                    } else {
-                        if (lastActIsCol && ((actStruct.isColNotFat & 1) != 0)) {
-                            if constexpr (SECT_DIR == eSequenceDir::ASCENDING) {
-                                if (lastActStruct.index <= actStruct.index) {
-                                    continue;
-                                }
-                            } else if constexpr (SECT_DIR == eSequenceDir::DESCENDING) {
-                                if (lastActStruct.index >= actStruct.index) {
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // The board-relative [startIndex, endIndex) restriction below
+            // already chooses one ordering for consecutive moves in the same
+            // row/column lane. Do not also compare ActStruct::index here:
+            // fatActionsIndexes changes with the fat position, so combining
+            // both orderings can reject every representative of a reachable
+            // state (notably the R04/R54 segment in puzzle 6-2).
 
             if (board == board_next) {
                 continue;
@@ -98,7 +74,7 @@ namespace perm_stream_detail {
                         board_next,
                         chunk,
                         move_next,
-                        actStruct,
+                        funcIndexes[actn_i],
                         nextStart,
                         nextEnd,
                         sink
@@ -113,7 +89,7 @@ namespace perm_stream_detail {
                         board_next,
                         chunk,
                         move_next,
-                        actStruct,
+                        funcIndexes[actn_i],
                         24,
                         48,
                         sink
@@ -144,7 +120,7 @@ namespace perm_stream_detail {
                         board_next,
                         chunk,
                         move_next,
-                        actStruct,
+                        funcIndexes[actn_i],
                         0,
                         24,
                         sink
@@ -159,7 +135,7 @@ namespace perm_stream_detail {
                         board_next,
                         chunk,
                         move_next,
-                        actStruct,
+                        funcIndexes[actn_i],
                         nextStart,
                         nextEnd,
                         sink
@@ -190,7 +166,7 @@ namespace perm_stream_detail {
                     board_in,
                     chunk,
                     0,
-                    {nullptr, 0, 0, 0, 0, "\0\0\0\0"},
+                    255,
                     0,
                     24,
                     sink
@@ -205,7 +181,7 @@ namespace perm_stream_detail {
                     board_in,
                     chunk,
                     0,
-                    {nullptr, 0, 0, 0, 0, "\0\0\0\0"},
+                    255,
                     24,
                     48,
                     sink

@@ -108,7 +108,7 @@ namespace perm_stream_detail {
             const Board& board,
             StreamChunk<T>& chunk,
             u64 move,
-            const ActStruct& lastActStruct,
+            u8 previousGlobalAction,
             u8 startIndex,
             u8 endIndex,
             Sink& sink);
@@ -160,10 +160,13 @@ class PermStream {
             return;
         }
 
+        // CHECK_CROSS: skip a C -> R pair that commutes on the current board;
+        // the R -> C order keeps the same state. Exact-state completeness is
+        // covered by testExactSolverRegression.
         perm_stream_detail::stream_perm_list<
                 T,
                 DEPTH,
-                false,
+                true,
                 true,
                 (SECT_DIR != eSequenceDir::NONE),
                 SECT_DIR>(

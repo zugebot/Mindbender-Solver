@@ -43,7 +43,10 @@ MU typename Perms<T>::ToDepthFuncPtr Perms<T>::FromLeft::funcPtrs[] = {
 };
 
 
-// TODO: CHECK_CROSS must be OFF for fromLeft and fromRight, because it can prune too early. It may only be used on eSequenceDir::NONE.
+// CHECK_CROSS stays OFF for these materialized tables. Pruning a commuting C -> R pair is
+// state-complete in every direction (see testExactSolverRegression), but the solver_direct
+// pipeline recovers solution lists by permuting row/column runs of each path, which cannot
+// regenerate a pruned C -> R ordering. PermStream (exact-state pipeline) enables it.
 template<typename T>
 MU typename Perms<T>::ToDepthFuncPtr Perms<T>::FromNone::funcPtrs[] = {
         &perms_detail::make_perm_list<T, 0, false, true, false, eSequenceDir::NONE>,

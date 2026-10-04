@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -36,7 +37,7 @@ void process_chunk(
         return;
     }
     if (end1 > size1) {
-        return;
+        throw std::runtime_error("intersection chunk exceeds left lane size");
     }
 
     const u64 min_hash = boards1[start1].getHash();
@@ -128,17 +129,16 @@ std::vector<std::pair<const T*, const T*>> intersection_threaded(
     ranges.reserve(num_threads);
 
     {
-        const size_t base_chunk = total_size / num_threads;
-        const size_t remainder = total_size % num_threads;
-
         size_t start = 0;
         for (size_t i = 0; i < num_threads && start < total_size; ++i) {
-            size_t chunk_len = base_chunk + (i < remainder ? 1 : 0);
-            size_t end = start + chunk_len;
+            const size_t threadsLeft = num_threads - i;
+            const size_t statesLeft = total_size - start;
+            const size_t chunkLen = (statesLeft + threadsLeft - 1) / threadsLeft;
+            size_t end = std::min(total_size, start + chunkLen);
 
             if (end < total_size) {
-                const u64 boundary_hash = boards1[end - 1].getHash();
-                while (end < total_size && boards1[end].getHash() == boundary_hash) {
+                const u64 boundaryHash = boards1[end - 1].getHash();
+                while (end < total_size && boards1[end].getHash() == boundaryHash) {
                     ++end;
                 }
             }
@@ -146,6 +146,11 @@ std::vector<std::pair<const T*, const T*>> intersection_threaded(
             ranges.emplace_back(start, end);
             start = end;
         }
+    }
+
+    if (ranges.empty() || ranges.front().first != 0 ||
+        ranges.back().second != total_size) {
+        throw std::runtime_error("intersection partition did not cover the full left lane");
     }
 
     std::vector<std::thread> threads;
@@ -189,58 +194,57 @@ std::vector<std::pair<const T*, const T*>> intersection_threaded(
 }
 
 
-// TODO: garbage bad code
+// Exact single-threaded intersection.  Preserve every matching path pair in
+// equal-hash runs and validate the full state before returning it.
 #ifdef USE_CUDA
 template<typename T>
 #else
 template<HasGetHash_v T>
 #endif
-std::vector<std::pair<const T *, const T *>> intersection(const JVec<T>& boards1, const JVec<T>& boards2) {
+std::vector<std::pair<const T*, const T*>> intersection(
+        const JVec<T>& boards1,
+        const JVec<T>& boards2) {
     static_assert(HasGetHash_v<T>, "T must have a getHash() method returning uint64_t");
 
-    std::vector<std::pair<const T *, const T *>> results;
-    auto it1 = boards1.begin();
-    auto it2 = boards2.begin();
-    while (it1 != boards1.end() && it2 != boards2.end()) {
-        if (it1->getHash() == it2->getHash()) {
-            auto it1_end = it1;
-            auto it2_end = it2;
-            // find range of matching hashes in boards1
-            while (it1_end != boards1.end() && it1_end->getHash() == it1->getHash()) {
-                ++it1_end;
-            }
-            // find range of matching hashes in boards2
-            while (it2_end != boards2.end() && it2_end->getHash() == it2->getHash()) {
-                ++it2_end;
-            }
-            // make pairs for all combinations of matching hashes
-            for (auto it1_match = it1; it1_match != it1_end; ++it1_match) {
-                for (auto it2_match = it2; it2_match != it2_end; ++it2_match) {
-                    results.emplace_back(it1_match, it2_match);
-                    break;
+    std::vector<std::pair<const T*, const T*>> results;
+    std::size_t i1 = 0;
+    std::size_t i2 = 0;
+
+    while (i1 < boards1.size() && i2 < boards2.size()) {
+        const u64 hash1 = boards1[i1].getHash();
+        const u64 hash2 = boards2[i2].getHash();
+
+        if (hash1 < hash2) {
+            ++i1;
+            continue;
+        }
+        if (hash2 < hash1) {
+            ++i2;
+            continue;
+        }
+
+        std::size_t end1 = i1 + 1;
+        std::size_t end2 = i2 + 1;
+        while (end1 < boards1.size() && boards1[end1].getHash() == hash1) {
+            ++end1;
+        }
+        while (end2 < boards2.size() && boards2[end2].getHash() == hash2) {
+            ++end2;
+        }
+
+        for (std::size_t a = i1; a < end1; ++a) {
+            for (std::size_t b = i2; b < end2; ++b) {
+                if (boards1[a] == boards2[b]) {
+                    results.emplace_back(&boards1[a], &boards2[b]);
                 }
-                break;
             }
-
-            it1 = it1_end;
-            it2 = it2_end;
-        } else if (it1->getHash() < it2->getHash()) {
-            ++it1;
-        } else {
-            ++it2;
         }
+
+        i1 = end1;
+        i2 = end2;
     }
 
-    // removes board pairs that have the same hashes but different states
-    std::vector<std::pair<const T *, const T *>> realResults;
-    realResults.reserve(results.size());
-    for (auto& [fst, snd] : results) {
-        if (*fst == *snd) {
-            realResults.emplace_back(fst, snd);
-        }
-    }
-    return realResults;
-
+    return results;
 }
 
 
@@ -380,7 +384,7 @@ MU static void process_chunk(
         return;
     }
     if (end1 > size1) {
-        return;
+        throw std::runtime_error("intersection chunk exceeds left lane size");
     }
 
     const u64 min_hash = hashes1[start1];
@@ -465,17 +469,16 @@ MU std::vector<std::pair<const T*, const T*>> intersection_threaded(
     ranges.reserve(num_threads);
 
     {
-        const size_t base_chunk = total_size / num_threads;
-        const size_t remainder = total_size % num_threads;
-
         size_t start = 0;
         for (size_t i = 0; i < num_threads && start < total_size; ++i) {
-            size_t chunk_len = base_chunk + (i < remainder ? 1 : 0);
-            size_t end = start + chunk_len;
+            const size_t threadsLeft = num_threads - i;
+            const size_t statesLeft = total_size - start;
+            const size_t chunkLen = (statesLeft + threadsLeft - 1) / threadsLeft;
+            size_t end = std::min(total_size, start + chunkLen);
 
             if (end < total_size) {
-                const u64 boundary_hash = hashes1[end - 1];
-                while (end < total_size && hashes1[end] == boundary_hash) {
+                const u64 boundaryHash = hashes1[end - 1];
+                while (end < total_size && hashes1[end] == boundaryHash) {
                     ++end;
                 }
             }
@@ -483,6 +486,11 @@ MU std::vector<std::pair<const T*, const T*>> intersection_threaded(
             ranges.emplace_back(start, end);
             start = end;
         }
+    }
+
+    if (ranges.empty() || ranges.front().first != 0 ||
+        ranges.back().second != total_size) {
+        throw std::runtime_error("intersection partition did not cover the full left lane");
     }
 
     std::vector<std::thread> threads;

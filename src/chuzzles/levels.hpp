@@ -80,12 +80,13 @@ public:
     MUND std::string_view getNameView() const { return std::string_view(name); }
     MUND i8 getTrueColor(const u32 color) const { return trueColors[color]; }
     MUND std::string toString() const { return board.toString(solve, {true, trueColors}); }
+    MUND std::string toStringNoColors() const { return board.toString(solve, {false, trueColors}); }
     MUND std::string toStringReversed() const { return solve.toString(board, {true, trueColors}); }
 };
 
 class BoardLookup {
 private:
-    inline static const std::array<LevelDef, 100> LEVEL_DEFS = {{
+    inline static const std::array<LevelDef, 101> LEVEL_DEFS = {{
             {"1-1",   LevelCells::b1_1,   LevelCells::s1_1,   {},           {}},
             {"1-2",   LevelCells::b1_2,   LevelCells::s1_2,   {},           {}},
             {"1-3",   LevelCells::b1_3,   LevelCells::s1_3,   {},           {}},
@@ -205,6 +206,8 @@ private:
             {"20-3",  LevelCells::b20_3,  LevelCells::s20_3,  {true, 2, 2}, {true, 2, 2}},
             {"20-4",  LevelCells::b20_4,  LevelCells::s20_4,  {},           {}},
             {"20-5",  LevelCells::b20_5,  LevelCells::s20_5,  {},           {}},
+        
+            {"21-1",  LevelCells::b21_1,  LevelCells::s21_1,  {},           {}},
     }};
 
     inline static const std::array<BoardPair, LEVEL_DEFS.size()> BOARD_PAIRS = [] {
@@ -232,7 +235,7 @@ public:
         return BOARD_PAIRS;
     }
 
-    MUND static const std::array<LevelDef, 100>& getAllLevelDefs() {
+    MUND static const std::array<LevelDef, 101>& getAllLevelDefs() {
         return LEVEL_DEFS;
     }
 };

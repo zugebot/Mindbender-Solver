@@ -46,8 +46,11 @@ MU static constexpr u64 BOARD_SECT_NONE_PRE_MAX_MALLOC_SIZES[8] = {
         60ULL * 60 * 60 * 60 * 60 * 60 * 60,
 };
 
+// Hard upper bounds for the corrected board-relative fat canonical generator.
+// These include every metadata-valid branch (before color-based no-op rejection)
+// across all 25 fat positions, for both ascending and descending generation.
 MU static constexpr u64 BOARD_FAT_MAX_MALLOC_SIZES[8] = {
-        1, 48, 1320, 36402, 1001168, 27513569, 0, 0,
+        1, 48, 1620, 52478, 1701430, 55162126, 0, 0,
 };
 
 enum class eSequenceDir {
@@ -118,7 +121,6 @@ namespace perms_detail {
             JVec<u64>& hashes_out,
             u32& count,
             u64 move,
-            const ActStruct& lastActStruct,
             u8 startIndex,
             u8 endIndex);
     

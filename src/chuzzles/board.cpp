@@ -134,32 +134,64 @@ MU HD bool Board::doActISColMatch(const u8 x1, const u8 y1, const u8 m, const u8
     return (color1 ^ color2) & 0'7;
 }
 
-// TODO: very important to optimize
-// TODO: this code sucks make it better
-// TODO: actually nvm I think the perm code specifically doesn't use the branch that has this
 u8 HD Board::doActISColMatchBatched(const u8 x1, const u8 y1, const u8 m) const {
-    const i32 x2 = (x1 - m + 6) % 6;
-    const u64 base = y1 < 3 ? b1 : b2;
-    const i32 offset_shared = 51 - y1 % 3 * 18;
-    const u8 color1 = base >> (x1 * 3 + offset_shared);
-    const u8 color3 = base >> (x2 * 3 + offset_shared);
-
-    if ((color1 ^ color3) & 0'7) {
+    // *this is the board A right after column x1 was shifted down by m.
+    // Bit (n - 1) of the result is set iff shifting row y1 right by n now gives
+    // the same board as shifting that row before the column, which holds
+    // exactly when A(x1, y1) == A(x1, y1 + m) == A(x1 - n, y1).
+    const u8 pivot = getColor(x1, y1);
+    if (getColor(x1, static_cast<u8>((y1 + m) % 6)) != pivot) {
         return 0;
     }
 
-    u8 results = 0;
-    const i32 offset_shared2 = 51 - x1 * 3;
-    for (i32 i = -5; i < 1; i++) {
-        const i32 y2 = (y1 - i) % 6;
-        const i32 y3 = ((y1 - i) % 3) * 18;
-        const u64 base2 = y2 < 3 ? b1 : b2;
-        const u8 color2 = base2 >> (offset_shared2 - y3);
-        results |= ((((color1 ^ color2) & 07) != 0) << (i + 5));
+    // Row y1 as 18 bits; column c sits at bit 3 * (5 - c).
+    const u64 half = y1 < 3 ? b1 : b2;
+    const u64 row = (half >> (36 - 18 * (y1 % 3))) & 0'777777;
+    const u64 diff = row ^ (pivot * 0'111111);
+    const u64 same = ~(diff | diff >> 1 | diff >> 2) & 0'111111;
+
+    // Bit j of e <=> column (5 - j) matches the pivot. Result bit k (n = k + 1)
+    // needs column (x1 - 1 - k) mod 6, i.e. e bit (k + 6 - x1) mod 6.
+    const u32 e = static_cast<u32>(my_pext_u64(same, 0'111111));
+    const u32 s = (6 - x1) % 6;
+    const u32 rotated = ((e >> s) | (e << (6 - s))) & 0x3F;
+    return static_cast<u8>(rotated & 0x1F);
+}
+
+
+u32 HD Board::getFatNormalColThenRowCommutingMask(const u8 previousGlobalAction) const {
+    // Canonicalize only ordinary C -> ordinary R inversions. These moves do
+    // not touch the 2x2 piece, so fat position and physical lane identities
+    // are unchanged by swapping them. Returns a mask over the board-relative
+    // row slots [0, 24) of fatActionsIndexes: a set bit means that row move
+    // commutes with the previous column move, so only the R -> C order is kept.
+    if (previousGlobalAction < 32 || previousGlobalAction >= 62) {
+        return 0;
     }
 
-    return results;
+    static constexpr u8 LOCAL_BASE_BY_FAT_Y[5][6] = {
+        {255, 255,   4,   9,  14,  19},
+        {  0, 255, 255,   9,  14,  19},
+        {  0,   5, 255, 255,  14,  19},
+        {  0,   5,  10, 255, 255,  19},
+        {  0,   5,  10,  15, 255, 255},
+    };
+
+    const u8 previousColumn = static_cast<u8>((previousGlobalAction - 32) / 5);
+    const u8 previousAmount = static_cast<u8>((previousGlobalAction - 32) % 5 + 1);
+    const u8* localBases = LOCAL_BASE_BY_FAT_Y[getFatY()];
+
+    u32 result = 0;
+    for (u8 row = 0; row < 6; ++row) {
+        const u8 localBase = localBases[row];
+        if (localBase != 255) {
+            result |= static_cast<u32>(doActISColMatchBatched(
+                    previousColumn, row, previousAmount)) << localBase;
+        }
+    }
+    return result;
 }
+
 
 double HD Board::getDuplicateEstimateAtDepth(MU u32 depth) {
     (void)depth;

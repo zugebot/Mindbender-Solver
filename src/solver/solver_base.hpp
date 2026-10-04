@@ -25,7 +25,7 @@
 class MU BoardSolverBase {
 public:
     static constexpr u32 MAX_DEPTH = 5;
-    static constexpr u32 LEFT_STREAM_CHUNK_SIZE = 1u << 20;
+    static constexpr u32 LEFT_STREAM_CHUNK_SIZE = 1024;
 
 protected:
     std::vector<JVec<Board>> board1Table;
@@ -313,6 +313,37 @@ protected:
         for (const auto& line : lines) {
             file << line << '\n';
         }
+    }
+
+    // Exact recovery already enumerates complete move sequences.  Validate and
+    // order those sequences directly instead of re-expanding commuting moves.
+    MU void finalizeExactSolutionsIntoFinalSet() {
+        expandedResultSet.clear();
+
+        std::size_t validInputSolutions = 0;
+        std::size_t skippedInputSolutions = 0;
+
+        tcout << "\nFinalizing exact solver results...\n";
+
+        for (const auto& solution : resultSet) {
+            std::vector<u8> moves;
+            std::string canonicalLine;
+            if (!tryParseValidatedLine(solution, hasFat, moves, canonicalLine)
+                || !applyMovesAndCheckGoal(board1, board2, moves)) {
+                ++skippedInputSolutions;
+                tcout << "Skipping invalid exact solver solution: "
+                      << solution << '\n';
+                continue;
+            }
+
+            expandedResultSet.insert(std::move(canonicalLine));
+            ++validInputSolutions;
+        }
+
+        tcout << "Original exact solutions: " << resultSet.size() << '\n';
+        tcout << "Valid exact solutions: " << validInputSolutions << '\n';
+        tcout << "Skipped exact solutions: " << skippedInputSolutions << '\n';
+        tcout << "Final exact solutions: " << expandedResultSet.size() << '\n';
     }
 
     MU void expandRawSolutionsIntoFinalSet() {

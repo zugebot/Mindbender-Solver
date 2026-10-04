@@ -12,56 +12,32 @@ namespace perms_detail {
             JVec<u64>& hashes_out,
             u32& count,
             const u64 move,
-            const ActStruct& lastActStruct,
+            const u8 previousGlobalAction,
             const u8 startIndex,
             const u8 endIndex) {
         static_assert(AllowedPermsType<T>, "T must be Board or B1B2");
 
-        MU bool lastActIsRow = false;
-        MU bool lastActIsCol = false;
-
-        if constexpr (DIRECTION) {
-            lastActIsRow = (lastActStruct.isColNotFat & 2) != 0;
-        } else {
-            lastActIsCol = (lastActStruct.isColNotFat & 1) != 0;
-        }
-
+        // A normal C followed by a normal R that commutes on this board is
+        // skipped; the same state is kept through the R -> C order.
         const u8* funcIndexes = fatActionsIndexes[board.getFatXY()];
+        const u32 crossMask = DIRECTION
+                ? board.getFatNormalColThenRowCommutingMask(previousGlobalAction)
+                : 0;
 
         for (u64 actn_i = startIndex; actn_i < endIndex; ++actn_i) {
+            if (crossMask & (u32{1} << actn_i)) {
+                continue;
+            }
             const ActStruct& actStruct = allActStructList[funcIndexes[actn_i]];
             Board board_next = board;
             actStruct.action(board_next);
 
-            if constexpr (CUR_DEPTH != 0) {
-                if constexpr (SECT_DIR != eSequenceDir::NONE) {
-                    if constexpr (DIRECTION) {
-                        if (lastActIsRow && ((actStruct.isColNotFat & 2) != 0)) {
-                            if constexpr (SECT_DIR == eSequenceDir::ASCENDING) {
-                                if (lastActStruct.index <= actStruct.index) {
-                                    continue;
-                                }
-                            } else if constexpr (SECT_DIR == eSequenceDir::DESCENDING) {
-                                if (lastActStruct.index >= actStruct.index) {
-                                    continue;
-                                }
-                            }
-                        }
-                    } else {
-                        if (lastActIsCol && ((actStruct.isColNotFat & 1) != 0)) {
-                            if constexpr (SECT_DIR == eSequenceDir::ASCENDING) {
-                                if (lastActStruct.index <= actStruct.index) {
-                                    continue;
-                                }
-                            } else if constexpr (SECT_DIR == eSequenceDir::DESCENDING) {
-                                if (lastActStruct.index >= actStruct.index) {
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // The board-relative [startIndex, endIndex) restriction below
+            // already chooses one ordering for consecutive moves in the same
+            // row/column lane. Do not also compare ActStruct::index here:
+            // fatActionsIndexes changes with the fat position, so combining
+            // both orderings can reject every representative of a reachable
+            // state (notably the R04/R54 segment in puzzle 6-2).
 
             if (board == board_next) {
                 continue;
@@ -99,10 +75,10 @@ namespace perms_detail {
                 const u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
 
                 make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, SECT_DIR, true>(
-                        board_next, boards_out, hashes_out, count, move_next, actStruct, nextStart, nextEnd);
+                        board_next, boards_out, hashes_out, count, move_next, funcIndexes[actn_i], nextStart, nextEnd);
 
                 make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, SECT_DIR, false>(
-                        board_next, boards_out, hashes_out, count, move_next, actStruct, 24, 48);
+                        board_next, boards_out, hashes_out, count, move_next, funcIndexes[actn_i], 24, 48);
 
             } else {
                 u8 nextStart = 24;
@@ -121,10 +97,10 @@ namespace perms_detail {
                 const u64 move_next = move | (actn_i << (6 * CUR_DEPTH));
 
                 make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, SECT_DIR, true>(
-                        board_next, boards_out, hashes_out, count, move_next, actStruct, 0, 24);
+                        board_next, boards_out, hashes_out, count, move_next, funcIndexes[actn_i], 0, 24);
 
                 make_fat_perm_list_helper<T, CUR_DEPTH + 1, MAX_DEPTH, SECT_DIR, false>(
-                        board_next, boards_out, hashes_out, count, move_next, actStruct, nextStart, nextEnd);
+                        board_next, boards_out, hashes_out, count, move_next, funcIndexes[actn_i], nextStart, nextEnd);
             }
         }
     }
@@ -154,12 +130,10 @@ namespace perms_detail {
 
         } else {
             make_fat_perm_list_helper<T, 0, DEPTH, SECT_DIR, true>(
-                    board_in, boards_out, hashes_out, count, 0,
-                    {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 0, 24);
+                    board_in, boards_out, hashes_out, count, 0, 255, 0, 24);
 
             make_fat_perm_list_helper<T, 0, DEPTH, SECT_DIR, false>(
-                    board_in, boards_out, hashes_out, count, 0,
-                    {nullptr, 0, 0, 0, 0, "\0\0\0\0"}, 24, 48);
+                    board_in, boards_out, hashes_out, count, 0, 255, 24, 48);
 
             boards_out.resize(count);
             hashes_out.resize(count);

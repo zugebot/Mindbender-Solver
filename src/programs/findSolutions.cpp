@@ -1,6 +1,5 @@
 // programs/findSolutions.cpp
 #include "../chuzzles/include.hpp"
-#include "src/solver/memory_perm_gen.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -10,7 +9,6 @@
 #include <string>
 
 #include "include/nlohmann/json.hpp"
-#include "src/solver/solver_direct.hpp"
 #include "src/solver/solver_frontier.hpp"
 #include "utils/get_free_memory.hpp"
 
@@ -18,6 +16,7 @@
 struct FindSolutionConfig {
     std::string outDirectory = R"(C:\Users\jerrin\CLionProjects\Mindbender-Solver)";
     BoardSolverFrontier::SearchDirection searchDirection = BoardSolverFrontier::SearchDirection::Auto;
+    bool ignoredExperimentalSettings = false;
     bool debug = true;
     std::string puzzle = "14-2";
     int estimatedDepth = 10;
@@ -59,7 +58,8 @@ static BoardSolverFrontier::SearchDirection parseSearchDirection(const nlohmann:
     return SearchDirection::Auto;
 }
 
-static FindSolutionConfig loadFindSolutionConfig() {
+static FindSolutionConfig 
+loadFindSolutionConfig() {
     FindSolutionConfig cfg;
     namespace fs = std::filesystem;
 
@@ -97,6 +97,19 @@ static FindSolutionConfig loadFindSolutionConfig() {
 
         if (const auto it = j.find("searchDirection"); it != j.end()) {
             cfg.searchDirection = parseSearchDirection(*it);
+        }
+
+        static constexpr const char* REMOVED_EXPERIMENTAL_KEYS[] = {
+                "rightFrontierIndex",
+                "rightFrontierCachelineLoadFactor",
+                "leftGeneration",
+                "rightGeneration",
+                "probeStream"
+        };
+        for (const char* key : REMOVED_EXPERIMENTAL_KEYS) {
+            if (j.find(key) != j.end()) {
+                cfg.ignoredExperimentalSettings = true;
+            }
         }
 
         if (const auto it = j.find("debug"); it != j.end() && it->is_boolean()) {
@@ -197,16 +210,27 @@ static int runSolverForEstimatedDepth(
 int runSingleFindSolution(const FindSolutionConfig& config) {
     const std::string outDirectory = config.outDirectory;
     const auto SEARCH_DIRECTION = config.searchDirection;
-    std::string puzzle = config.puzzle;
-    int estimatedDepth = config.estimatedDepth;
-    int threads = config.threads;
+    const std::string puzzle = config.puzzle;
+    const int estimatedDepth = config.estimatedDepth;
+    const int threads = config.threads;
     
     const auto pair = BoardLookup::getBoardPair(puzzle);
+    if (pair == nullptr) {
+        tcout << "Unknown puzzle: " << puzzle << '\n';
+        return -1;
+    }
 
-    tcout << pair->toString() << "\n";
+    tcout << pair->toStringNoColors() << "\n";
 
     BoardSolverFrontier solver(pair);
     solver.setWriteDirectory(outDirectory);
+    tcout << "solver mode: exact-state exhaustive\n";
+    tcout << "right frontier validation: full board state\n";
+    tcout << "solution recovery: global exact-depth recovery\n";
+    if (config.ignoredExperimentalSettings) {
+        tcout << "warning: removed experimental config keys were ignored; "
+                 "the exact-state exhaustive pipeline is always used\n";
+    }
 
     if (config.debug) {
         return runSolverForEstimatedDepth<true>(solver, estimatedDepth, threads, SEARCH_DIRECTION);
@@ -233,19 +257,24 @@ int runMultiFindSolution(const FindSolutionConfig& config) {
         tcout << "Solving puzzle: " << puzzle << "\n";
         
         const auto pair = BoardLookup::getBoardPair(puzzle);
-        if (pair->getStartState().getFatBool()) {
+        if (pair == nullptr) {
+            tcout << "Unknown puzzle: " << puzzle << '\n';
+            --status;
             continue;
         }
-    
+
         tcout << pair->toString() << "\n";
         
         BoardSolverFrontier solver(pair);
         solver.setWriteDirectory(outDirectory);
 
         if (config.debug) {
-            status += runSolverForEstimatedDepth<true>(solver, estimatedDepth, threads, SEARCH_DIRECTION);
+            status += runSolverForEstimatedDepth<true>(
+                    solver, estimatedDepth, threads, SEARCH_DIRECTION);
+        } else {
+            status += runSolverForEstimatedDepth<false>(
+                    solver, estimatedDepth, threads, SEARCH_DIRECTION);
         }
-        status += runSolverForEstimatedDepth<false>(solver, estimatedDepth, threads, SEARCH_DIRECTION);
     }
     return status;
 }
@@ -257,128 +286,10 @@ int main() {
     if (!hasAtLeastGBMemoryTotal(GB_NEEDED)) {
         tcout << "Program requires more RAM, exiting...\n";
         const u64 mem = getTotalSystemMemory();
-        tcout << bytesFormatted(mem) << "/" << GB_NEEDED << ".000GB" << "\n";
+        tcout << bytesFormatted(mem) << "/" << GB_NEEDED << ".000GB\n";
         return -1;
     }
 
     const FindSolutionConfig config = loadFindSolutionConfig();
-
     return runSingleFindSolution(config);
-    // return runMultiFindSolution(config);
-  
-    
-    
-    
-    
-    
-    
-    /*
-    namespace std {
-        template <>
-        struct hash<Board> {
-            std::size_t operator()(const Board& b) const {
-                return b.getHash();
-            }
-        };
-    }
-    void func(Board& board, Action action, std::vector<u8>& indexes) {
-        u8* list = fatActionsIndexes[board.getFatXY()];
-        indexes.push_back(std::find(list, list + 48, getIndexFromAction(action)) - list);
-        action(board);
-    }
-    std::vector<HashMem> boards_out(48);
-    const Board board = pair->getInitialState();
-    const auto hasher = HashMem::getHashFunc(board);
-    make_fat_perm_list<1>(board, boards_out, hasher);
-
-    tcout << board.toString() << "\n";
-
-    int index = 10;
-    int funcIndex = fatActionsIndexes[board.getFatXY()][index];
-
-    Board temp = board;
-
-    auto function = allActionsList[funcIndex];
-
-
-    tcout << "is fat: " << temp.getFatBool() << "\n";
-    function(temp);
-    tcout << "is fat: " << temp.getFatBool() << "\n";
-
-    temp.getMemory().setNextNMove<1>(funcIndex);
-    // applyMoves(temp, boards_out[index]);
-    tcout << temp.toString() << "\n";
-
-    tcout << boards_out[index].getMemory().asmFatStringForwards(board.getFatXY());
-
-
-    return 0;
-    */
-    /*
-    c_Board board = pair->getInitialState();
-    c_auto hasher = board.getHashFunc();
-
-    static constexpr u64 depth = 2;
-    c_u64 sizeOut = 170000000; // 2948970, 170000000
-
-    std::vector<Board> boards_new;
-    boards_new.reserve(sizeOut);
-    std::vector<Board> boards_old(sizeOut);
-
-
-    Timer timer_new;
-    // make_fat_perm_list<depth>(board, boards_new, hasher);
-    make_fat_perm_list<depth>(board, boards_new, hasher);
-    tcout << "New: " << timer_new.getSeconds() << " size: " << boards_new.size() << "\n";
-
-
-    Timer timer_old;
-    Perms::getDepthFunc(board, boards_old, depth, true);
-    tcout << "Old: " << timer_old.getSeconds() << " size: " << boards_old.size() << "\n";
-
-
-    MU volatile int x = 0;
-    */
-    /*
-    BoardSolver solver(pair);
-    solver.setWriteDirectory(outDirectory);
-    solver.setDepthParams(6, 10, 11);
-    solver.preAllocateMemory(6);
-
-    tcout << pair->toString() << "\n";
-    solver.findSolutions<true>();
-    return 0;
-    */
-    /*
-    tcout << board1.toString() << "\n";
-
-    bool intersection[5];
-
-    intersection[0] = doActISColMatch(board1, 4, 3, 1, 1);
-    intersection[1] = doActISColMatch(board1, 4, 3, 1, 2);
-    intersection[2] = doActISColMatch(board1, 4, 3, 1, 3);
-    intersection[3] = doActISColMatch(board1, 4, 3, 1, 4);
-    intersection[4] = doActISColMatch(board1, 4, 3, 1, 5);
-
-    for (int i = 0; i < 5; i++) {
-        std::string valStr = intersection[i] ? "true" : "false";
-        tcout << "3 Colors at [" << i << "]: " << valStr << "\n";
-    }
-
-    tcout << "\n";
-
-    auto intersection2 = doActISColMatchBatched(board1, 4, 3, 1);
-
-    for (int i = 0; i < 5; i++) {
-        u8 mask = 1 << i;
-        bool val = intersection2 & mask;
-        std::string valStr = val ? "true" : "false";
-        tcout << "3 Colors at [" << i << "]: " << valStr << "\n";
-    }
-
-
-
-
-    return 0;
-    */
 }

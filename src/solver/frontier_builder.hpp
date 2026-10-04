@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <thread>
 #include <vector>
@@ -238,6 +239,8 @@ namespace frontier_recovery_detail {
             JVec<B1B2>& nextStates,
             JVec<u64>& nextHashes,
             const u64 reserveGuess) {
+        (void) reserveGuess;
+
         nextStates.clear();
         nextHashes.clear();
 
@@ -245,53 +248,46 @@ namespace frontier_recovery_detail {
             return;
         }
 
+        const std::size_t branchCap = IS_FAT ? FAT_NONE_MOVE_COUNT : NORMAL_NONE_MOVE_COUNT;
+        const std::size_t hardUpper = frontierStates.size() * branchCap;
+
+        // Allocate the final raw buffer exactly once. The previous threaded path built
+        // one giant set of per-thread partial buffers, then allocated/copied into a
+        // second giant final buffer. At depth 5 that can briefly require more than
+        // twice the raw frontier memory. This fixed-block layout gives each worker a
+        // disjoint section of the final array and compacts the gaps after expansion.
+        reserveStateHashLanes(nextStates, nextHashes, hardUpper);
+        nextStates.resize(hardUpper);
+        nextHashes.resize(hardUpper);
+
         const std::size_t threadCount = chooseExpandThreadCount(frontierStates.size());
-
-        if (threadCount <= 1) {
-            expandNoneFrontierRangeByOne<IS_FAT>(
-                    frontierStates,
-                    0,
-                    frontierStates.size(),
-                    nextStates,
-                    nextHashes,
-                    reserveGuess
-            );
-            return;
-        }
-
-        std::vector<FrontierChunkResult> partials(threadCount);
-        std::vector<std::thread> workers;
-        workers.reserve(threadCount);
-
         const std::size_t baseChunk = frontierStates.size() / threadCount;
         const std::size_t remainder = frontierStates.size() % threadCount;
 
-        u64 reserveGuessPerThread = reserveGuess == 0
-                                            ? 0
-                                            : (reserveGuess / static_cast<u64>(threadCount));
-
-        const u64 minReservePerThread = IS_FAT
-                                                ? static_cast<u64>(FAT_NONE_MOVE_COUNT)
-                                                : static_cast<u64>(NORMAL_NONE_MOVE_COUNT);
-
-        if (reserveGuessPerThread < minReservePerThread) {
-            reserveGuessPerThread = minReservePerThread;
-        }
+        std::vector<std::size_t> chunkBegins(threadCount, 0);
+        std::vector<std::size_t> producedCounts(threadCount, 0);
+        std::vector<std::thread> workers;
+        workers.reserve(threadCount);
 
         std::size_t begin = 0;
         for (std::size_t t = 0; t < threadCount; ++t) {
             const std::size_t chunkLen = baseChunk + (t < remainder ? 1 : 0);
             const std::size_t end = begin + chunkLen;
+            chunkBegins[t] = begin;
 
-            workers.emplace_back([&, t, begin, end, reserveGuessPerThread]() {
-                expandNoneFrontierRangeByOne<IS_FAT>(
-                        frontierStates,
-                        begin,
-                        end,
-                        partials[t].states,
-                        partials[t].hashes,
-                        reserveGuessPerThread
-                );
+            workers.emplace_back([&, t, begin, end]() {
+                const std::size_t outputBase = begin * branchCap;
+                std::size_t produced = 0;
+
+                for (std::size_t i = begin; i < end; ++i) {
+                    produced += emitNoneChildren<IS_FAT>(
+                            frontierStates[i],
+                            &nextStates[outputBase + produced],
+                            &nextHashes[outputBase + produced]
+                    );
+                }
+
+                producedCounts[t] = produced;
             });
 
             begin = end;
@@ -301,34 +297,32 @@ namespace frontier_recovery_detail {
             worker.join();
         }
 
-        std::size_t totalSize = 0;
-        for (const auto& partial : partials) {
-            totalSize += partial.states.size();
-        }
-
-        reserveStateHashLanes(
-                nextStates,
-                nextHashes,
-                std::max<std::size_t>(
-                        static_cast<std::size_t>(reserveGuess),
-                        totalSize
-                        )
-        );
-
-        nextStates.resize(totalSize);
-        nextHashes.resize(totalSize);
-
         std::size_t writeOffset = 0;
-        for (const auto& partial : partials) {
-            copyLaneRangeIntoOffset(
-                    nextStates,
-                    nextHashes,
-                    writeOffset,
-                    partial.states,
-                    partial.hashes
-            );
-            writeOffset += partial.states.size();
+        for (std::size_t t = 0; t < threadCount; ++t) {
+            const std::size_t produced = producedCounts[t];
+            if (produced == 0) {
+                continue;
+            }
+
+            const std::size_t sourceOffset = chunkBegins[t] * branchCap;
+            if (writeOffset != sourceOffset) {
+                std::memmove(
+                        nextStates.data() + writeOffset,
+                        nextStates.data() + sourceOffset,
+                        produced * sizeof(B1B2)
+                );
+                std::memmove(
+                        nextHashes.data() + writeOffset,
+                        nextHashes.data() + sourceOffset,
+                        produced * sizeof(u64)
+                );
+            }
+
+            writeOffset += produced;
         }
+
+        nextStates.resize(writeOffset);
+        nextHashes.resize(writeOffset);
     }
 
     template<typename T>
@@ -415,117 +409,6 @@ MU static void compactUniqueSortedStatesInPlace(JVec<T>& states,
     hashes.resize(writeIndex);
 }
 
-template<typename T>
-MU static void removeStatesPresentInSortedSetLinear(JVec<T>& states,
-                                                    JVec<u64>& hashes,
-                                                    const JVec<T>& sortedSeenStates,
-                                                    const JVec<u64>& sortedSeenHashes) {
-    if (states.empty() || sortedSeenStates.empty()) {
-        return;
-    }
-
-    std::size_t writeIndex = 0;
-    std::size_t seenIndex = 0;
-
-    for (std::size_t i = 0; i < states.size(); ++i) {
-        const u64 curHash = hashes[i];
-
-        while (seenIndex < sortedSeenStates.size() && sortedSeenHashes[seenIndex] < curHash) {
-            ++seenIndex;
-        }
-
-        bool found = false;
-        std::size_t probe = seenIndex;
-
-        while (probe < sortedSeenStates.size() && sortedSeenHashes[probe] == curHash) {
-            if (sortedSeenStates[probe] == states[i]) {
-                found = true;
-                break;
-            }
-            ++probe;
-        }
-
-        if (!found) {
-            states[writeIndex] = states[i];
-            hashes[writeIndex] = hashes[i];
-            ++writeIndex;
-        }
-    }
-
-    states.resize(writeIndex);
-    hashes.resize(writeIndex);
-}
-
-template<typename T>
-MU static void mergeSortedUniqueStatesIntoSeen(JVec<T>& seenStates,
-                                               JVec<u64>& seenHashes,
-                                               const JVec<T>& newStates,
-                                               const JVec<u64>& newHashes,
-                                               JVec<T>& scratchStates,
-                                               JVec<u64>& scratchHashes) {
-    if (newStates.empty()) {
-        return;
-    }
-
-    scratchStates.resize(seenStates.size() + newStates.size());
-    scratchHashes.resize(seenHashes.size() + newHashes.size());
-
-    std::size_t i = 0;
-    std::size_t j = 0;
-    std::size_t out = 0;
-
-    while (i < seenStates.size() && j < newStates.size()) {
-        if (frontier_recovery_detail::lessByHashThenState(
-                    seenStates[i], seenHashes[i],
-                    newStates[j], newHashes[j])) {
-            scratchStates[out] = seenStates[i];
-            scratchHashes[out] = seenHashes[i];
-            ++i;
-            ++out;
-            continue;
-        }
-
-        if (frontier_recovery_detail::lessByHashThenState(
-                    newStates[j], newHashes[j],
-                    seenStates[i], seenHashes[i])) {
-            scratchStates[out] = newStates[j];
-            scratchHashes[out] = newHashes[j];
-            ++j;
-            ++out;
-            continue;
-        }
-
-        scratchStates[out] = seenStates[i];
-        scratchHashes[out] = seenHashes[i];
-        ++i;
-        ++j;
-        ++out;
-    }
-
-    while (i < seenStates.size()) {
-        scratchStates[out] = seenStates[i];
-        scratchHashes[out] = seenHashes[i];
-        ++i;
-        ++out;
-    }
-
-    while (j < newStates.size()) {
-        scratchStates[out] = newStates[j];
-        scratchHashes[out] = newHashes[j];
-        ++j;
-        ++out;
-    }
-
-    scratchStates.resize(out);
-    scratchHashes.resize(out);
-
-    seenStates.swap(scratchStates);
-    seenHashes.swap(scratchHashes);
-
-    scratchStates.clear();
-    scratchHashes.clear();
-}
-
 class FrontierBuilderB1B2 {
     static constexpr u64 NORMAL_BRANCH_CAP = 60ULL;
     static constexpr u64 FAT_BRANCH_CAP = 48ULL;
@@ -535,24 +418,17 @@ class FrontierBuilderB1B2 {
         u64 frontierSize = 0;
         u64 rawGenerated = 0;
         u64 afterSelfDedupe = 0;
-        u64 afterSeenSubtract = 0;
         std::size_t expandThreads = 1;
     };
 
     Board root_{};
     BoardSorter<B1B2> sorter_{};
 
-    JVec<B1B2> seen_{};
-    JVec<u64> seenHashes_{};
-
     JVec<B1B2> frontier_{};
     JVec<u64> frontierHashes_{};
 
     JVec<B1B2> next_{};
     JVec<u64> nextHashes_{};
-
-    JVec<B1B2> mergeScratch_{};
-    JVec<u64> mergeScratchHashes_{};
 
     u32 colorCount_ = 0;
     bool verbose_ = true;
@@ -591,17 +467,13 @@ class FrontierBuilderB1B2 {
     }
 
     MUND u64 workspaceLiveBytes() const {
-        return pairLiveBytes(seen_, seenHashes_)
-               + pairLiveBytes(frontier_, frontierHashes_)
-               + pairLiveBytes(next_, nextHashes_)
-               + pairLiveBytes(mergeScratch_, mergeScratchHashes_);
+        return pairLiveBytes(frontier_, frontierHashes_)
+               + pairLiveBytes(next_, nextHashes_);
     }
 
     MUND u64 workspaceCapacityBytes() const {
-        return pairCapacityBytes(seen_, seenHashes_)
-               + pairCapacityBytes(frontier_, frontierHashes_)
-               + pairCapacityBytes(next_, nextHashes_)
-               + pairCapacityBytes(mergeScratch_, mergeScratchHashes_);
+        return pairCapacityBytes(frontier_, frontierHashes_)
+               + pairCapacityBytes(next_, nextHashes_);
     }
 
     MU void updatePeakWorkspaceCapacity() {
@@ -650,12 +522,12 @@ class FrontierBuilderB1B2 {
             return 0;
         }
 
-        if (lastStats_.rawGenerated == 0 || lastStats_.afterSeenSubtract == 0) {
+        if (lastStats_.rawGenerated == 0 || lastStats_.afterSelfDedupe == 0) {
             return hardUpper;
         }
 
         const double keepRatio =
-                static_cast<double>(lastStats_.afterSeenSubtract) /
+                static_cast<double>(lastStats_.afterSelfDedupe) /
                 static_cast<double>(lastStats_.rawGenerated);
 
         const double paddedRatio = std::clamp(keepRatio * 1.25, 0.10, 1.0);
@@ -673,25 +545,16 @@ class FrontierBuilderB1B2 {
     }
 
     MU void initRootState() {
-        seen_.clear();
-        seenHashes_.clear();
         frontier_.clear();
         frontierHashes_.clear();
         next_.clear();
         nextHashes_.clear();
-        mergeScratch_.clear();
-        mergeScratchHashes_.clear();
 
-        seen_.resize(1);
-        seenHashes_.resize(1);
         frontier_.resize(1);
         frontierHashes_.resize(1);
 
         const B1B2 rootState = root_.asB1B2();
         const u64 rootHash = StateHash::computeHash(rootState);
-
-        seen_[0] = rootState;
-        seenHashes_[0] = rootHash;
 
         frontier_[0] = rootState;
         frontierHashes_[0] = rootHash;
@@ -707,7 +570,7 @@ class FrontierBuilderB1B2 {
     MU void expandOneDepth(const u32 depth) {
         Timer stepTimer;
         if (verbose_) {
-            tcout << "Generating NONE depth " << depth << "...\n" << std::flush;
+            tcout << "Generating exact NONE depth " << depth << "...\n" << std::flush;
         }
 
         next_.clear();
@@ -715,14 +578,6 @@ class FrontierBuilderB1B2 {
 
         const bool fatPuzzle = isFatPuzzle();
         const u64 reserveGuess = estimateNextReserve();
-        frontier_recovery_detail::reserveStateHashLanes(
-                next_,
-                nextHashes_,
-                static_cast<std::size_t>(reserveGuess)
-        );
-
-        updatePeakWorkspaceCapacity();
-
         lastStats_ = {};
         lastStats_.frontierSize = frontier_.size();
         lastStats_.expandThreads = frontier_recovery_detail::chooseExpandThreadCount(frontier_.size());
@@ -731,11 +586,6 @@ class FrontierBuilderB1B2 {
             tcout << "    frontier in: " << frontier_.size()
                   << " states, " << fmtBytes(pairLiveBytes(frontier_, frontierHashes_))
                   << " live, " << fmtBytes(pairCapacityBytes(frontier_, frontierHashes_))
-                  << " rsv\n";
-
-            tcout << "    seen so far: " << seen_.size()
-                  << " states, " << fmtBytes(pairLiveBytes(seen_, seenHashes_))
-                  << " live, " << fmtBytes(pairCapacityBytes(seen_, seenHashes_))
                   << " rsv\n";
         }
 
@@ -809,41 +659,6 @@ class FrontierBuilderB1B2 {
             }
         }
 
-        {
-            Timer timerSubtract;
-            removeStatesPresentInSortedSetLinear(
-                    next_,
-                    nextHashes_,
-                    seen_,
-                    seenHashes_
-            );
-            lastStats_.afterSeenSubtract = next_.size();
-
-            if (verbose_) {
-                tcout << "    after seen subtract: " << next_.size()
-                      << " states (" << pct(lastStats_.afterSeenSubtract, lastStats_.rawGenerated) << "% of raw, "
-                      << pct(lastStats_.afterSeenSubtract, lastStats_.afterSelfDedupe) << "% of self-deduped)\n";
-
-                tcout << "    subtract seen time: " << timerSubtract.getSeconds() << '\n';
-            }
-        }
-
-        {
-            Timer timerMerge;
-            mergeSortedUniqueStatesIntoSeen(
-                    seen_,
-                    seenHashes_,
-                    next_,
-                    nextHashes_,
-                    mergeScratch_,
-                    mergeScratchHashes_
-            );
-            if (verbose_) {
-                tcout << "    cumulative seen size: " << seen_.size() << '\n';
-                tcout << "    seen merge time: " << timerMerge.getSeconds() << '\n';
-            }
-        }
-
         frontier_.swap(next_);
         frontierHashes_.swap(nextHashes_);
         next_.clear();
@@ -855,9 +670,7 @@ class FrontierBuilderB1B2 {
             tcout << "    new frontier size: " << frontier_.size() << '\n';
 
             printLaneStats("frontier lane", frontier_, frontierHashes_);
-            printLaneStats("seen lane", seen_, seenHashes_);
             printLaneStats("next scratch", next_, nextHashes_);
-            printLaneStats("merge scratch", mergeScratch_, mergeScratchHashes_);
 
             tcout << "    workspace live: " << fmtBytes(workspaceLiveBytes()) << '\n';
             tcout << "    workspace rsv: " << fmtBytes(workspaceCapacityBytes()) << '\n';

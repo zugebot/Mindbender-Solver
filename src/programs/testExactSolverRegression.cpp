@@ -1,0 +1,398 @@
+#include "src/chuzzles/include.hpp"
+#include "src/chuzzles/intersection.hpp"
+#include "src/solver/frontier_builder.hpp"
+#include "src/solver/right_frontier/right_frontier_table.hpp"
+#include "src/solver/solver_frontier.hpp"
+
+#include <algorithm>
+#include <iostream>
+#include <random>
+#include <set>
+#include <string>
+#include <vector>
+
+namespace {
+
+bool testThreadedIntersectionCoversTail() {
+    JVec<B1B2> left;
+    left.resize(10);
+    JVec<u64> leftHashes;
+    leftHashes.resize(10);
+    for (std::size_t i = 0; i < left.size(); ++i) {
+        left[i].b1 = static_cast<u64>(i + 1);
+        left[i].b2 = static_cast<u64>(100 + i);
+    }
+
+    // With four workers, the old range calculation extended the first chunk
+    // through indices [0,6), then gave a later chunk an end beyond size 10.
+    // process_chunk() silently discarded that chunk, including index 9.
+    for (std::size_t i = 0; i < 6; ++i) leftHashes[i] = 1;
+    for (std::size_t i = 6; i < 9; ++i) leftHashes[i] = 2;
+    leftHashes[9] = 3;
+
+    JVec<B1B2> right;
+    right.resize(1);
+    JVec<u64> rightHashes;
+    rightHashes.resize(1);
+    right[0] = left[9];
+    rightHashes[0] = 3;
+
+    const auto single = intersection(left, leftHashes, right, rightHashes);
+    const auto threaded = intersection_threaded(
+            left, leftHashes, right, rightHashes, 4);
+
+    return single.size() == 1 && threaded.size() == 1 &&
+           *threaded[0].first == left[9] && *threaded[0].second == right[0];
+}
+
+bool testExactIndexRejectsHashCollisions() {
+    JVec<B1B2> states;
+    states.resize(3);
+    JVec<u64> hashes;
+    hashes.resize(3);
+
+    states[0] = B1B2{1, 10};
+    states[1] = B1B2{2, 20};
+    states[2] = B1B2{3, 30};
+    hashes[0] = hashes[1] = hashes[2] = 0x123456789abcdef0ULL;
+
+    RightFrontierTableB1B2 index;
+    Board unusedRoot;
+    index.buildFromUniqueStates<false>(
+            std::move(states), std::move(hashes), unusedRoot);
+
+    JVec<B1B2> queries;
+    queries.resize(2);
+    JVec<u64> queryHashes;
+    queryHashes.resize(2);
+    queries[0] = B1B2{2, 20};
+    queries[1] = B1B2{4, 40};
+    queryHashes[0] = queryHashes[1] = 0x123456789abcdef0ULL;
+
+    JVec<B1B2> matches;
+    JVec<u64> matchHashes;
+    RightFrontierTableB1B2::ProbeStats stats;
+    index.collectMatches<5, true>(
+            queries, queryHashes, matches, matchHashes, &stats);
+
+    return matches.size() == 1 && matches[0] == queries[0] &&
+           stats.hashHits == 2 && stats.exactMatches == 1;
+}
+
+bool testExactLayerRetainsLongerReachability() {
+    const BoardPair* pair = BoardLookup::getBoardPair("7-1");
+    if (pair == nullptr) {
+        return false;
+    }
+
+    JVec<B1B2> depth1;
+    JVec<u64> depth1Hashes;
+    JVec<B1B2> depth3;
+    JVec<u64> depth3Hashes;
+
+    FrontierBuilderB1B2 builder(pair->getStartState(), false);
+    builder.buildExactNoneDepth(1, depth1, depth1Hashes);
+    builder.buildExactNoneDepth(3, depth3, depth3Hashes);
+
+    if (depth1.empty()) {
+        return false;
+    }
+
+    return std::find(depth3.begin(), depth3.end(), depth1[0]) != depth3.end();
+}
+
+
+bool testFatCanonicalGeneratorsCoverKnownMiddleSegment() {
+    const BoardPair* pair = BoardLookup::getBoardPair("6-2");
+    if (pair == nullptr) {
+        return false;
+    }
+
+    // The missing 40-solution family contains this valid prefix. After its
+    // first five moves, both canonical fat generators must retain the board
+    // reached by the consecutive R04/R54 segment. The old code combined two
+    // opposing ordering rules and removed every representative of this state.
+    const std::vector<u8> moves = Memory::parseFatMoveString(
+            "R11 R342 C05 R15 C25 R04 R54 C345 C54 R235 C11 C41"
+    );
+    if (moves.size() != 12) {
+        return false;
+    }
+
+    Board segmentStart = pair->getStartState();
+    for (std::size_t i = 0; i < 5; ++i) {
+        allActStructList[moves[i]].action(segmentStart);
+    }
+
+    Board target = pair->getStartState();
+    for (std::size_t i = 0; i < 7; ++i) {
+        allActStructList[moves[i]].action(target);
+    }
+    const B1B2 targetState = target.asB1B2();
+
+    struct TargetSink {
+        B1B2 target{};
+        bool found = false;
+
+        void operator()(JVec<B1B2>& states,
+                        JVec<u64>&,
+                        const u32 count) {
+            for (u32 i = 0; i < count; ++i) {
+                if (states[i] == target) {
+                    found = true;
+                    return;
+                }
+            }
+        }
+    } sink{targetState, false};
+
+    PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, 2>(
+            segmentStart, sink, 1024
+    );
+
+    JVec<B1B2> materializedStates;
+    JVec<u64> materializedHashes;
+    Perms<B1B2>::getDepthFunc<eSequenceDir::ASCENDING>(
+            segmentStart, materializedStates, materializedHashes, 2
+    );
+    const bool materializedFound =
+            std::find(materializedStates.begin(), materializedStates.end(), targetState)
+            != materializedStates.end();
+
+    return sink.found && materializedFound;
+}
+
+bool testStreamCoversExactDistanceShell(const char* puzzle) {
+    // Every state at exact BFS distance 3 from the root must be produced by
+    // the canonical stream. The old fat column->row commuting mask pruned
+    // pairs that do not commute and lost ~8% of these states on 6-2; 1-1
+    // (2 colors) exercises the normal stream's CHECK_CROSS pruning hardest.
+    const BoardPair* pair = BoardLookup::getBoardPair(puzzle);
+    if (pair == nullptr) {
+        return false;
+    }
+    const Board root = pair->getStartState();
+
+    std::vector<B1B2> closer;
+    for (u32 depth = 0; depth < 3; ++depth) {
+        JVec<B1B2> states;
+        JVec<u64> hashes;
+        FrontierBuilderB1B2 builder(root, false);
+        builder.buildExactNoneDepth(depth, states, hashes);
+        closer.insert(closer.end(), states.begin(), states.end());
+    }
+    std::sort(closer.begin(), closer.end());
+
+    JVec<B1B2> depth3;
+    JVec<u64> depth3Hashes;
+    FrontierBuilderB1B2 builder(root, false);
+    builder.buildExactNoneDepth(3, depth3, depth3Hashes);
+
+    struct CollectSink {
+        std::vector<B1B2> states;
+
+        void operator()(JVec<B1B2>& chunk,
+                        JVec<u64>&,
+                        const u32 count) {
+            states.insert(states.end(), chunk.begin(), chunk.begin() + count);
+        }
+    } sink;
+    PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, 3>(root, sink, 1024);
+    std::sort(sink.states.begin(), sink.states.end());
+
+    for (const B1B2& state : depth3) {
+        if (std::binary_search(closer.begin(), closer.end(), state)) {
+            continue;
+        }
+        if (!std::binary_search(sink.states.begin(), sink.states.end(), state)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool testFatColThenRowMaskIsExact() {
+    // The C -> R pruning mask must flag exactly the pairs where applying the
+    // row move before the column move gives the same board. Flagging a pair
+    // that does not commute loses states; the old version did so for ~89%.
+    std::mt19937_64 rng(12345);
+    for (int trial = 0; trial < 2000; ++trial) {
+        u8 cells[36];
+        const int colors = 2 + trial % 4;
+        for (u8& cell : cells) {
+            cell = static_cast<u8>(rng() % colors);
+        }
+        const Board board(cells, static_cast<u8>(rng() % 5), static_cast<u8>(rng() % 5));
+        const u8* relative = fatActionsIndexes[board.getFatXY()];
+
+        for (int colSlot = 24; colSlot < 48; ++colSlot) {
+            const u8 col = relative[colSlot];
+            if (col < 32 || col >= 62) {
+                continue;
+            }
+            Board afterCol = board;
+            allActStructList[col].action(afterCol);
+            const u32 mask = afterCol.getFatNormalColThenRowCommutingMask(col);
+
+            for (int rowSlot = 0; rowSlot < 24; ++rowSlot) {
+                const u8 row = relative[rowSlot];
+                const bool flagged = (mask >> rowSlot) & 1U;
+                if (row >= 30) {
+                    if (flagged) {
+                        return false;
+                    }
+                    continue;
+                }
+                Board colThenRow = afterCol;
+                allActStructList[row].action(colThenRow);
+                Board rowThenCol = board;
+                allActStructList[row].action(rowThenCol);
+                allActStructList[col].action(rowThenCol);
+                if (flagged != (colThenRow == rowThenCol)) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+bool testGetColorMatchesPackedLayout() {
+    // getShiftAmount used to read rows {2,1,0,5,4,3} and shift by >= 64 (UB);
+    // at -O3 the unrolled loop below folded most reads to 0.
+    u8 cells[36];
+    for (int i = 0; i < 36; ++i) {
+        cells[i] = static_cast<u8>((i * 5 + i / 6) % 8);
+    }
+    const Board board(cells);
+
+    for (u8 y = 0; y < 6; ++y) {
+        for (u8 x = 0; x < 6; ++x) {
+            if (board.getColor(x, y) != board.getColor(static_cast<u64>(x), static_cast<u64>(y))) {
+                return false;
+            }
+        }
+    }
+
+    // setState renumbers the colors present in ascending value order.
+    bool present[8] = {};
+    for (const u8 c : cells) {
+        present[c] = true;
+    }
+    u8 adjusted[8] = {};
+    u8 next = 0;
+    for (u8 c = 0; c < 8; ++c) {
+        if (present[c]) {
+            adjusted[c] = next++;
+        }
+    }
+    for (u8 y = 0; y < 6; ++y) {
+        for (u8 x = 0; x < 6; ++x) {
+            if (board.getColor(x, y) != adjusted[cells[6 * y + x]]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool testSmallEndToEndExactSolver() {
+    const BoardPair* base = BoardLookup::getBoardPair("7-1");
+    if (base == nullptr) {
+        return false;
+    }
+
+    Board start = base->getStartState();
+    Board goal = start;
+    const u8 targetMoves[3] = {0, 34, 23};
+    for (const u8 action : targetMoves) {
+        allActStructList[action].action(goal);
+    }
+
+    BoardPair pair("regression", start, goal);
+
+    std::set<std::string> expected;
+    for (u64 d0 = 0; d0 < 2; ++d0) {
+        for (u64 s0 = 0; s0 < 6; ++s0) {
+            for (u64 h0 = 0; h0 < 5; ++h0) {
+                const u8 a0 = static_cast<u8>((d0 << 5) + s0 * 5 + h0);
+                Board b0 = start;
+                allActStructList[a0].action(b0);
+                if (b0 == start) continue;
+
+                for (u64 d1 = 0; d1 < 2; ++d1) {
+                    for (u64 s1 = 0; s1 < 6; ++s1) {
+                        for (u64 h1 = 0; h1 < 5; ++h1) {
+                            const u8 a1 = static_cast<u8>((d1 << 5) + s1 * 5 + h1);
+                            Board b1 = b0;
+                            allActStructList[a1].action(b1);
+                            if (b1 == b0) continue;
+
+                            for (u64 d2 = 0; d2 < 2; ++d2) {
+                                for (u64 s2 = 0; s2 < 6; ++s2) {
+                                    for (u64 h2 = 0; h2 < 5; ++h2) {
+                                        const u8 a2 = static_cast<u8>(
+                                                (d2 << 5) + s2 * 5 + h2);
+                                        Board b2 = b1;
+                                        allActStructList[a2].action(b2);
+                                        if (b2 == b1 || b2 != goal) continue;
+
+                                        Memory memory;
+                                        memory.setNextNMove<3>(
+                                                static_cast<u64>(a0) |
+                                                (static_cast<u64>(a1) << 6U) |
+                                                (static_cast<u64>(a2) << 12U));
+                                        expected.insert(memory.asmStringForwards());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    BoardSolverFrontier solver(&pair);
+    solver.setWriteSolutionsToFile(false);
+    const int found = solver.findSolutionsFrontierThreaded<1, 1, 1, false>(
+            4, BoardSolverFrontier::SearchDirection::Forward);
+
+    return found == static_cast<int>(expected.size());
+}
+
+} // namespace
+
+int main() {
+    const bool intersectionOk = testThreadedIntersectionCoversTail();
+    const bool indexOk = testExactIndexRejectsHashCollisions();
+    const bool layerOk = testExactLayerRetainsLongerReachability();
+    const bool fatGeneratorsOk = testFatCanonicalGeneratorsCoverKnownMiddleSegment();
+    const bool fatShellOk = testStreamCoversExactDistanceShell("6-2");
+    const bool normalShellOk = testStreamCoversExactDistanceShell("1-1");
+    const bool fatMaskOk = testFatColThenRowMaskIsExact();
+    const bool getColorOk = testGetColorMatchesPackedLayout();
+    const bool solverOk = testSmallEndToEndExactSolver();
+
+    std::cout << "threaded intersection tail coverage: "
+              << (intersectionOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "exact index collision validation: "
+              << (indexOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "exact-depth layer semantics: "
+              << (layerOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "fat canonical middle coverage: "
+              << (fatGeneratorsOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "fat stream exact distance-3 coverage: "
+              << (fatShellOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "normal stream exact distance-3 coverage: "
+              << (normalShellOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "fat col->row commuting mask exact: "
+              << (fatMaskOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "getColor matches packed layout: "
+              << (getColorOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "small end-to-end exact solver: "
+              << (solverOk ? "PASS" : "FAIL") << '\n';
+
+    return intersectionOk && indexOk && layerOk && fatGeneratorsOk
+           && fatShellOk && normalShellOk && fatMaskOk && getColorOk && solverOk ? 0 : 1;
+}
