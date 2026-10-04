@@ -6,7 +6,10 @@
 //   Build:  exact depth-5 frontier in RAM -> expand every state by one move ->
 //           route each child to one of 256 partition files by the top 8 bits of
 //           a mixed state key -> sort + de-dupe each partition independently.
-//   Probe:  load a contiguous range of sorted partitions that fits the RAM
+//   Probe (default): load a compact fingerprint index of the whole table (u32
+//           per state + bucket starts), stream the left side once, and confirm
+//           fingerprint hits against the full states on disk.
+//   Probe (--batched): load a contiguous range of sorted partitions that fits the RAM
 //           budget, index it with a direct-address bucket table, then regenerate
 //           the whole left side (exact depth-S seeds, canonical depth-3 stream)
 //           and probe only states whose key falls in that range. Repeat per range.
@@ -18,7 +21,7 @@
 // Usage:
 //   experimentDiskDepth6 <puzzle> [--out X:/mindbender_d6] [--batch 320000000]
 //                        [--threads N] [--seed-depth S] [--reverse] [--rebuild]
-//                        [--no-recover] [--solutions file]
+//                        [--no-recover] [--batched] [--solutions file]
 //                        [--d7-sample N [--d7-pass-budget STATES]]
 
 #include "src/chuzzles/include.hpp"
@@ -66,6 +69,7 @@ namespace {
         std::string solutionsFile;
         u32 seedDepth = 3;
         bool recover = true;
+        bool batched = false;
         u32 d7Sample = 0;
         u64 d7PassBudget = 375'000'000ULL;
     };
@@ -501,6 +505,237 @@ namespace {
     }
 
     // ------------------------------------------------------------------
+    // Fingerprint mode: one probe pass over a compact in-RAM index
+    // ------------------------------------------------------------------
+    //
+    // fp.bin    : u32 low 32 key bits of every table state, in key order
+    // fpdir.bin : u64 start index of every bucket (bucket = top bits of key)
+    // fpmeta.txt: "<bucketBits> <stateCount>"
+    //
+    // A probe whose bucket holds a matching fingerprint becomes a candidate;
+    // candidates are confirmed against the full states on disk, so false
+    // fingerprint matches (~bucket size / 2^32 per probe) cost one tiny read.
+
+    struct FingerprintIndex {
+        u32 bucketBits = 0;
+        u32 shift = 0;
+        u64 stateCount = 0;
+        std::vector<u32> fingerprints;
+        std::vector<u64> starts;   // bucketCount + 1
+
+        // Prefetch bucket offsets, then fingerprint runs, then compare, so the
+        // DRAM misses of a whole group overlap.
+        void probeGroup(const B1B2* probes, const u64* keys, const u32 count,
+                        std::vector<KeyedState>& candidates) const {
+            u64 bucket[PROBE_GROUP], lo[PROBE_GROUP], hi[PROBE_GROUP];
+            for (u32 i = 0; i < count; ++i) {
+                bucket[i] = keys[i] >> shift;
+                __builtin_prefetch(&starts[bucket[i]]);
+            }
+            for (u32 i = 0; i < count; ++i) {
+                lo[i] = starts[bucket[i]];
+                hi[i] = starts[bucket[i] + 1];
+                if (lo[i] < hi[i]) {
+                    __builtin_prefetch(&fingerprints[lo[i]]);
+                }
+            }
+            for (u32 i = 0; i < count; ++i) {
+                const u32 fp = static_cast<u32>(keys[i]);
+                for (u64 j = lo[i]; j < hi[i]; ++j) {
+                    if (fingerprints[j] == fp) {
+                        candidates.push_back({keys[i], probes[i]});
+                        break;
+                    }
+                }
+            }
+        }
+    };
+
+    fs::path fpPath(const fs::path& dir) { return dir / "fp.bin"; }
+    fs::path fpDirPath(const fs::path& dir) { return dir / "fpdir.bin"; }
+    fs::path fpMetaPath(const fs::path& dir) { return dir / "fpmeta.txt"; }
+
+    void buildFingerprintIndex(const fs::path& dir, const std::vector<u64>& counts, const u32 threads) {
+        Timer timer;
+        u64 n = 0;
+        for (const u64 c : counts) {
+            n += c;
+        }
+        u32 bucketBits = PARTITION_BITS;
+        while (bucketBits < 40 && (n >> bucketBits) > 8) {
+            ++bucketBits;
+        }
+        const u32 shift = 64U - bucketBits;
+        const u64 bucketCount = 1ULL << bucketBits;
+
+        std::vector<u64> starts(bucketCount + 1, 0);
+        std::FILE* fpOut = std::fopen(fpPath(dir).string().c_str(), "wb");
+        if (fpOut == nullptr) {
+            throw std::runtime_error("failed to open fp.bin");
+        }
+
+        u64 globalIndex = 0, nextBucket = 0;
+        for (u32 p = 0; p < PARTITION_COUNT; ++p) {
+            const std::vector<B1B2> states = readAll<B1B2>(sortedPath(dir, p));
+            std::vector<u64> keys(states.size());
+            parallelFor(threads, (states.size() + 65535) / 65536, [&](u32, const std::size_t c) {
+                const std::size_t end = std::min(states.size(), (c + 1) * 65536);
+                for (std::size_t i = c * 65536; i < end; ++i) {
+                    keys[i] = keyOf(states[i]);
+                }
+            });
+            std::vector<u32> fps(states.size());
+            for (std::size_t i = 0; i < states.size(); ++i) {
+                const u64 bucket = keys[i] >> shift;
+                while (nextBucket <= bucket) {
+                    starts[nextBucket++] = globalIndex + i;
+                }
+                fps[i] = static_cast<u32>(keys[i]);
+            }
+            if (std::fwrite(fps.data(), sizeof(u32), fps.size(), fpOut) != fps.size()) {
+                throw std::runtime_error("fp.bin write failed");
+            }
+            globalIndex += states.size();
+        }
+        while (nextBucket <= bucketCount) {
+            starts[nextBucket++] = globalIndex;
+        }
+        std::fclose(fpOut);
+        writeAll(fpDirPath(dir), starts.data(), starts.size());
+        std::ofstream(fpMetaPath(dir)) << bucketBits << ' ' << n << '\n';
+
+        tcout << "BUILD fingerprint index: " << n << " fingerprints + 2^" << bucketBits << " buckets ("
+              << (n * 4.0 + (bucketCount + 1) * 8.0) / 1e9 << " GB) in " << timer.getSeconds() << "s\n";
+    }
+
+    FingerprintIndex loadFingerprintIndex(const fs::path& dir) {
+        FingerprintIndex index;
+        std::ifstream meta(fpMetaPath(dir));
+        meta >> index.bucketBits >> index.stateCount;
+        index.shift = 64U - index.bucketBits;
+        index.fingerprints = readAll<u32>(fpPath(dir));
+        index.starts = readAll<u64>(fpDirPath(dir));
+        if (index.fingerprints.size() != index.stateCount
+            || index.starts.size() != (1ULL << index.bucketBits) + 1) {
+            throw std::runtime_error("fingerprint index files are inconsistent");
+        }
+        return index;
+    }
+
+    std::vector<B1B2> probeFingerprint(const Board& leftRoot,
+                                       const fs::path& dir,
+                                       const std::vector<u64>& counts,
+                                       const Config& cfg,
+                                       const u32 threads) {
+        if (!fs::exists(fpMetaPath(dir)) || cfg.rebuild) {
+            buildFingerprintIndex(dir, counts, threads);
+        }
+
+        Timer loadTimer;
+        const FingerprintIndex index = loadFingerprintIndex(dir);
+        const double gb = (index.fingerprints.size() * 4.0 + index.starts.size() * 8.0) / 1e9;
+        const double loadSeconds = loadTimer.getSeconds();
+        tcout << "loaded fingerprint index: " << gb << " GB in " << loadSeconds << "s ("
+              << gb / loadSeconds * 1000.0 << " MB/s)\n";
+
+        Timer seedTimer;
+        JVec<B1B2> seeds;
+        buildSeeds(leftRoot, cfg.seedDepth, seeds);
+        tcout << "left seeds (exact depth " << cfg.seedDepth << "): " << seeds.size()
+              << " in " << seedTimer.getSeconds() << "s\n";
+
+        // Single pass: every left state is probed exactly once.
+        Timer probeTimer;
+        std::mutex candidateLock;
+        std::vector<KeyedState> candidates;
+        std::vector<u64> streamed(threads, 0);
+        parallelFor(threads, seeds.size(), [&](const u32 t, const std::size_t s) {
+            struct Sink {
+                const FingerprintIndex& index;
+                B1B2 groupStates[PROBE_GROUP];
+                u64 groupKeys[PROBE_GROUP];
+                u32 groupCount = 0;
+                std::vector<KeyedState> found;
+                u64 streamed = 0;
+
+                void flush() {
+                    index.probeGroup(groupStates, groupKeys, groupCount, found);
+                    groupCount = 0;
+                }
+
+                void operator()(JVec<B1B2>& chunkStates, JVec<u64>& chunkHashes, const u32 count) {
+                    streamed += count;
+                    for (u32 i = 0; i < count; ++i) {
+                        groupStates[groupCount] = chunkStates[i];
+                        groupKeys[groupCount] = mixKey(chunkHashes[i]);
+                        if (++groupCount == PROBE_GROUP) {
+                            flush();
+                        }
+                    }
+                }
+            } sink{index, {}, {}, 0, {}, 0};
+
+            const Board seedBoard = makeBoardFromState(seeds[s]);
+            PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH>(seedBoard, sink, 4096);
+            sink.flush();
+            streamed[t] += sink.streamed;
+            if (!sink.found.empty()) {
+                std::lock_guard<std::mutex> lock(candidateLock);
+                candidates.insert(candidates.end(), sink.found.begin(), sink.found.end());
+            }
+        });
+        const double probeSeconds = probeTimer.getSeconds();
+        u64 streamedTotal = 0;
+        for (const u64 n : streamed) {
+            streamedTotal += n;
+        }
+        std::sort(candidates.begin(), candidates.end());
+        candidates.erase(std::unique(candidates.begin(), candidates.end(),
+                                     [](const KeyedState& a, const KeyedState& b) {
+                                         return a.key == b.key && a.state == b.state;
+                                     }),
+                         candidates.end());
+        tcout << "stream+probe: " << streamedTotal << " left states in " << probeSeconds << "s ("
+              << static_cast<double>(streamedTotal) / probeSeconds / 1e6 << " M/s), "
+              << candidates.size() << " unique candidates\n";
+
+        // Confirm each candidate against the full states of its bucket on disk.
+        Timer verifyTimer;
+        std::vector<u64> partitionStart(PARTITION_COUNT + 1, 0);
+        for (u32 p = 0; p < PARTITION_COUNT; ++p) {
+            partitionStart[p + 1] = partitionStart[p] + counts[p];
+        }
+        std::vector<B1B2> middles;
+        u64 falseMatches = 0;
+        std::size_t i = 0;
+        while (i < candidates.size()) {
+            const u32 p = static_cast<u32>(candidates[i].key >> PARTITION_SHIFT);
+            std::ifstream in(sortedPath(dir, p), std::ios::binary);
+            for (; i < candidates.size() && (candidates[i].key >> PARTITION_SHIFT) == p; ++i) {
+                const u64 bucket = candidates[i].key >> index.shift;
+                const u64 lo = index.starts[bucket];
+                const u64 hi = index.starts[bucket + 1];
+                std::vector<B1B2> run(hi - lo);
+                in.seekg(static_cast<std::streamoff>((lo - partitionStart[p]) * sizeof(B1B2)));
+                in.read(reinterpret_cast<char*>(run.data()), static_cast<std::streamsize>(run.size() * sizeof(B1B2)));
+                if (!in) {
+                    throw std::runtime_error("failed to read candidate bucket");
+                }
+                if (std::find(run.begin(), run.end(), candidates[i].state) != run.end()) {
+                    middles.push_back(candidates[i].state);
+                } else {
+                    ++falseMatches;
+                }
+            }
+        }
+        std::sort(middles.begin(), middles.end());
+        middles.erase(std::unique(middles.begin(), middles.end()), middles.end());
+        tcout << "verify: " << middles.size() << " confirmed, " << falseMatches
+              << " fingerprint false matches, " << verifyTimer.getSeconds() << "s\n";
+        return middles;
+    }
+
+    // ------------------------------------------------------------------
     // Depth-7 sample: one real pass over the depth-6 table, keeping N of the
     // 1024 depth-7 key slices. A full depth-7 build would repeat this pass for
     // every group of slices that fits in RAM; the raw depth-7 children (~1 TB
@@ -698,6 +933,7 @@ namespace {
             else if (a == "--reverse") cfg.reverse = true;
             else if (a == "--rebuild") cfg.rebuild = true;
             else if (a == "--no-recover") cfg.recover = false;
+            else if (a == "--batched") cfg.batched = true;
             else if (a == "--solutions") cfg.solutionsFile = next();
             else if (a == "--d7-sample") cfg.d7Sample = static_cast<u32>(std::stoul(next()));
             else if (a == "--d7-pass-budget") cfg.d7PassBudget = std::stoull(next());
@@ -751,7 +987,9 @@ int main(const int argc, char** argv) {
     }
 
     const Timer probeTimer;
-    const std::vector<B1B2> middles = probeAllBatches(leftRoot, dir, counts, cfg, cfg.threads);
+    const std::vector<B1B2> middles = cfg.batched
+            ? probeAllBatches(leftRoot, dir, counts, cfg, cfg.threads)
+            : probeFingerprint(leftRoot, dir, counts, cfg, cfg.threads);
     const double probeSeconds = probeTimer.getSeconds();
     tcout << "unique middle states (" << leftDepth << " from left, 6 from table side): "
           << middles.size() << '\n';
