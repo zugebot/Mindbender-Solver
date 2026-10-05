@@ -122,6 +122,9 @@ class MindBender(Menu):
         self.populate()
         self.updatePuzzle()
 
+        # Build expensive route-guide surfaces now, not during level switching.
+        self.route_guide.precompute_all_visual_caches()
+
     def _now(self):
         return time.time()
 
@@ -342,6 +345,11 @@ class MindBender(Menu):
     def _is_board_solved(self):
         return self._board_signature(self.board.chuzzles) == self._board_signature(self.solution_board)
 
+    def _set_board_excited_eyes(self, enabled: bool):
+        for chuzzle in self.board.chuzzles:
+            if hasattr(chuzzle, "setExcitedEyes"):
+                chuzzle.setExcitedEyes(enabled)
+    
     def _with_alpha(self, surface, alpha):
         tinted = surface.copy()
         tinted.set_alpha(alpha)
@@ -414,10 +422,15 @@ class MindBender(Menu):
             self.board.chuzzles.load_from_array(self.puzzle.solved_cells)
             if self.puzzle.end_fat is not None:
                 self.board.chuzzles.placeFatChuzzle(*self.puzzle.end_fat)
+
+            self._set_board_excited_eyes(True)
+
         else:
             self.board.chuzzles.load_from_array(self.puzzle.initial_cells)
             if self.puzzle.start_fat is not None:
                 self.board.chuzzles.placeFatChuzzle(*self.puzzle.start_fat)
+
+            self._set_board_excited_eyes(False)
 
         self.solution_board.load_from_array(self.puzzle.solved_cells)
         if self.puzzle.end_fat is not None:
@@ -555,6 +568,7 @@ class MindBender(Menu):
                 self.solved_indices.add(self.current_index)
                 self._record_current_puzzle_if_needed()
                 self._record_world_thresholds_if_needed(reason="solve")
+                self._set_board_excited_eyes(True)
                 self.popup.start_popup_animation()
             return
 
@@ -649,7 +663,7 @@ class MindBender(Menu):
 
         self.sprites.append(Button(
             game=self.game,
-            coords=(0, 551),
+            coords=(0, 550),
             textures=self.textures.MainMenuButton,
             data={
                 "hitbox": "all",
@@ -688,7 +702,7 @@ class MindBender(Menu):
 
         self.left_world_star_btn = Button(
             game=self.game,
-            coords=(23, 453),
+            coords=(23, 452),
             textures=self.textures.MindBenderSmallStarLeft,
             data={
                 "hitbox": self.textures.MindBenderSmallStarLeft_Alpha[0],
@@ -699,7 +713,7 @@ class MindBender(Menu):
 
         self.left_world_star_hidden_btn = Button(
             game=self.game,
-            coords=(23, 455),
+            coords=(23, 452),
             clickable=False,
             data={
                 "textures": {
@@ -720,10 +734,11 @@ class MindBender(Menu):
 
         self.right_world_star_btn = Button(
             game=self.game,
-            coords=(170, 453),
+            coords=(170, 452),
             textures=self.textures.MindBenderSmallStarRight,
             data={
                 "hitbox": self.textures.MindBenderSmallStarRight_Alpha[0],
+                "hitbox_offset": (-1, 0),
                 "sounds": self.buttonSoundLow,
                 "func": {"clickup": self.incrementLevel}
             }
@@ -731,7 +746,7 @@ class MindBender(Menu):
 
         self.right_world_star_locked_btn = Button(
             game=self.game,
-            coords=(170, 453),
+            coords=(170, 452),
             clickable=False,
             data={
                 "textures": {
@@ -740,6 +755,7 @@ class MindBender(Menu):
                     "clickdown": self._dim_right_star[0],
                 },
                 "hitbox": self.textures.MindBenderSmallStarRight_Alpha[0],
+                "hitbox_offset": (-1, 0),
                 "sounds": self.buttonSoundLow,
             }
         )
@@ -754,12 +770,14 @@ class MindBender(Menu):
             self.solved_indices.add(self.current_index)
             self._record_current_puzzle_if_needed()
             self._record_world_thresholds_if_needed(reason="solve")
+            self._set_board_excited_eyes(True)
             self.popup.start_popup_animation()
 
         if self.popup.replaying_solved_puzzle and self._is_board_solved():
             self.popup.replaying_solved_puzzle = False
             self._record_current_puzzle_if_needed()
             self._record_world_thresholds_if_needed(reason="solve")
+            self._set_board_excited_eyes(True)
             self.popup.start_popup_animation()
 
         self._sync_world_star_state()

@@ -29,6 +29,12 @@ class InputState:
     ) -> bool:
         """
         Returns whether a right-click-down edge occurred this frame.
+
+        This intentionally mimics the original game-style behavior:
+        - click-down is a one-frame edge
+        - held-down continues even if the cursor leaves the client area
+        - release is emitted exactly once
+        - a click beginning outside the client does not arm game input
         """
 
         if dragging_window:
@@ -37,26 +43,24 @@ class InputState:
             self.right_down_latched = right_button_down
             return False
 
-        # Preserve your existing drag semantics.
-        # A left drag that begins in the client area stays active until button release.
-        if left_button_down and not self.left_down_latched:
-            if over_non_client:
-                self.mouse_state = MOUSE_HOVER
-                self.left_down_latched = False
+        if left_button_down:
+            if not self.left_down_latched:
+                if over_non_client:
+                    self.mouse_state = MOUSE_HOVER
+                    self.left_down_latched = False
+                else:
+                    self.mouse_state = MOUSE_CLICK_DOWN
+                    self.left_down_latched = True
             else:
-                self.mouse_state = MOUSE_CLICK_DOWN
-                self.left_down_latched = True
-
-        elif left_button_down and self.left_down_latched:
-            self.mouse_state = MOUSE_HELD_DOWN
-
-        elif (not left_button_down) and self.left_down_latched:
-            self.mouse_state = MOUSE_CLICK_UP
-            self.left_down_latched = False
+                self.mouse_state = MOUSE_HELD_DOWN
 
         else:
-            self.mouse_state = MOUSE_HOVER
-            self.left_down_latched = False
+            if self.left_down_latched:
+                self.mouse_state = MOUSE_CLICK_UP
+                self.left_down_latched = False
+            else:
+                self.mouse_state = MOUSE_HOVER
+                self.left_down_latched = False
 
         right_click_down = right_button_down and not self.right_down_latched
         self.right_down_latched = right_button_down

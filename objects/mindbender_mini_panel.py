@@ -14,11 +14,11 @@ class MindBenderMiniPanel:
         self.textures = menu.textures
 
         self.mini_coords = [
-            (20, 323),
-            (61, 352),
-            (107, 360),
-            (154, 351),
-            (196, 327),
+            (20, 323-1),
+            (61, 352-1),
+            (107, 360-1),
+            (154, 351-1),
+            (196, 327-1),
         ]
 
         self._mini_solution_cache = {}
@@ -148,7 +148,7 @@ class MindBenderMiniPanel:
         for i, coords in enumerate(self.mini_coords):
             absolute_index = level_start + i
             cx = coords[0] + mini_w // 2 + 1
-            cy = coords[1] + mini_h // 2
+            cy = coords[1] + mini_h // 2 + 1
 
             mini_solution = self._get_mini_solution_surface(absolute_index)
             if mini_solution is not None:

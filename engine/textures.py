@@ -263,8 +263,11 @@ class Textures:
             "9": None
         }
 
+        self.ChuzzleBlinkEyes = [None] * 9
+
         self.loadChuzzleTextures()
         self.loadChuzzleTexturesFat()
+        self.loadChuzzleBlinkEyes()
 
     def loadTexture(self, filename, alphaOnly=False, pngOnly=False, split=-1, split_vertical=False):
 
@@ -279,14 +282,15 @@ class Textures:
 
         surface = p.Surface((base.get_width(), base.get_height()), p.SRCALPHA)
         surface.fill((0, 0, 0, 0))
-        surface.blit(base, (0, 0), None, p.BLEND_RGBA_ADD)
+        surface.blit(base, (0, 0))
 
         if not alphaOnly and not pngOnly:
             filename_segments = filename.split(".")
             filename_segments.insert(1, "_Alpha.")
             alpha_filename = "".join(filename_segments)
-            base_alpha = createAlpha(alpha_filename)
-            surface.blit(base_alpha, (0, 0), None, p.BLEND_RGBA_MULT)
+
+            if os.path.isfile(alpha_filename):
+                surface = applyAlphaMask(surface, alpha_filename)
 
         if split != -1:
             if not split_vertical:
@@ -301,13 +305,71 @@ class Textures:
                 piece.blit(
                     surface,
                     (0, 0),
-                    (0, i * piece_h, surface.get_width(), piece_h),
-                    p.BLEND_RGBA_ADD
+                    (0, i * piece_h, surface.get_width(), piece_h)
                 )
                 pieces.append(piece)
             return pieces
 
         return surface
+
+    def loadChuzzleBlinkEyes(self):
+        for color_index in range(9):
+            self.ChuzzleBlinkEyes[color_index] = self.makeBlinkEyesForColor(color_index)
+    
+    
+    def makeBlinkEyesForColor(self, color_index):
+        """
+        Creates blink/closed-eye overlays from normal Eyes.png shapes.
+
+        This intentionally does not use AngryEyes or SleepyEyes.
+        AngryEyes is the right-click annoyance state.
+        SleepyEyes is the long-idle sleepy state.
+        Normal blinking is a colored eyelid over the normal eye shape.
+        """
+
+        color_obj = self.colorsMain.get(str(color_index), {})
+
+        if "fat_color" in color_obj:
+            blink_color = color_obj["fat_color"]
+        elif "color" in color_obj:
+            blink_color = color_obj["color"]
+        elif color_index == 4:
+            blink_color = (255, 255, 0)
+        else:
+            blink_color = (255, 255, 255)
+
+        blink_surfaces = []
+
+        for eye_surface in self.Eyes:
+            eye_surface = eye_surface.convert_alpha()
+            width, height = eye_surface.get_size()
+
+            out = p.Surface((width, height), p.SRCALPHA)
+            out.fill((0, 0, 0, 0))
+
+            # The blink is a colored horizontal eyelid band over the normal eye area.
+            # Use the eye's visible pixels as the mask, but only keep a central band.
+            band_top = int(height * 0.43)
+            band_bottom = int(height * 0.58)
+
+            for y in range(height):
+                for x in range(width):
+                    r0, g0, b0, a0 = eye_surface.get_at((x, y))
+
+                    if a0 <= 0:
+                        continue
+
+                    brightness = max(r0, g0, b0)
+
+                    if brightness <= 12:
+                        continue
+
+                    if band_top <= y <= band_bottom:
+                        out.set_at((x, y), (blink_color[0], blink_color[1], blink_color[2], a0))
+
+            blink_surfaces.append(out.convert_alpha())
+
+        return blink_surfaces
 
 
     def loadChuzzleTextures(self):
@@ -316,7 +378,6 @@ class Textures:
         createAlpha("textures/Chuzzle-Hilite_Alpha.png")
 
         BaseImage = p.image.load("textures/Chuzzle-Base.png").convert_alpha()
-        AlphaImage = p.image.load("cached/Chuzzle-Base_Alpha.png").convert_alpha()
         HiliteImage = p.image.load("cached/Chuzzle-Hilite_Alpha.png").convert_alpha()
 
         surface = p.Surface((4860, 84), p.SRCALPHA)
@@ -329,23 +390,24 @@ class Textures:
             base = None
             if "color" in colorObj.keys():
                 base = BaseImage.copy()
+
                 color1 = surface.copy()
                 color1.fill(colorObj["color"])
 
                 color2 = surface.copy()
-                color2.fill((60,60,60,0))
+                color2.fill((60, 60, 60, 0))
                 color2.blit(HiliteImage, (0, 0), None, p.BLEND_RGBA_MULT)
 
                 base.blit(color1, (0, 0), None, p.BLEND_RGBA_MULT)
                 base.blit(color2, (0, 0), None, p.BLEND_RGB_ADD)
-                base.blit(AlphaImage, (0, 0), None, p.BLEND_RGBA_MULT)
+                base = applyAlphaMask(base, "textures/Chuzzle-Base_Alpha.png")
 
             elif "texture" in colorObj.keys():
                 base = surface.copy()
                 baseImage = p.image.load(colorObj["texture"]["base"]).convert_alpha()
                 alphaImage = p.image.load(colorObj["texture"]["alpha"]).convert_alpha()
-                base.blit(baseImage, (0, 0), None, p.BLEND_RGBA_ADD)
-                base.blit(alphaImage, (0, 0), None, p.BLEND_RGBA_MULT)
+                base.blit(baseImage, (0, 0))
+                base = applyAlphaMask(base, colorObj["texture"]["alpha"])
 
             # This creates all the chuzzle textures
             surfaces = []
@@ -353,7 +415,7 @@ class Textures:
                 surf = p.Surface((81, 81), p.SRCALPHA)
                 surf.fill((0, 0, 0, 0))
                 surfaces.append(surf)
-                surfaces[-1].blit(base, (0, 0), (81 * i, 2, 80, 80), p.BLEND_RGBA_ADD)
+                surfaces[-1].blit(base, (0, 0), (81 * i, 2, 80, 80))
 
                 # resize the texture
                 new = 480 / self.game.settings.boardSize + 1
@@ -370,7 +432,6 @@ class Textures:
         createAlpha("textures/ChuzzleHuge-Hilite_Alpha.png")
 
         BaseImage = p.image.load("textures/ChuzzleHuge-Base.png").convert_alpha()
-        AlphaImage = p.image.load("cached/ChuzzleHuge-Base_Alpha.png").convert_alpha()
         HiliteImage = p.image.load("cached/ChuzzleHuge-Hilite_Alpha.png").convert_alpha()
 
         surface = p.Surface((5370, 183), p.SRCALPHA)
@@ -397,7 +458,8 @@ class Textures:
 
                 base.blit(color1, (0, 0), None, p.BLEND_RGBA_MULT)
                 base.blit(color2, (0, 0), None, p.BLEND_RGB_ADD)
-                base.blit(AlphaImage, (0, 0), None, p.BLEND_RGBA_MULT)
+                base = applyAlphaMask(base, "textures/ChuzzleHuge-Base_Alpha.png")
+
 
             elif "color" in colorObj:
                 base = BaseImage.copy()
@@ -411,21 +473,21 @@ class Textures:
 
                 base.blit(color1, (0, 0), None, p.BLEND_RGBA_MULT)
                 base.blit(color2, (0, 0), None, p.BLEND_RGB_ADD)
-                base.blit(AlphaImage, (0, 0), None, p.BLEND_RGBA_MULT)
+                base = applyAlphaMask(base, "textures/ChuzzleHuge-Base_Alpha.png")
 
             elif "texture" in colorObj:
                 base = surface.copy()
                 baseImage = p.image.load(colorObj["texture"]["base"]).convert_alpha()
                 alphaImage = p.image.load(colorObj["texture"]["alpha"]).convert_alpha()
-                base.blit(baseImage, (0, 0), None, p.BLEND_RGBA_ADD)
-                base.blit(alphaImage, (0, 0), None, p.BLEND_RGBA_MULT)
+                base.blit(baseImage, (0, 0))
+                base = applyAlphaMask(base, colorObj["texture"]["alpha"])
 
             surfaces = []
             for i in range(30):
                 surf = p.Surface((179, 179), p.SRCALPHA)
                 surf.fill((0, 0, 0, 0))
                 surfaces.append(surf)
-                surfaces[-1].blit(base, (0, 0), (179 * i, 0, 179, 179), p.BLEND_RGBA_ADD)
+                surfaces[-1].blit(base, (0, 0), (179 * i, 0, 179, 179))
 
                 # resize the texture
                 new = 480 / self.game.settings.boardSize * 2 + 18

@@ -189,7 +189,7 @@ class MindBenderRouteGuide:
         self.status_flash = ""
         self.status_flash_timer = 0
 
-        self.lookahead_actions = 5
+        self.lookahead_actions = 4
 
         self.font = p.font.SysFont("arial", 18, bold=True)
         self.small_font = p.font.SysFont("arial", 16, bold=True)
@@ -217,6 +217,8 @@ class MindBenderRouteGuide:
         self._cached_completed_layer: p.Surface | None = None
         self._cached_body_layer: p.Surface | None = None
         self._cached_static_circle_layer: p.Surface | None = None
+        self._cached_static_overlay_layer: p.Surface | None = None
+        self._precomputed_visual_caches = {}
 
         self._text_cache_key = None
         self._text_cache_surface: p.Surface | None = None
@@ -234,6 +236,7 @@ class MindBenderRouteGuide:
         self._cached_completed_layer = None
         self._cached_body_layer = None
         self._cached_static_circle_layer = None
+        self._cached_static_overlay_layer = None
 
     def _invalidate_text_cache(self):
         self._text_cache_key = None
@@ -281,6 +284,7 @@ class MindBenderRouteGuide:
         self.step_index_by_puzzle_id.clear()
         self.loaded_ok = False
         self.load_error = ""
+        self._precomputed_visual_caches = {}
 
         if not self.json_path.exists():
             self.load_error = f"Missing route file: {self.json_path.name}"
@@ -782,9 +786,35 @@ class MindBenderRouteGuide:
             prompt_rect_key,
         )
 
+    def _capture_visual_cache(self):
+        return (
+            list(self._cached_actions),
+            self._cached_completed_layer,
+            self._cached_body_layer,
+            self._cached_static_circle_layer,
+            self._cached_static_overlay_layer,
+        )
+
+    def _restore_visual_cache(self, key, cached):
+        (
+            self._cached_actions,
+            self._cached_completed_layer,
+            self._cached_body_layer,
+            self._cached_static_circle_layer,
+            self._cached_static_overlay_layer,
+        ) = cached
+
+        self._cached_actions = list(self._cached_actions)
+        self._state_cache_key = key
+
     def _ensure_visual_cache(self):
         key = self._get_visual_state_key()
         if key == self._state_cache_key:
+            return
+
+        cached = self._precomputed_visual_caches.get(key)
+        if cached is not None:
+            self._restore_visual_cache(key, cached)
             return
 
         self._state_cache_key = key
@@ -794,6 +824,45 @@ class MindBenderRouteGuide:
         self._cached_completed_layer = self._build_completed_layer()
         self._cached_body_layer = self._build_body_layer(visible_actions)
         self._cached_static_circle_layer = self._build_static_circle_layer(visible_actions)
+        self._cached_static_overlay_layer = self._build_static_overlay_layer()
+
+        self._precomputed_visual_caches[key] = self._capture_visual_cache()
+        
+    def precompute_all_visual_caches(self):
+        if not self.loaded_ok:
+            return
+
+        saved_current_step = self.current_step
+        saved_current_move_index = self.current_move_index
+        saved_current_puzzle_id = self.current_puzzle_id
+        saved_state_cache_key = self._state_cache_key
+        saved_cached_actions = self._cached_actions
+        saved_completed_layer = self._cached_completed_layer
+        saved_body_layer = self._cached_body_layer
+        saved_static_circle_layer = self._cached_static_circle_layer
+        saved_static_overlay_layer = self._cached_static_overlay_layer
+
+        try:
+            for step in self.ordered_steps:
+                self.current_step = step
+                self.current_puzzle_id = step.puzzle_id
+
+                max_index = len(step.overlay_moves)
+                for move_index in range(max_index + 1):
+                    self.current_move_index = move_index
+                    self._state_cache_key = None
+                    self._ensure_visual_cache()
+
+        finally:
+            self.current_step = saved_current_step
+            self.current_move_index = saved_current_move_index
+            self.current_puzzle_id = saved_current_puzzle_id
+            self._state_cache_key = saved_state_cache_key
+            self._cached_actions = saved_cached_actions
+            self._cached_completed_layer = saved_completed_layer
+            self._cached_body_layer = saved_body_layer
+            self._cached_static_circle_layer = saved_static_circle_layer
+            self._cached_static_overlay_layer = saved_static_overlay_layer
 
     # -------------------------------------------------------------------------
     # drawing helpers
@@ -1252,6 +1321,22 @@ class MindBenderRouteGuide:
 
         return layer
 
+    def _build_static_overlay_layer(self) -> p.Surface:
+        layer = p.Surface(self.game.screenSize.tuple(), p.SRCALPHA)
+
+        layer.blit(self._get_dim_mask(), (0, 0))
+
+        if self._cached_completed_layer is not None:
+            layer.blit(self._cached_completed_layer, (0, 0))
+
+        if self._cached_body_layer is not None:
+            layer.blit(self._cached_body_layer, (0, 0))
+
+        if self._cached_static_circle_layer is not None:
+            layer.blit(self._cached_static_circle_layer, (0, 0))
+
+        return layer
+    
     # -------------------------------------------------------------------------
     # text cache
     # -------------------------------------------------------------------------
@@ -1409,16 +1494,8 @@ class MindBenderRouteGuide:
         visible_actions = self._cached_actions[:self.lookahead_actions]
         self._ensure_text_cache(visible_actions)
 
-        screen.blit(self._get_dim_mask(), (0, 0))
-
-        if self._cached_completed_layer is not None:
-            screen.blit(self._cached_completed_layer, (0, 0))
-
-        if self._cached_body_layer is not None:
-            screen.blit(self._cached_body_layer, (0, 0))
-
-        if self._cached_static_circle_layer is not None:
-            screen.blit(self._cached_static_circle_layer, (0, 0))
+        if self._cached_static_overlay_layer is not None:
+            screen.blit(self._cached_static_overlay_layer, (0, 0))
 
         self._draw_current_action(screen, visible_actions)
 

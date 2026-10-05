@@ -33,6 +33,9 @@ class Game:
         self.borderTop = 26
         self.borderBottom = 3
 
+        self.clientRenderOffsetX = 0
+        self.clientRenderOffsetY = 0
+
         self.captionTextLeftPadding = 10
         self.captionTextTopPadding = 5
 
@@ -70,6 +73,10 @@ class Game:
         self.inputState = InputState()
         self.hasWindowFocus = True
 
+        # Board input samples for the current frame.
+        # This is populated by global polling, not by pygame mouse events.
+        self.mouseSamples = []
+
         # menus
         self.menuIndex = -1
         self.menus = []
@@ -87,6 +94,12 @@ class Game:
 
         # title font
         self.captionFont = p.font.SysFont("Segoe UI", 9, bold=False)
+        self._caption_surface_focused = None
+        self._caption_surface_unfocused = None
+
+        # Reused scaling target. Avoid allocating a new scaled surface every frame.
+        self._scaled_frame_surface = None
+        self._scaled_frame_size = None
 
     def currentMenu(self, offset=0) -> Menu:
         try:
@@ -136,7 +149,10 @@ class Game:
         self.screen = self.instance.Surface(self.internalSize.tuple()).convert_alpha()
 
     def _client_origin(self):
-        return Point(self.borderLeft, self.borderTop)
+        return Point(
+            self.borderLeft + self.clientRenderOffsetX,
+            self.borderTop + self.clientRenderOffsetY,
+        )
 
     def _client_rect(self):
         return p.Rect(
@@ -257,6 +273,24 @@ class Game:
         p.draw.line(self.window, (0, 0, 0), (x1, y1), (x2, y2), 1)
         p.draw.line(self.window, (0, 0, 0), (x2, y1), (x1, y2), 1)
 
+    def _get_caption_surface(self):
+        if self.hasWindowFocus:
+            if self._caption_surface_focused is None:
+                self._caption_surface_focused = self.captionFont.render(
+                    self.settings.windowName,
+                    True,
+                    (0, 0, 0),
+                )
+            return self._caption_surface_focused
+
+        if self._caption_surface_unfocused is None:
+            self._caption_surface_unfocused = self.captionFont.render(
+                self.settings.windowName,
+                True,
+                (80, 80, 80),
+            )
+        return self._caption_surface_unfocused
+
     def _draw_fake_windows10_titlebar(self):
         if not self.chromeEnabled:
             return
@@ -273,11 +307,9 @@ class Game:
         if self.hasWindowFocus:
             title_color = (255, 255, 255)
             separator_color = (208, 208, 208)
-            text_color = (0, 0, 0)
         else:
             title_color = (245, 245, 245)
             separator_color = (220, 220, 220)
-            text_color = (80, 80, 80)
 
         p.draw.rect(self.window, title_color, title_rect)
 
@@ -286,11 +318,13 @@ class Game:
             separator_color,
             (0, self.borderTop - 1),
             (self.windowSize.x - 1, self.borderTop - 1),
-            1
+            1,
         )
 
-        text_surface = self.captionFont.render(self.settings.windowName, True, text_color)
-        self.window.blit(text_surface, (self.captionTextLeftPadding, self.captionTextTopPadding))
+        self.window.blit(
+            self._get_caption_surface(),
+            (self.captionTextLeftPadding, self.captionTextTopPadding),
+        )
 
         if self._hoveringMinimize:
             p.draw.rect(self.window, (229, 229, 229), min_rect)
@@ -308,53 +342,32 @@ class Game:
             self._draw_close_glyph(close_rect)
 
     def _blit_edge_gutters(self, scaled):
-        x0 = self.borderLeft
-        y0 = self.borderTop
-        w = self.outputSize.x
-        h = self.outputSize.y
+        pass
 
-        if self.borderLeft > 0:
-            left_strip = scaled.subsurface((0, 0, 1, h))
-            left_fill = p.transform.scale(left_strip, (self.borderLeft, h))
-            self.window.blit(left_fill, (0, y0))
+    def _get_scaled_frame(self):
+        if self.outputSize.x == self.internalSize.x and self.outputSize.y == self.internalSize.y:
+            return self.screen
 
-        if self.borderRight > 0:
-            right_strip = scaled.subsurface((w - 1, 0, 1, h))
-            right_fill = p.transform.scale(right_strip, (self.borderRight, h))
-            self.window.blit(right_fill, (x0 + w, y0))
-
-        if self.borderBottom > 0:
-            bottom_strip = scaled.subsurface((0, h - 1, w, 1))
-            bottom_fill = p.transform.scale(bottom_strip, (w, self.borderBottom))
-            self.window.blit(bottom_fill, (x0, y0 + h))
-
-        if self.borderLeft > 0 and self.borderBottom > 0:
-            px = scaled.get_at((0, h - 1))
-            corner = p.Surface((self.borderLeft, self.borderBottom))
-            corner.fill(px)
-            self.window.blit(corner, (0, y0 + h))
-
-        if self.borderRight > 0 and self.borderBottom > 0:
-            px = scaled.get_at((w - 1, h - 1))
-            corner = p.Surface((self.borderRight, self.borderBottom))
-            corner.fill(px)
-            self.window.blit(corner, (x0 + w, y0 + h))
-
-    def _presentScreen(self):
-        self.window.fill((255, 255, 255))
+        out_size = self.outputSize.tuple()
 
         if self.settings.smoothScale:
-            scaled = p.transform.smoothscale(self.screen, self.outputSize.tuple())
-        else:
-            scaled = p.transform.scale(self.screen, self.outputSize.tuple())
+            return p.transform.smoothscale(self.screen, out_size)
 
+        if self._scaled_frame_surface is None or self._scaled_frame_size != out_size:
+            self._scaled_frame_surface = p.Surface(out_size).convert()
+            self._scaled_frame_size = out_size
+
+        p.transform.scale(self.screen, out_size, self._scaled_frame_surface)
+        return self._scaled_frame_surface
+
+    def _presentScreen(self):
         if self.chromeEnabled:
+            self.window.fill((255, 255, 255))
             client_origin = self._client_origin()
-            self.window.blit(scaled, client_origin.tuple())
-            self._blit_edge_gutters(scaled)
+            self.window.blit(self._get_scaled_frame(), client_origin.tuple())
             self._draw_fake_windows10_titlebar()
         else:
-            self.window.blit(scaled, (0, 0))
+            self.window.blit(self._get_scaled_frame(), (0, 0))
 
     def quit(self):
         self.running = False
@@ -364,9 +377,85 @@ class Game:
     def _handle_focus_loss(self):
         self.inputState.reset_buttons()
         self.mouseState = MOUSE_HOVER
+        self.mouseSamples = []
+
+    def _queue_mouse_sample(self, raw_mouse, mouse_state):
+        raw_mouse = (int(raw_mouse[0]), int(raw_mouse[1]))
+        mapped_mouse = self._mapMouseToInternal(raw_mouse)
+
+        self.mouseSamples.append((mapped_mouse, mouse_state))
+        self.mousePos = mapped_mouse
+        self.mouseState = mouse_state
+
+    def _queue_global_mouse_input(self):
+        """
+        Poll global mouse state every frame.
+
+        This is intentionally independent of pygame mouse focus. It allows the clone
+        to receive drag input while another window is focused or layered above it.
+        """
+
+        if self._draggingWindow:
+            self.mouseState = MOUSE_HOVER
+            self.inputState.left_down_latched = False
+            return
+
+        raw_mouse = self._get_window_client_mouse_pos()
+        raw_mouse = (int(raw_mouse[0]), int(raw_mouse[1]))
+
+        client_rect = self._client_rect()
+        over_non_client = not client_rect.collidepoint(raw_mouse[0], raw_mouse[1])
+
+        left_button_down, right_button_down = self.platform.get_global_mouse_buttons(self.instance)
+
+        if left_button_down:
+            if not self.inputState.left_down_latched:
+                if over_non_client:
+                    self.mouseState = MOUSE_HOVER
+                    self.mousePos = self._mapMouseToInternal(raw_mouse)
+                    self.inputState.left_down_latched = False
+                else:
+                    self.inputState.left_down_latched = True
+                    self._queue_mouse_sample(raw_mouse, MOUSE_CLICK_DOWN)
+            else:
+                self._queue_mouse_sample(raw_mouse, MOUSE_HELD_DOWN)
+
+        else:
+            if self.inputState.left_down_latched:
+                self._queue_mouse_sample(raw_mouse, MOUSE_CLICK_UP)
+                self.inputState.left_down_latched = False
+            else:
+                self.mousePos = self._mapMouseToInternal(raw_mouse)
+                if over_non_client:
+                    self.mouseState = MOUSE_HOVER
+                else:
+                    self._queue_mouse_sample(raw_mouse, MOUSE_HOVER)
+
+        right_click_down = right_button_down and not self.inputState.right_down_latched
+        self.inputState.right_down_latched = right_button_down
+
+        if right_click_down and not over_non_client:
+            mapped_mouse = self._mapMouseToInternal(raw_mouse)
+            self.mousePos = mapped_mouse
+
+            current_menu = self.currentMenu()
+            if current_menu is not None and hasattr(current_menu, "onRightClickDown"):
+                current_menu.onRightClickDown(mapped_mouse)
+
+    def _replayCurrentMenuInput(self):
+        current_menu = self.currentMenu()
+        if current_menu is None:
+            return
+
+        if not self.mouseSamples:
+            current_menu.run(self.mousePos, self.mouseState)
+            return
+
+        for mouse_pos, mouse_state in self.mouseSamples:
+            current_menu.run(mouse_pos, mouse_state)
 
     def eventLoop(self):
-        raw_mouse = self._get_window_client_mouse_pos()
+        self.mouseSamples = []
 
         for event in self.instance.event.get():
             if event.type == p.QUIT:
@@ -378,10 +467,14 @@ class Game:
 
             elif event.type == p.MOUSEBUTTONDOWN:
                 if event.button == 1 and self.chromeEnabled:
+                    raw_mouse = self._get_window_client_mouse_pos()
+
                     if self._close_button_rect().collidepoint(raw_mouse[0], raw_mouse[1]):
                         self.quit()
+
                     elif self._minimize_button_rect().collidepoint(raw_mouse[0], raw_mouse[1]):
                         self._minimize_window()
+
                     elif self._point_in_title_drag_zone(raw_mouse[0], raw_mouse[1]):
                         self._start_window_drag()
 
@@ -395,14 +488,15 @@ class Game:
             elif event.type == p.WINDOWFOCUSLOST:
                 self.hasWindowFocus = False
                 if self.settings.needsWindowFocus:
-                    self._handle_focus_loss()
+                    # Do not reset mouse buttons here.
+                    # Board input is global-polled specifically so testing works
+                    # while another window is focused.
+                    pass
 
             elif event.type == p.ACTIVEEVENT:
                 if hasattr(event, "state") and hasattr(event, "gain"):
                     if event.state & 2:
                         self.hasWindowFocus = bool(event.gain)
-                        if self.settings.needsWindowFocus and not self.hasWindowFocus:
-                            self._handle_focus_loss()
 
         self._update_window_drag()
 
@@ -421,34 +515,13 @@ class Game:
         focused = pygame_focused and platform_focused
 
         if self.settings.needsWindowFocus:
-            self.hasWindowFocus = self.hasWindowFocus and focused if not focused else focused
-
-            if not self.hasWindowFocus:
-                self._handle_focus_loss()
-                return
+            self.hasWindowFocus = bool(focused)
         else:
             self.hasWindowFocus = True
 
-        client_rect = self._client_rect()
-        over_non_client = not client_rect.collidepoint(raw_mouse[0], raw_mouse[1])
-
-        left_button_down, right_button_down = self.platform.get_global_mouse_buttons(self.instance)
-        mapped_mouse = self._mapMouseToInternal(raw_mouse)
-
-        right_click_down = self.inputState.update_mouse_state(
-            left_button_down=left_button_down,
-            right_button_down=right_button_down,
-            over_non_client=over_non_client,
-            dragging_window=self._draggingWindow,
-        )
-
-        self.mouseState = self.inputState.mouse_state
-        self.mousePos = mapped_mouse
-
-        if right_click_down:
-            current_menu = self.currentMenu()
-            if current_menu is not None and hasattr(current_menu, "onRightClickDown"):
-                current_menu.onRightClickDown(mapped_mouse)
+        # Critical: board mouse input is polled globally, even if this pygame
+        # window does not have focus.
+        self._queue_global_mouse_input()
 
     def run(self, running=True):
         while running:
@@ -459,13 +532,7 @@ class Game:
             self.screen.fill(EMPTY_SCREEN)
             self.eventLoop()
 
-            if self.settings.needsWindowFocus:
-                if self.hasWindowFocus:
-                    self.currentMenu().run(self.mousePos, self.mouseState)
-                else:
-                    self.currentMenu().run(self.mousePos, MOUSE_HOVER)
-            else:
-                self.currentMenu().run(self.mousePos, self.mouseState)
+            self._replayCurrentMenuInput()
 
             self._presentScreen()
 

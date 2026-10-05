@@ -7,6 +7,7 @@ from tools.texture_utils import rotate, convertToAlpha
 
 
 class Button:
+
     def __init__(self,
                  game,
                  coords=Point(),
@@ -21,42 +22,86 @@ class Button:
         self.coords = coords
 
         self.data = {} if data is None else data
+        self.clickable = clickable
+
         self.fixData()
+
         if textures is not None:
             self.data["textures"]["default"] = textures[0]
             self.data["textures"]["hover"] = textures[1]
             self.data["textures"]["clickdown"] = textures[2]
 
-        self.clickable = clickable
-
         self.clickedDownBeforeHover = False
         self.lastFrameTouching = False
         self.mouseDownStartedInside = False
 
-        # pre-scale image sizes
         if "render" in self.data:
             if "scale" in self.data["render"]:
                 scale = self.data["render"]["scale"]
 
-                # multiply image size by number
                 if "multiply" in scale:
-                    newSize = Point(self.image.get_size()) * scale["multiply"]
-                    self.data["textures"]["default"] = p.transform.scale(self.image, newSize.tuple())
+                    old_size = Point(self.data["textures"]["default"].get_size())
+                    new_size = old_size * scale["multiply"]
 
-                # set height to value, force width to stay in ratio
+                    self.data["textures"]["default"] = p.transform.scale(
+                        self.data["textures"]["default"],
+                        new_size.tuple()
+                    )
+
+                    if self.data["textures"]["hover"] is not None:
+                        self.data["textures"]["hover"] = p.transform.scale(
+                            self.data["textures"]["hover"],
+                            new_size.tuple()
+                        )
+
+                    if self.data["textures"]["clickdown"] is not None:
+                        self.data["textures"]["clickdown"] = p.transform.scale(
+                            self.data["textures"]["clickdown"],
+                            new_size.tuple()
+                        )
+
                 elif "set-H" in scale:
-                    oldSize = Point(self.data["textures"]["default"].get_size())
-                    if scale["set-H"] == "screen-size":
-                        scale = self.game.screenSize.y / oldSize.y
-                    else:
-                        scale = scale["set-H"] / oldSize.y
-                    newSize = (oldSize * float(scale)).tuple()
+                    old_size = Point(self.data["textures"]["default"].get_size())
 
-                    self.data["textures"]["default"] = p.transform.scale(self.data["textures"]["default"], newSize)
+                    if scale["set-H"] == "screen-size":
+                        scale_value = self.game.screenSize.y / old_size.y
+                    else:
+                        scale_value = scale["set-H"] / old_size.y
+
+                    new_size = (old_size * float(scale_value)).tuple()
+
+                    self.data["textures"]["default"] = p.transform.scale(
+                        self.data["textures"]["default"],
+                        new_size
+                    )
+
+                    if self.data["textures"]["hover"] is not None:
+                        self.data["textures"]["hover"] = p.transform.scale(
+                            self.data["textures"]["hover"],
+                            new_size
+                        )
+
+                    if self.data["textures"]["clickdown"] is not None:
+                        self.data["textures"]["clickdown"] = p.transform.scale(
+                            self.data["textures"]["clickdown"],
+                            new_size
+                        )
 
         self.image = self.data["textures"]["default"]
         self.size = Point((self.image.get_width(), self.image.get_height()))
-        self.rect = self.image.get_rect(center=(coords + self.size / 2).tuple())
+
+        # Important:
+        # coords are top-left coords. Do not reconstruct the rect through center.
+        # That avoids the 61 / 2 = 30.5 ambiguity entirely.
+        self.rect = p.Rect(
+            int(self.coords.x),
+            int(self.coords.y),
+            int(self.size.x),
+            int(self.size.y)
+        )
+
+        self.hitbox_offset = Point(self.data.get("hitbox_offset", (0, 0)))
+        self.hitbox_rect = self.rect.move(int(self.hitbox_offset.x), int(self.hitbox_offset.y))
 
         self.fixData()
 
@@ -106,15 +151,32 @@ class Button:
         if not self.clickable:
             return False
 
-        if not self.rect.collidepoint(*mousePos):
+        hitbox_rect = getattr(self, "hitbox_rect", self.rect)
+
+        if not hitbox_rect.collidepoint(*mousePos):
             return False
 
-        pos_in_mask = mousePos[0] - self.rect.x, mousePos[1] - self.rect.y
+        pos_in_mask = (
+            int(mousePos[0] - hitbox_rect.x),
+            int(mousePos[1] - hitbox_rect.y),
+        )
 
-        if isinstance(self.data["hitbox"], str):
-            return self.data["hitbox"] == "all"
+        hitbox = self.data["hitbox"]
 
-        px = self.data["hitbox"].get_at(pos_in_mask)
+        if isinstance(hitbox, str):
+            return hitbox == "all"
+
+        if pos_in_mask[0] < 0 or pos_in_mask[1] < 0:
+            return False
+
+        if pos_in_mask[0] >= hitbox.get_width() or pos_in_mask[1] >= hitbox.get_height():
+            return False
+
+        px = hitbox.get_at(pos_in_mask)
+
+        if len(px) >= 4:
+            return px[3] != 0
+
         return px[0] != 0 or px[1] != 0 or px[2] != 0
 
     def testMouseStates(self, mousePos, mouseState):

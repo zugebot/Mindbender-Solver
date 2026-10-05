@@ -1,1 +1,5 @@
 /cached/
+
+__pycache__/
+*.zip
+.idea/vcs.xml
