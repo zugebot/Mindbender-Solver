@@ -49,9 +49,13 @@ C:/mingw64/bin/gcc -O3 -shared -Imouse/include mouse/src/chuzzle_mouse.c -o pyth
   saved per game exe in `user_data/calibration.json`. Without calibration
   the app uses the 800x600 layout from `python/deluxe_clone` (board at
   (255, 60), 80 px chuzzles), scaled to the window's client area.
-- **Reset Speed Chuzzle save** moves the current profile's
-  `SAVEGAME-SPEEDCHUZZLE.DAT` into `user_data/save_backups/stashed`, keeping
-  the last 20 (the old resetter deleted it).
+## Speed Chuzzle tab
+
+Shows the current profile of the game folder in use, its
+`SAVEGAME-SPEEDCHUZZLE.DAT` (size, last write) and the Speed high scores from
+`HSSpeedChuzzle.cfg`. *Reset Speed Chuzzle save* moves that file into
+`user_data/save_backups/stashed`, keeping the newest 20 (the old resetter
+deleted it), so the next Speed game starts fresh; the tab lists the stash.
 
 ## Saves tab
 

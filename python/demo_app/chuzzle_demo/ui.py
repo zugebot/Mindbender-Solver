@@ -29,7 +29,7 @@ BAD = (230, 90, 90)
 
 # y positions in the right ("Real game") panel
 RY = {"hint": 84, "play": 120, "stop": 160, "speed": 198, "nav": 246, "world": 276, "arrows": 304,
-      "levels": 340, "speedc": 388, "reset": 448, "log": 496}
+      "levels": 340, "log": 392}
 
 MOVES_HELP = ("Moves are 1-indexed. R = row (1 = top) shifted right, C = column (1 = left) shifted "
               "down; the last digit is how many cells. Moves of the 2x2 piece name both of its "
@@ -102,7 +102,8 @@ class App:
         self.confirm_restore_until = 0.0
         self.save_rows: list[tuple[pg.Rect, saves.SaveLocation, saves.Profile | None]] = []
 
-        self.buttons: dict[str, list[Button]] = {"solutions": [], "saves": [], "all": []}
+        self.buttons: dict[str, list[Button]] = {"solutions": [], "saves": [], "speed": [], "all": []}
+        self._speed_cache: tuple[float, dict] | None = None
         self._build_buttons()
         self.select_level(self.selected)
         self.find_game(quiet=True)
@@ -145,8 +146,10 @@ class App:
     def _build_buttons(self) -> None:
         b = self.buttons
         b["all"] += [
-            Button(pg.Rect(W - 250, 8, 115, 30), "Solutions", lambda: self.set_tab("solutions"),
+            Button(pg.Rect(W - 372, 8, 115, 30), "Solutions", lambda: self.set_tab("solutions"),
                    active=lambda: self.tab == "solutions"),
+            Button(pg.Rect(W - 250, 8, 115, 30), "Speed Chuzzle", lambda: self.set_tab("speed"),
+                   active=lambda: self.tab == "speed"),
             Button(pg.Rect(W - 128, 8, 115, 30), "Saves", lambda: self.set_tab("saves"),
                    active=lambda: self.tab == "saves"),
         ]
@@ -212,8 +215,16 @@ class App:
         for i in range(5):
             b["solutions"].append(Button(pg.Rect(x + i * 73, RY["levels"], 68, 28), f"Level {i + 1}",
                                          lambda i=i: self.click_level_button(i), game))
-        b["solutions"].append(Button(pg.Rect(x, RY["reset"], 360, 30), "Reset Speed Chuzzle save",
-                                     self.reset_speed_save, lambda: self.active_loc is not None))
+        # speed chuzzle tab
+        info = lambda: self.speed_info()
+        b["speed"] += [
+            Button(pg.Rect(36, 300, 300, 40), "Reset Speed Chuzzle save", self.reset_speed_save,
+                   lambda: info().get("save") is not None and info()["save"].is_file()),
+            Button(pg.Rect(346, 300, 180, 40), "Open profile folder",
+                   lambda: self._open(info()["profile"].path), lambda: info().get("profile") is not None),
+            Button(pg.Rect(536, 300, 180, 40), "Open reset stash",
+                   lambda: self._open(info()["stash_dir"]), lambda: info().get("stash_dir") is not None),
+        ]
         # saves tab
         bx = W - 230
         b["saves"] += [
@@ -434,6 +445,7 @@ class App:
             return
         path = profile.path / "SAVEGAME-SPEEDCHUZZLE.DAT"
         moved = saves.stash_file(path, f"{loc.label}_{profile.name}")
+        self._speed_cache = None
         if moved is None:
             self.log(f"No Speed Chuzzle save for {profile.name} (already reset).", WARN)
         else:
@@ -746,18 +758,92 @@ class App:
         self.text(f"{self.speed:.2f}x", (x + 104, RY["speed"] + 14), self.font, center=True)
         self.text("Navigate in game", (x, RY["nav"]), self.bold)
         self.text(f"Game shows world {self.tracked_world}", (x, RY["world"]), self.font)
-        self.text("Speed Chuzzle", (x, RY["speedc"]), self.bold)
-        self.wrap("Moves the current profile's SAVEGAME-SPEEDCHUZZLE.DAT into user_data/save_backups "
-                  "(last 20 kept) so the next Speed game starts fresh.",
-                  x, RY["speedc"] + 24, rect.width - 24, self.small, DIM, 16)
         # log
         ly = RY["log"]
         pg.draw.line(self.screen, PANEL_LINE, (rect.x + 8, ly - 6), (rect.right - 8, ly - 6))
-        for when, msg, color in self.log_lines[-14:]:
+        for when, msg, color in self.log_lines[-20:]:
             ly = self.wrap(f"{time.strftime('%H:%M:%S', time.localtime(when))}  {msg}", x, ly,
                            rect.width - 24, self.small, color, 15)
             if ly > rect.bottom - 10:
                 break
+
+    def speed_info(self) -> dict:
+        """Current profile's Speed Chuzzle save, high scores and stashed resets
+        (re-read at most once a second)."""
+        now = time.time()
+        if self._speed_cache and now - self._speed_cache[0] < 1.0:
+            return self._speed_cache[1]
+        info: dict = {}
+        loc = self.active_loc
+        if loc is not None:
+            info["loc"] = loc
+            name = loc.current_profile
+            profile = loc.profile(name) if name else None
+            info["profile"] = profile
+            if profile is not None:
+                info["save"] = profile.path / "SAVEGAME-SPEEDCHUZZLE.DAT"
+                label = f"{loc.label}_{profile.name}"
+                info["stash_dir"] = saves.stash_dir(label)
+                info["stashed"] = saves.list_stashed(label)
+            for folder in (loc.root, loc.root.parent):
+                hs = folder / "HSSpeedChuzzle.cfg"
+                if hs.is_file():
+                    cfg = saves.read_config(hs)
+                    info["scores"] = [(cfg.get(f"NAME{i}", ""), cfg.get(f"SCORE{i}", ""))
+                                      for i in range(10) if f"NAME{i}" in cfg]
+                    break
+        self._speed_cache = (now, info)
+        return info
+
+    def draw_speed(self) -> None:
+        rect = pg.Rect(12, 52, W - 24, 716)
+        self.panel(rect, "Speed Chuzzle")
+        x, y = rect.x + 24, rect.y + 44
+        info = self.speed_info()
+        loc, profile = info.get("loc"), info.get("profile")
+        if loc is None:
+            self.text("No Chuzzle save folder found yet (see the Saves tab).", (x, y), self.font, WARN)
+            return
+        self.text(f"Game folder: {loc.label}", (x, y), self.font)
+        self.text(str(loc.root), (x, y + 22), self.small, DIM)
+        if profile is None:
+            self.text("No current profile in config.cfg.", (x, y + 50), self.font, WARN)
+            return
+        self.text(f"Profile: {profile.name}", (x, y + 50), self.bold, GOOD)
+        save = info["save"]
+        if save.is_file():
+            st = save.stat()
+            when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(st.st_mtime))
+            self.text(f"Speed save: {save.name}  {st.st_size} bytes, modified {when}", (x, y + 76), self.font)
+        else:
+            self.text("Speed save: none (the next Speed game starts fresh)", (x, y + 76), self.font, GOOD)
+        self.wrap("Reset moves this profile's SAVEGAME-SPEEDCHUZZLE.DAT into the reset stash "
+                  "(newest 20 kept, nothing is deleted from the game), so the next Speed Chuzzle game "
+                  "starts from the beginning. Start Speed Chuzzle again in the game afterwards.",
+                  x, y + 108, 720, self.small, DIM, 17)
+
+        # high scores
+        sx = rect.x + 780
+        self.text("High scores (HSSpeedChuzzle.cfg)", (sx, rect.y + 44), self.bold)
+        for i, (name, score) in enumerate(info.get("scores", [])):
+            yy = rect.y + 74 + i * 22
+            self.text(f"{i + 1}.", (sx, yy), self.font, DIM)
+            self.text(name, (sx + 28, yy), self.font)
+            self.text(score, (sx + 340 - self.font.size(score)[0], yy), self.font)
+        if not info.get("scores"):
+            self.text("none found", (sx, rect.y + 74), self.small, DIM)
+
+        # stashed resets
+        y = rect.y + 320
+        stashed = info.get("stashed", [])
+        self.text(f"Reset stash ({len(stashed)})", (x, y), self.bold)
+        for i, path in enumerate(stashed[:18]):
+            st = path.stat()
+            when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(st.st_mtime))
+            self.text(f"{path.name}", (x, y + 28 + i * 20), self.small, TEXT)
+            self.text(f"{st.st_size} bytes   saved {when}", (x + 460, y + 28 + i * 20), self.small, DIM)
+        if not stashed:
+            self.text("No resets yet.", (x, y + 28), self.small, DIM)
 
     def _elide(self, s: str, font, width: int) -> str:
         if font.size(s)[0] <= width:
@@ -868,6 +954,8 @@ class App:
             self.draw_grid(mouse)
             self.draw_preview(mouse)
             self.draw_game_panel()
+        elif self.tab == "speed":
+            self.draw_speed()
         else:
             self.draw_saves(mouse)
         self.draw_game_bar()
@@ -891,7 +979,7 @@ class App:
                     if not self.playing():
                         self.select_level(name)
                     return
-        else:
+        elif self.tab == "saves":
             for r, loc, prof in self.save_rows:
                 if r.collidepoint(pos):
                     self.selected_save = (loc, prof)

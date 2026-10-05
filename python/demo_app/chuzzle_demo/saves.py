@@ -368,7 +368,7 @@ def stash_file(path: Path, label: str, keep: int = 20,
     Chuzzle), keeping the newest `keep` stashed copies."""
     if not path.is_file():
         return None
-    folder = backup_root / "stashed" / _slug(label)
+    folder = stash_dir(label, backup_root)
     folder.mkdir(parents=True, exist_ok=True)
     dest = folder / f"{time.strftime('%Y%m%d-%H%M%S')}_{int(time.time() * 1000) % 1000:03d}_{path.name}"
     shutil.move(str(path), dest)
@@ -376,3 +376,13 @@ def stash_file(path: Path, label: str, keep: int = 20,
     for old in stashed[:-keep]:
         old.unlink()
     return dest
+
+
+def stash_dir(label: str, backup_root: Path = paths.SAVE_BACKUP_DIR) -> Path:
+    return backup_root / "stashed" / _slug(label)
+
+
+def list_stashed(label: str, backup_root: Path = paths.SAVE_BACKUP_DIR) -> list[Path]:
+    """Stashed files for `label`, newest first."""
+    folder = stash_dir(label, backup_root)
+    return sorted((p for p in folder.iterdir() if p.is_file()), reverse=True) if folder.is_dir() else []
