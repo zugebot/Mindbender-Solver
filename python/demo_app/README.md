@@ -28,12 +28,22 @@ C:/mingw64/bin/gcc -O3 -shared -Imouse/include mouse/src/chuzzle_mouse.c -o pyth
   Solutions are ranked by mouse travel with the `python/viewer` library and
   cached in `user_data/route_rank_cache.json`. Moves are shown 1-indexed:
   `R14` = row 1 (top) shifted right 4, `C453` = columns 4+5 (2x2 piece) down 3.
-- **Real game**: start Chuzzle Deluxe 1.01 or the Christmas Edition, open
-  the mindbender, press *Find game*, then *Play solution in game* (or *Step in
-  game*, one move per press). Holding **Esc**, pressing *Stop*, or
-  alt-tabbing away stops at once and releases the mouse button.
-  *Navigate in game* clicks the world arrows and level buttons. Tell it which
-  world the game is showing first; it can't read the screen.
+- **Real game**: start Chuzzle (Deluxe 1.0/1.01, also when PopCap's wrapper
+  runs it as `pop*.tmp`, or the Christmas Edition), open the mindbender,
+  press *Find game*, then *Play solution in game* (or *Step in game*, one
+  move per press).
+  - **Input: background** (default): mouse messages are posted straight to the
+    game window, so your real mouse stays free and the game needn't be in
+    front. Before each move it unpauses the game if it shows "GAME PAUSED"
+    (fake focus + a click on the empty pause band), and it waits while your
+    cursor is over the game window, since real moves there would mix in.
+  - **Input: real cursor**: moves the real mouse; hands off. Alt-tabbing
+    away stops it.
+  - Each press is held still for ~60 ms (a few frames) before the drag starts.
+    Holding **Esc** or pressing *Stop* stops either mode at once and releases
+    the button.
+  - *Navigate in game* clicks the world arrows and level buttons. Tell it which
+    world the game is showing first; it can't read the screen.
 - **Calibrate** if clicks land off-target: hover the centre of the top-left
   chuzzle and press F9, then the bottom-right one and press F9. The result is
   saved per game exe in `user_data/calibration.json`. Without calibration

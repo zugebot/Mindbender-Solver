@@ -27,7 +27,7 @@ WARN = (240, 190, 70)
 BAD = (230, 90, 90)
 
 # y positions in the right ("Real game") panel
-RY = {"find": 200, "auto": 244, "play": 290, "stop": 330, "speed": 368, "nav": 414,
+RY = {"find": 200, "auto": 236, "play": 292, "stop": 330, "speed": 368, "nav": 414,
       "world": 444, "arrows": 474, "levels": 510, "speedc": 556, "reset": 616, "log": 664}
 
 
@@ -78,6 +78,8 @@ class App:
         self.played_moves = 0
         self.speed = 1.0
         self.click_next_after = False
+        self.background_input = True
+        self.player_status = ""
         self.tracked_world = 1
         self.calib_step = 0
         self.calib_points: list[tuple[float, float]] = []
@@ -169,7 +171,11 @@ class App:
                    lambda: game() and has_sol()),
             Button(pg.Rect(x + 183, RY["play"], 177, 34), lambda: f"Step in game ({self.played_moves})",
                    self.play_step, lambda: game() and has_sol()),
-            Button(pg.Rect(x, RY["stop"], 360, 30), "Stop (or hold Esc)", self.stop_player, self.playing),
+            Button(pg.Rect(x, RY["stop"], 150, 30), "Stop (or hold Esc)", self.stop_player, self.playing),
+            Button(pg.Rect(x + 156, RY["stop"], 204, 30),
+                   lambda: "Input: background" if self.background_input else "Input: real cursor",
+                   lambda: setattr(self, "background_input", not self.background_input),
+                   lambda: not self.playing(), lambda: self.background_input),
             Button(pg.Rect(x, RY["speed"], 36, 28), "-", lambda: self.set_speed(self.speed / 1.25)),
             Button(pg.Rect(x + 136, RY["speed"], 36, 28), "+", lambda: self.set_speed(self.speed * 1.25)),
             Button(pg.Rect(x + 184, RY["speed"], 176, 28),
@@ -345,11 +351,14 @@ class App:
 
         def done(msg):
             color = GOOD if msg == "done" else WARN
-            self.post(lambda: self.log(f"{label}: {msg}", color))
+            self.post(lambda: (self.log(f"{label}: {msg}", color), setattr(self, "player_status", "")))
+
+        def status(msg):
+            self.post(lambda: setattr(self, "player_status", msg))
 
         self._play_base = self.played_moves
-        self.player = Player(self.window, self.geometry, drags, self.speed,
-                             after=after, on_progress=progress, on_done=done)
+        self.player = Player(self.window, self.geometry, drags, self.speed, background=self.background_input,
+                             after=after, on_progress=progress, on_status=status, on_done=done)
         self.player.start()
 
     def _route(self) -> routes.Route:
@@ -689,8 +698,12 @@ class App:
             self.text(f"Calibrating: point {self.calib_step}/2 - press F9", (x, y + 92), self.font, ACCENT)
 
         self.text(f"Auto-play {self.selected}", (x, RY["auto"]), self.bold)
-        self.wrap("Open the puzzle in the game, then Play. Esc or alt-tab stops it.",
-                  x, RY["auto"] + 24, rect.width - 24, self.small, DIM, 16)
+        hint = ("Background input: your mouse stays free; keep it off the game window. Hold Esc to stop."
+                if self.background_input else
+                "Real cursor: hands off the mouse. Esc or alt-tab stops it.")
+        if self.player_status:
+            hint = self.player_status
+        self.wrap(hint, x, RY["auto"] + 22, rect.width - 24, self.small, WARN if self.player_status else DIM, 14)
         self.text(f"{self.speed:.2f}x", (x + 104, RY["speed"] + 14), self.font, center=True)
         self.text("Navigate in game", (x, RY["nav"]), self.bold)
         self.text(f"Game shows world {self.tracked_world}", (x, RY["world"]), self.font)

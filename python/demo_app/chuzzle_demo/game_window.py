@@ -16,6 +16,33 @@ from . import paths
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
+gdi32 = ctypes.windll.gdi32
+
+# Handles are 64-bit: declare them so ctypes doesn't truncate or overflow.
+user32.GetDC.argtypes = [wintypes.HWND]
+user32.GetDC.restype = wintypes.HDC
+user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+user32.PrintWindow.argtypes = [wintypes.HWND, wintypes.HDC, wintypes.UINT]
+user32.WindowFromPoint.argtypes = [wintypes.POINT]
+user32.WindowFromPoint.restype = wintypes.HWND
+user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+user32.GetAncestor.restype = wintypes.HWND
+user32.GetForegroundWindow.restype = wintypes.HWND
+user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+kernel32.OpenProcess.restype = wintypes.HANDLE
+kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                                                ctypes.POINTER(wintypes.DWORD)]
+kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
+gdi32.CreateCompatibleDC.restype = wintypes.HDC
+gdi32.CreateCompatibleBitmap.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int]
+gdi32.CreateCompatibleBitmap.restype = wintypes.HBITMAP
+gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
+gdi32.SelectObject.restype = wintypes.HGDIOBJ
+gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+gdi32.DeleteDC.argtypes = [wintypes.HDC]
+gdi32.GetDIBits.argtypes = [wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wintypes.UINT,
+                            ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT]
 
 # Window titles of the Chuzzle 1 builds (python/deluxe_clone uses the same list).
 KNOWN_TITLES = ("Chuzzle Deluxe 1.01", "Chuzzle Deluxe 1.0", "Chuzzle Christmas Edition 1.0")
@@ -119,7 +146,7 @@ class GameWindow:
         return pt.x, pt.y, rect.right - rect.left, rect.bottom - rect.top
 
     def is_foreground(self) -> bool:
-        return user32.GetForegroundWindow() == self.hwnd
+        return (user32.GetForegroundWindow() or 0) == self.hwnd
 
     def bring_to_front(self) -> bool:
         if user32.IsIconic(self.hwnd):
@@ -172,11 +199,16 @@ class Geometry:
     cell: tuple[float, float] = (CELL / LOGICAL_W, CELL / LOGICAL_H)
     calibrated: bool = False
 
-    def to_screen(self, window: GameWindow, point: tuple[float, float]) -> tuple[int, int]:
-        left, top, width, height = window.client_rect()
+    def to_client(self, window: GameWindow, point: tuple[float, float]) -> tuple[float, float]:
+        _, _, width, height = window.client_rect()
         fx = self.origin[0] + point[0] * self.cell[0]
         fy = self.origin[1] + point[1] * self.cell[1]
-        return round(left + fx * width), round(top + fy * height)
+        return fx * width, fy * height
+
+    def to_screen(self, window: GameWindow, point: tuple[float, float]) -> tuple[int, int]:
+        left, top, _, _ = window.client_rect()
+        x, y = self.to_client(window, point)
+        return round(left + x), round(top + y)
 
     @staticmethod
     def from_corners(top_left: tuple[float, float], bottom_right: tuple[float, float]) -> "Geometry":
@@ -229,7 +261,111 @@ def clear_geometry(window: GameWindow) -> None:
 
 
 # --------------------------------------------------------------------------
-# Raw mouse
+# Background input: window messages straight to the game. The real cursor is
+# never moved and the game does not need focus. Coordinates are client pixels.
+# --------------------------------------------------------------------------
+
+WM_ACTIVATE, WM_SETFOCUS = 0x0006, 0x0007
+WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP = 0x0200, 0x0201, 0x0202
+MK_LBUTTON = 0x0001
+PAUSE_BANNER_CLICK = (60, 250)      # logical px: left end of the "GAME PAUSED" band
+
+
+def _lparam(x: float, y: float) -> int:
+    return (int(round(y)) & 0xFFFF) << 16 | (int(round(x)) & 0xFFFF)
+
+
+def post_move(window: GameWindow, x: float, y: float, button_down: bool) -> None:
+    user32.PostMessageW(window.hwnd, WM_MOUSEMOVE, MK_LBUTTON if button_down else 0, _lparam(x, y))
+
+
+def post_button(window: GameWindow, down: bool, x: float, y: float) -> None:
+    user32.PostMessageW(window.hwnd, WM_LBUTTONDOWN if down else WM_LBUTTONUP,
+                        MK_LBUTTON if down else 0, _lparam(x, y))
+
+
+def post_focus(window: GameWindow) -> None:
+    """Tell the game it is active/focused (it pauses on focus loss)."""
+    user32.PostMessageW(window.hwnd, WM_ACTIVATE, 1, 0)
+    user32.PostMessageW(window.hwnd, WM_SETFOCUS, 0, 0)
+
+
+def cursor_over(window: GameWindow) -> bool:
+    """Is the real cursor over the game window? Real mouse moves there would
+    mix with the posted drag."""
+    pt = wintypes.POINT()
+    user32.GetCursorPos(ctypes.byref(pt))
+    hwnd = user32.WindowFromPoint(pt)
+    return bool(hwnd) and (hwnd == window.hwnd or user32.GetAncestor(hwnd, 2) == window.hwnd)
+
+
+def capture_client(window: GameWindow) -> tuple[bytes, int, int] | None:
+    """BGRA pixels of the client area (PrintWindow, works while covered)."""
+    _, _, cw, ch = window.client_rect()
+    if cw <= 0 or ch <= 0:
+        return None
+
+    class BITMAPINFOHEADER(ctypes.Structure):
+        _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long), ("biHeight", ctypes.c_long),
+                    ("biPlanes", wintypes.WORD), ("biBitCount", wintypes.WORD),
+                    ("biCompression", wintypes.DWORD), ("biSizeImage", wintypes.DWORD),
+                    ("biXPelsPerMeter", ctypes.c_long), ("biYPelsPerMeter", ctypes.c_long),
+                    ("biClrUsed", wintypes.DWORD), ("biClrImportant", wintypes.DWORD)]
+
+    hdc = user32.GetDC(window.hwnd)
+    mdc = gdi32.CreateCompatibleDC(hdc)
+    bmp = gdi32.CreateCompatibleBitmap(hdc, cw, ch)
+    old = gdi32.SelectObject(mdc, bmp)
+    try:
+        if not user32.PrintWindow(window.hwnd, mdc, 1 | 2):   # PW_CLIENTONLY | PW_RENDERFULLCONTENT
+            return None
+        header = BITMAPINFOHEADER(ctypes.sizeof(BITMAPINFOHEADER), cw, -ch, 1, 32, 0, 0, 0, 0, 0, 0)
+        buf = ctypes.create_string_buffer(cw * ch * 4)
+        gdi32.GetDIBits(mdc, bmp, 0, ch, buf, ctypes.byref(header), 0)
+        return buf.raw, cw, ch
+    finally:
+        gdi32.SelectObject(mdc, old)
+        gdi32.DeleteObject(bmp)
+        gdi32.DeleteDC(mdc)
+        user32.ReleaseDC(window.hwnd, hdc)
+
+
+def looks_paused(window: GameWindow) -> bool:
+    """The pause screen is a black band across the middle (logical y ~230-370)."""
+    shot = capture_client(window)
+    if shot is None:
+        return False
+    data, cw, ch = shot
+    dark = 0
+    xs = [0.02, 0.08, 0.25, 0.75, 0.92, 0.98]
+    ys = [235 / 600, 245 / 600, 355 / 600, 365 / 600]
+    for fx in xs:
+        for fy in ys:
+            i = (int(fy * ch) * cw + int(fx * cw)) * 4
+            b, g, r = data[i], data[i + 1], data[i + 2]
+            dark += max(r, g, b) < 24
+    return dark >= len(xs) * len(ys) - 2
+
+
+def resume_if_paused(window: GameWindow) -> bool:
+    """Unpause without focus: fake focus, then click the empty pause band."""
+    if not looks_paused(window):
+        return False
+    post_focus(window)
+    time.sleep(0.3)
+    _, _, cw, ch = window.client_rect()
+    x, y = PAUSE_BANNER_CLICK[0] * cw / LOGICAL_W, PAUSE_BANNER_CLICK[1] * ch / LOGICAL_H
+    post_move(window, x, y, False)
+    time.sleep(0.05)
+    post_button(window, True, x, y)
+    time.sleep(0.08)
+    post_button(window, False, x, y)
+    time.sleep(0.5)
+    return True
+
+
+# --------------------------------------------------------------------------
+# Raw mouse (real cursor)
 # --------------------------------------------------------------------------
 
 def move_cursor(x: int, y: int) -> None:
