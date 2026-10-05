@@ -1,0 +1,7214 @@
+{
+  "category": "speedrun",
+  "description": "puzzler category",
+  "name": "puzzler",
+  "route_totals": {
+    "step_count": 27,
+    "total_cost": 561.9931801953826,
+    "total_drag": 361.5216591074327,
+    "total_move": 200.47152108794987
+  },
+  "steps": [
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        4.0,
+        3.0
+      ],
+      "final_move_distance": 3.0,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 0.0,
+      "inter_move_distance": 0.0,
+      "move_string": "R25 C44",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            5.0,
+            2.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            2.0
+          ],
+          "move": "R25",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              2.0
+            ],
+            [
+              4.0,
+              2.0
+            ],
+            [
+              4.0,
+              2.0
+            ]
+          ],
+          "release": [
+            4.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 1.0
+        },
+        {
+          "click_down": [
+            4.0,
+            2.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            1.0
+          ],
+          "move": "C44",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              2.0
+            ],
+            [
+              4.0,
+              1.0
+            ],
+            [
+              4.0,
+              0.0
+            ]
+          ],
+          "release": [
+            4.0,
+            0.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 3.0
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "1-1",
+      "puzzle_number": 1,
+      "source_file": "1-1_c2_1.txt",
+      "start_mouse_position": null,
+      "step_id": "7277db4af9d9",
+      "total_cost": 6.0,
+      "total_drag": 3.0,
+      "total_move": 3.0,
+      "world_number": 1
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        2.0,
+        3.0
+      ],
+      "final_move_distance": 2.0,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 0.0,
+      "inter_move_distance": 0.0,
+      "move_string": "C13 R11",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            1.0,
+            4.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.0,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            3.0
+          ],
+          "move": "C13",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              4.0
+            ],
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              1.0
+            ]
+          ],
+          "release": [
+            1.0,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 3.0
+        },
+        {
+          "click_down": [
+            1.0,
+            1.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "R11",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ]
+          ],
+          "release": [
+            2.0,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 4.0
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "1-2",
+      "puzzle_number": 2,
+      "source_file": "1-2_c2_2.txt",
+      "start_mouse_position": null,
+      "step_id": "cc1929b0de50",
+      "total_cost": 6.0,
+      "total_drag": 4.0,
+      "total_move": 2.0,
+      "world_number": 1
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.22,
+          4.73
+        ]
+      ],
+      "final_mouse_target": [
+        -1.22,
+        4.73
+      ],
+      "final_move_distance": 0.735888482939294,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 0.0,
+      "inter_move_distance": 0.0,
+      "move_string": "C22",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            2.0,
+            3.0
+          ],
+          "displacement": 2,
+          "drag_distance": 3.7255129673406353,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            4.0
+          ],
+          "move": "C22",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              3.0
+            ],
+            [
+              2.0,
+              4.0
+            ],
+            [
+              -0.5354330863073384,
+              5.0
+            ]
+          ],
+          "release": [
+            -0.5354330863073384,
+            5.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 3.7255129673406353
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "1-3",
+      "puzzle_number": 3,
+      "source_file": "1-3_c1_1.txt",
+      "start_mouse_position": null,
+      "step_id": "c5d963d86878",
+      "total_cost": 4.461401450279929,
+      "total_drag": 3.7255129673406353,
+      "total_move": 0.735888482939294,
+      "world_number": 1
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.52,
+          3.4205
+        ]
+      ],
+      "final_mouse_target": [
+        -1.52,
+        3.4205
+      ],
+      "final_move_distance": 2.1194409501238107,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 6.792738770186882,
+      "inter_move_distance": 2.3581137043038325e-13,
+      "move_string": "R25 C44 R03",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            5.0,
+            2.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            2.0
+          ],
+          "move": "R25",
+          "move_distance": 6.792738770186882,
+          "path_points": [
+            [
+              5.0,
+              2.0
+            ],
+            [
+              4.0,
+              2.0
+            ],
+            [
+              4.0,
+              2.0
+            ]
+          ],
+          "release": [
+            4.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 7.792738770186882
+        },
+        {
+          "click_down": [
+            4.0,
+            2.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            1.0
+          ],
+          "move": "C44",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              2.0
+            ],
+            [
+              4.0,
+              1.0
+            ],
+            [
+              3.000000000000236,
+              0.0
+            ]
+          ],
+          "release": [
+            3.000000000000236,
+            0.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 10.20695233255981
+        },
+        {
+          "click_down": [
+            3.0,
+            0.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.7887379636893375,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            0.0
+          ],
+          "move": "R03",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              3.0,
+              0.0
+            ],
+            [
+              2.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.9434658294197384
+            ]
+          ],
+          "release": [
+            0.0,
+            1.9434658294197384
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 13.995690296249384
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "2-1",
+      "puzzle_number": 1,
+      "source_file": "2-1_c3_3.txt",
+      "start_mouse_position": [
+        -1.22,
+        4.73
+      ],
+      "step_id": "cc0ed428f05b",
+      "total_cost": 16.115131246373195,
+      "total_drag": 7.202951526062266,
+      "total_move": 8.912179720310927,
+      "world_number": 2
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        4.0,
+        3.0
+      ],
+      "final_move_distance": 4.716227408607665e-13,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 2.080437514082074,
+      "inter_move_distance": 4.716227408607665e-13,
+      "move_string": "R22 C23 C11 R53",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            0.0,
+            2.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "R22",
+          "move_distance": 2.080437514082074,
+          "path_points": [
+            [
+              0.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0,
+              1.0000000000002358
+            ]
+          ],
+          "release": [
+            2.0,
+            1.0000000000002358
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 4.4946510764550025
+        },
+        {
+          "click_down": [
+            2.0,
+            1.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            2.0
+          ],
+          "move": "C23",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              2.0,
+              1.0
+            ],
+            [
+              2.0,
+              2.0
+            ],
+            [
+              1.0000000000002358,
+              4.0
+            ]
+          ],
+          "release": [
+            1.0000000000002358,
+            4.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 7.730719053954922
+        },
+        {
+          "click_down": [
+            1.0,
+            4.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            5.0
+          ],
+          "move": "C11",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              1.0,
+              4.0
+            ],
+            [
+              1.0,
+              5.0
+            ],
+            [
+              1.0,
+              5.0
+            ]
+          ],
+          "release": [
+            1.0,
+            5.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 8.730719053955157
+        },
+        {
+          "click_down": [
+            1.0,
+            5.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.828427124745857,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            5.0
+          ],
+          "move": "R53",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              5.0
+            ],
+            [
+              2.0,
+              5.0
+            ],
+            [
+              4.0,
+              3.0000000000004716
+            ]
+          ],
+          "release": [
+            4.0,
+            3.0000000000004716
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 12.559146178701015
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "2-4",
+      "puzzle_number": 4,
+      "source_file": "2-4_c4_3.txt",
+      "start_mouse_position": [
+        -1.52,
+        3.4205
+      ],
+      "step_id": "99fc974d2e19",
+      "total_cost": 12.559146178701488,
+      "total_drag": 10.47870866461847,
+      "total_move": 2.0804375140830174,
+      "world_number": 2
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.22,
+          4.73
+        ]
+      ],
+      "final_mouse_target": [
+        -1.22,
+        4.73
+      ],
+      "final_move_distance": 0.9408996995650117,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 4.242640687119285,
+      "inter_move_distance": 1.0,
+      "move_string": "R01 C21 C13",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            1.0,
+            0.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            0.0
+          ],
+          "move": "R01",
+          "move_distance": 4.242640687119285,
+          "path_points": [
+            [
+              1.0,
+              0.0
+            ],
+            [
+              2.0,
+              0.0
+            ],
+            [
+              2.0,
+              0.0
+            ]
+          ],
+          "release": [
+            2.0,
+            0.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 5.242640687119285
+        },
+        {
+          "click_down": [
+            2.0,
+            0.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "C21",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              0.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ]
+          ],
+          "release": [
+            2.0,
+            1.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 6.242640687119285
+        },
+        {
+          "click_down": [
+            1.0,
+            1.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.577807449374781,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "C13",
+          "move_distance": 1.0,
+          "path_points": [
+            [
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              -0.6263736489663478,
+              4.0
+            ]
+          ],
+          "release": [
+            -0.6263736489663478,
+            4.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 10.820448136494065
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "2-5",
+      "puzzle_number": 5,
+      "source_file": "2-5_c3_3.txt",
+      "start_mouse_position": [
+        4.0,
+        3.0
+      ],
+      "step_id": "6b1af0ec4a52",
+      "total_cost": 11.761347836059077,
+      "total_drag": 5.577807449374781,
+      "total_move": 6.183540386684297,
+      "world_number": 2
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        1.0,
+        3.0
+      ],
+      "final_move_distance": 0.0,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 5.632166545832963,
+      "inter_move_distance": 2.3582067082176723e-13,
+      "move_string": "R13 R01 C13",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            3.0,
+            1.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "R13",
+          "move_distance": 5.632166545832963,
+          "path_points": [
+            [
+              3.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              0.0,
+              2.3582067082176723e-13
+            ]
+          ],
+          "release": [
+            0.0,
+            2.3582067082176723e-13
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 8.868234523332646
+        },
+        {
+          "click_down": [
+            0.0,
+            0.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            0.0
+          ],
+          "move": "R01",
+          "move_distance": 2.3582067082176723e-13,
+          "path_points": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "release": [
+            1.0,
+            0.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 9.868234523332884
+        },
+        {
+          "click_down": [
+            1.0,
+            0.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.0,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            1.0
+          ],
+          "move": "C13",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              3.0
+            ]
+          ],
+          "release": [
+            1.0,
+            3.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 12.868234523332884
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "3-1",
+      "puzzle_number": 1,
+      "source_file": "3-1_c3_2.txt",
+      "start_mouse_position": [
+        -1.22,
+        4.73
+      ],
+      "step_id": "fa25e586ee97",
+      "total_cost": 12.868234523332884,
+      "total_drag": 7.236067977499684,
+      "total_move": 5.632166545833199,
+      "world_number": 3
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        4.0,
+        3.0
+      ],
+      "final_move_distance": 1.0,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 1.0,
+      "inter_move_distance": 3.1622776601683795,
+      "move_string": "C22 R55 R23 C51",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            2.0,
+            3.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            4.0
+          ],
+          "move": "C22",
+          "move_distance": 1.0,
+          "path_points": [
+            [
+              2.0,
+              3.0
+            ],
+            [
+              2.0,
+              4.0
+            ],
+            [
+              2.0,
+              5.0
+            ]
+          ],
+          "release": [
+            2.0,
+            5.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 3.0
+        },
+        {
+          "click_down": [
+            2.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            5.0
+          ],
+          "move": "R55",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              5.0
+            ],
+            [
+              1.0,
+              5.0
+            ],
+            [
+              1.0,
+              5.0
+            ]
+          ],
+          "release": [
+            1.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 4.0
+        },
+        {
+          "click_down": [
+            2.0,
+            2.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.0,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            2.0
+          ],
+          "move": "R23",
+          "move_distance": 3.1622776601683795,
+          "path_points": [
+            [
+              2.0,
+              2.0
+            ],
+            [
+              3.0,
+              2.0
+            ],
+            [
+              5.0,
+              2.0
+            ]
+          ],
+          "release": [
+            5.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 10.16227766016838
+        },
+        {
+          "click_down": [
+            5.0,
+            2.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            3.0
+          ],
+          "move": "C51",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              2.0
+            ],
+            [
+              5.0,
+              3.0
+            ],
+            [
+              5.0,
+              3.0
+            ]
+          ],
+          "release": [
+            5.0,
+            3.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 11.16227766016838
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "3-2",
+      "puzzle_number": 2,
+      "source_file": "3-2_c4_20.txt",
+      "start_mouse_position": [
+        1.0,
+        3.0
+      ],
+      "step_id": "3c38a00f8bdf",
+      "total_cost": 12.16227766016838,
+      "total_drag": 7.0,
+      "total_move": 5.16227766016838,
+      "world_number": 3
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.22,
+          4.73
+        ]
+      ],
+      "final_mouse_target": [
+        -1.22,
+        4.73
+      ],
+      "final_move_distance": 2.6751808084702655,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 1.0,
+      "inter_move_distance": 2.2360679775000256,
+      "move_string": "C35 C12 R52 C24",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            3.0,
+            3.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            2.0
+          ],
+          "move": "C35",
+          "move_distance": 1.0,
+          "path_points": [
+            [
+              3.0,
+              3.0
+            ],
+            [
+              3.0,
+              2.0
+            ],
+            [
+              3.0,
+              2.0
+            ]
+          ],
+          "release": [
+            3.0,
+            2.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 2.0
+        },
+        {
+          "click_down": [
+            1.0,
+            3.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            4.0
+          ],
+          "move": "C12",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              4.0
+            ],
+            [
+              2.3582067082176723e-13,
+              5.0
+            ]
+          ],
+          "release": [
+            2.3582067082176723e-13,
+            5.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 6.650281539872719
+        },
+        {
+          "click_down": [
+            0.0,
+            5.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            5.0
+          ],
+          "move": "R52",
+          "move_distance": 2.3582067082176723e-13,
+          "path_points": [
+            [
+              0.0,
+              5.0
+            ],
+            [
+              1.0,
+              5.0
+            ],
+            [
+              2.0,
+              5.0
+            ]
+          ],
+          "release": [
+            2.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 8.650281539872955
+        },
+        {
+          "click_down": [
+            2.0,
+            5.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.546347350857824,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            4.0
+          ],
+          "move": "C24",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              5.0
+            ],
+            [
+              2.0,
+              4.0
+            ],
+            [
+              0.8205127684010267,
+              3.0
+            ]
+          ],
+          "release": [
+            0.8205127684010267,
+            3.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 11.196628890730778
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "3-3",
+      "puzzle_number": 3,
+      "source_file": "3-3_c4_2.txt",
+      "start_mouse_position": [
+        4.0,
+        3.0
+      ],
+      "step_id": "14a7860b77e2",
+      "total_cost": 13.871809699201044,
+      "total_drag": 7.960560913230752,
+      "total_move": 5.911248785970291,
+      "world_number": 3
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -2.11,
+          3.5125
+        ]
+      ],
+      "final_mouse_target": [
+        -2.11,
+        3.5125
+      ],
+      "final_move_distance": 4.817131537543894,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 7.044238780734226,
+      "inter_move_distance": 2.23606797749979,
+      "move_string": "R01 C55 C31 R15",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            4.0,
+            0.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            0.0
+          ],
+          "move": "R01",
+          "move_distance": 7.044238780734226,
+          "path_points": [
+            [
+              4.0,
+              0.0
+            ],
+            [
+              5.0,
+              0.0
+            ],
+            [
+              5.0,
+              0.0
+            ]
+          ],
+          "release": [
+            5.0,
+            0.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 8.044238780734226
+        },
+        {
+          "click_down": [
+            5.0,
+            0.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            -1.0
+          ],
+          "move": "C55",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              0.0
+            ],
+            [
+              5.0,
+              -1.0
+            ],
+            [
+              5.0,
+              -1.0
+            ]
+          ],
+          "release": [
+            5.0,
+            -1.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 9.044238780734226
+        },
+        {
+          "click_down": [
+            3.0,
+            0.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            1.0
+          ],
+          "move": "C31",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              3.0,
+              0.0
+            ],
+            [
+              3.0,
+              1.0
+            ],
+            [
+              3.0,
+              1.0
+            ]
+          ],
+          "release": [
+            3.0,
+            1.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 12.280306758234016
+        },
+        {
+          "click_down": [
+            3.0,
+            1.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "R15",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              3.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ]
+          ],
+          "release": [
+            2.0,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 13.280306758234016
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "4-1",
+      "puzzle_number": 1,
+      "source_file": "4-1_c4_30.txt",
+      "start_mouse_position": [
+        -1.22,
+        4.73
+      ],
+      "step_id": "792918ab2a3d",
+      "total_cost": 18.09743829577791,
+      "total_drag": 4.0,
+      "total_move": 14.09743829577791,
+      "world_number": 4
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        1.0,
+        3.0
+      ],
+      "final_move_distance": 1.0,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 2.5961040522290317,
+      "inter_move_distance": 7.074341112911497e-13,
+      "move_string": "C04 R02 C23 R31 C34 C13 R45",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            0.0,
+            2.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            0.0,
+            1.0
+          ],
+          "move": "C04",
+          "move_distance": 2.5961040522290317,
+          "path_points": [
+            [
+              0.0,
+              2.0
+            ],
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              0.0
+            ]
+          ],
+          "release": [
+            0.0,
+            0.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 4.596104052229032
+        },
+        {
+          "click_down": [
+            0.0,
+            0.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            0.0
+          ],
+          "move": "R02",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0
+            ],
+            [
+              2.0,
+              0.0
+            ]
+          ],
+          "release": [
+            2.0,
+            0.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 6.596104052229032
+        },
+        {
+          "click_down": [
+            2.0,
+            0.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.0,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "C23",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              0.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              2.0,
+              3.0
+            ]
+          ],
+          "release": [
+            2.0,
+            3.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 9.596104052229032
+        },
+        {
+          "click_down": [
+            2.0,
+            3.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            3.0
+          ],
+          "move": "R31",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              3.0
+            ],
+            [
+              3.0,
+              3.0
+            ],
+            [
+              3.0,
+              3.0
+            ]
+          ],
+          "release": [
+            3.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 10.596104052229032
+        },
+        {
+          "click_down": [
+            3.0,
+            3.0
+          ],
+          "displacement": -2,
+          "drag_distance": 3.236067977499368,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            2.0
+          ],
+          "move": "C34",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              3.0,
+              3.0
+            ],
+            [
+              3.0,
+              2.0
+            ],
+            [
+              1.0000000000004716,
+              1.0
+            ]
+          ],
+          "release": [
+            1.0000000000004716,
+            1.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 13.8321720297284
+        },
+        {
+          "click_down": [
+            1.0,
+            1.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "C13",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.9999999999997642,
+              4.0
+            ]
+          ],
+          "release": [
+            1.9999999999997642,
+            4.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 17.068240007228553
+        },
+        {
+          "click_down": [
+            2.0,
+            4.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            4.0
+          ],
+          "move": "R45",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              2.0,
+              4.0
+            ],
+            [
+              1.0,
+              4.0
+            ],
+            [
+              1.0,
+              4.0
+            ]
+          ],
+          "release": [
+            1.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 18.068240007228788
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "4-3",
+      "puzzle_number": 3,
+      "source_file": "4-3_c7_881.txt",
+      "start_mouse_position": [
+        -2.11,
+        3.5125
+      ],
+      "step_id": "1a27899dd862",
+      "total_cost": 19.068240007228788,
+      "total_drag": 15.47213595499905,
+      "total_move": 3.596104052229739,
+      "world_number": 4
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.22,
+          4.73
+        ]
+      ],
+      "final_mouse_target": [
+        -1.22,
+        4.73
+      ],
+      "final_move_distance": 1.5393679778004186,
+      "has_fat": true,
+      "initial_fat_position": [
+        2.0,
+        2.0
+      ],
+      "initial_move_distance": 2.0,
+      "inter_move_distance": 6.513233075967294,
+      "move_string": "R13 C43 R01 R14 C03 R55 R03",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            1.0,
+            1.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.828427124745857,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "R13",
+          "move_distance": 2.0,
+          "path_points": [
+            [
+              1.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              4.0,
+              2.9999999999995284
+            ]
+          ],
+          "release": [
+            4.0,
+            2.9999999999995284
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 5.828427124745857
+        },
+        {
+          "click_down": [
+            4.0,
+            3.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.828427124745857,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            2.0
+          ],
+          "move": "C43",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              4.0,
+              3.0
+            ],
+            [
+              4.0,
+              2.0
+            ],
+            [
+              2.0000000000004716,
+              0.0
+            ]
+          ],
+          "release": [
+            2.0000000000004716,
+            0.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 9.656854249492184
+        },
+        {
+          "click_down": [
+            2.0,
+            0.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            0.0
+          ],
+          "move": "R01",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              2.0,
+              0.0
+            ],
+            [
+              3.0,
+              0.0
+            ],
+            [
+              3.0,
+              0.0
+            ]
+          ],
+          "release": [
+            3.0,
+            0.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 10.656854249492657
+        },
+        {
+          "click_down": [
+            2.0,
+            1.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            1.0
+          ],
+          "move": "R14",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              2.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.9999999999997642
+            ]
+          ],
+          "release": [
+            0.0,
+            1.9999999999997642
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 14.485281374238681
+        },
+        {
+          "click_down": [
+            0.0,
+            2.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            0.0,
+            3.0
+          ],
+          "move": "C03",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              0.0,
+              2.0
+            ],
+            [
+              0.0,
+              3.0
+            ],
+            [
+              0.9999999999997642,
+              5.0
+            ]
+          ],
+          "release": [
+            0.9999999999997642,
+            5.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 17.721349351738603
+        },
+        {
+          "click_down": [
+            1.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            0.0,
+            5.0
+          ],
+          "move": "R55",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              1.0,
+              5.0
+            ],
+            [
+              0.0,
+              5.0
+            ],
+            [
+              0.0,
+              5.0
+            ]
+          ],
+          "release": [
+            0.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 18.721349351738837
+        },
+        {
+          "click_down": [
+            1.0,
+            0.0
+          ],
+          "displacement": -3,
+          "drag_distance": 4.94709718658366,
+          "free_drag": true,
+          "lock_point": [
+            0.0,
+            0.0
+          ],
+          "move": "R03",
+          "move_distance": 5.0990195135927845,
+          "path_points": [
+            [
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0
+            ],
+            [
+              -2.0,
+              3.402877635228255
+            ]
+          ],
+          "release": [
+            -2.0,
+            3.402877635228255
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 28.767466051915278
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "4-4",
+      "puzzle_number": 4,
+      "source_file": "4-4_c7_16.txt",
+      "start_mouse_position": [
+        1.0,
+        3.0
+      ],
+      "step_id": "c90d7bd5059b",
+      "total_cost": 30.3068340297157,
+      "total_drag": 20.254232975947986,
+      "total_move": 10.052601053767713,
+      "world_number": 4
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        4.0,
+        3.0
+      ],
+      "final_move_distance": 2.3581137043038325e-13,
+      "has_fat": true,
+      "initial_fat_position": [
+        0.0,
+        2.0
+      ],
+      "initial_move_distance": 4.228628619304372,
+      "inter_move_distance": 5.162277660169323,
+      "move_string": "C35 C54 R232 C231 C05 R341 C15 R23",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            3.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            4.0
+          ],
+          "move": "C35",
+          "move_distance": 4.228628619304372,
+          "path_points": [
+            [
+              3.0,
+              5.0
+            ],
+            [
+              3.0,
+              4.0
+            ],
+            [
+              3.0,
+              4.0
+            ]
+          ],
+          "release": [
+            3.0,
+            4.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 5.228628619304372
+        },
+        {
+          "click_down": [
+            5.0,
+            4.0
+          ],
+          "displacement": -2,
+          "drag_distance": 5.123105625616746,
+          "free_drag": true,
+          "lock_point": [
+            5.0,
+            3.0
+          ],
+          "move": "C54",
+          "move_distance": 2.0,
+          "path_points": [
+            [
+              5.0,
+              4.0
+            ],
+            [
+              5.0,
+              3.0
+            ],
+            [
+              1.0000000000009432,
+              2.0
+            ]
+          ],
+          "release": [
+            1.0000000000009432,
+            2.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 12.351734244921118
+        },
+        {
+          "click_down": [
+            1.0,
+            2.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            2.0
+          ],
+          "move": "R232",
+          "move_distance": 9.43245481721533e-13,
+          "path_points": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0,
+              2.0
+            ],
+            [
+              3.0,
+              2.0
+            ]
+          ],
+          "release": [
+            3.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 14.35173424492206
+        },
+        {
+          "click_down": [
+            3.0,
+            2.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            3.0
+          ],
+          "move": "C231",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              3.0,
+              2.0
+            ],
+            [
+              3.0,
+              3.0
+            ],
+            [
+              3.0,
+              3.0
+            ]
+          ],
+          "release": [
+            3.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 15.35173424492206
+        },
+        {
+          "click_down": [
+            0.0,
+            4.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            0.0,
+            3.0
+          ],
+          "move": "C05",
+          "move_distance": 3.1622776601683795,
+          "path_points": [
+            [
+              0.0,
+              4.0
+            ],
+            [
+              0.0,
+              3.0
+            ],
+            [
+              0.0,
+              3.0
+            ]
+          ],
+          "release": [
+            0.0,
+            3.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 19.51401190509044
+        },
+        {
+          "click_down": [
+            0.0,
+            3.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            3.0
+          ],
+          "move": "R341",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              0.0,
+              3.0
+            ],
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              3.0
+            ]
+          ],
+          "release": [
+            1.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 20.51401190509044
+        },
+        {
+          "click_down": [
+            1.0,
+            3.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "C15",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ],
+          "release": [
+            1.0,
+            2.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 21.51401190509044
+        },
+        {
+          "click_down": [
+            1.0,
+            2.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            2.0
+          ],
+          "move": "R23",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0,
+              2.0
+            ],
+            [
+              4.0,
+              2.999999999999764
+            ]
+          ],
+          "release": [
+            4.0,
+            2.999999999999764
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 24.75007988259012
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "5-1",
+      "puzzle_number": 1,
+      "source_file": "5-1_c8_71.txt",
+      "start_mouse_position": [
+        -1.22,
+        4.73
+      ],
+      "step_id": "21d8de4d889c",
+      "total_cost": 24.75007988259036,
+      "total_drag": 15.359173603116428,
+      "total_move": 9.390906279473931,
+      "world_number": 5
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        4.0,
+        3.0
+      ],
+      "final_move_distance": 1.4142135623730951,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 0.0,
+      "inter_move_distance": 9.916933949981624,
+      "move_string": "R31 C51 C05 R51 C04 R02 R11 C51",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            4.0,
+            3.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            3.0
+          ],
+          "move": "R31",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              3.0
+            ],
+            [
+              5.0,
+              3.0
+            ],
+            [
+              5.0,
+              3.0
+            ]
+          ],
+          "release": [
+            5.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 1.0
+        },
+        {
+          "click_down": [
+            5.0,
+            3.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            4.0
+          ],
+          "move": "C51",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              3.0
+            ],
+            [
+              5.0,
+              4.0
+            ],
+            [
+              5.0,
+              4.0
+            ]
+          ],
+          "release": [
+            5.0,
+            4.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 2.0
+        },
+        {
+          "click_down": [
+            0.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            0.0,
+            4.0
+          ],
+          "move": "C05",
+          "move_distance": 5.0990195135927845,
+          "path_points": [
+            [
+              0.0,
+              5.0
+            ],
+            [
+              0.0,
+              4.0
+            ],
+            [
+              0.0,
+              4.0
+            ]
+          ],
+          "release": [
+            0.0,
+            4.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 8.099019513592784
+        },
+        {
+          "click_down": [
+            0.0,
+            5.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            5.0
+          ],
+          "move": "R51",
+          "move_distance": 1.0,
+          "path_points": [
+            [
+              0.0,
+              5.0
+            ],
+            [
+              1.0,
+              5.0
+            ],
+            [
+              1.0,
+              5.0
+            ]
+          ],
+          "release": [
+            1.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 10.099019513592784
+        },
+        {
+          "click_down": [
+            0.0,
+            4.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.201850401448481,
+          "free_drag": true,
+          "lock_point": [
+            0.0,
+            3.0
+          ],
+          "move": "C04",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              0.0,
+              4.0
+            ],
+            [
+              0.0,
+              3.0
+            ],
+            [
+              0.6666666239297385,
+              2.0
+            ]
+          ],
+          "release": [
+            0.6666666239297385,
+            2.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 13.71508347741436
+        },
+        {
+          "click_down": [
+            2.0,
+            0.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            0.0
+          ],
+          "move": "R02",
+          "move_distance": 2.403700874015509,
+          "path_points": [
+            [
+              2.0,
+              0.0
+            ],
+            [
+              3.0,
+              0.0
+            ],
+            [
+              4.0,
+              0.9999999999997642
+            ]
+          ],
+          "release": [
+            4.0,
+            0.9999999999997642
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 18.532997913802795
+        },
+        {
+          "click_down": [
+            4.0,
+            1.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            1.0
+          ],
+          "move": "R11",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              4.0,
+              1.0
+            ],
+            [
+              5.0,
+              1.0
+            ],
+            [
+              5.0,
+              1.0
+            ]
+          ],
+          "release": [
+            5.0,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 19.532997913803033
+        },
+        {
+          "click_down": [
+            5.0,
+            1.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            2.0
+          ],
+          "move": "C51",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              1.0
+            ],
+            [
+              5.0,
+              2.0
+            ],
+            [
+              5.0,
+              2.0
+            ]
+          ],
+          "release": [
+            5.0,
+            2.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 20.532997913803033
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "5-2",
+      "puzzle_number": 2,
+      "source_file": "5-2_c8_297.txt",
+      "start_mouse_position": [
+        4.0,
+        3.0
+      ],
+      "step_id": "76fd643031d5",
+      "total_cost": 21.94721147617613,
+      "total_drag": 10.616063963821409,
+      "total_move": 11.33114751235472,
+      "world_number": 5
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.22,
+          4.73
+        ]
+      ],
+      "final_mouse_target": [
+        -1.22,
+        4.73
+      ],
+      "final_move_distance": 1.4281158992233247,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 1.4142135623730951,
+      "inter_move_distance": 2.403700844963706,
+      "move_string": "R23 R12 C42 C32 C24 C02 R24",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            5.0,
+            2.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            2.0
+          ],
+          "move": "R23",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              5.0,
+              2.0
+            ],
+            [
+              4.0,
+              2.0
+            ],
+            [
+              2.0,
+              1.0000000000002358
+            ]
+          ],
+          "release": [
+            2.0,
+            1.0000000000002358
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 4.650281539872779
+        },
+        {
+          "click_down": [
+            2.0,
+            1.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            1.0
+          ],
+          "move": "R12",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              2.0,
+              1.0
+            ],
+            [
+              3.0,
+              1.0
+            ],
+            [
+              4.0,
+              2.3582067082176723e-13
+            ]
+          ],
+          "release": [
+            4.0,
+            2.3582067082176723e-13
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 7.064495102245943
+        },
+        {
+          "click_down": [
+            4.0,
+            0.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            1.0
+          ],
+          "move": "C42",
+          "move_distance": 2.3582067082176723e-13,
+          "path_points": [
+            [
+              4.0,
+              0.0
+            ],
+            [
+              4.0,
+              1.0
+            ],
+            [
+              3.000000000000236,
+              2.0
+            ]
+          ],
+          "release": [
+            3.000000000000236,
+            2.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 9.478708664619107
+        },
+        {
+          "click_down": [
+            3.0,
+            2.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            3.0
+          ],
+          "move": "C32",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              3.0,
+              2.0
+            ],
+            [
+              3.0,
+              3.0
+            ],
+            [
+              2.000000000000236,
+              4.0
+            ]
+          ],
+          "release": [
+            2.000000000000236,
+            4.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 11.892922226992273
+        },
+        {
+          "click_down": [
+            2.0,
+            4.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.201850430501227,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            3.0
+          ],
+          "move": "C24",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              2.0,
+              4.0
+            ],
+            [
+              2.0,
+              3.0
+            ],
+            [
+              1.333333323694679,
+              2.0
+            ]
+          ],
+          "release": [
+            1.333333323694679,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 14.094772657493737
+        },
+        {
+          "click_down": [
+            0.0,
+            0.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            0.0,
+            1.0
+          ],
+          "move": "C02",
+          "move_distance": 2.4037008449627626,
+          "path_points": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              2.0
+            ]
+          ],
+          "release": [
+            0.0,
+            2.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 18.4984735024565
+        },
+        {
+          "click_down": [
+            0.0,
+            2.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.830917699867057,
+          "free_drag": true,
+          "lock_point": [
+            -1.0,
+            2.0
+          ],
+          "move": "R24",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              0.0,
+              2.0
+            ],
+            [
+              -1.0,
+              2.0
+            ],
+            [
+              -2.0,
+              3.533707802577295
+            ]
+          ],
+          "release": [
+            -2.0,
+            3.533707802577295
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 21.329391202323556
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "5-3",
+      "puzzle_number": 3,
+      "source_file": "5-3_c7_74.txt",
+      "start_mouse_position": [
+        4.0,
+        3.0
+      ],
+      "step_id": "599286a1ad5e",
+      "total_cost": 22.75750710154688,
+      "total_drag": 17.511476794986756,
+      "total_move": 5.246030306560126,
+      "world_number": 5
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        4.0,
+        3.0
+      ],
+      "final_move_distance": 2.23606797749979,
+      "has_fat": true,
+      "initial_fat_position": [
+        4.0,
+        4.0
+      ],
+      "initial_move_distance": 1.4217243052012583,
+      "inter_move_distance": 2.236067998163792,
+      "move_string": "C04 R25 C15 R12 C454 R04 R234 C04 C13 R53 R01 C51",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            0.0,
+            4.0
+          ],
+          "displacement": -2,
+          "drag_distance": 3.236067977499368,
+          "free_drag": true,
+          "lock_point": [
+            0.0,
+            3.0
+          ],
+          "move": "C04",
+          "move_distance": 1.4217243052012583,
+          "path_points": [
+            [
+              0.0,
+              4.0
+            ],
+            [
+              0.0,
+              3.0
+            ],
+            [
+              1.9999999999995284,
+              2.0
+            ]
+          ],
+          "release": [
+            1.9999999999995284,
+            2.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 4.657792282700626
+        },
+        {
+          "click_down": [
+            2.0,
+            2.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "R25",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              2.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ],
+          "release": [
+            1.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 5.657792282701098
+        },
+        {
+          "click_down": [
+            1.0,
+            2.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            1.0
+          ],
+          "move": "C15",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0
+            ]
+          ],
+          "release": [
+            1.0,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 6.657792282701098
+        },
+        {
+          "click_down": [
+            1.0,
+            1.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.1180339783557605,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "R12",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              3.0,
+              1.4999999767580083
+            ]
+          ],
+          "release": [
+            3.0,
+            1.4999999767580083
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 8.775826261056858
+        },
+        {
+          "click_down": [
+            4.0,
+            2.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            1.0
+          ],
+          "move": "C454",
+          "move_distance": 1.1180339991440298,
+          "path_points": [
+            [
+              4.0,
+              2.0
+            ],
+            [
+              4.0,
+              1.0
+            ],
+            [
+              4.0,
+              0.0
+            ]
+          ],
+          "release": [
+            4.0,
+            0.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 11.893860260200888
+        },
+        {
+          "click_down": [
+            4.0,
+            0.0
+          ],
+          "displacement": -2,
+          "drag_distance": 3.236067977499368,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            0.0
+          ],
+          "move": "R04",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              0.0
+            ],
+            [
+              3.0,
+              0.0
+            ],
+            [
+              2.0,
+              1.9999999999995284
+            ]
+          ],
+          "release": [
+            2.0,
+            1.9999999999995284
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 15.129928237700256
+        },
+        {
+          "click_down": [
+            2.0,
+            2.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "R234",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              2.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              0.0,
+              2.999999999999764
+            ]
+          ],
+          "release": [
+            0.0,
+            2.999999999999764
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 17.544141800073657
+        },
+        {
+          "click_down": [
+            0.0,
+            3.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.1180339784823863,
+          "free_drag": true,
+          "lock_point": [
+            0.0,
+            2.0
+          ],
+          "move": "C04",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              0.0,
+              3.0
+            ],
+            [
+              0.0,
+              2.0
+            ],
+            [
+              0.4999999770411522,
+              1.0
+            ]
+          ],
+          "release": [
+            0.4999999770411522,
+            1.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 19.66217577855628
+        },
+        {
+          "click_down": [
+            1.0,
+            2.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.0,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            3.0
+          ],
+          "move": "C13",
+          "move_distance": 1.118033999017404,
+          "path_points": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              5.0
+            ]
+          ],
+          "release": [
+            1.0,
+            5.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 23.78020977757368
+        },
+        {
+          "click_down": [
+            1.0,
+            5.0
+          ],
+          "displacement": 3,
+          "drag_distance": 6.385164807133409,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            5.0
+          ],
+          "move": "R53",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              5.0
+            ],
+            [
+              2.0,
+              5.0
+            ],
+            [
+              4.0,
+              1.1791033541088355e-12
+            ]
+          ],
+          "release": [
+            4.0,
+            1.1791033541088355e-12
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 30.165374584707088
+        },
+        {
+          "click_down": [
+            4.0,
+            0.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            0.0
+          ],
+          "move": "R01",
+          "move_distance": 1.1791033541088355e-12,
+          "path_points": [
+            [
+              4.0,
+              0.0
+            ],
+            [
+              5.0,
+              0.0
+            ],
+            [
+              5.0,
+              0.0
+            ]
+          ],
+          "release": [
+            5.0,
+            0.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 31.165374584708267
+        },
+        {
+          "click_down": [
+            5.0,
+            0.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            1.0
+          ],
+          "move": "C51",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              0.0
+            ],
+            [
+              5.0,
+              1.0
+            ],
+            [
+              5.0,
+              1.0
+            ]
+          ],
+          "release": [
+            5.0,
+            1.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 32.16537458470827
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "6-1",
+      "puzzle_number": 1,
+      "source_file": "6-1_c12_392.txt",
+      "start_mouse_position": [
+        -1.22,
+        4.73
+      ],
+      "step_id": "9b7e6f265de4",
+      "total_cost": 34.40144256220806,
+      "total_drag": 28.50758228134322,
+      "total_move": 5.89386028086484,
+      "world_number": 6
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -0.98,
+          3.1125
+        ]
+      ],
+      "final_mouse_target": [
+        -0.98,
+        3.1125
+      ],
+      "final_move_distance": 2.169805578848022,
+      "has_fat": true,
+      "initial_fat_position": [
+        1.0,
+        3.0
+      ],
+      "initial_move_distance": 2.23606797749979,
+      "inter_move_distance": 13.337413298647188,
+      "move_string": "R51 C44 C03 R341 C11 R15 C43 R03 C54 C45 C235 R45",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            3.0,
+            5.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            5.0
+          ],
+          "move": "R51",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              3.0,
+              5.0
+            ],
+            [
+              4.0,
+              5.0
+            ],
+            [
+              4.0,
+              5.0
+            ]
+          ],
+          "release": [
+            4.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 3.23606797749979
+        },
+        {
+          "click_down": [
+            4.0,
+            5.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.4142135827667026,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            4.0
+          ],
+          "move": "C44",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              5.0
+            ],
+            [
+              4.0,
+              4.0
+            ],
+            [
+              2.999999971159084,
+              3.0
+            ]
+          ],
+          "release": [
+            2.999999971159084,
+            3.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 5.650281560266492
+        },
+        {
+          "click_down": [
+            0.0,
+            0.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.0,
+          "free_drag": true,
+          "lock_point": [
+            0.0,
+            1.0
+          ],
+          "move": "C03",
+          "move_distance": 4.242640666725678,
+          "path_points": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              3.0
+            ]
+          ],
+          "release": [
+            0.0,
+            3.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 12.89292222699217
+        },
+        {
+          "click_down": [
+            0.0,
+            3.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            3.0
+          ],
+          "move": "R341",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              0.0,
+              3.0
+            ],
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              3.0
+            ]
+          ],
+          "release": [
+            1.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 13.89292222699217
+        },
+        {
+          "click_down": [
+            1.0,
+            3.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            4.0
+          ],
+          "move": "C11",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              4.0
+            ],
+            [
+              1.0,
+              4.0
+            ]
+          ],
+          "release": [
+            1.0,
+            4.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 14.89292222699217
+        },
+        {
+          "click_down": [
+            4.0,
+            1.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            1.0
+          ],
+          "move": "R15",
+          "move_distance": 4.242640687119285,
+          "path_points": [
+            [
+              4.0,
+              1.0
+            ],
+            [
+              3.0,
+              1.0
+            ],
+            [
+              3.0,
+              1.0
+            ]
+          ],
+          "release": [
+            3.0,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 20.135562914111453
+        },
+        {
+          "click_down": [
+            4.0,
+            2.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.403700870535123,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            1.0
+          ],
+          "move": "C43",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              4.0,
+              2.0
+            ],
+            [
+              4.0,
+              1.0
+            ],
+            [
+              2.666666630204093,
+              -1.0
+            ]
+          ],
+          "release": [
+            2.666666630204093,
+            -1.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 24.95347734701967
+        },
+        {
+          "click_down": [
+            2.0,
+            0.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            0.0
+          ],
+          "move": "R03",
+          "move_distance": 1.2018504049288667,
+          "path_points": [
+            [
+              2.0,
+              0.0
+            ],
+            [
+              3.0,
+              0.0
+            ],
+            [
+              5.0,
+              0.9999999999997642
+            ]
+          ],
+          "release": [
+            5.0,
+            0.9999999999997642
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 29.391395729448224
+        },
+        {
+          "click_down": [
+            5.0,
+            1.0
+          ],
+          "displacement": 4,
+          "drag_distance": 4.1622776601683045,
+          "free_drag": true,
+          "lock_point": [
+            5.0,
+            2.0
+          ],
+          "move": "C54",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              5.0,
+              1.0
+            ],
+            [
+              5.0,
+              2.0
+            ],
+            [
+              4.000000000000236,
+              5.0
+            ]
+          ],
+          "release": [
+            4.000000000000236,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 33.55367338961676
+        },
+        {
+          "click_down": [
+            4.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            4.0
+          ],
+          "move": "C45",
+          "move_distance": 2.362554596402333e-13,
+          "path_points": [
+            [
+              4.0,
+              5.0
+            ],
+            [
+              4.0,
+              4.0
+            ],
+            [
+              4.0,
+              4.0
+            ]
+          ],
+          "release": [
+            4.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 34.553673389617
+        },
+        {
+          "click_down": [
+            2.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            4.0
+          ],
+          "move": "C235",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              2.0,
+              5.0
+            ],
+            [
+              2.0,
+              4.0
+            ],
+            [
+              2.0,
+              4.0
+            ]
+          ],
+          "release": [
+            2.0,
+            4.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 37.78974136711679
+        },
+        {
+          "click_down": [
+            2.0,
+            4.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            4.0
+          ],
+          "move": "R45",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              4.0
+            ],
+            [
+              1.0,
+              4.0
+            ],
+            [
+              1.0,
+              4.0
+            ]
+          ],
+          "release": [
+            1.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 38.78974136711679
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "6-2",
+      "puzzle_number": 2,
+      "source_file": "6-2_c12_24.txt",
+      "start_mouse_position": [
+        4.0,
+        3.0
+      ],
+      "step_id": "3acfe21ae4f5",
+      "total_cost": 40.95954694596481,
+      "total_drag": 23.21626009096981,
+      "total_move": 17.743286854995,
+      "world_number": 6
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.22,
+          4.73
+        ]
+      ],
+      "final_mouse_target": [
+        -1.22,
+        4.73
+      ],
+      "final_move_distance": 3.2313000479683094,
+      "has_fat": true,
+      "initial_fat_position": [
+        3.0,
+        0.0
+      ],
+      "initial_move_distance": 3.1093498114557647,
+      "inter_move_distance": 3.030776398380062,
+      "move_string": "C25 R31 C342 C15 R44 R231 C455 R124 C52 C231",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            2.0,
+            4.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            3.0
+          ],
+          "move": "C25",
+          "move_distance": 3.1093498114557647,
+          "path_points": [
+            [
+              2.0,
+              4.0
+            ],
+            [
+              2.0,
+              3.0
+            ],
+            [
+              2.0,
+              3.0
+            ]
+          ],
+          "release": [
+            2.0,
+            3.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 4.109349811455765
+        },
+        {
+          "click_down": [
+            2.0,
+            3.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            3.0
+          ],
+          "move": "R31",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              3.0
+            ],
+            [
+              3.0,
+              3.0
+            ],
+            [
+              3.0,
+              3.0
+            ]
+          ],
+          "release": [
+            3.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 5.109349811455765
+        },
+        {
+          "click_down": [
+            3.0,
+            3.0
+          ],
+          "displacement": 2,
+          "drag_distance": 3.236067977499368,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            4.0
+          ],
+          "move": "C342",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              3.0,
+              3.0
+            ],
+            [
+              3.0,
+              4.0
+            ],
+            [
+              1.0000000000004716,
+              5.0
+            ]
+          ],
+          "release": [
+            1.0000000000004716,
+            5.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 8.345417788955132
+        },
+        {
+          "click_down": [
+            1.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            4.0
+          ],
+          "move": "C15",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              1.0,
+              5.0
+            ],
+            [
+              1.0,
+              4.0
+            ],
+            [
+              1.0,
+              4.0
+            ]
+          ],
+          "release": [
+            1.0,
+            4.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 9.345417788955604
+        },
+        {
+          "click_down": [
+            1.0,
+            4.0
+          ],
+          "displacement": 4,
+          "drag_distance": 4.092329227238778,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            4.0
+          ],
+          "move": "R44",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              4.0
+            ],
+            [
+              2.0,
+              4.0
+            ],
+            [
+              5.0,
+              3.249999966909882
+            ]
+          ],
+          "release": [
+            5.0,
+            3.249999966909882
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 13.437747016194383
+        },
+        {
+          "click_down": [
+            4.0,
+            3.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            3.0
+          ],
+          "move": "R231",
+          "move_distance": 1.0307763983788831,
+          "path_points": [
+            [
+              4.0,
+              3.0
+            ],
+            [
+              5.0,
+              3.0
+            ],
+            [
+              5.0,
+              3.0
+            ]
+          ],
+          "release": [
+            5.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 15.468523414573266
+        },
+        {
+          "click_down": [
+            5.0,
+            3.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            2.0
+          ],
+          "move": "C455",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              3.0
+            ],
+            [
+              5.0,
+              2.0
+            ],
+            [
+              5.0,
+              2.0
+            ]
+          ],
+          "release": [
+            5.0,
+            2.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 16.468523414573266
+        },
+        {
+          "click_down": [
+            5.0,
+            2.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            2.0
+          ],
+          "move": "R124",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              2.0
+            ],
+            [
+              4.0,
+              2.0
+            ],
+            [
+              3.0,
+              2.0
+            ]
+          ],
+          "release": [
+            3.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 18.468523414573266
+        },
+        {
+          "click_down": [
+            5.0,
+            2.0
+          ],
+          "displacement": 2,
+          "drag_distance": 4.1622776601677085,
+          "free_drag": true,
+          "lock_point": [
+            5.0,
+            3.0
+          ],
+          "move": "C52",
+          "move_distance": 2.0,
+          "path_points": [
+            [
+              5.0,
+              2.0
+            ],
+            [
+              5.0,
+              3.0
+            ],
+            [
+              2.0000000000007074,
+              4.0
+            ]
+          ],
+          "release": [
+            2.0000000000007074,
+            4.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 24.630801074740976
+        },
+        {
+          "click_down": [
+            2.0,
+            4.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            5.0
+          ],
+          "move": "C231",
+          "move_distance": 7.074341112911497e-13,
+          "path_points": [
+            [
+              2.0,
+              4.0
+            ],
+            [
+              2.0,
+              5.0
+            ],
+            [
+              2.0,
+              5.0
+            ]
+          ],
+          "release": [
+            2.0,
+            5.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 25.630801074741683
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "6-5",
+      "puzzle_number": 5,
+      "source_file": "6-5_c10_8.txt",
+      "start_mouse_position": [
+        -0.98,
+        3.1125
+      ],
+      "step_id": "49f581309f65",
+      "total_cost": 28.862101122709994,
+      "total_drag": 19.490674864905856,
+      "total_move": 9.371426257804137,
+      "world_number": 6
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        2.0,
+        3.0
+      ],
+      "final_move_distance": 2.3581137043038325e-13,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 2.990200662162993,
+      "inter_move_distance": 5.590169933355812,
+      "move_string": "R21 C05 C15 R42 C31 R53 R31 C15 R22 C43 R44",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            0.0,
+            2.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "R21",
+          "move_distance": 2.990200662162993,
+          "path_points": [
+            [
+              0.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ],
+          "release": [
+            1.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 3.990200662162993
+        },
+        {
+          "click_down": [
+            0.0,
+            4.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            0.0,
+            3.0
+          ],
+          "move": "C05",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              0.0,
+              4.0
+            ],
+            [
+              0.0,
+              3.0
+            ],
+            [
+              0.0,
+              3.0
+            ]
+          ],
+          "release": [
+            0.0,
+            3.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 7.226268639662782
+        },
+        {
+          "click_down": [
+            1.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            4.0
+          ],
+          "move": "C15",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              1.0,
+              5.0
+            ],
+            [
+              1.0,
+              4.0
+            ],
+            [
+              1.0,
+              4.0
+            ]
+          ],
+          "release": [
+            1.0,
+            4.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 10.462336617162572
+        },
+        {
+          "click_down": [
+            1.0,
+            4.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            4.0
+          ],
+          "move": "R42",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              4.0
+            ],
+            [
+              2.0,
+              4.0
+            ],
+            [
+              3.0,
+              4.0
+            ]
+          ],
+          "release": [
+            3.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 12.462336617162572
+        },
+        {
+          "click_down": [
+            3.0,
+            4.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            5.0
+          ],
+          "move": "C31",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              3.0,
+              4.0
+            ],
+            [
+              3.0,
+              5.0
+            ],
+            [
+              3.0,
+              5.0
+            ]
+          ],
+          "release": [
+            3.0,
+            5.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 13.462336617162572
+        },
+        {
+          "click_down": [
+            3.0,
+            5.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.828427124745857,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            5.0
+          ],
+          "move": "R53",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              3.0,
+              5.0
+            ],
+            [
+              2.0,
+              5.0
+            ],
+            [
+              0.0,
+              3.0000000000004716
+            ]
+          ],
+          "release": [
+            0.0,
+            3.0000000000004716
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 17.290763741908428
+        },
+        {
+          "click_down": [
+            0.0,
+            3.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            3.0
+          ],
+          "move": "R31",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              0.0,
+              3.0
+            ],
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              3.0
+            ]
+          ],
+          "release": [
+            1.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 18.290763741908904
+        },
+        {
+          "click_down": [
+            1.0,
+            3.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "C15",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ],
+          "release": [
+            1.0,
+            2.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 19.290763741908904
+        },
+        {
+          "click_down": [
+            1.0,
+            2.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.11803399914403,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            2.0
+          ],
+          "move": "R22",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0,
+              2.0
+            ],
+            [
+              3.0,
+              1.4999999767580083
+            ]
+          ],
+          "release": [
+            3.0,
+            1.4999999767580083
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 21.408797741052933
+        },
+        {
+          "click_down": [
+            4.0,
+            1.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.0,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            2.0
+          ],
+          "move": "C43",
+          "move_distance": 1.1180339783557602,
+          "path_points": [
+            [
+              4.0,
+              1.0
+            ],
+            [
+              4.0,
+              2.0
+            ],
+            [
+              4.0,
+              4.0
+            ]
+          ],
+          "release": [
+            4.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 25.526831719408694
+        },
+        {
+          "click_down": [
+            4.0,
+            4.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            4.0
+          ],
+          "move": "R44",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              4.0
+            ],
+            [
+              3.0,
+              4.0
+            ],
+            [
+              2.0,
+              3.000000000000236
+            ]
+          ],
+          "release": [
+            2.0,
+            3.000000000000236
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 27.941045281781623
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "7-1",
+      "puzzle_number": 1,
+      "source_file": "7-1_c11_1505.txt",
+      "start_mouse_position": [
+        -1.22,
+        4.73
+      ],
+      "step_id": "bb9fa4d3041f",
+      "total_cost": 27.94104528178186,
+      "total_drag": 19.36067468626282,
+      "total_move": 8.58037059551904,
+      "world_number": 7
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        1.0,
+        3.0
+      ],
+      "final_move_distance": 4.716227408607665e-13,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 1.4142135623730951,
+      "inter_move_distance": 4.242640680436191,
+      "move_string": "C34 R04 R22 C23 R53 C43 C51 R43 C51 R12",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            3.0,
+            2.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            1.0
+          ],
+          "move": "C34",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              3.0,
+              2.0
+            ],
+            [
+              3.0,
+              1.0
+            ],
+            [
+              2.000000000000236,
+              0.0
+            ]
+          ],
+          "release": [
+            2.000000000000236,
+            0.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 3.8284271247460238
+        },
+        {
+          "click_down": [
+            2.0,
+            0.0
+          ],
+          "displacement": -2,
+          "drag_distance": 3.236067977499368,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            0.0
+          ],
+          "move": "R04",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              2.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.9999999999995284
+            ]
+          ],
+          "release": [
+            0.0,
+            1.9999999999995284
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 7.064495102245627
+        },
+        {
+          "click_down": [
+            0.0,
+            2.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "R22",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              0.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0,
+              2.0
+            ]
+          ],
+          "release": [
+            2.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 9.064495102246099
+        },
+        {
+          "click_down": [
+            2.0,
+            2.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            3.0
+          ],
+          "move": "C23",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              2.0
+            ],
+            [
+              2.0,
+              3.0
+            ],
+            [
+              1.0000000000002358,
+              5.0
+            ]
+          ],
+          "release": [
+            1.0000000000002358,
+            5.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 12.300563079745782
+        },
+        {
+          "click_down": [
+            1.0,
+            5.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.0,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            5.0
+          ],
+          "move": "R53",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              1.0,
+              5.0
+            ],
+            [
+              2.0,
+              5.0
+            ],
+            [
+              4.0,
+              5.0
+            ]
+          ],
+          "release": [
+            4.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 15.300563079746018
+        },
+        {
+          "click_down": [
+            4.0,
+            5.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            4.0
+          ],
+          "move": "C43",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              5.0
+            ],
+            [
+              4.0,
+              4.0
+            ],
+            [
+              4.999999999999764,
+              2.0
+            ]
+          ],
+          "release": [
+            4.999999999999764,
+            2.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 18.5366310572457
+        },
+        {
+          "click_down": [
+            5.0,
+            2.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            3.0
+          ],
+          "move": "C51",
+          "move_distance": 2.362554596402333e-13,
+          "path_points": [
+            [
+              5.0,
+              2.0
+            ],
+            [
+              5.0,
+              3.0
+            ],
+            [
+              5.0,
+              3.0
+            ]
+          ],
+          "release": [
+            5.0,
+            3.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 19.536631057245938
+        },
+        {
+          "click_down": [
+            4.0,
+            4.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.828427131430464,
+          "free_drag": true,
+          "lock_point": [
+            5.0,
+            4.0
+          ],
+          "move": "R43",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              4.0,
+              4.0
+            ],
+            [
+              5.0,
+              4.0
+            ],
+            [
+              7.0,
+              1.9999999905470092
+            ]
+          ],
+          "release": [
+            7.0,
+            1.9999999905470092
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 24.779271751049496
+        },
+        {
+          "click_down": [
+            5.0,
+            0.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            1.0
+          ],
+          "move": "C51",
+          "move_distance": 2.8284271180619163,
+          "path_points": [
+            [
+              5.0,
+              0.0
+            ],
+            [
+              5.0,
+              1.0
+            ],
+            [
+              5.0,
+              1.0
+            ]
+          ],
+          "release": [
+            5.0,
+            1.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 28.60769886911141
+        },
+        {
+          "click_down": [
+            5.0,
+            1.0
+          ],
+          "displacement": -4,
+          "drag_distance": 4.605551275463728,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            1.0
+          ],
+          "move": "R12",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              1.0
+            ],
+            [
+              4.0,
+              1.0
+            ],
+            [
+              1.0,
+              2.9999999999995284
+            ]
+          ],
+          "release": [
+            1.0,
+            2.9999999999995284
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 33.21325014457514
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "7-2",
+      "puzzle_number": 2,
+      "source_file": "7-2_c10_24.txt",
+      "start_mouse_position": [
+        2.0,
+        3.0
+      ],
+      "step_id": "c62028c06b3c",
+      "total_cost": 33.21325014457561,
+      "total_drag": 27.556395901765853,
+      "total_move": 5.656854242809757,
+      "world_number": 7
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.22,
+          4.73
+        ]
+      ],
+      "final_mouse_target": [
+        -1.22,
+        4.73
+      ],
+      "final_move_distance": 0.3482814953453596,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 0.0,
+      "inter_move_distance": 5.064495102246924,
+      "move_string": "C14 C01 C25 R33 C44 R11 C33 R45 R55",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            1.0,
+            3.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "C14",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.3582067082176723e-13,
+              1.0
+            ]
+          ],
+          "release": [
+            2.3582067082176723e-13,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 2.4142135623729284
+        },
+        {
+          "click_down": [
+            0.0,
+            1.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            0.0,
+            2.0
+          ],
+          "move": "C01",
+          "move_distance": 2.3582067082176723e-13,
+          "path_points": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              2.0
+            ],
+            [
+              0.0,
+              2.0
+            ]
+          ],
+          "release": [
+            0.0,
+            2.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 3.414213562373164
+        },
+        {
+          "click_down": [
+            2.0,
+            3.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            2.0
+          ],
+          "move": "C25",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              2.0,
+              3.0
+            ],
+            [
+              2.0,
+              2.0
+            ],
+            [
+              2.0,
+              2.0
+            ]
+          ],
+          "release": [
+            2.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 6.650281539872955
+        },
+        {
+          "click_down": [
+            1.0,
+            3.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.0,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            3.0
+          ],
+          "move": "R33",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              1.0,
+              3.0
+            ],
+            [
+              2.0,
+              3.0
+            ],
+            [
+              4.0,
+              3.0
+            ]
+          ],
+          "release": [
+            4.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 11.064495102246049
+        },
+        {
+          "click_down": [
+            4.0,
+            3.0
+          ],
+          "displacement": -2,
+          "drag_distance": 3.236067977499368,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            2.0
+          ],
+          "move": "C44",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              3.0
+            ],
+            [
+              4.0,
+              2.0
+            ],
+            [
+              2.0000000000004716,
+              1.0
+            ]
+          ],
+          "release": [
+            2.0000000000004716,
+            1.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 14.300563079745416
+        },
+        {
+          "click_down": [
+            2.0,
+            1.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            1.0
+          ],
+          "move": "R11",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              2.0,
+              1.0
+            ],
+            [
+              3.0,
+              1.0
+            ],
+            [
+              3.0,
+              1.0
+            ]
+          ],
+          "release": [
+            3.0,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 15.300563079745888
+        },
+        {
+          "click_down": [
+            3.0,
+            1.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            2.0
+          ],
+          "move": "C33",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              3.0,
+              1.0
+            ],
+            [
+              3.0,
+              2.0
+            ],
+            [
+              2.000000000000236,
+              4.0
+            ]
+          ],
+          "release": [
+            2.000000000000236,
+            4.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 18.53663105724557
+        },
+        {
+          "click_down": [
+            2.0,
+            4.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            4.0
+          ],
+          "move": "R45",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              2.0,
+              4.0
+            ],
+            [
+              1.0,
+              4.0
+            ],
+            [
+              1.0,
+              4.0
+            ]
+          ],
+          "release": [
+            1.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 19.536631057245806
+        },
+        {
+          "click_down": [
+            0.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            -1.0,
+            5.0
+          ],
+          "move": "R55",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              0.0,
+              5.0
+            ],
+            [
+              -1.0,
+              5.0
+            ],
+            [
+              -1.0,
+              5.0
+            ]
+          ],
+          "release": [
+            -1.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 21.950844619618902
+        }
+      ],
+      "post_end_click_target": [
+        -2.67,
+        3.4205
+      ],
+      "puzzle_id": "7-3",
+      "puzzle_number": 3,
+      "source_file": "7-3_c9_2784.txt",
+      "start_mouse_position": [
+        1.0,
+        3.0
+      ],
+      "step_id": "1c75d81ebc66",
+      "total_cost": 22.299126114964263,
+      "total_drag": 16.88634951737198,
+      "total_move": 5.412776597592283,
+      "world_number": 7
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.52,
+          3.4205
+        ]
+      ],
+      "final_mouse_target": [
+        -1.52,
+        3.4205
+      ],
+      "final_move_distance": 0.5395315925316925,
+      "has_fat": true,
+      "initial_fat_position": [
+        4.0,
+        4.0
+      ],
+      "initial_move_distance": 3.024354517909565,
+      "inter_move_distance": 9.290050355677703,
+      "move_string": "R21 R05 R13 C455 R55 C455 C32 R234",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            0.0,
+            2.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            2.0
+          ],
+          "move": "R21",
+          "move_distance": 3.024354517909565,
+          "path_points": [
+            [
+              0.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              2.0
+            ]
+          ],
+          "release": [
+            1.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 4.024354517909565
+        },
+        {
+          "click_down": [
+            2.0,
+            0.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            0.0
+          ],
+          "move": "R05",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              2.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "release": [
+            1.0,
+            0.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 7.260422495409355
+        },
+        {
+          "click_down": [
+            1.0,
+            1.0
+          ],
+          "displacement": 3,
+          "drag_distance": 4.605551275463401,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "R13",
+          "move_distance": 1.0,
+          "path_points": [
+            [
+              1.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              4.0,
+              3.9999999999992926
+            ]
+          ],
+          "release": [
+            4.0,
+            3.9999999999992926
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 12.865973770872756
+        },
+        {
+          "click_down": [
+            4.0,
+            4.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            3.0
+          ],
+          "move": "C455",
+          "move_distance": 7.074341112911497e-13,
+          "path_points": [
+            [
+              4.0,
+              4.0
+            ],
+            [
+              4.0,
+              3.0
+            ],
+            [
+              4.0,
+              3.0
+            ]
+          ],
+          "release": [
+            4.0,
+            3.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 13.865973770873463
+        },
+        {
+          "click_down": [
+            5.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            5.0
+          ],
+          "move": "R55",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              5.0,
+              5.0
+            ],
+            [
+              4.0,
+              5.0
+            ],
+            [
+              4.0,
+              5.0
+            ]
+          ],
+          "release": [
+            4.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 17.102041748373253
+        },
+        {
+          "click_down": [
+            4.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            4.0
+          ],
+          "move": "C455",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              5.0
+            ],
+            [
+              4.0,
+              4.0
+            ],
+            [
+              4.0,
+              4.0
+            ]
+          ],
+          "release": [
+            4.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 18.102041748373253
+        },
+        {
+          "click_down": [
+            3.0,
+            3.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.201850437159667,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            4.0
+          ],
+          "move": "C32",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              3.0,
+              3.0
+            ],
+            [
+              3.0,
+              4.0
+            ],
+            [
+              2.3333333116910056,
+              5.0
+            ]
+          ],
+          "release": [
+            2.3333333116910056,
+            5.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 21.718105747906016
+        },
+        {
+          "click_down": [
+            1.0,
+            3.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.037560747821275,
+          "free_drag": true,
+          "lock_point": [
+            0.0,
+            3.0
+          ],
+          "move": "R234",
+          "move_distance": 2.4037008383043226,
+          "path_points": [
+            [
+              1.0,
+              3.0
+            ],
+            [
+              0.0,
+              3.0
+            ],
+            [
+              -1.0,
+              3.276644727799833
+            ]
+          ],
+          "release": [
+            -1.0,
+            3.276644727799833
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 26.15936733403161
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "8-2",
+      "puzzle_number": 2,
+      "source_file": "8-2_c8_92.txt",
+      "start_mouse_position": [
+        -2.67,
+        3.4205
+      ],
+      "step_id": "9acce765a238",
+      "total_cost": 26.698898926563302,
+      "total_drag": 13.844962460444343,
+      "total_move": 12.853936466118961,
+      "world_number": 8
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        3.0,
+        3.0
+      ],
+      "final_move_distance": 3.0,
+      "has_fat": true,
+      "initial_fat_position": [
+        3.0,
+        4.0
+      ],
+      "initial_move_distance": 1.5770923403529675,
+      "inter_move_distance": 6.280311661157653,
+      "move_string": "R35 R02 C22 R12 C53 R455 R25 C234",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            0.0,
+            3.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            -1.0,
+            3.0
+          ],
+          "move": "R35",
+          "move_distance": 1.5770923403529675,
+          "path_points": [
+            [
+              0.0,
+              3.0
+            ],
+            [
+              -1.0,
+              3.0
+            ],
+            [
+              -1.0,
+              3.0
+            ]
+          ],
+          "release": [
+            -1.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 2.5770923403529675
+        },
+        {
+          "click_down": [
+            0.0,
+            0.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            0.0
+          ],
+          "move": "R02",
+          "move_distance": 3.1622776601683795,
+          "path_points": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0
+            ],
+            [
+              2.0,
+              0.0
+            ]
+          ],
+          "release": [
+            2.0,
+            0.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 7.7393700005213475
+        },
+        {
+          "click_down": [
+            2.0,
+            0.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.1180339765105165,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "C22",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              0.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              2.499999972631918,
+              2.0
+            ]
+          ],
+          "release": [
+            2.499999972631918,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 9.857403977031865
+        },
+        {
+          "click_down": [
+            3.0,
+            1.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            1.0
+          ],
+          "move": "R12",
+          "move_distance": 1.1180340009892735,
+          "path_points": [
+            [
+              3.0,
+              1.0
+            ],
+            [
+              4.0,
+              1.0
+            ],
+            [
+              5.0,
+              1.0
+            ]
+          ],
+          "release": [
+            5.0,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 12.975437978021137
+        },
+        {
+          "click_down": [
+            5.0,
+            1.0
+          ],
+          "displacement": 3,
+          "drag_distance": 3.0,
+          "free_drag": true,
+          "lock_point": [
+            5.0,
+            2.0
+          ],
+          "move": "C53",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              1.0
+            ],
+            [
+              5.0,
+              2.0
+            ],
+            [
+              5.0,
+              4.0
+            ]
+          ],
+          "release": [
+            5.0,
+            4.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 15.975437978021137
+        },
+        {
+          "click_down": [
+            5.0,
+            4.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            4.0
+          ],
+          "move": "R455",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              5.0,
+              4.0
+            ],
+            [
+              4.0,
+              4.0
+            ],
+            [
+              4.0,
+              4.0
+            ]
+          ],
+          "release": [
+            4.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 16.975437978021137
+        },
+        {
+          "click_down": [
+            4.0,
+            2.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            2.0
+          ],
+          "move": "R25",
+          "move_distance": 2.0,
+          "path_points": [
+            [
+              4.0,
+              2.0
+            ],
+            [
+              3.0,
+              2.0
+            ],
+            [
+              3.0,
+              2.0
+            ]
+          ],
+          "release": [
+            3.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 19.975437978021137
+        },
+        {
+          "click_down": [
+            3.0,
+            2.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            1.0
+          ],
+          "move": "C234",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              3.0,
+              2.0
+            ],
+            [
+              3.0,
+              1.0
+            ],
+            [
+              3.0,
+              0.0
+            ]
+          ],
+          "release": [
+            3.0,
+            0.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 21.975437978021137
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "8-4",
+      "puzzle_number": 4,
+      "source_file": "8-4_c8_16.txt",
+      "start_mouse_position": [
+        -1.52,
+        3.4205
+      ],
+      "step_id": "49a630652701",
+      "total_cost": 24.975437978021137,
+      "total_drag": 14.118033976510517,
+      "total_move": 10.85740400151062,
+      "world_number": 8
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.22,
+          4.73
+        ]
+      ],
+      "final_mouse_target": [
+        -1.22,
+        4.73
+      ],
+      "final_move_distance": 0.3482814953453596,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 2.23606797749979,
+      "inter_move_distance": 2.0000000000014153,
+      "move_string": "R54 C23 R22 C52 C42 C14 R45 R55",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            4.0,
+            5.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            5.0
+          ],
+          "move": "R54",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              4.0,
+              5.0
+            ],
+            [
+              3.0,
+              5.0
+            ],
+            [
+              2.0,
+              5.0
+            ]
+          ],
+          "release": [
+            2.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 4.23606797749979
+        },
+        {
+          "click_down": [
+            2.0,
+            5.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.236067977499684,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            4.0
+          ],
+          "move": "C23",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              5.0
+            ],
+            [
+              2.0,
+              4.0
+            ],
+            [
+              2.999999999999764,
+              2.0
+            ]
+          ],
+          "release": [
+            2.999999999999764,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 7.472135954999474
+        },
+        {
+          "click_down": [
+            3.0,
+            2.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            2.0
+          ],
+          "move": "R22",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              3.0,
+              2.0
+            ],
+            [
+              4.0,
+              2.0
+            ],
+            [
+              5.0,
+              1.0000000000002358
+            ]
+          ],
+          "release": [
+            5.0,
+            1.0000000000002358
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 9.886349517372638
+        },
+        {
+          "click_down": [
+            5.0,
+            1.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.414213562372928,
+          "free_drag": true,
+          "lock_point": [
+            5.0,
+            2.0
+          ],
+          "move": "C52",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              5.0,
+              1.0
+            ],
+            [
+              5.0,
+              2.0
+            ],
+            [
+              4.000000000000236,
+              3.0
+            ]
+          ],
+          "release": [
+            4.000000000000236,
+            3.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 12.300563079745803
+        },
+        {
+          "click_down": [
+            4.0,
+            3.0
+          ],
+          "displacement": 2,
+          "drag_distance": 4.1622776601677085,
+          "free_drag": true,
+          "lock_point": [
+            4.0,
+            4.0
+          ],
+          "move": "C42",
+          "move_distance": 2.362554596402333e-13,
+          "path_points": [
+            [
+              4.0,
+              3.0
+            ],
+            [
+              4.0,
+              4.0
+            ],
+            [
+              1.0000000000007074,
+              5.0
+            ]
+          ],
+          "release": [
+            1.0000000000007074,
+            5.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 16.462840739913748
+        },
+        {
+          "click_down": [
+            1.0,
+            5.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            4.0
+          ],
+          "move": "C14",
+          "move_distance": 7.074341112911497e-13,
+          "path_points": [
+            [
+              1.0,
+              5.0
+            ],
+            [
+              1.0,
+              4.0
+            ],
+            [
+              1.0,
+              3.0
+            ]
+          ],
+          "release": [
+            1.0,
+            3.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 18.46284073991445
+        },
+        {
+          "click_down": [
+            1.0,
+            4.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            0.0,
+            4.0
+          ],
+          "move": "R45",
+          "move_distance": 1.0,
+          "path_points": [
+            [
+              1.0,
+              4.0
+            ],
+            [
+              0.0,
+              4.0
+            ],
+            [
+              0.0,
+              4.0
+            ]
+          ],
+          "release": [
+            0.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 20.46284073991445
+        },
+        {
+          "click_down": [
+            0.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            -1.0,
+            5.0
+          ],
+          "move": "R55",
+          "move_distance": 1.0,
+          "path_points": [
+            [
+              0.0,
+              5.0
+            ],
+            [
+              -1.0,
+              5.0
+            ],
+            [
+              -1.0,
+              5.0
+            ]
+          ],
+          "release": [
+            -1.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 22.462840739914455
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "8-5",
+      "puzzle_number": 5,
+      "source_file": "8-5_c8_855.txt",
+      "start_mouse_position": [
+        3.0,
+        3.0
+      ],
+      "step_id": "2c18ad1636e6",
+      "total_cost": 22.811122235259813,
+      "total_drag": 18.226772762413248,
+      "total_move": 4.584349472846565,
+      "world_number": 8
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.52,
+          3.4205
+        ]
+      ],
+      "final_mouse_target": [
+        -1.52,
+        3.4205
+      ],
+      "final_move_distance": 2.8581847823400084,
+      "has_fat": true,
+      "initial_fat_position": [
+        1.0,
+        3.0
+      ],
+      "initial_move_distance": 3.3017116772970954,
+      "inter_move_distance": 5.236067977500026,
+      "move_string": "C121 C45 R451 C41 R34 C234 R05 R15",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            2.0,
+            4.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            5.0
+          ],
+          "move": "C121",
+          "move_distance": 3.3017116772970954,
+          "path_points": [
+            [
+              2.0,
+              4.0
+            ],
+            [
+              2.0,
+              5.0
+            ],
+            [
+              2.0,
+              5.0
+            ]
+          ],
+          "release": [
+            2.0,
+            5.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 4.301711677297096
+        },
+        {
+          "click_down": [
+            4.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            4.0
+          ],
+          "move": "C45",
+          "move_distance": 2.0,
+          "path_points": [
+            [
+              4.0,
+              5.0
+            ],
+            [
+              4.0,
+              4.0
+            ],
+            [
+              4.0,
+              4.0
+            ]
+          ],
+          "release": [
+            4.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 7.301711677297096
+        },
+        {
+          "click_down": [
+            4.0,
+            4.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            5.0,
+            4.0
+          ],
+          "move": "R451",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              4.0
+            ],
+            [
+              5.0,
+              4.0
+            ],
+            [
+              5.0,
+              4.0
+            ]
+          ],
+          "release": [
+            5.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 8.301711677297096
+        },
+        {
+          "click_down": [
+            4.0,
+            2.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            3.0
+          ],
+          "move": "C41",
+          "move_distance": 2.23606797749979,
+          "path_points": [
+            [
+              4.0,
+              2.0
+            ],
+            [
+              4.0,
+              3.0
+            ],
+            [
+              4.0,
+              3.0
+            ]
+          ],
+          "release": [
+            4.0,
+            3.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 11.537779654796886
+        },
+        {
+          "click_down": [
+            4.0,
+            3.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            3.0
+          ],
+          "move": "R34",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              3.0
+            ],
+            [
+              3.0,
+              3.0
+            ],
+            [
+              2.0,
+              2.000000000000236
+            ]
+          ],
+          "release": [
+            2.0,
+            2.000000000000236
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 13.951993217169814
+        },
+        {
+          "click_down": [
+            2.0,
+            2.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "C234",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              2.0,
+              2.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              2.0,
+              0.0
+            ]
+          ],
+          "release": [
+            2.0,
+            0.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 15.95199321717005
+        },
+        {
+          "click_down": [
+            2.0,
+            0.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            0.0
+          ],
+          "move": "R05",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "release": [
+            1.0,
+            0.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 16.95199321717005
+        },
+        {
+          "click_down": [
+            1.0,
+            1.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            0.0,
+            1.0
+          ],
+          "move": "R15",
+          "move_distance": 1.0,
+          "path_points": [
+            [
+              1.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.0
+            ]
+          ],
+          "release": [
+            0.0,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 18.95199321717005
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "9-1",
+      "puzzle_number": 1,
+      "source_file": "9-1_c8_164.txt",
+      "start_mouse_position": [
+        -1.22,
+        4.73
+      ],
+      "step_id": "0b9c1db41272",
+      "total_cost": 21.81017799951006,
+      "total_drag": 10.414213562372929,
+      "total_move": 11.395964437137131,
+      "world_number": 9
+    },
+    {
+      "end_next_puzzle": true,
+      "end_positions": [],
+      "final_mouse_target": [
+        4.0,
+        3.0
+      ],
+      "final_move_distance": 2.0,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 1.5770923403529675,
+      "inter_move_distance": 1.0000000000014144,
+      "move_string": "C02 C13 C35 R14 C21 R23 R55",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            0.0,
+            3.0
+          ],
+          "displacement": 2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            0.0,
+            4.0
+          ],
+          "move": "C02",
+          "move_distance": 1.5770923403529675,
+          "path_points": [
+            [
+              0.0,
+              3.0
+            ],
+            [
+              0.0,
+              4.0
+            ],
+            [
+              0.9999999999997642,
+              5.0
+            ]
+          ],
+          "release": [
+            0.9999999999997642,
+            5.0
+          ],
+          "selected_line": 0,
+          "total_distance_to_here": 3.991305902725896
+        },
+        {
+          "click_down": [
+            1.0,
+            5.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.828427124745857,
+          "free_drag": true,
+          "lock_point": [
+            1.0,
+            4.0
+          ],
+          "move": "C13",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              1.0,
+              5.0
+            ],
+            [
+              1.0,
+              4.0
+            ],
+            [
+              2.9999999999995284,
+              2.0
+            ]
+          ],
+          "release": [
+            2.9999999999995284,
+            2.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 7.8197330274719885
+        },
+        {
+          "click_down": [
+            3.0,
+            2.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            3.0,
+            1.0
+          ],
+          "move": "C35",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              3.0,
+              2.0
+            ],
+            [
+              3.0,
+              1.0
+            ],
+            [
+              3.0,
+              1.0
+            ]
+          ],
+          "release": [
+            3.0,
+            1.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 8.81973302747246
+        },
+        {
+          "click_down": [
+            3.0,
+            1.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.0,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "R14",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              3.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0
+            ]
+          ],
+          "release": [
+            1.0,
+            1.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 10.81973302747246
+        },
+        {
+          "click_down": [
+            2.0,
+            1.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            2.0
+          ],
+          "move": "C21",
+          "move_distance": 1.0,
+          "path_points": [
+            [
+              2.0,
+              1.0
+            ],
+            [
+              2.0,
+              2.0
+            ],
+            [
+              2.0,
+              2.0
+            ]
+          ],
+          "release": [
+            2.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 12.81973302747246
+        },
+        {
+          "click_down": [
+            2.0,
+            2.0
+          ],
+          "displacement": 3,
+          "drag_distance": 4.605551275463402,
+          "free_drag": true,
+          "lock_point": [
+            3.0,
+            2.0
+          ],
+          "move": "R23",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              2.0
+            ],
+            [
+              3.0,
+              2.0
+            ],
+            [
+              5.0,
+              4.999999999999293
+            ]
+          ],
+          "release": [
+            5.0,
+            4.999999999999293
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 17.42528430293586
+        },
+        {
+          "click_down": [
+            5.0,
+            5.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            5.0
+          ],
+          "move": "R55",
+          "move_distance": 7.069900220812997e-13,
+          "path_points": [
+            [
+              5.0,
+              5.0
+            ],
+            [
+              4.0,
+              5.0
+            ],
+            [
+              4.0,
+              5.0
+            ]
+          ],
+          "release": [
+            4.0,
+            5.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 18.425284302936568
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "9-4",
+      "puzzle_number": 4,
+      "source_file": "9-4_c7_608.txt",
+      "start_mouse_position": [
+        -1.52,
+        3.4205
+      ],
+      "step_id": "2d5c4f5c7420",
+      "total_cost": 20.425284302936568,
+      "total_drag": 15.848191962582186,
+      "total_move": 4.5770923403543815,
+      "world_number": 9
+    },
+    {
+      "end_next_puzzle": false,
+      "end_positions": [
+        [
+          -1.22,
+          4.73
+        ]
+      ],
+      "final_mouse_target": [
+        -1.22,
+        4.73
+      ],
+      "final_move_distance": 4.221528159328089,
+      "has_fat": false,
+      "initial_fat_position": null,
+      "initial_move_distance": 1.4142135623730951,
+      "inter_move_distance": 4.576491222542417,
+      "move_string": "R45 C24 C11 R35 R41 C41 C53 R14 R21",
+      "notes": "added from studio",
+      "overlay_moves": [
+        {
+          "click_down": [
+            3.0,
+            4.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            4.0
+          ],
+          "move": "R45",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              3.0,
+              4.0
+            ],
+            [
+              2.0,
+              4.0
+            ],
+            [
+              2.0,
+              4.0
+            ]
+          ],
+          "release": [
+            2.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 2.414213562373095
+        },
+        {
+          "click_down": [
+            2.0,
+            4.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            3.0
+          ],
+          "move": "C24",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              2.0,
+              4.0
+            ],
+            [
+              2.0,
+              3.0
+            ],
+            [
+              1.0000000000002358,
+              2.0
+            ]
+          ],
+          "release": [
+            1.0000000000002358,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 4.828427124746024
+        },
+        {
+          "click_down": [
+            1.0,
+            2.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            1.0,
+            3.0
+          ],
+          "move": "C11",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              1.0,
+              3.0
+            ],
+            [
+              1.0,
+              3.0
+            ]
+          ],
+          "release": [
+            1.0,
+            3.0
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 5.82842712474626
+        },
+        {
+          "click_down": [
+            1.0,
+            3.0
+          ],
+          "displacement": -1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            0.0,
+            3.0
+          ],
+          "move": "R35",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              1.0,
+              3.0
+            ],
+            [
+              0.0,
+              3.0
+            ],
+            [
+              0.0,
+              3.0
+            ]
+          ],
+          "release": [
+            0.0,
+            3.0
+          ],
+          "selected_line": 3,
+          "total_distance_to_here": 6.82842712474626
+        },
+        {
+          "click_down": [
+            3.0,
+            4.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            4.0
+          ],
+          "move": "R41",
+          "move_distance": 3.1622776601683795,
+          "path_points": [
+            [
+              3.0,
+              4.0
+            ],
+            [
+              4.0,
+              4.0
+            ],
+            [
+              4.0,
+              4.0
+            ]
+          ],
+          "release": [
+            4.0,
+            4.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 10.990704784914639
+        },
+        {
+          "click_down": [
+            4.0,
+            4.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            4.0,
+            5.0
+          ],
+          "move": "C41",
+          "move_distance": 0.0,
+          "path_points": [
+            [
+              4.0,
+              4.0
+            ],
+            [
+              4.0,
+              5.0
+            ],
+            [
+              4.0,
+              5.0
+            ]
+          ],
+          "release": [
+            4.0,
+            5.0
+          ],
+          "selected_line": 4,
+          "total_distance_to_here": 11.990704784914639
+        },
+        {
+          "click_down": [
+            5.0,
+            4.0
+          ],
+          "displacement": -3,
+          "drag_distance": 3.828427124745857,
+          "free_drag": true,
+          "lock_point": [
+            5.0,
+            3.0
+          ],
+          "move": "C53",
+          "move_distance": 1.4142135623730951,
+          "path_points": [
+            [
+              5.0,
+              4.0
+            ],
+            [
+              5.0,
+              3.0
+            ],
+            [
+              3.0000000000004716,
+              1.0
+            ]
+          ],
+          "release": [
+            3.0000000000004716,
+            1.0
+          ],
+          "selected_line": 5,
+          "total_distance_to_here": 17.23334547203359
+        },
+        {
+          "click_down": [
+            3.0,
+            1.0
+          ],
+          "displacement": -2,
+          "drag_distance": 2.4142135623729284,
+          "free_drag": true,
+          "lock_point": [
+            2.0,
+            1.0
+          ],
+          "move": "R14",
+          "move_distance": 4.716227408607665e-13,
+          "path_points": [
+            [
+              3.0,
+              1.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.9999999999997642
+            ]
+          ],
+          "release": [
+            1.0,
+            1.9999999999997642
+          ],
+          "selected_line": 1,
+          "total_distance_to_here": 19.647559034406992
+        },
+        {
+          "click_down": [
+            1.0,
+            2.0
+          ],
+          "displacement": 1,
+          "drag_distance": 1.0,
+          "free_drag": false,
+          "lock_point": [
+            2.0,
+            2.0
+          ],
+          "move": "R21",
+          "move_distance": 2.3581137043038325e-13,
+          "path_points": [
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0,
+              2.0
+            ],
+            [
+              2.0,
+              2.0
+            ]
+          ],
+          "release": [
+            2.0,
+            2.0
+          ],
+          "selected_line": 2,
+          "total_distance_to_here": 20.647559034407227
+        }
+      ],
+      "post_end_click_target": null,
+      "puzzle_id": "9-5",
+      "puzzle_number": 5,
+      "source_file": "9-5_c9_1079.txt",
+      "start_mouse_position": [
+        4.0,
+        3.0
+      ],
+      "step_id": "bd9a1bc0c29a",
+      "total_cost": 24.869087193735318,
+      "total_drag": 14.656854249491715,
+      "total_move": 10.2122329442436,
+      "world_number": 9
+    }
+  ],
+  "world_totals": {
+    "1": {
+      "step_count": 3,
+      "total_cost": 16.46140145027993
+    },
+    "2": {
+      "step_count": 3,
+      "total_cost": 40.435625261133765
+    },
+    "3": {
+      "step_count": 3,
+      "total_cost": 38.90232188270231
+    },
+    "4": {
+      "step_count": 3,
+      "total_cost": 67.4725123327224
+    },
+    "5": {
+      "step_count": 3,
+      "total_cost": 69.45479846031337
+    },
+    "6": {
+      "step_count": 3,
+      "total_cost": 104.22309063088287
+    },
+    "7": {
+      "step_count": 3,
+      "total_cost": 83.45342154132173
+    },
+    "8": {
+      "step_count": 3,
+      "total_cost": 74.48545913984425
+    },
+    "9": {
+      "step_count": 3,
+      "total_cost": 67.10454949618195
+    }
+  }
+}
