@@ -1,0 +1,34 @@
+
+    # moves = solveToTuples("C34 R04 R22 C23 R53 C51 C43 R43 C51 R12")
+
+    # for move in moves:
+    #     window.dragChuzzle(*move)
+    # time.sleep(0.2)
+
+
+
+    """
+    # def myWait():
+    #     keyboard.read_key()
+
+    # keyboard.add_hotkey(window.keyStart, window.Run_Checker)
+
+    # while True:
+    #     myWait()
+
+    window = ChuzzleWindow("Chuzzle Christmas")
+    window.moveTo(1400, 200)
+    time.sleep(1)
+
+    # while True:
+        # window.dragChuzzle((0, 0), (5, 5))
+        # time.sleep(5)
+
+        # point = window.percentageToScreen(window.puzzle_left)
+        # window.click(point)
+        # time.sleep(5)
+        # x, y = window.screenToPercentage(*p.position())
+        # print(f"{x}, {y}")
+        # time.sleep(1)
+        # input("Enter String to execute: ")
+    """
