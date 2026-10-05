@@ -4,20 +4,25 @@
 Two input modes:
 - background (default): mouse messages are posted straight to the game
   window, so the real cursor stays yours and the game needn't be in front.
-  Before each move it unpauses the game if it shows "GAME PAUSED", and it
-  waits while your cursor is over the game window (real moves there would
-  mix into the drag).
+  It unpauses the game if it shows "GAME PAUSED" (checked at the start and
+  after waiting), and it waits while your cursor is over the game window
+  (real moves there would mix into the drag).
 - cursor: moves the real cursor (SetCursorPos + mouse_event); the game must
   be in front and you must not touch the mouse.
 
-Each press is held for a few frames before the drag starts, and the button
-waits at the release point before letting go, so the game sees every step.
+Motion is smooth for recording: each glide and each drag is one eased
+motion whose position comes from the clock (not a step count), pointer
+updates go out every ~4 ms with a 1 ms system timer, and the glide to the
+next press point overlaps the previous move's settle time instead of
+stopping. Each press is still held for a few frames before the drag starts,
+and the pointer rests briefly before release, so the game sees every step.
 Esc (held), Stop, or the game window closing stop it at once; the button is
 always released on the way out.
 """
 
 from __future__ import annotations
 
+import ctypes
 import math
 import threading
 import time
@@ -28,11 +33,12 @@ from .routes import Drag
 
 
 class Player:
-    BASE_SPEED = 1800.0     # pointer speed in logical px/s at 1.0x
-    STEP_S = 0.008          # one pointer update per ~half a frame
-    HOVER_S = 0.05          # pointer rests on the press point before pressing
+    BASE_SPEED = 1400.0     # average pointer speed in logical px/s at 1.0x (eased in/out)
+    MIN_GLIDE_S = 0.12      # shortest glide, so short hops don't snap
+    STEP_S = 0.004          # pointer update every ~4 ms (several per game frame)
+    HOVER_S = 0.03          # pointer rests on the press point before pressing
     HOLD_S = 0.06           # button held still before moving (a few frames)
-    RELEASE_S = 0.05        # pointer rests on the release point before letting go
+    RELEASE_S = 0.04        # pointer rests on the release point before letting go
 
     def __init__(self, window: gw.GameWindow, geometry: gw.Geometry, drags: list[Drag],
                  speed: float = 1.0, settle_s: float = 0.35, background: bool = True,
@@ -95,6 +101,8 @@ class Player:
         self._down = down
 
     # ------------------------------------------------------------------
+    # timing
+    # ------------------------------------------------------------------
 
     def _check(self) -> None:
         if self._stop.is_set():
@@ -106,63 +114,109 @@ class Player:
         if not self.background and not self.window.is_foreground():
             raise InterruptedError("game window lost focus")
 
-    def _pause(self, seconds: float) -> None:
-        end = time.perf_counter() + seconds / max(0.1, self.speed)
-        while time.perf_counter() < end:
+    def _wait_until(self, deadline: float) -> None:
+        while time.perf_counter() < deadline:
             self._check()
-            time.sleep(0.004)
+            time.sleep(0.002)
+
+    def _pause(self, seconds: float) -> None:
+        """A wait that scales with playback speed."""
+        self._wait_until(time.perf_counter() + seconds / max(0.1, self.speed))
 
     def _hold(self, seconds: float) -> None:
-        """Fixed waits that must not shrink with speed (frame timing)."""
-        end = time.perf_counter() + seconds
-        while time.perf_counter() < end:
-            self._check()
-            time.sleep(0.004)
+        """A wait that must not shrink with speed (frame timing)."""
+        self._wait_until(time.perf_counter() + seconds)
 
-    def _glide(self, target: tuple[float, float]) -> None:
+    # ------------------------------------------------------------------
+    # motion
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _ease(u: float) -> float:
+        """Smooth start and stop (smootherstep)."""
+        u = max(0.0, min(1.0, u))
+        return u * u * u * (u * (u * 6 - 15) + 10)
+
+    def _glide_path(self, points: list[tuple[float, float]], min_duration: float = 0.0) -> None:
+        """Move from the current position through `points` as one eased
+        motion; the position along the path is a function of elapsed time.
+        `min_duration` stretches it (used to arrive just as the board is ready)."""
+        path = [self._current()] + list(points)
+        cumulative = [0.0]
+        for a, b in zip(path, path[1:]):
+            cumulative.append(cumulative[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
+        total = cumulative[-1]
+        if total < 0.5:
+            self._move(*path[-1])
+            return
         _, _, cw, _ = self.window.client_rect()
-        scale = cw / gw.LOGICAL_W
-        x0, y0 = self._current()
-        dist = math.hypot(target[0] - x0, target[1] - y0)
-        steps = max(1, int(dist / (self.BASE_SPEED * scale * self.speed) / self.STEP_S))
-        for i in range(1, steps + 1):
+        px_per_s = self.BASE_SPEED * (cw / gw.LOGICAL_W) * self.speed
+        duration = max(self.MIN_GLIDE_S / max(0.25, self.speed), total / px_per_s, min_duration)
+        t0 = time.perf_counter()
+        segment = 0
+        while True:
             self._check()
-            t = i / steps
-            self._move(x0 + (target[0] - x0) * t, y0 + (target[1] - y0) * t)
+            u = (time.perf_counter() - t0) / duration
+            if u >= 1.0:
+                break
+            s = self._ease(u) * total
+            while segment < len(path) - 2 and s > cumulative[segment + 1]:
+                segment += 1
+            a, b = path[segment], path[segment + 1]
+            length = cumulative[segment + 1] - cumulative[segment]
+            f = 0.0 if length <= 0 else (s - cumulative[segment]) / length
+            self._move(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f)
             time.sleep(self.STEP_S)
+        self._move(*path[-1])
 
-    def _prepare_move(self) -> None:
+    def _prepare_move(self, first: bool) -> None:
+        """Background mode: wait while the real cursor is over the game, and
+        unpause the game. The pause check captures the window, which can cost
+        the game a frame, so it only runs at the start or after a wait."""
         if not self.background:
             return
+        waited = False
         if gw.cursor_over(self.window):
+            waited = True
             self.on_status("waiting: move your mouse off the game window")
             while gw.cursor_over(self.window):
                 self._check()
                 time.sleep(0.05)
             self.on_status("")
-        if gw.resume_if_paused(self.window):
+        if (first or waited) and gw.resume_if_paused(self.window):
             self.on_status("game was paused; resumed it")
             self._pos = None
 
-    def _drag(self, drag: Drag) -> None:
+    def _drag(self, drag: Drag, first: bool = False, ready_at: float = 0.0) -> float:
+        """One move: glide to the press point (overlapping the previous move's
+        settle time), wait until the board is ready (`ready_at`), press, hold
+        a few frames, drag along the route in one eased motion, rest, release.
+        Returns when the board will be ready for the next press."""
         pts = [self.geometry.to_client(self.window, p) for p in drag.points]
-        self._prepare_move()
+        self._prepare_move(first)
         if self.background and self._pos is None:
             self._move(*pts[0])
-        self._glide(pts[0])
+        # arrive as the board becomes ready, at most 2x slower than normal
+        slack = ready_at - time.perf_counter()
+        self._glide_path([pts[0]], min_duration=min(slack, 0.6 / max(0.1, self.speed)))
+        self._wait_until(ready_at)
         self._hold(self.HOVER_S)
         self._button(True)
         self._hold(self.HOLD_S)
-        for pt in pts[1:]:
-            self._glide(pt)
+        route = [p for prev, p in zip(pts, pts[1:]) if p != prev]
+        if route:
+            self._glide_path(route)
         self._hold(self.RELEASE_S)
         self._button(False)
+        return time.perf_counter() + self.settle_s / max(0.1, self.speed)
 
-    def _click(self, point: tuple[float, float]) -> None:
-        self._drag(Drag("click", [point]))
+    def _click(self, point: tuple[float, float]) -> float:
+        return self._drag(Drag("click", [point]), first=True)
 
     def _run(self) -> None:
         message = "done"
+        winmm = ctypes.windll.winmm
+        winmm.timeBeginPeriod(1)            # 1 ms timer: even pointer updates
         try:
             if self.background:
                 gw.post_focus(self.window)
@@ -172,13 +226,15 @@ class Player:
                 gw.key_tap(gw.VK_SHIFT)     # the game pauses on focus loss
                 self._hold(0.4)
             self._hold(0.15)
+            ready = 0.0
             for i, drag in enumerate(self.drags):
                 if drag.move == "click":
-                    self._click(drag.points[0])
+                    self._wait_until(ready)
+                    ready = self._click(drag.points[0])
                 else:
-                    self._drag(drag)
+                    ready = self._drag(drag, first=(i == 0), ready_at=ready)
                 self.on_progress(i + 1)
-                self._pause(self.settle_s)
+            self._wait_until(ready)
             for point in self.after:
                 self._pause(0.6)
                 self._click(point)
@@ -192,4 +248,5 @@ class Player:
                     self._button(False)
                 except Exception:
                     pass
+            winmm.timeEndPeriod(1)
             self.on_done(message)
