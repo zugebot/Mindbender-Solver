@@ -13,7 +13,7 @@ modified); the originals are still in `C:\Users\jerrin\PycharmProjects`.
 | `legacy/screen_bot/` | `PycharmProjects/PythonOldCode/chuzzles2.py` | Early bot: screen-grabs the board, simulates row/column moves, clicks. |
 | `legacy/match_finder/` | `PycharmProjects/ChuzzleMatchFinder` | pygame + OpenCV: finds chuzzle matches in a board screenshot (sprite templates included). |
 
-Related code already in this repo: `python/viewer/` (mouse-route studio),
+Related code already in this repo: `python/deluxe_clone/` (ChuzzlePuzzle2, merged with history: pygame recreation of the Deluxe Mindbender screen with route guide and stats; it also finds and moves the real game window), `python/viewer/` (mouse-route studio),
 `mouse/` (C mouse-path DP library), `src/programs/DecompMindbenderScramble.cpp`
 (the game's scramble), and `build/levels_final/` (complete optimal solutions —
 the source a unified "show the solution" demo should use instead of
