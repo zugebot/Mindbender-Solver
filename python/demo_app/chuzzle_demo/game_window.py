@@ -18,12 +18,13 @@ user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
 # Window titles of the Chuzzle 1 builds (python/deluxe_clone uses the same list).
-KNOWN_TITLES = ("Chuzzle Deluxe 1.01", "Chuzzle Christmas Edition 1.0")
+KNOWN_TITLES = ("Chuzzle Deluxe 1.01", "Chuzzle Deluxe 1.0", "Chuzzle Christmas Edition 1.0")
 OWN_TITLE = "Chuzzle Demo"
 
 VK_ESCAPE = 0x1B
 VK_F9 = 0x78
 VK_MENU = 0x12
+VK_SHIFT = 0x10
 MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
@@ -81,6 +82,25 @@ def _process_exe(hwnd) -> Path | None:
     return None
 
 
+def _is_popcap_wrapper(exe: Path) -> bool:
+    """PopCap's DRM wrapper runs the game as popcapgame1.exe or as a temp
+    file it unpacks next to the real exe (e.g. pop41E2.tmp)."""
+    name = exe.name.lower()
+    return name.startswith("popcapgame") or (name.startswith("pop") and name.endswith(".tmp"))
+
+
+def game_exe_for(exe: Path | None) -> Path | None:
+    """The Chuzzle exe a game process belongs to: wrapper processes map back
+    to the Chuzzle*.exe in the same folder, so saves and calibration stay
+    tied to that install."""
+    if exe is None or "chuzzle" in exe.name.lower():
+        return exe
+    if _is_popcap_wrapper(exe):
+        for candidate in sorted(exe.parent.glob("Chuzzle*.exe")):
+            return candidate
+    return exe
+
+
 @dataclass
 class GameWindow:
     hwnd: int
@@ -124,10 +144,11 @@ def find_game_windows() -> list[GameWindow]:
         if not title or title.startswith(OWN_TITLE) or "chuzzle" not in title.lower():
             return True
         exe = _process_exe(hwnd)
-        # Only the game itself: skips editors, browsers and Explorer windows
+        # Only the game itself: skips editors, consoles and Explorer windows
         # whose title merely mentions Chuzzle.
-        if title in KNOWN_TITLES or (exe is not None and "chuzzle" in exe.name.lower()):
-            found.append(GameWindow(int(hwnd), title, exe))
+        is_game = exe is not None and ("chuzzle" in exe.name.lower() or _is_popcap_wrapper(exe))
+        if title in KNOWN_TITLES or is_game:
+            found.append(GameWindow(int(hwnd), title, game_exe_for(exe)))
         return True
 
     user32.EnumWindows(callback, 0)
@@ -213,6 +234,11 @@ def clear_geometry(window: GameWindow) -> None:
 
 def move_cursor(x: int, y: int) -> None:
     user32.SetCursorPos(int(x), int(y))
+
+
+def key_tap(vk: int) -> None:
+    user32.keybd_event(vk, 0, 0, 0)
+    user32.keybd_event(vk, 0, 2, 0)   # KEYEVENTF_KEYUP
 
 
 def mouse_down() -> None:

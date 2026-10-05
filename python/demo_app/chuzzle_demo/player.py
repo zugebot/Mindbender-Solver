@@ -99,8 +99,12 @@ class Player:
     def _run(self) -> None:
         message = "done"
         try:
-            if not self.window.bring_to_front():
-                raise InterruptedError("could not bring the game window to the front")
+            if not self.window.is_foreground():
+                if not self.window.bring_to_front():
+                    raise InterruptedError("could not bring the game window to the front")
+                # the game pauses when it loses focus ("press any key to resume")
+                gw.key_tap(gw.VK_SHIFT)
+                self._pause(0.4)
             self._pause(0.15)
             for i, drag in enumerate(self.drags):
                 self._drag(drag)
