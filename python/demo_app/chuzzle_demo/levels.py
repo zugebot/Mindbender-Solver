@@ -20,6 +20,8 @@ LEVEL_DEF_RE = re.compile(
 )
 FAT_RE = re.compile(r"{\s*true\s*,\s*(\d+)\s*,\s*(\d+)\s*}")
 SOLUTION_FILE_RE = re.compile(r"^(\d+)-(\d+)_c(\d+)_(\d+)\.txt$")
+BOUND_RE = re.compile(r"^\s*(\d+-\d+):\s*at least\s+(\d+)\s+moves", re.M)
+DEFAULT_LOWER_BOUND = 13   # every unsolved puzzle has no solution at 12 (2026-10-05)
 
 # levels.hpp: RED 0, GREEN 1, BLUE 2, ORANGE 3, YELLOW 4, PURPLE 5, WHITE 6, CYAN 7
 COLOR_NAMES = ["red", "green", "blue", "orange", "yellow", "purple", "white", "cyan"]
@@ -39,6 +41,7 @@ class Level:
     solutions: list[str] = field(default_factory=list)   # stored (0-indexed) move strings
     optimum: int | None = None     # move count of the stored solutions
     solution_file: Path | None = None
+    lower_bound: int | None = None   # unsolved: proven minimum move count
 
     @property
     def world(self) -> int:
@@ -69,7 +72,8 @@ def _parse_fat(text: str) -> tuple[int, int] | None:
 
 def load_levels(levels_hpp: Path = paths.LEVELS_HPP,
                 cells_hpp: Path = paths.LEVELS_CELLS_HPP,
-                solutions_dir: Path = paths.LEVELS_FINAL_DIR) -> dict[str, Level]:
+                solutions_dir: Path = paths.LEVELS_FINAL_DIR,
+                bounds_file: Path = paths.BUILD_README) -> dict[str, Level]:
     cells = {}
     cells_text = strip_comments(cells_hpp.read_text())
     for symbol, values in CELL_RE.findall(cells_text):
@@ -84,7 +88,19 @@ def load_levels(levels_hpp: Path = paths.LEVELS_HPP,
             levels[name] = Level(name, cells[b], cells[s], _parse_fat(start_fat), _parse_fat(goal_fat))
 
     attach_solutions(levels, solutions_dir)
+    attach_bounds(levels, bounds_file)
     return levels
+
+
+def attach_bounds(levels: dict[str, Level], bounds_file: Path) -> None:
+    """Lower bounds of unsolved puzzles from build/README.md ("6-4: at least
+    15 moves"), which the solver runs keep up to date."""
+    bounds = {}
+    if bounds_file.is_file():
+        bounds = {name: int(n) for name, n in BOUND_RE.findall(bounds_file.read_text(errors="replace"))}
+    for level in levels.values():
+        if not level.solved:
+            level.lower_bound = bounds.get(level.name, DEFAULT_LOWER_BOUND)
 
 
 def attach_solutions(levels: dict[str, Level], solutions_dir: Path) -> None:

@@ -34,8 +34,9 @@ RY = {"hint": 84, "play": 120, "stop": 160, "speed": 198, "nav": 246, "world": 2
 MOVES_HELP = ("Moves are 1-indexed. R = row (1 = top) shifted right, C = column (1 = left) shifted "
               "down; the last digit is how many cells. Moves of the 2x2 piece name both of its "
               "lines, e.g. C453 = columns 4 and 5 down 3.")
-GRID_HELP = ("Number = optimal move count. Green = solved (darker = longer), red = unsolved "
-             "(no solution of 12 or fewer moves). White dot = level has a 2x2 piece.")
+GRID_HELP = ("Number = optimal move count. Green = solved (darker = longer). Red = unsolved; "
+             ">=N means no solution shorter than N moves exists (from build/README.md). "
+             "White dot = level has a 2x2 piece.")
 
 
 @dataclass
@@ -691,7 +692,7 @@ class App:
                 if name == self.selected:
                     pg.draw.rect(self.screen, (255, 255, 255), r, 2, border_radius=5)
                 self.text(name, (r.x + 6, r.y + 7), self.font)
-                tag = str(level.optimum) if level.solved else ">=13"
+                tag = str(level.optimum) if level.solved else f">={level.lower_bound}"
                 self.text(tag, (r.right - 6 - self.small.size(tag)[0], r.y + 9), self.small, (230, 230, 230))
                 if level.has_fat:
                     pg.draw.rect(self.screen, (235, 235, 235), (r.right - 10, r.y + 3, 6, 6))
@@ -704,7 +705,7 @@ class App:
         if level.solved:
             info = f"Optimal: {level.optimum} moves  |  {len(level.solutions)} solutions"
         else:
-            info = "Unsolved: no solution with 12 or fewer moves"
+            info = f"Unsolved: needs at least {level.lower_bound} moves"
         self.text(info + ("  |  2x2 piece" if level.has_fat else ""), (rect.x + 12, y), self.font, DIM)
 
         states = self.preview_states()

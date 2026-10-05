@@ -11,6 +11,7 @@ LEVELS_CELLS_HPP = REPO_ROOT / "src" / "chuzzles" / "levels_cells.hpp"
 LEVELS_FINAL_DIR = REPO_ROOT / "build" / "levels_final"
 VIEWER_DIR = REPO_ROOT / "python" / "viewer"
 BUILD_CONFIG = REPO_ROOT / "build" / "config.json"
+BUILD_README = REPO_ROOT / "build" / "README.md"   # "6-4: at least 15 moves" lines
 
 APP_DIR = Path(__file__).resolve().parents[1]
 USER_DATA_DIR = APP_DIR / "user_data"          # git-ignored: calibration, settings

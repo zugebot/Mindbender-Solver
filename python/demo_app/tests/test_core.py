@@ -33,6 +33,11 @@ class LevelsAndSimulator(unittest.TestCase):
                 checked += 1
         self.assertGreater(checked, 90000)
 
+    def test_unsolved_bounds_come_from_build_readme(self):
+        self.assertEqual(self.levels["6-4"].lower_bound, 15)      # none at 13 or 14
+        self.assertEqual(self.levels["12-1"].lower_bound, 13)
+        self.assertIsNone(self.levels["10-2"].lower_bound)        # solved
+
     def test_display_is_one_indexed(self):
         self.assertEqual(lv.to_display("R04 C342 R50"), "R14 C452 R60")
 
