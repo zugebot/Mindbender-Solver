@@ -22,7 +22,8 @@
 // Usage:
 //   experimentDiskDepth6 <puzzle> [--out X:/mindbender_d6] [--batch 320000000]
 //                        [--threads N] [--seed-depth S] [--reverse] [--rebuild]
-//                        [--no-recover] [--batched] [--ram-gb GB] [--solutions file]
+//                        [--no-recover] [--batched] [--ram-gb GB] [--no-large-pages]
+//                        [--solutions file]
 //                        [--d7-sample N [--d7-pass-budget STATES]]
 
 #include "src/chuzzles/include.hpp"
@@ -73,6 +74,7 @@ namespace {
         bool recover = true;
         bool batched = false;
         u64 ramBytes = 0;   // 0: ~60% of free RAM
+        bool largePages = true;
         u32 d7Sample = 0;
         u64 d7PassBudget = 375'000'000ULL;
     };
@@ -567,6 +569,80 @@ namespace {
         }
     };
 
+    // Large (2 MB) pages for the probe index when the process may lock memory
+    // ("Lock pages in memory" user right), otherwise normal pages. Random
+    // probes into a multi-GB array then mostly avoid TLB misses / page walks.
+    bool g_largePagesWanted = true;
+
+    bool enableLockMemoryPrivilege() {
+        static const bool enabled = [] {
+            HANDLE token = nullptr;
+            if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token)) {
+                return false;
+            }
+            TOKEN_PRIVILEGES privileges{};
+            privileges.PrivilegeCount = 1;
+            privileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+            bool ok = LookupPrivilegeValueA(nullptr, "SeLockMemoryPrivilege", &privileges.Privileges[0].Luid)
+                      && AdjustTokenPrivileges(token, FALSE, &privileges, 0, nullptr, nullptr)
+                      && GetLastError() == ERROR_SUCCESS;
+            CloseHandle(token);
+            return ok;
+        }();
+        return enabled;
+    }
+
+    template<typename T>
+    class BigArray {
+        T* data_ = nullptr;
+        u64 size_ = 0;
+        bool large_ = false;
+
+        void release() {
+            if (data_ != nullptr) {
+                VirtualFree(data_, 0, MEM_RELEASE);
+            }
+            data_ = nullptr;
+            size_ = 0;
+            large_ = false;
+        }
+
+    public:
+        BigArray() = default;
+        BigArray(const BigArray&) = delete;
+        BigArray& operator=(const BigArray&) = delete;
+        ~BigArray() { release(); }
+
+        // Zero-filled, page-aligned storage for `count` elements.
+        void allocate(const u64 count) {
+            release();
+            size_ = count;
+            const u64 bytes = std::max<u64>(1, count * sizeof(T));
+            if (g_largePagesWanted && enableLockMemoryPrivilege()) {
+                const u64 page = GetLargePageMinimum();
+                if (page != 0) {
+                    data_ = static_cast<T*>(VirtualAlloc(nullptr, (bytes + page - 1) / page * page,
+                                                         MEM_RESERVE | MEM_COMMIT | MEM_LARGE_PAGES,
+                                                         PAGE_READWRITE));
+                    large_ = data_ != nullptr;
+                }
+            }
+            if (data_ == nullptr) {
+                data_ = static_cast<T*>(VirtualAlloc(nullptr, bytes, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+            }
+            if (data_ == nullptr) {
+                throw std::runtime_error("VirtualAlloc failed for probe index");
+            }
+        }
+
+        MUND T* data() { return data_; }
+        MUND const T* data() const { return data_; }
+        MUND u64 size() const { return size_; }
+        MUND bool largePages() const { return large_; }
+        FORCEINLINE T& operator[](const u64 i) { return data_[i]; }
+        FORCEINLINE const T& operator[](const u64 i) const { return data_[i]; }
+    };
+
     struct FingerprintMeta {
         u32 bucketBits = 0;           // buckets per partition = 2^bucketBits
         u64 bloomBlocksPerPartition = 0;
@@ -667,9 +743,9 @@ namespace {
         FingerprintMeta meta;
         u32 pBegin = 0, pEnd = 0;
         std::vector<u64> partitionFirst;   // first fp index of each partition in range, + end
-        std::vector<u16> fingerprints;
-        std::vector<u32> starts;           // (pEnd - pBegin) * (bucketsPerPartition + 1)
-        AlignedWords bloom;
+        BigArray<u16> fingerprints;
+        BigArray<u32> starts;              // (pEnd - pBegin) * (bucketsPerPartition + 1)
+        BigArray<u32> bloom;               // page-aligned, so blocks never straddle lines
 
         void load(const fs::path& dir, const FingerprintMeta& m, const std::vector<u64>& counts,
                   const u32 begin, const u32 end) {
@@ -688,12 +764,16 @@ namespace {
             const u64 dirPer = meta.bucketsPerPartition() + 1;
             const u64 bloomPer = meta.bloomBlocksPerPartition * 8;
 
-            fingerprints.resize(partitionFirst.back());
-            starts.resize(parts * dirPer);
+            fingerprints.allocate(partitionFirst.back());
+            starts.allocate(parts * dirPer);
             bloom.allocate(parts * bloomPer);
             readRange(fp16Path(dir), before * sizeof(u16), fingerprints.data(), fingerprints.size() * sizeof(u16));
             readRange(fpDir32Path(dir), pBegin * dirPer * sizeof(u32), starts.data(), starts.size() * sizeof(u32));
-            readRange(bloomPartPath(dir), pBegin * bloomPer * sizeof(u32), bloom.aligned, parts * bloomPer * sizeof(u32));
+            readRange(bloomPartPath(dir), pBegin * bloomPer * sizeof(u32), bloom.data(), parts * bloomPer * sizeof(u32));
+        }
+
+        MUND bool largePages() const {
+            return fingerprints.largePages() && starts.largePages() && bloom.largePages();
         }
 
         // Chunked fread with a 64-bit seek: a single ifstream::read of more
@@ -735,7 +815,7 @@ namespace {
             for (u32 i = 0; i < count; ++i) {
                 const u64 part = (keys[i] >> PARTITION_SHIFT) - pBegin;
                 h[i] = bloomHash(keys[i]);
-                blocks[i] = bloom.aligned
+                blocks[i] = bloom.data()
                             + (part * meta.bloomBlocksPerPartition
                                + bloomBlockInPartition(h[i], meta.bloomBlocksPerPartition)) * 8;
                 __builtin_prefetch(blocks[i]);
@@ -890,7 +970,8 @@ namespace {
             inRangeTotal += passInRange;
             bloomPassTotal += passBloom;
             tcout << "  pass " << (pass + 1) << "/" << passes.size() << " partitions [" << pBegin << ","
-                  << pEnd << "): load " << index.bytes() / 1e9 << " GB in " << passLoad << "s, stream+probe "
+                  << pEnd << "): load " << index.bytes() / 1e9 << " GB ("
+                  << (index.largePages() ? "large pages" : "normal pages") << ") in " << passLoad << "s, stream+probe "
                   << passStreamed << " left states in " << passProbe << "s ("
                   << static_cast<double>(passStreamed) / passProbe / 1e6 << " M/s), Bloom pass "
                   << 100.0 * static_cast<double>(passBloom) / static_cast<double>(std::max<u64>(1, passInRange))
@@ -1165,6 +1246,7 @@ namespace {
             else if (a == "--no-recover") cfg.recover = false;
             else if (a == "--batched") cfg.batched = true;
             else if (a == "--ram-gb") cfg.ramBytes = static_cast<u64>(std::stod(next()) * 1e9);
+            else if (a == "--no-large-pages") cfg.largePages = false;
             else if (a == "--solutions") cfg.solutionsFile = next();
             else if (a == "--d7-sample") cfg.d7Sample = static_cast<u32>(std::stoul(next()));
             else if (a == "--d7-pass-budget") cfg.d7PassBudget = std::stoull(next());
@@ -1180,6 +1262,7 @@ namespace {
 
 int main(const int argc, char** argv) {
     const Config cfg = parseArgs(argc, argv);
+    g_largePagesWanted = cfg.largePages;
     const BoardPair* pair = BoardLookup::getBoardPair(cfg.puzzle);
     if (pair == nullptr) {
         tcout << "Unknown puzzle: " << cfg.puzzle << '\n';
