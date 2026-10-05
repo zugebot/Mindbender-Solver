@@ -257,6 +257,78 @@ bool testFatColThenRowMaskIsExact() {
     return true;
 }
 
+bool testLaneRotationsMatchActions() {
+    // lane_rotations.hpp must reproduce every normal row/column action.
+    std::mt19937_64 rng(3);
+    for (int trial = 0; trial < 2000; ++trial) {
+        u8 cells[36];
+        for (u8& cell : cells) {
+            cell = static_cast<u8>(rng() % (2 + trial % 7));
+        }
+        const Board board(cells);
+        B1B2 shifted[5];
+        for (u32 lane = 0; lane < 6; ++lane) {
+            lane_rotations::rowShifts(board, lane, shifted);
+            for (u32 n = 1; n <= 5; ++n) {
+                B1B2 expected = board;
+                allActStructList[lane * 5 + n - 1].action(expected);
+                if (!(expected == shifted[n - 1])) {
+                    return false;
+                }
+            }
+            lane_rotations::colShifts(board, lane, shifted);
+            for (u32 n = 1; n <= 5; ++n) {
+                B1B2 expected = board;
+                allActStructList[32 + lane * 5 + n - 1].action(expected);
+                if (!(expected == shifted[n - 1])) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+bool testDfsStreamMatchesMaterializedPerms() {
+    // The depth-first B1B2 stream must emit exactly the same multiset of states
+    // as the independent materialized generator with the same rules.
+    std::vector<Board> roots;
+    for (const char* name : {"1-1", "9-3", "10-3", "7-4"}) {
+        const BoardPair* pair = BoardLookup::getBoardPair(name);
+        roots.push_back(pair->getStartState());
+        roots.push_back(pair->getEndState());
+    }
+
+    struct CollectSink {
+        std::vector<B1B2> states;
+
+        void operator()(JVec<B1B2>& chunk, JVec<u64>&, const u32 count) {
+            states.insert(states.end(), chunk.begin(), chunk.begin() + count);
+        }
+    };
+
+    for (const Board& root : roots) {
+        CollectSink sink;
+        PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, 3>(root, sink, 1024);
+
+        JVec<B1B2> boards;
+        JVec<u64> hashes;
+        boards.reserve(BOARD_PRE_MAX_MALLOC_SIZES[3]);
+        boards.resize(BOARD_PRE_MAX_MALLOC_SIZES[3]);
+        hashes.reserve(BOARD_PRE_MAX_MALLOC_SIZES[3]);
+        hashes.resize(BOARD_PRE_MAX_MALLOC_SIZES[3]);
+        perms_detail::make_perm_list<B1B2, 3, true, true, true, eSequenceDir::ASCENDING>(root, boards, hashes);
+
+        std::vector<B1B2> expected(boards.begin(), boards.end());
+        std::sort(sink.states.begin(), sink.states.end());
+        std::sort(expected.begin(), expected.end());
+        if (sink.states != expected) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool testGetColorMatchesPackedLayout() {
     // getShiftAmount used to read rows {2,1,0,5,4,3} and shift by >= 64 (UB);
     // at -O3 the unrolled loop below folded most reads to 0.
@@ -371,6 +443,8 @@ int main() {
     const bool fatShellOk = testStreamCoversExactDistanceShell("6-2");
     const bool normalShellOk = testStreamCoversExactDistanceShell("1-1");
     const bool fatMaskOk = testFatColThenRowMaskIsExact();
+    const bool laneOk = testLaneRotationsMatchActions();
+    const bool dfsOk = testDfsStreamMatchesMaterializedPerms();
     const bool getColorOk = testGetColorMatchesPackedLayout();
     const bool solverOk = testSmallEndToEndExactSolver();
 
@@ -388,11 +462,16 @@ int main() {
               << (normalShellOk ? "PASS" : "FAIL") << '\n';
     std::cout << "fat col->row commuting mask exact: "
               << (fatMaskOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "lane rotations match actions: "
+              << (laneOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "DFS stream matches materialized perms: "
+              << (dfsOk ? "PASS" : "FAIL") << '\n';
     std::cout << "getColor matches packed layout: "
               << (getColorOk ? "PASS" : "FAIL") << '\n';
     std::cout << "small end-to-end exact solver: "
               << (solverOk ? "PASS" : "FAIL") << '\n';
 
     return intersectionOk && indexOk && layerOk && fatGeneratorsOk
-           && fatShellOk && normalShellOk && fatMaskOk && getColorOk && solverOk ? 0 : 1;
+           && fatShellOk && normalShellOk && fatMaskOk && laneOk && dfsOk
+           && getColorOk && solverOk ? 0 : 1;
 }

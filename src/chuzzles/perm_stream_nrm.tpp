@@ -234,4 +234,72 @@ namespace perm_stream_detail {
         );
     }
 
+
+    // Depth-first canonical stream for B1B2 output: the same sequences as
+    // stream_perm_list (same-direction lanes strictly ordered by SECT_DIR, no
+    // no-op moves, commuting C -> R pairs skipped), but each node expands all
+    // five shifts of a lane at once and every prefix is computed only once,
+    // instead of replaying the move prefix for every full lane sequence.
+    template<i32 CUR_DEPTH, i32 MAX_DEPTH,
+             bool CHECK_CROSS, bool CHECK_SIM,
+             eSequenceDir SECT_DIR,
+             typename Sink>
+    void stream_lanes_dfs(
+            const B1B2& board,
+            StreamChunk<B1B2>& chunk,
+            Sink& sink,
+            const i32 prevDir,
+            const i32 prevSect,
+            const u32 prevAmount) {
+        for (i32 dir = 0; dir < 2; ++dir) {
+            i32 first = 0, last = 5, step = 1;
+            if constexpr (SECT_DIR == eSequenceDir::ASCENDING) {
+                if (CUR_DEPTH > 0 && dir == prevDir) {
+                    first = prevSect + 1;
+                }
+            } else if constexpr (SECT_DIR == eSequenceDir::DESCENDING) {
+                first = 5;
+                last = 0;
+                step = -1;
+                if (CUR_DEPTH > 0 && dir == prevDir) {
+                    first = prevSect - 1;
+                }
+            }
+
+            for (i32 sect = first; step > 0 ? sect <= last : sect >= last; sect += step) {
+                u8 crossSkip = 0;
+                if constexpr (CHECK_CROSS && CUR_DEPTH > 0) {
+                    if (prevDir == 1 && dir == 0) {
+                        crossSkip = makeBoardStateView(board).doActISColMatchBatched(
+                                static_cast<u8>(prevSect), static_cast<u8>(sect), static_cast<u8>(prevAmount));
+                    }
+                }
+
+                B1B2 shifted[5];
+                if (dir == 0) {
+                    lane_rotations::rowShifts(board, static_cast<u32>(sect), shifted);
+                } else {
+                    lane_rotations::colShifts(board, static_cast<u32>(sect), shifted);
+                }
+
+                for (u32 k = 0; k < 5; ++k) {
+                    if constexpr (CHECK_SIM) {
+                        if (shifted[k] == board) {
+                            continue;
+                        }
+                    }
+                    if (crossSkip & (1u << k)) {
+                        continue;
+                    }
+                    if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
+                        emitStateB1B2(shifted[k], chunk, sink);
+                    } else {
+                        stream_lanes_dfs<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS, CHECK_SIM, SECT_DIR>(
+                                shifted[k], chunk, sink, dir, sect, k + 1);
+                    }
+                }
+            }
+        }
+    }
+
 } // namespace perm_stream_detail

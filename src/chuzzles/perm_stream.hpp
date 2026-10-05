@@ -2,6 +2,7 @@
 // src/perm_stream.hpp
 
 #include "perms.hpp"
+#include "lane_rotations.hpp"
 #include "../utils/jvec.hpp"
 #include "../utils/processor.hpp"
 
@@ -68,6 +69,19 @@ namespace perm_stream_detail {
         }
     }
 
+    template<typename Sink>
+    FORCEINLINE static void emitStateB1B2(const B1B2& state,
+                                          StreamChunk<B1B2>& chunk,
+                                          Sink& sink) {
+        chunk.data[chunk.count] = state;
+        chunk.hashes[chunk.count] = StateHash::computeHash(state);
+
+        ++chunk.count;
+        if EXPECT_FALSE(chunk.count == chunk.data.capacity()) {
+            flushChunk(chunk, sink);
+        }
+    }
+
     template<typename T,
              i32 CUR_DEPTH, i32 MAX_DEPTH,
              bool CHECK_CROSS, bool CHECK_SIM,
@@ -122,6 +136,27 @@ namespace perm_stream_detail {
             StreamChunk<T>& chunk,
             Sink& sink);
 
+    // Board view of a packed state, for Board-only helpers such as the
+    // column->row commuting check.
+    FORCEINLINE Board makeBoardStateView(const B1B2& state) {
+        Board board;
+        board.b1 = state.b1;
+        board.b2 = state.b2;
+        return board;
+    }
+
+    template<i32 CUR_DEPTH, i32 MAX_DEPTH,
+             bool CHECK_CROSS, bool CHECK_SIM,
+             eSequenceDir SECT_DIR,
+             typename Sink>
+    static void stream_lanes_dfs(
+            const B1B2& board,
+            StreamChunk<B1B2>& chunk,
+            Sink& sink,
+            i32 prevDir,
+            i32 prevSect,
+            u32 prevAmount);
+
 } // namespace perm_stream_detail
 
 
@@ -163,6 +198,17 @@ class PermStream {
         // CHECK_CROSS: skip a C -> R pair that commutes on the current board;
         // the R -> C order keeps the same state. Exact-state completeness is
         // covered by testExactSolverRegression.
+        if constexpr (std::is_same_v<T, B1B2>) {
+            if constexpr (DEPTH == 0) {
+                perm_stream_detail::emitStateB1B2(board_in.asB1B2(), chunk, sink);
+            } else {
+                perm_stream_detail::stream_lanes_dfs<0, DEPTH, true, true, SECT_DIR>(
+                        board_in.asB1B2(), chunk, sink, -1, -1, 0);
+            }
+            perm_stream_detail::flushChunk(chunk, sink);
+            return;
+        }
+
         perm_stream_detail::stream_perm_list<
                 T,
                 DEPTH,

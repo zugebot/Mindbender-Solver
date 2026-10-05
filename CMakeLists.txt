@@ -249,6 +249,7 @@ add_solver_program(testDepth4Direct       "${CMAKE_SOURCE_DIR}/src/programs/test
 add_solver_program(testDepth4DirectFat    "${CMAKE_SOURCE_DIR}/src/programs/testDepth4DirectFat.cpp")
 add_solver_program(findSolutions          "${CMAKE_SOURCE_DIR}/src/programs/findSolutions.cpp")
 add_solver_program(experimentDiskDepth6   "${CMAKE_SOURCE_DIR}/src/programs/experimentDiskDepth6.cpp")
+add_solver_program(benchmarkLeftStream    "${CMAKE_SOURCE_DIR}/src/programs/benchmarkLeftStream.cpp")
 add_solver_program(CFCC                   "${CMAKE_SOURCE_DIR}/src/programs/CFCC.cpp")
 add_solver_program(expandAllLevels        "${CMAKE_SOURCE_DIR}/src/programs/expandAllLevels.cpp")
 add_solver_program(benchmarkMatchingBound "${CMAKE_SOURCE_DIR}/src/programs/benchmarkMatchingBound.cpp")
