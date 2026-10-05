@@ -15,17 +15,15 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 
 
 
-# 37 puzzles remain unsolved:
- 6-4: not tried yet
+# 35 puzzles remain unsolved:
+ 6-4: at least 13 moves
 10-2: at least 13 moves
 10-3: at least 13 moves
 12-1: at least 13 moves
-12-3: not tried yet
 12-5: at least 13 moves
-13-1: at least 13 moves
 14-3: at least 13 moves
 14-4: at least 13 moves
-14-5: not tried yet
+14-5: at least 13 moves
 15-1: at least 13 moves
 15-2: at least 13 moves
 15-3: at least 13 moves
@@ -50,7 +48,7 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 19-4: at least 13 moves
 19-5: at least 13 moves
 20-2: 
-20-3: 
+20-3: at least 13 moves
 20-4: at least 13 moves
 20-5: at least 13 moves
 
