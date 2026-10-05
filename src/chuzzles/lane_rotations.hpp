@@ -47,4 +47,52 @@ namespace lane_rotations {
         }
     }
 
+    FORCEINLINE u64 readRow(const B1B2& board, const u32 row) {
+        const u64 half = row >= 3 ? board.b2 : board.b1;
+        return (half >> (36 - 18 * (row % 3))) & LANE_BITS;
+    }
+
+    FORCEINLINE void writeRow(B1B2& board, const u32 row, const u64 lane) {
+        const u32 shift = 36 - 18 * (row % 3);
+        u64& half = row >= 3 ? board.b2 : board.b1;
+        half = (half & ~(LANE_BITS << shift)) | (lane << shift);
+    }
+
+    FORCEINLINE u64 columnMask(const u32 col) {
+        return (7ULL << (51 - 3 * col)) | (7ULL << (33 - 3 * col)) | (7ULL << (15 - 3 * col));
+    }
+
+    // Fat lanes move the two rows (or columns) under the 2x2 piece together
+    // and carry the piece with them. out[n - 1] is the shift by n; the caller
+    // skips the one amount that would put the piece across the board edge,
+    // (5 - fatX) for rows and (5 - fatY) for columns, which the game forbids.
+    FORCEINLINE void fatRowShifts(const B1B2& board, const u32 row, const u32 fatX, B1B2 out[5]) {
+        const u64 laneA = readRow(board, row);
+        const u64 laneB = readRow(board, row + 1);
+        for (u32 n = 1; n <= 5; ++n) {
+            B1B2 moved = board;
+            writeRow(moved, row, rotateLane(laneA, n));
+            writeRow(moved, row + 1, rotateLane(laneB, n));
+            moved.b1 = (moved.b1 & b1b2::FAT_X_MASK) | (static_cast<u64>((fatX + n) % 6) << b1b2::FAT_X_OFFSET);
+            out[n - 1] = moved;
+        }
+    }
+
+    FORCEINLINE void fatColShifts(const B1B2& board, const u32 col, const u32 fatY, B1B2 out[5]) {
+        const u64 maskA = columnMask(col);
+        const u64 maskB = columnMask(col + 1);
+        const u64 laneA = (_pext_u64(board.b1, maskA) << 9) | _pext_u64(board.b2, maskA);
+        const u64 laneB = (_pext_u64(board.b1, maskB) << 9) | _pext_u64(board.b2, maskB);
+        const u64 keep1 = board.b1 & ~(maskA | maskB);
+        const u64 keep2 = board.b2 & ~(maskA | maskB);
+        for (u32 m = 1; m <= 5; ++m) {
+            const u64 movedA = rotateLane(laneA, m);
+            const u64 movedB = rotateLane(laneB, m);
+            u64 b1 = keep1 | _pdep_u64(movedA >> 9, maskA) | _pdep_u64(movedB >> 9, maskB);
+            const u64 b2 = keep2 | _pdep_u64(movedA & 0x1FF, maskA) | _pdep_u64(movedB & 0x1FF, maskB);
+            b1 = (b1 & b1b2::FAT_Y_MASK) | (static_cast<u64>((fatY + m) % 6) << b1b2::FAT_Y_OFFSET);
+            out[m - 1] = B1B2(b1, b2);
+        }
+    }
+
 } // namespace lane_rotations

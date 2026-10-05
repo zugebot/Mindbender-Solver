@@ -289,6 +289,92 @@ bool testLaneRotationsMatchActions() {
     return true;
 }
 
+bool testFatLaneRotationsMatchActions() {
+    // Every slot of fatActionsIndexes must match the corresponding lane shift,
+    // and the fat lanes must omit exactly amount (5 - fatX) / (5 - fatY).
+    std::mt19937_64 rng(5);
+    for (int trial = 0; trial < 1000; ++trial) {
+        u8 cells[36];
+        for (u8& cell : cells) {
+            cell = static_cast<u8>(rng() % (2 + trial % 6));
+        }
+        const u8 fatX = static_cast<u8>(trial % 5);
+        const u8 fatY = static_cast<u8>((trial / 5) % 5);
+        const Board board(cells, fatX, fatY);
+        const u8* relative = fatActionsIndexes[board.getFatXY()];
+
+        bool rowAmountListed[6] = {}, colAmountListed[6] = {};
+        for (int slot = 0; slot < 48; ++slot) {
+            const u32 action = relative[slot];
+            B1B2 expected = board;
+            allActStructList[action].action(expected);
+            B1B2 shifted[5];
+            u32 amount;
+            if (action < 30) {
+                lane_rotations::rowShifts(board, action / 5, shifted);
+                amount = action % 5 + 1;
+            } else if (action < 62) {
+                lane_rotations::colShifts(board, (action - 32) / 5, shifted);
+                amount = (action - 32) % 5 + 1;
+            } else if (action < 89) {
+                lane_rotations::fatRowShifts(board, (action - 64) / 5, fatX, shifted);
+                amount = (action - 64) % 5 + 1;
+                rowAmountListed[amount] = true;
+            } else {
+                lane_rotations::fatColShifts(board, (action - 89) / 5, fatY, shifted);
+                amount = (action - 89) % 5 + 1;
+                colAmountListed[amount] = true;
+            }
+            if (!(expected == shifted[amount - 1])) {
+                return false;
+            }
+        }
+        for (u32 amount = 1; amount <= 5; ++amount) {
+            if (rowAmountListed[amount] == (amount == 5U - fatX)
+                || colAmountListed[amount] == (amount == 5U - fatY)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool testFatDfsStreamWithinSlotTableStream() {
+    // The lane-based fat stream drops only consecutive moves on the fat lane,
+    // so its states must be a subset of the slot-table generator's states.
+    struct CollectSink {
+        std::vector<B1B2> states;
+
+        void operator()(JVec<B1B2>& chunk, JVec<u64>&, const u32 count) {
+            states.insert(states.end(), chunk.begin(), chunk.begin() + count);
+        }
+    };
+
+    for (const char* name : {"6-2", "4-4", "13-4"}) {
+        const Board root = BoardLookup::getBoardPair(name)->getStartState();
+        CollectSink sink;
+        PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, 3>(root, sink, 1024);
+
+        JVec<B1B2> boards;
+        JVec<u64> hashes;
+        boards.reserve(BOARD_FAT_MAX_MALLOC_SIZES[3]);
+        boards.resize(BOARD_FAT_MAX_MALLOC_SIZES[3]);
+        hashes.reserve(BOARD_FAT_MAX_MALLOC_SIZES[3]);
+        hashes.resize(BOARD_FAT_MAX_MALLOC_SIZES[3]);
+        perms_detail::make_fat_perm_list<B1B2, 3, eSequenceDir::ASCENDING>(root, boards, hashes);
+
+        std::vector<B1B2> reference(boards.begin(), boards.end());
+        std::sort(sink.states.begin(), sink.states.end());
+        sink.states.erase(std::unique(sink.states.begin(), sink.states.end()), sink.states.end());
+        std::sort(reference.begin(), reference.end());
+        reference.erase(std::unique(reference.begin(), reference.end()), reference.end());
+        if (!std::includes(reference.begin(), reference.end(), sink.states.begin(), sink.states.end())) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool testDfsStreamMatchesMaterializedPerms() {
     // The depth-first B1B2 stream must emit exactly the same multiset of states
     // as the independent materialized generator with the same rules.
@@ -445,6 +531,8 @@ int main() {
     const bool fatMaskOk = testFatColThenRowMaskIsExact();
     const bool laneOk = testLaneRotationsMatchActions();
     const bool dfsOk = testDfsStreamMatchesMaterializedPerms();
+    const bool fatLaneOk = testFatLaneRotationsMatchActions();
+    const bool fatDfsOk = testFatDfsStreamWithinSlotTableStream();
     const bool getColorOk = testGetColorMatchesPackedLayout();
     const bool solverOk = testSmallEndToEndExactSolver();
 
@@ -466,6 +554,10 @@ int main() {
               << (laneOk ? "PASS" : "FAIL") << '\n';
     std::cout << "DFS stream matches materialized perms: "
               << (dfsOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "fat lane rotations match actions: "
+              << (fatLaneOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "fat DFS stream within slot-table stream: "
+              << (fatDfsOk ? "PASS" : "FAIL") << '\n';
     std::cout << "getColor matches packed layout: "
               << (getColorOk ? "PASS" : "FAIL") << '\n';
     std::cout << "small end-to-end exact solver: "
@@ -473,5 +565,5 @@ int main() {
 
     return intersectionOk && indexOk && layerOk && fatGeneratorsOk
            && fatShellOk && normalShellOk && fatMaskOk && laneOk && dfsOk
-           && getColorOk && solverOk ? 0 : 1;
+           && fatLaneOk && fatDfsOk && getColorOk && solverOk ? 0 : 1;
 }

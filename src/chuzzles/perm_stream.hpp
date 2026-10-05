@@ -146,6 +146,18 @@ namespace perm_stream_detail {
     }
 
     template<i32 CUR_DEPTH, i32 MAX_DEPTH,
+             eSequenceDir SECT_DIR,
+             typename Sink>
+    static void stream_fat_lanes_dfs(
+            const B1B2& board,
+            StreamChunk<B1B2>& chunk,
+            Sink& sink,
+            i32 prevDir,
+            i32 prevLane,
+            i32 prevNormalCol,
+            u32 prevAmount);
+
+    template<i32 CUR_DEPTH, i32 MAX_DEPTH,
              bool CHECK_CROSS, bool CHECK_SIM,
              eSequenceDir SECT_DIR,
              typename Sink>
@@ -182,6 +194,17 @@ class PermStream {
         chunk.count = 0;
 
         if (board_in.getFatBool()) {
+            if constexpr (std::is_same_v<T, B1B2>) {
+                if constexpr (DEPTH == 0) {
+                    perm_stream_detail::emitStateB1B2(board_in.asB1B2(), chunk, sink);
+                } else {
+                    perm_stream_detail::stream_fat_lanes_dfs<0, DEPTH, SECT_DIR>(
+                            board_in.asB1B2(), chunk, sink, -1, -1, -1, 0);
+                }
+                perm_stream_detail::flushChunk(chunk, sink);
+                return;
+            }
+
             perm_stream_detail::stream_fat_perm_list<
                     T,
                     DEPTH,
