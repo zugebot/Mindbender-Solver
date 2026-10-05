@@ -741,7 +741,7 @@ class App:
                 x += surf_w
             y += 30
         else:
-            y = 470
+            y = 530     # below the step and solution button rows (452-514)
         self.text("Goal", (rect.x + 14, y), self.small, DIM)
         cell = max(14, min(24, (rect.bottom - 14 - (y + 20)) // 6))
         self.draw_board(board_sim.BoardState(list(level.goal), level.goal_fat), (rect.x + 14, y + 20), cell)
