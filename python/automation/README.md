@@ -11,6 +11,7 @@ modified); the originals are still in `C:\Users\jerrin\PycharmProjects`.
 | `legacy/mindbender_macro/` | `PycharmProjects/ChuzzlePuzzleMacro` | Plays a mindbender solution by dragging pieces in the real window (`ChuzzleWindow.solve("5-3")`); profile creation; button positions as window-relative fractions. `levels/` are its old one-solution-per-level files. |
 | `legacy/speed_save_reader/` | `PycharmProjects/Chuzzle 1 Editor` | Reads the Speed Chuzzle save format (score, scrambles, bottle, speed bar). Includes sample saves and hex dumps. |
 | `legacy/screen_bot/` | `PycharmProjects/PythonOldCode/chuzzles2.py` | Early bot: screen-grabs the board, simulates row/column moves, clicks. |
+| `legacy/match_finder/` | `PycharmProjects/ChuzzleMatchFinder` | pygame + OpenCV: finds chuzzle matches in a board screenshot (sprite templates included). |
 
 Related code already in this repo: `python/viewer/` (mouse-route studio),
 `mouse/` (C mouse-path DP library), `src/programs/DecompMindbenderScramble.cpp`
