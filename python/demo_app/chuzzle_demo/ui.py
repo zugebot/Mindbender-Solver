@@ -15,7 +15,8 @@ import pygame as pg
 
 from . import board_sim, game_window as gw, levels as lv, routes, saves
 
-W, H = 1200, 780
+W, H = 1200, 840
+BAR = pg.Rect(12, 776, W - 24, 54)      # game status bar along the bottom
 BG = (24, 26, 32)
 PANEL = (34, 37, 46)
 PANEL_LINE = (58, 62, 76)
@@ -27,8 +28,14 @@ WARN = (240, 190, 70)
 BAD = (230, 90, 90)
 
 # y positions in the right ("Real game") panel
-RY = {"find": 200, "auto": 236, "play": 292, "stop": 330, "speed": 368, "nav": 414,
-      "world": 444, "arrows": 474, "levels": 510, "speedc": 556, "reset": 616, "log": 664}
+RY = {"hint": 84, "play": 120, "stop": 160, "speed": 198, "nav": 246, "world": 276, "arrows": 304,
+      "levels": 340, "speedc": 388, "reset": 448, "log": 496}
+
+MOVES_HELP = ("Moves are 1-indexed. R = row (1 = top) shifted right, C = column (1 = left) shifted "
+              "down; the last digit is how many cells. Moves of the 2x2 piece name both of its "
+              "lines, e.g. C453 = columns 4 and 5 down 3.")
+GRID_HELP = ("Number = optimal move count. Green = solved (darker = longer), red = unsolved "
+             "(no solution of 12 or fewer moves). White dot = level has a 2x2 piece.")
 
 
 @dataclass
@@ -143,30 +150,44 @@ class App:
             Button(pg.Rect(W - 128, 8, 115, 30), "Saves", lambda: self.set_tab("saves"),
                    active=lambda: self.tab == "saves"),
         ]
-        # preview controls (middle column)
-        x, y = 445, 452
+        # preview controls (middle column): rows span the panel's inner width
         has_sol = lambda: self.current_solution() is not None
+        x0, inner, y = 444, 338, 452
+        widths = [54, 54, 0, 54, 54]
+        widths[2] = inner - sum(widths) - 4 * 6
+        labels = ["|<", "<", None, ">", ">|"]
+        actions = [lambda: self.set_step(0), lambda: self.set_step(self.preview_step - 1), self.toggle_animate,
+                   lambda: self.set_step(self.preview_step + 1), lambda: self.set_step(10 ** 6)]
+        x = x0
+        for w_, label, action in zip(widths, labels, actions):
+            if label is None:
+                b["solutions"].append(Button(pg.Rect(x, y, w_, 28), lambda: "Pause" if self.animating else "Animate",
+                                             action, has_sol, lambda: self.animating))
+            else:
+                b["solutions"].append(Button(pg.Rect(x, y, w_, 28), label, action, has_sol))
+            x += w_ + 6
         b["solutions"] += [
-            Button(pg.Rect(x, y, 44, 28), "|<", lambda: self.set_step(0), has_sol),
-            Button(pg.Rect(x + 48, y, 44, 28), "<", lambda: self.set_step(self.preview_step - 1), has_sol),
-            Button(pg.Rect(x + 96, y, 70, 28), lambda: "Pause" if self.animating else "Animate",
-                   self.toggle_animate, has_sol, lambda: self.animating),
-            Button(pg.Rect(x + 170, y, 44, 28), ">", lambda: self.set_step(self.preview_step + 1), has_sol),
-            Button(pg.Rect(x + 218, y, 44, 28), ">|", lambda: self.set_step(10 ** 6), has_sol),
-            Button(pg.Rect(x, y + 34, 70, 28), "< Sol", lambda: self.set_solution(self.solution_index - 1),
+            Button(pg.Rect(x0, y + 34, 74, 28), "< Sol", lambda: self.set_solution(self.solution_index - 1),
                    lambda: self.solution_count() > 1),
-            Button(pg.Rect(x + 192, y + 34, 70, 28), "Sol >", lambda: self.set_solution(self.solution_index + 1),
-                   lambda: self.solution_count() > 1),
+            Button(pg.Rect(x0 + inner - 74, y + 34, 74, 28), "Sol >",
+                   lambda: self.set_solution(self.solution_index + 1), lambda: self.solution_count() > 1),
+        ]
+        # game status bar (bottom, every tab)
+        bx = BAR.right - 10 - 3 * 116
+        b["all"] += [
+            Button(pg.Rect(bx, BAR.y + 12, 110, 30), "Find game", lambda: self.find_game(),
+                   lambda: not self.playing()),
+            Button(pg.Rect(bx + 116, BAR.y + 12, 110, 30), lambda: "Cancel calib" if self.calib_step else "Calibrate",
+                   self.toggle_calibration, lambda: self.window is not None and not self.playing(),
+                   lambda: self.calib_step > 0),
+            Button(pg.Rect(bx + 232, BAR.y + 12, 110, 30), "Reset calib", self.reset_calibration,
+                   lambda: self.window is not None and self.geometry.calibrated and not self.playing()),
         ]
         # game controls (right column); RY is shared with draw_game_panel
         x = 816
+        has_sol = lambda: self.current_solution() is not None
         game = lambda: self.window is not None and self.window.alive() and not self.playing()
         b["solutions"] += [
-            Button(pg.Rect(x, RY["find"], 110, 28), "Find game", lambda: self.find_game(), lambda: not self.playing()),
-            Button(pg.Rect(x + 116, RY["find"], 120, 28), lambda: "Cancel calib" if self.calib_step else "Calibrate",
-                   self.toggle_calibration, game, lambda: self.calib_step > 0),
-            Button(pg.Rect(x + 242, RY["find"], 118, 28), "Reset calib", self.reset_calibration,
-                   lambda: game() and self.geometry.calibrated),
             Button(pg.Rect(x, RY["play"], 177, 34), "Play solution in game", self.play_all,
                    lambda: game() and has_sol()),
             Button(pg.Rect(x + 183, RY["play"], 177, 34), lambda: f"Step in game ({self.played_moves})",
@@ -523,6 +544,39 @@ class App:
             y += line_h
         return y
 
+    def info_icon(self, center, text: str, mouse) -> pg.Rect:
+        """A small (i); hovering it shows `text` as a tooltip (drawn last)."""
+        rect = pg.Rect(0, 0, 18, 18)
+        rect.center = center
+        hover = rect.inflate(6, 6).collidepoint(mouse)
+        pg.draw.circle(self.screen, ACCENT if hover else (70, 76, 94), rect.center, 9)
+        self.text("i", (rect.centerx, rect.centery - 1), self.small, (255, 255, 255), center=True)
+        if hover:
+            self.tooltip = (text, rect)
+        return rect
+
+    def draw_tooltip(self) -> None:
+        if not self.tooltip:
+            return
+        text, anchor = self.tooltip
+        width = 300
+        lines, line = [], ""
+        for word in text.split():
+            trial = f"{line} {word}".strip()
+            if self.small.size(trial)[0] > width - 20 and line:
+                lines.append(line)
+                line = word
+            else:
+                line = trial
+        lines.append(line)
+        box = pg.Rect(0, 0, width, 12 + 17 * len(lines))
+        box.topleft = (anchor.x - width + anchor.width, anchor.bottom + 6)
+        box.clamp_ip(self.screen.get_rect().inflate(-8, -8))
+        pg.draw.rect(self.screen, (20, 22, 28), box, border_radius=6)
+        pg.draw.rect(self.screen, ACCENT, box, 1, border_radius=6)
+        for i, ln in enumerate(lines):
+            self.text(ln, (box.x + 10, box.y + 6 + 17 * i), self.small, TEXT)
+
     def draw_button(self, b: Button, mouse) -> None:
         enabled = b.enabled()
         hover = enabled and b.rect.collidepoint(mouse)
@@ -603,7 +657,7 @@ class App:
     def draw_grid(self, mouse) -> None:
         rect = pg.Rect(12, 52, 410, 716)
         self.panel(rect, "Mindbenders")
-        self.text("number = optimal moves, white dot = 2x2 piece", (rect.x + 140, rect.y + 11), self.small, DIM)
+        self.info_icon((rect.x + 12 + self.bold.size("Mindbenders")[0] + 16, rect.y + 19), GRID_HELP, mouse)
         cw, ch = 78, 32
         self.grid_rects = {}
         for world in range(1, 21):
@@ -630,7 +684,7 @@ class App:
                 if level.has_fat:
                     pg.draw.rect(self.screen, (235, 235, 235), (r.right - 10, r.y + 3, 6, 6))
 
-    def draw_preview(self) -> None:
+    def draw_preview(self, mouse) -> None:
         rect = pg.Rect(432, 52, 362, 716)
         level = self.level
         self.panel(rect, f"Level {level.name}")
@@ -650,14 +704,17 @@ class App:
         y = 530
         if sol:
             moves = sol.split()
-            self.text(f"step {step}/{len(moves)}", (rect.right - 90, rect.y + 8), self.bold, ACCENT)
+            step_text = f"step {step}/{len(moves)}"
+            sx = rect.right - 14 - self.bold.size(step_text)[0]
+            self.text(step_text, (sx, rect.y + 8), self.bold, ACCENT)
+            self.info_icon((sx - 16, rect.y + 19), MOVES_HELP, mouse)
             ranked = self.ranked.get(level.name)
             label = f"{self.solution_index + 1}/{len(level.solutions)}"
             if ranked:
                 label += f"  mouse {ranked[min(self.solution_index, len(ranked) - 1)][0]:.1f}"
             elif level.name in self.ranking:
                 label += f"  ranking {self.rank_progress.get(level.name, '')}"
-            self.text(label, (rect.x + 144, 500), self.small, DIM, center=True)
+            self.text(label, (rect.centerx, 500), self.font, DIM, center=True)
             # move list, 1-indexed, current move highlighted
             x0, x = rect.x + 14, rect.x + 14
             for i, token in enumerate(lv.to_display(sol).split()):
@@ -670,40 +727,22 @@ class App:
                 self.text(token, (x, y), self.mono, color)
                 x += surf_w
             y += 30
-            self.text("Goal", (rect.x + 14, y), self.small, DIM)
-            self.draw_board(board_sim.BoardState(list(level.goal), level.goal_fat), (rect.x + 14, y + 20), 18)
-            self.wrap("Moves are 1-indexed: R = row (1 = top) shifted right, C = column (1 = left) shifted "
-                      "down; last digit = cells. Fat moves name both lines.",
-                      rect.x + 140, y + 20, rect.width - 150, self.small, DIM, 17)
+        else:
+            y = 470
+        self.text("Goal", (rect.x + 14, y), self.small, DIM)
+        cell = max(14, min(24, (rect.bottom - 14 - (y + 20)) // 6))
+        self.draw_board(board_sim.BoardState(list(level.goal), level.goal_fat), (rect.x + 14, y + 20), cell)
 
     def draw_game_panel(self) -> None:
         rect = pg.Rect(804, 52, 384, 716)
-        self.panel(rect, "Real game")
-        x, y = rect.x + 12, rect.y + 36
-        if self.window and self.window.alive():
-            left, top, cw, ch = self.window.client_rect()
-            self.text(self.window.title, (x, y), self.font, GOOD)
-            self.text(f"client {cw}x{ch} at ({left},{top})", (x, y + 20), self.small, DIM)
-            self.text(str(self.window.exe or "exe unknown"), (x, y + 38), self.small, DIM)
-            cal = "calibrated" if self.geometry.calibrated else "default 800x600 layout (calibrate if clicks miss)"
-            self.text(cal, (x, y + 56), self.small, GOOD if self.geometry.calibrated else WARN)
-        else:
-            self.text("Game not found", (x, y), self.font, WARN)
-            self.wrap("Start Chuzzle (Deluxe 1.01 or Christmas Edition), open a Mindbender puzzle, then "
-                      "press Find game.", x, y + 20, rect.width - 24, self.small, DIM, 17)
-        if self.active_loc:
-            prof = self.active_loc.current_profile or "?"
-            self.text(f"saves: {self.active_loc.label}, profile {prof}", (x, y + 74), self.small, DIM)
-        if self.calib_step:
-            self.text(f"Calibrating: point {self.calib_step}/2 - press F9", (x, y + 92), self.font, ACCENT)
-
-        self.text(f"Auto-play {self.selected}", (x, RY["auto"]), self.bold)
+        self.panel(rect, f"Auto-play {self.selected}")
+        x = rect.x + 12
         hint = ("Background input: your mouse stays free; keep it off the game window. Hold Esc to stop."
                 if self.background_input else
                 "Real cursor: hands off the mouse. Esc or alt-tab stops it.")
         if self.player_status:
             hint = self.player_status
-        self.wrap(hint, x, RY["auto"] + 22, rect.width - 24, self.small, WARN if self.player_status else DIM, 14)
+        self.wrap(hint, x, RY["hint"], rect.width - 24, self.small, WARN if self.player_status else DIM, 15)
         self.text(f"{self.speed:.2f}x", (x + 104, RY["speed"] + 14), self.font, center=True)
         self.text("Navigate in game", (x, RY["nav"]), self.bold)
         self.text(f"Game shows world {self.tracked_world}", (x, RY["world"]), self.font)
@@ -714,11 +753,43 @@ class App:
         # log
         ly = RY["log"]
         pg.draw.line(self.screen, PANEL_LINE, (rect.x + 8, ly - 6), (rect.right - 8, ly - 6))
-        for when, msg, color in self.log_lines[-5:]:
+        for when, msg, color in self.log_lines[-14:]:
             ly = self.wrap(f"{time.strftime('%H:%M:%S', time.localtime(when))}  {msg}", x, ly,
                            rect.width - 24, self.small, color, 15)
             if ly > rect.bottom - 10:
                 break
+
+    def _elide(self, s: str, font, width: int) -> str:
+        if font.size(s)[0] <= width:
+            return s
+        while len(s) > 8 and font.size("..." + s)[0] > width:
+            s = s[1:]
+        return "..." + s
+
+    def draw_game_bar(self) -> None:
+        self.panel(BAR)
+        x, y = BAR.x + 14, BAR.y + 8
+        right = BAR.right - 10 - 3 * 116 - 14
+        sep = "   |   "
+        if self.window and self.window.alive():
+            left, top, cw, ch = self.window.client_rect()
+            cx = self.text(self.window.title, (x, y), self.bold, GOOD).right
+            cx = self.text(f"{sep}{cw}x{ch} at ({left},{top})", (cx, y + 1), self.font, TEXT).right
+            if self.calib_step:
+                state, color = f"Calibrating {self.calib_step}/2: hover a chuzzle centre, press F9", ACCENT
+            elif self.geometry.calibrated:
+                state, color = "calibrated layout", GOOD
+            else:
+                state, color = "default 800x600 layout", DIM
+            self.text(sep + state, (cx, y + 1), self.font, color)
+            line2 = str(self.window.exe or "exe unknown")
+        else:
+            self.text("Game not found", (x, y), self.bold, WARN)
+            line2 = "Start Chuzzle, open a Mindbender puzzle, then press Find game."
+        if self.active_loc:
+            prof = self.active_loc.current_profile or "?"
+            line2 = f"saves: {self.active_loc.label}, profile {prof}{sep}{line2}"
+        self.text(self._elide(line2, self.small, right - x), (x, y + 23), self.small, DIM)
 
     def draw_saves(self, mouse) -> None:
         rect = pg.Rect(12, 52, W - 260, 716)
@@ -788,20 +859,21 @@ class App:
 
     def draw(self) -> None:
         mouse = pg.mouse.get_pos()
+        self.tooltip = None
         self.screen.fill(BG)
         self.text("Chuzzle Demo", (14, 10), self.big)
         solved = sum(1 for l in self.levels.values() if l.solved and l.world <= 20)
-        self.text(f"{solved}/100 mindbenders solved optimally  |  mouse routes: "
-                  f"{'C library' if routes.backend_available() else 'simple (build python/viewer DLL)'}",
-                  (190, 18), self.font, DIM)
+        self.text(f"{solved}/100 mindbenders solved optimally", (190, 18), self.font, DIM)
         if self.tab == "solutions":
             self.draw_grid(mouse)
-            self.draw_preview()
+            self.draw_preview(mouse)
             self.draw_game_panel()
         else:
             self.draw_saves(mouse)
+        self.draw_game_bar()
         for b in self.buttons["all"] + self.buttons[self.tab]:
             self.draw_button(b, mouse)
+        self.draw_tooltip()
         pg.display.flip()
 
     # ------------------------------------------------------------------
