@@ -19,6 +19,11 @@ Related code already in this repo: `python/deluxe_clone/` (ChuzzlePuzzle2, merge
 the source a unified "show the solution" demo should use instead of
 `mindbender_macro/levels/`).
 
+## Combined app
+
+`python/demo_app/` is the combined app (solutions, real-game auto-play, Speed
+reset, save tracking). See its README.
+
 ## Common pieces to unify
 
 All three clicking tools reimplement the same things: find the window by title
