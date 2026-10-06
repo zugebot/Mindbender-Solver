@@ -81,6 +81,11 @@ Done (2026-10-06, verified):
    60% of free: 16.6 GB vs 12.8 GB on this machine, so a ~13 GB index (12-1) needs 1 pass, not 2
    (saves one full left stream, ~6 min of ~47 for 12-1).
 - Background CPU users slow runs: the MuMu Android emulator (`MuMuVMMHeadless`) cost ~6%.
+- RAM upgraded 2026-10-06 to 64 GB (2x32 GB Corsair CMK64GX4M2E3200C16). The Lenovo BIOS has no
+  XMP, so it runs at JEDEC 2133 MHz (old Crucial 2x16 GB ran at 2933). Measured anyway: 6-4 13-move
+  search 311.8 / 307.4 s vs 318 s before (large pages available again after the reboot), RAM
+  budget 48.5 GB vs 16.6 GB. Don't flash a modded BIOS for XMP (Boot Guard brick risk); a JEDEC-3200
+  kit (e.g. Crucial CT2K32G4DFD832A) would run at 2933 if speed ever matters.
 
 Next (medium, days):
 3. Smaller index: binary fuse filter with 16-bit fingerprints (~2.3 B/state vs ~3.7 now) ->
