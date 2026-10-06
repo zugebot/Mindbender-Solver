@@ -87,6 +87,14 @@ Done (2026-10-06, verified):
   budget 48.5 GB vs 16.6 GB. Don't flash a modded BIOS for XMP (Boot Guard brick risk); a JEDEC-3200
   kit (e.g. Crucial CT2K32G4DFD832A) would run at 2933 if speed ever matters.
 
+3a. Probe self-calibration (2026-10-06): the first ~20 s of every run's first probe pass rotate the
+   real seeds through batch sizes 32/64/128 x plain/pipelined, then use the fastest; cached per
+   machine in %LOCALAPPDATA%/MindbenderSolver/probe_profile.txt (`--probe-variant G:P`,
+   `--no-calibrate`). Correct for every variant (6-2: identical 64 solutions). Measured on 6-4
+   13-move, alternating A/B: 322.1 s -> 318.4 s (-1.1%, net of the calibration). It picks 128/plain
+   here; pipelining never helped. Its own per-thread estimate (~10.8%) overstates the real gain, so
+   the bottleneck is probably not memory-level parallelism (page walks / raw latency instead).
+
 Next (medium, days):
 3. Smaller index: binary fuse filter with 16-bit fingerprints (~2.3 B/state vs ~3.7 now) ->
    ~40% fewer passes, but 3 memory reads per lookup instead of 1; prototype and measure.

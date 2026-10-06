@@ -38,6 +38,16 @@
 //                        [--solutions file]
 //                        [--table-depth 6|7 [--d7-partitions N [--d7-first-partition F]]]
 //                        [--progress-file path.json [--progress-interval SECONDS]]
+//                        [--probe-variant G:P] [--no-calibrate] [--calibrate-seconds S]
+//
+// Probe self-calibration: the first ~20 s of the first probe pass run the real
+// seeds through every probe variant (batch size G = 32/64/128 lookups, P =
+// pipelined: the next batch's memory fetches are issued before the current
+// batch is tested), interleaved seed by seed so they share the same memory and
+// CPU conditions. The fastest variant then runs the rest of the search. That
+// work is part of the search (nothing is repeated). Results are cached per
+// machine in %LOCALAPPDATA%/MindbenderSolver/probe_profile.txt; --no-calibrate
+// uses the cached best, --probe-variant forces one.
 //
 // --progress-file: a background thread rewrites a small JSON status (phase,
 // done/total units, elapsed) every few seconds for python/scheduler; workers
@@ -54,7 +64,9 @@
 #include <cstdio>
 #include <filesystem>
 #include <cmath>
+#include <cpuid.h>
 #include <cstring>
+#include <sstream>
 #include <fstream>
 #include <future>
 #include <memory>
@@ -105,6 +117,10 @@ namespace {
         u32 d7FirstPartition = 0; //   [first, first + count)
         std::string progressFile;
         double progressInterval = 5.0;
+        bool calibrate = true;
+        double calibrateSeconds = 20.0;
+        int forcedGroup = 0;          // --probe-variant G:P
+        int forcedPipeline = 0;
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }
         MUND bool d7Subset() const { return tableDepth == 7 && (d7FirstPartition != 0 || d7End() != PARTITION_COUNT); }
@@ -814,6 +830,17 @@ namespace {
               << " B/state) in " << timer.getSeconds() << "s\n";
     }
 
+    constexpr u32 MAX_PROBE_GROUP = 128;
+
+    // One batch of in-range probes and its stage-1 results.
+    struct ProbeBatch {
+        B1B2 states[MAX_PROBE_GROUP];
+        u64 keys[MAX_PROBE_GROUP];
+        u64 h[MAX_PROBE_GROUP];
+        const u32* blocks[MAX_PROBE_GROUP];
+        u32 count = 0;
+    };
+
     // The index for partitions [pBegin, pEnd), loaded with three contiguous reads.
     struct FingerprintRange {
         FingerprintMeta meta;
@@ -886,35 +913,41 @@ namespace {
                    + (pEnd - pBegin) * meta.bloomBlocksPerPartition * 32;
         }
 
-        // Bloom block, then bucket offsets, then fingerprints; each stage
-        // prefetches the next stage's lines for the whole group. Returns the
-        // number of probes that passed the Bloom filter.
-        u32 probeGroup(const B1B2* probes, const u64* keys, const u32 count,
-                       std::vector<KeyedState>& candidates) const {
+        // Stage 1 of a probe batch: Bloom hashes and block addresses, with the
+        // block lines prefetched. Splitting it from finish() lets a caller
+        // issue the next batch's fetches before testing the current batch.
+        void issue(ProbeBatch& b) const {
+            for (u32 i = 0; i < b.count; ++i) {
+                const u64 part = (b.keys[i] >> PARTITION_SHIFT) - pBegin;
+                b.h[i] = bloomHash(b.keys[i]);
+                b.blocks[i] = bloom.data()
+                              + (part * meta.bloomBlocksPerPartition
+                                 + bloomBlockInPartition(b.h[i], meta.bloomBlocksPerPartition)) * 8;
+                __builtin_prefetch(b.blocks[i]);
+            }
+        }
+
+        // Stages 2-4: Bloom test, then bucket offsets, then fingerprints; each
+        // stage prefetches the next stage's lines for the whole batch. Returns
+        // the number of probes that passed the Bloom filter.
+        u32 finish(const ProbeBatch& b, std::vector<KeyedState>& candidates) const {
             const u64 bucketsPer = meta.bucketsPerPartition();
             const u64 dirPer = bucketsPer + 1;
             const u32 shift = meta.bucketShift();
+            const u64* keys = b.keys;
+            const B1B2* probes = b.states;
+            const u32 count = b.count;
 
-            u64 h[PROBE_GROUP];
-            const u32* blocks[PROBE_GROUP];
-            for (u32 i = 0; i < count; ++i) {
-                const u64 part = (keys[i] >> PARTITION_SHIFT) - pBegin;
-                h[i] = bloomHash(keys[i]);
-                blocks[i] = bloom.data()
-                            + (part * meta.bloomBlocksPerPartition
-                               + bloomBlockInPartition(h[i], meta.bloomBlocksPerPartition)) * 8;
-                __builtin_prefetch(blocks[i]);
-            }
-            u32 pass[PROBE_GROUP];
+            u32 pass[MAX_PROBE_GROUP];
             u32 passCount = 0;
             for (u32 i = 0; i < count; ++i) {
-                if (bloomTest(blocks[i], h[i])) {
+                if (bloomTest(b.blocks[i], b.h[i])) {
                     pass[passCount++] = i;
                 }
             }
 
-            const u32* dirSlot[PROBE_GROUP];
-            u64 base[PROBE_GROUP], lo[PROBE_GROUP], hi[PROBE_GROUP];
+            const u32* dirSlot[MAX_PROBE_GROUP];
+            u64 base[MAX_PROBE_GROUP], lo[MAX_PROBE_GROUP], hi[MAX_PROBE_GROUP];
             for (u32 j = 0; j < passCount; ++j) {
                 const u64 key = keys[pass[j]];
                 const u64 part = (key >> PARTITION_SHIFT) - pBegin;
@@ -941,7 +974,163 @@ namespace {
             }
             return passCount;
         }
+
+        // Unpipelined probe of up to MAX_PROBE_GROUP states (issue + finish).
+        u32 probeGroup(const B1B2* probes, const u64* keys, const u32 count,
+                       std::vector<KeyedState>& candidates) const {
+            ProbeBatch b;
+            b.count = count;
+            for (u32 i = 0; i < count; ++i) {
+                b.states[i] = probes[i];
+                b.keys[i] = keys[i];
+            }
+            issue(b);
+            return finish(b, candidates);
+        }
     };
+
+    // ------------------------------------------------------------------
+    // Probe variants and per-machine calibration
+    // ------------------------------------------------------------------
+    struct ProbeVariant {
+        u32 group = PROBE_GROUP;
+        bool pipeline = false;
+
+        MUND std::string name() const { return std::to_string(group) + (pipeline ? "/pipelined" : "/plain"); }
+    };
+
+    const std::vector<ProbeVariant>& probeVariants() {
+        static const std::vector<ProbeVariant> v = {{32, false}, {32, true}, {64, false}, {64, true},
+                                                    {128, false}, {128, true}};
+        return v;
+    }
+
+    // Collects in-range left states into batches and probes them with the
+    // chosen variant; pipelined batches overlap their fetches with the
+    // previous batch's tests.
+    struct ProbeSink {
+        const FingerprintRange& index;
+        ProbeVariant variant;
+        ProbeBatch batches[2];
+        u32 cur = 0;
+        bool prevPending = false;
+        std::vector<KeyedState> found;
+        u64 streamed = 0, inRange = 0, bloomPasses = 0;
+
+        ProbeSink(const FingerprintRange& idx, const ProbeVariant v) : index(idx), variant(v) {}
+
+        void submit() {
+            ProbeBatch& c = batches[cur];
+            index.issue(c);
+            if (!variant.pipeline) {
+                bloomPasses += index.finish(c, found);
+                c.count = 0;
+                return;
+            }
+            if (prevPending) {
+                ProbeBatch& prev = batches[cur ^ 1];
+                bloomPasses += index.finish(prev, found);
+                prev.count = 0;
+            }
+            prevPending = true;
+            cur ^= 1;
+        }
+
+        void drain() {
+            if (batches[cur].count != 0) {
+                submit();
+            }
+            if (prevPending) {
+                ProbeBatch& prev = batches[cur ^ 1];
+                bloomPasses += index.finish(prev, found);
+                prev.count = 0;
+                prevPending = false;
+            }
+        }
+
+        void operator()(JVec<B1B2>& chunkStates, JVec<u64>& chunkHashes, const u32 count) {
+            streamed += count;
+            for (u32 i = 0; i < count; ++i) {
+                const u64 key = mixKey(chunkHashes[i]);
+                const u32 p = static_cast<u32>(key >> PARTITION_SHIFT);
+                if (p < index.pBegin || p >= index.pEnd) {
+                    continue;
+                }
+                ++inRange;
+                ProbeBatch& b = batches[cur];
+                b.states[b.count] = chunkStates[i];
+                b.keys[b.count] = key;
+                if (++b.count == variant.group) {
+                    submit();
+                }
+            }
+        }
+    };
+
+    // "<cpu brand>|<RAM GB>|<threads>": a calibration result belongs to one machine setup.
+    std::string machineKey(const u32 threads) {
+        char brand[49] = {};
+        unsigned int regs[4];
+        for (unsigned int leaf = 0; leaf < 3; ++leaf) {
+            if (__get_cpuid(0x80000002 + leaf, &regs[0], &regs[1], &regs[2], &regs[3])) {
+                std::memcpy(brand + leaf * 16, regs, 16);
+            }
+        }
+        std::string cpu = brand;
+        while (!cpu.empty() && cpu.front() == ' ') cpu.erase(cpu.begin());
+        MEMORYSTATUSEX status{};
+        status.dwLength = sizeof(status);
+        GlobalMemoryStatusEx(&status);
+        const u64 ramGb = (status.ullTotalPhys + 512ULL * 1024 * 1024) / (1024ULL * 1024 * 1024);
+        return cpu + "|" + std::to_string(ramGb) + "GB|" + std::to_string(threads) + "t";
+    }
+
+    fs::path probeProfilePath() {
+        const char* local = std::getenv("LOCALAPPDATA");
+        return fs::path(local != nullptr ? local : ".") / "MindbenderSolver" / "probe_profile.txt";
+    }
+
+    // Line format: "<machine key>\t<group>\t<pipeline>\t<ns/state best>\t<ns/state baseline>"
+    bool readCachedVariant(const std::string& key, ProbeVariant& out) {
+        std::ifstream in(probeProfilePath());
+        std::string line;
+        while (std::getline(in, line)) {
+            const auto tab = line.find('\t');
+            if (tab == std::string::npos || line.substr(0, tab) != key) {
+                continue;
+            }
+            std::istringstream rest(line.substr(tab + 1));
+            int g = 0, pl = 0;
+            if (rest >> g >> pl && g > 0 && g <= static_cast<int>(MAX_PROBE_GROUP)) {
+                out = {static_cast<u32>(g), pl != 0};
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void writeCachedVariant(const std::string& key, const ProbeVariant& v, const double bestNs, const double baseNs) {
+        const fs::path path = probeProfilePath();
+        std::vector<std::string> lines;
+        {
+            std::ifstream in(path);
+            std::string line;
+            while (std::getline(in, line)) {
+                if (line.rfind(key + "\t", 0) != 0 && !line.empty()) {
+                    lines.push_back(line);
+                }
+            }
+        }
+        std::ostringstream entry;
+        entry << key << '\t' << v.group << '\t' << (v.pipeline ? 1 : 0) << '\t' << bestNs << '\t' << baseNs;
+        lines.push_back(entry.str());
+        std::error_code ec;
+        fs::create_directories(path.parent_path(), ec);
+        std::ofstream out(path, std::ios::trunc);
+        for (const std::string& l : lines) {
+            out << l << '\n';
+        }
+    }
 
     // RAM for the index (or the depth-7 build's key buffers), measured on this
     // machine when the run starts: free physical memory minus a reserve for
@@ -1017,6 +1206,11 @@ namespace {
         u64 streamedTotal = 0, inRangeTotal = 0, bloomPassTotal = 0;
         g_progress.phase("probe", static_cast<u64>(passes.size()) * seeds.size(),
                          "pass 1/" + std::to_string(passes.size()) + " loading index");
+        ProbeVariant chosenVariant{0, false};   // group 0: not chosen yet
+        if (cfg.forcedGroup > 0) {
+            chosenVariant = {static_cast<u32>(std::min<int>(cfg.forcedGroup, MAX_PROBE_GROUP)), cfg.forcedPipeline != 0};
+            tcout << "probe variant: " << chosenVariant.name() << " (forced)\n";
+        }
 
         for (std::size_t pass = 0; pass < passes.size(); ++pass) {
             const auto [pBegin, pEnd] = passes[pass];
@@ -1032,41 +1226,11 @@ namespace {
             Timer probeTimer;
             std::mutex candidateLock;
             std::vector<u64> streamed(threads, 0), inRange(threads, 0), bloomPasses(threads, 0);
-            parallelFor(threads, seeds.size(), [&](const u32 t, const std::size_t s) {
-                struct Sink {
-                    const FingerprintRange& index;
-                    B1B2 groupStates[PROBE_GROUP];
-                    u64 groupKeys[PROBE_GROUP];
-                    u32 groupCount = 0;
-                    std::vector<KeyedState> found;
-                    u64 streamed = 0, inRange = 0, bloomPasses = 0;
-
-                    void flush() {
-                        bloomPasses += index.probeGroup(groupStates, groupKeys, groupCount, found);
-                        groupCount = 0;
-                    }
-
-                    void operator()(JVec<B1B2>& chunkStates, JVec<u64>& chunkHashes, const u32 count) {
-                        streamed += count;
-                        for (u32 i = 0; i < count; ++i) {
-                            const u64 key = mixKey(chunkHashes[i]);
-                            const u32 p = static_cast<u32>(key >> PARTITION_SHIFT);
-                            if (p < index.pBegin || p >= index.pEnd) {
-                                continue;
-                            }
-                            ++inRange;
-                            groupStates[groupCount] = chunkStates[i];
-                            groupKeys[groupCount] = key;
-                            if (++groupCount == PROBE_GROUP) {
-                                flush();
-                            }
-                        }
-                    }
-                } sink{index, {}, {}, 0, {}, 0, 0, 0};
-
+            auto processSeed = [&](const u32 t, const std::size_t s, const ProbeVariant variant) -> u64 {
+                ProbeSink sink(index, variant);
                 const Board seedBoard = makeBoardFromState(seeds[s]);
                 PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH>(seedBoard, sink, 4096);
-                sink.flush();
+                sink.drain();
                 streamed[t] += sink.streamed;
                 inRange[t] += sink.inRange;
                 bloomPasses[t] += sink.bloomPasses;
@@ -1075,6 +1239,63 @@ namespace {
                     candidates.insert(candidates.end(), sink.found.begin(), sink.found.end());
                 }
                 g_progress.add();   // one relaxed atomic add per seed (~ms of work)
+                return sink.streamed;
+            };
+
+            std::size_t firstSeed = 0;
+            if (pass == 0 && chosenVariant.group == 0) {
+                const auto& variants = probeVariants();
+                const std::size_t nV = variants.size();
+                const std::size_t round = static_cast<std::size_t>(threads) * nV * 4;
+                if (cfg.calibrate && seeds.size() >= round * 40) {
+                    // Real seeds, interleaved over all variants until the time is up.
+                    g_progress.detail(passLabel + " calibrating probe variants");
+                    std::vector<std::atomic<u64>> vStates(nV), vNanos(nV);
+                    for (std::size_t v = 0; v < nV; ++v) {
+                        vStates[v].store(0);
+                        vNanos[v].store(0);
+                    }
+                    const Timer calibTimer;
+                    while (firstSeed + round <= seeds.size() / 4 && calibTimer.getSeconds() < cfg.calibrateSeconds) {
+                        const std::size_t base = firstSeed;
+                        parallelFor(threads, round, [&](const u32 t, const std::size_t i) {
+                            const std::size_t v = i % nV;
+                            const auto t0 = std::chrono::steady_clock::now();
+                            const u64 n = processSeed(t, base + i, variants[v]);
+                            const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                    std::chrono::steady_clock::now() - t0).count();
+                            vStates[v].fetch_add(n, std::memory_order_relaxed);
+                            vNanos[v].fetch_add(static_cast<u64>(ns), std::memory_order_relaxed);
+                        });
+                        firstSeed += round;
+                    }
+                    std::size_t best = 0;
+                    std::vector<double> nsPer(nV);
+                    for (std::size_t v = 0; v < nV; ++v) {
+                        nsPer[v] = static_cast<double>(vNanos[v].load()) / static_cast<double>(std::max<u64>(1, vStates[v].load()));
+                        if (nsPer[v] < nsPer[best]) {
+                            best = v;
+                        }
+                    }
+                    chosenVariant = variants[best];
+                    tcout << "calibrate: " << firstSeed << " seeds in " << calibTimer.getSeconds() << "s, ns/state per thread:";
+                    for (std::size_t v = 0; v < nV; ++v) {
+                        tcout << ' ' << variants[v].name() << '=' << nsPer[v];
+                    }
+                    tcout << " -> " << chosenVariant.name() << " (" << nsPer[0] / nsPer[best] << "x vs 32/plain)\n";
+                    writeCachedVariant(machineKey(threads), chosenVariant, nsPer[best], nsPer[0]);
+                } else {
+                    ProbeVariant cached;
+                    chosenVariant = readCachedVariant(machineKey(threads), cached) ? cached : ProbeVariant{};
+                    tcout << "probe variant: " << chosenVariant.name()
+                          << (cfg.calibrate ? " (cached; too few seeds to calibrate)" : " (cached, --no-calibrate)") << '\n';
+                }
+                g_progress.detail(passLabel + " streaming");
+            }
+            const ProbeVariant variant = chosenVariant;
+            const std::size_t startSeed = firstSeed;
+            parallelFor(threads, seeds.size() - startSeed, [&](const u32 t, const std::size_t i) {
+                processSeed(t, startSeed + i, variant);
             });
             const double passProbe = probeTimer.getSeconds();
             probeSeconds += passProbe;
@@ -1760,6 +1981,14 @@ namespace {
             else if (a == "--d7-first-partition") cfg.d7FirstPartition = static_cast<u32>(std::stoul(next()));
             else if (a == "--progress-file") cfg.progressFile = next();
             else if (a == "--progress-interval") cfg.progressInterval = std::stod(next());
+            else if (a == "--no-calibrate") cfg.calibrate = false;
+            else if (a == "--calibrate-seconds") cfg.calibrateSeconds = std::stod(next());
+            else if (a == "--probe-variant") {
+                const std::string v = next();
+                const auto colon = v.find(':');
+                cfg.forcedGroup = std::stoi(v.substr(0, colon));
+                cfg.forcedPipeline = colon == std::string::npos ? 0 : std::stoi(v.substr(colon + 1));
+            }
             else cfg.puzzle = a;
         }
         if (cfg.threads == 0) {
