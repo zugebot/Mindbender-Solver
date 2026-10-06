@@ -53,6 +53,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <future>
@@ -631,6 +632,7 @@ namespace {
     class BigArray {
         T* data_ = nullptr;
         u64 size_ = 0;
+        u64 capacity_ = 0;
         bool large_ = false;
 
         void release() {
@@ -639,6 +641,7 @@ namespace {
             }
             data_ = nullptr;
             size_ = 0;
+            capacity_ = 0;
             large_ = false;
         }
 
@@ -648,10 +651,24 @@ namespace {
         BigArray& operator=(const BigArray&) = delete;
         ~BigArray() { release(); }
 
+        // Storage for `count` elements, reusing the current block when it is
+        // big enough (contents are then NOT cleared: callers overwrite them).
+        // Allocating once, early, and reusing it across passes avoids
+        // re-committing (and re-zeroing) many GB per pass and keeps a large-page
+        // block once one was obtained.
+        void ensure(const u64 count) {
+            if (data_ != nullptr && count <= capacity_) {
+                size_ = count;
+                return;
+            }
+            allocate(count);
+        }
+
         // Zero-filled, page-aligned storage for `count` elements.
         void allocate(const u64 count) {
             release();
             size_ = count;
+            capacity_ = count;
             const u64 bytes = std::max<u64>(1, count * sizeof(T));
             if (g_largePagesWanted && enableLockMemoryPrivilege()) {
                 const u64 page = GetLargePageMinimum();
@@ -823,13 +840,21 @@ namespace {
             const u64 dirPer = meta.bucketsPerPartition() + 1;
             const u64 bloomPer = meta.bloomBlocksPerPartition * 8;
 
-            fingerprints.allocate(partitionFirst.back());
-            starts.allocate(parts * dirPer);
-            bloom.allocate(parts * bloomPer);
+            fingerprints.ensure(partitionFirst.back());
+            starts.ensure(parts * dirPer);
+            bloom.ensure(parts * bloomPer);
             readRange(files.fp16, before * sizeof(u16), fingerprints.data(), fingerprints.size() * sizeof(u16));
             const u64 filePart = pBegin - meta.partitionBegin;   // files start at partitionBegin
             readRange(files.dir32, filePart * dirPer * sizeof(u32), starts.data(), starts.size() * sizeof(u32));
             readRange(files.bloom, filePart * bloomPer * sizeof(u32), bloom.data(), parts * bloomPer * sizeof(u32));
+        }
+
+        // Allocates the buffers for the largest pass up front, before the left
+        // seeds and per-pass work fragment memory.
+        void reserve(const FingerprintMeta& m, const u64 maxStates, const u64 maxPartitions) {
+            fingerprints.ensure(maxStates);
+            starts.ensure(maxPartitions * (m.bucketsPerPartition() + 1));
+            bloom.ensure(maxPartitions * m.bloomBlocksPerPartition * 8);
         }
 
         MUND bool largePages() const {
@@ -918,12 +943,21 @@ namespace {
         }
     };
 
-    u64 defaultRamBudgetBytes() {
-        // ~60% of currently free physical memory, at least 2 GB.
+    // RAM for the index (or the depth-7 build's key buffers), measured on this
+    // machine when the run starts: free physical memory minus a reserve for
+    // the OS and other programs (max(3 GB, 10% of RAM)) and minus `otherBytes`
+    // this run will also allocate (seeds, candidate buffers). At least 2 GB.
+    // (Previously a flat 60% of free memory, which left ~8 GB idle and cost
+    // whole extra passes, e.g. 12-1's 13.1 GB index ran in 2 passes.)
+    // --ram-gb overrides it.
+    u64 defaultRamBudgetBytes(const u64 otherBytes = 0) {
         MEMORYSTATUSEX status{};
         status.dwLength = sizeof(status);
         GlobalMemoryStatusEx(&status);
-        return std::max<u64>(2'000'000'000ULL, static_cast<u64>(status.ullAvailPhys * 0.6));
+        const u64 reserve = std::max<u64>(3'000'000'000ULL, status.ullTotalPhys / 10);
+        const u64 used = reserve + otherBytes;
+        const u64 avail = status.ullAvailPhys > used ? status.ullAvailPhys - used : 0;
+        return std::max<u64>(2'000'000'000ULL, avail);
     }
 
     // Streams the whole left side once per RAM-sized range of the index's
@@ -936,7 +970,9 @@ namespace {
                                            const u32 threads) {
         // Partition ranges whose index fits the RAM budget.
         const u32 pFirst = meta.partitionBegin, pLimit = meta.partitionLimit;
-        const u64 budget = cfg.ramBytes != 0 ? cfg.ramBytes : defaultRamBudgetBytes();
+        // Seeds: exact depth-S frontier, ~ (25.4^S) states of 16 B (+ hashes while built).
+        const u64 seedBytes = static_cast<u64>(std::pow(25.4, cfg.seedDepth) * 2 * sizeof(B1B2));
+        const u64 budget = cfg.ramBytes != 0 ? cfg.ramBytes : defaultRamBudgetBytes(seedBytes);
         std::vector<std::pair<u32, u32>> passes;
         u64 coveredStates = 0;
         for (u32 p = pFirst; p < pLimit;) {
@@ -953,6 +989,22 @@ namespace {
         tcout << "fingerprint index: " << meta.indexBytes(coveredStates, pLimit - pFirst) / 1e9
               << " GB over partitions [" << pFirst << "," << pLimit << "), RAM budget " << budget / 1e9 << " GB -> "
               << passes.size() << " pass(es)\n";
+
+        // One index buffer for every pass, sized for the largest pass and
+        // allocated before anything else.
+        FingerprintRange index;
+        {
+            u64 maxStates = 0, maxParts = 0;
+            for (const auto& [p0, p1] : passes) {
+                u64 states = 0;
+                for (u32 p = p0; p < p1; ++p) {
+                    states += counts[p];
+                }
+                maxStates = std::max(maxStates, states);
+                maxParts = std::max<u64>(maxParts, p1 - p0);
+            }
+            index.reserve(meta, maxStates, maxParts);
+        }
 
         Timer seedTimer;
         JVec<B1B2> seeds;
@@ -972,7 +1024,6 @@ namespace {
             g_progress.detail(passLabel + " loading index");
 
             Timer loadTimer;
-            FingerprintRange index;
             index.load(files, meta, counts, pBegin, pEnd);
             const double passLoad = loadTimer.getSeconds();
             loadSeconds += passLoad;
