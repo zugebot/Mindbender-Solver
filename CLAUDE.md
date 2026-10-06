@@ -18,6 +18,19 @@ bounds); history of what changed and why: `docs/changes-*.md`.
   `python -m unittest discover -s python/demo_app/tests`.
 - A running exe is locked: copy it before long runs (the scheduler does).
 
+## Everyday commands (cmd)
+
+```bat
+cd /d C:\Users\jerrin\CLionProjects\Mindbender-Solver
+python python\demo_app\run_demo.py
+python python\scheduler\mbq.py daemon
+python python\scheduler\mbq.py resume
+python python\scheduler\mbq.py status
+```
+
+`daemon` starts the queue server; it does not start by itself after a reboot.
+`status` is also available as a live page at http://127.0.0.1:8766/.
+
 ## Layout
 
 - `src/chuzzles/`: board (`B1B2` = two u64), moves, lane shifts (`lane_rotations.hpp`, pext/pdep),
