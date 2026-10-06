@@ -41,12 +41,12 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 18-2: at least 14 moves
 18-3: at least 13 moves
 18-4: at least 14 moves
-19-2: at least 13 moves
+19-2: at least 14 moves
 19-3: at least 13 moves
-19-4: at least 13 moves
+19-4: at least 14 moves
 19-5: at least 13 moves
 20-2: at least 13 moves
-20-3: at least 13 moves
+20-3: at least 14 moves
 20-4: at least 13 moves
 20-5: at least 13 moves
 
