@@ -7,6 +7,8 @@
     python python/scheduler/mbq.py add 12-1 12-5 --moves 13 --until 14
     python python/scheduler/mbq.py queue | history | log ID | cancel ID | pause | resume
 
+A live dashboard is served at http://127.0.0.1:8766/ (refreshes every 3 s).
+
 One job runs at a time, and never while another solver process is running
 (e.g. a run started by hand). Jobs and their results live in
 python/scheduler/state/ and survive restarts; a job that is still running
@@ -55,6 +57,8 @@ JOB_ROOT = STATE / "jobs"
 TABLE_ROOT = Path(os.environ.get("MBQ_TABLE_ROOT", "X:/mindbender_d6"))
 PORT = int(os.environ.get("MBQ_PORT", "8766"))
 POLL_S = 5.0
+DASHBOARD = Path(__file__).resolve().parent / "dashboard.html"
+ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 
 SSD_EXE = REPO / "build" / "experimentDiskDepth6.exe"
 INRAM_EXE = REPO / "build" / "findSolutions.exe"
@@ -266,6 +270,12 @@ def promote_bound(puzzle: str, searched_moves: int) -> list[str]:
 
     _edit_text_file(BUILD_README, readme)
     return [f"build/README.md: {puzzle} now at least {searched_moves + 1} moves"]
+
+
+def solved_count() -> int:
+    names = {m.group(1) for f in LEVELS_FINAL.glob("*.txt")
+             if (m := re.match(r"^(\d+-\d+)_c\d+_\d+\.txt$", f.name)) and int(m.group(1).split("-")[0]) <= 20}
+    return len(names)
 
 
 def replay_check(puzzle: str, path: Path, moves: int) -> tuple[bool, str]:
@@ -660,6 +670,25 @@ class Scheduler:
         out["finish_at"] = now() + out["total_remaining"] if out["total_remaining"] is not None else None
         return out
 
+    def _duration_estimate(self, job: dict) -> float | None:
+        """Median wall time of finished jobs of the same kind."""
+        def kind(j):
+            return (j["engine"], j.get("table_depth"), j.get("fat"), j["moves"])
+        vals = sorted(j["finished"] - j["started"] for j in self.jobs
+                      if j["status"] == "done" and j.get("started") and j.get("finished") and kind(j) == kind(job))
+        return vals[len(vals) // 2] if vals else None
+
+    def queue_estimate(self) -> dict:
+        known, unknown = 0.0, 0
+        for j in self.pending():
+            est = self._duration_estimate(j)
+            if est is None:
+                unknown += 1
+            else:
+                known += est
+        return {"known_seconds": known if unknown < len(self.pending()) or not self.pending() else None,
+                "unknown_jobs": unknown}
+
     def status(self) -> dict:
         procs = running_processes()
         with self.lock:
@@ -670,6 +699,10 @@ class Scheduler:
             return {"paused": self.paused, "running": dict(job, eta=self.eta(job)) if job else None,
                     "finalizing": fin,
                     "pending": self.pending(), "external_solvers": external,
+                    "solved": solved_count(), "queue_estimate": self.queue_estimate(),
+                    "finished_today": sum(1 for j in self.jobs if j.get("finished")
+                                          and time.localtime(j["finished"])[:3] == time.localtime()[:3]
+                                          and j["status"] == "done"),
                     "table_root_free_gb": round(shutil.disk_usage(TABLE_ROOT.anchor or TABLE_ROOT).free / 1e9, 1)}
 
 
@@ -694,8 +727,26 @@ def make_handler(sched: Scheduler):
             n = int(self.headers.get("Content-Length") or 0)
             return json.loads(self.rfile.read(n) or b"{}")
 
+        def _host_ok(self) -> bool:
+            # Only answer requests addressed to this machine (blocks DNS rebinding).
+            if self.headers.get("Host") in ALLOWED_HOSTS:
+                return True
+            self._send(403, {"error": "bad host"})
+            return False
+
         def do_GET(self):
+            if not self._host_ok():
+                return None
             parts = [p for p in self.path.split("?")[0].split("/") if p]
+            if not parts:
+                data = DASHBOARD.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return None
             query = dict(q.split("=", 1) for q in self.path.split("?", 1)[1].split("&")) if "?" in self.path else {}
             try:
                 if parts == ["status"]:
@@ -715,6 +766,12 @@ def make_handler(sched: Scheduler):
                 return self._send(500, {"error": str(exc)})
 
         def do_POST(self):
+            if not self._host_ok():
+                return None
+            # Commands need a custom header: a page on another site cannot send
+            # one without a CORS preflight, which this server never approves.
+            if self.headers.get("X-MBQ") != "1":
+                return self._send(403, {"error": "missing X-MBQ header"})
             parts = [p for p in self.path.split("?")[0].split("/") if p]
             try:
                 if parts == ["jobs"]:
@@ -757,7 +814,7 @@ def serve() -> None:
 def api(method: str, path: str, body: dict | None = None, raw: bool = False):
     req = urllib.request.Request(f"http://127.0.0.1:{PORT}{path}", method=method,
                                  data=json.dumps(body).encode() if body is not None else None,
-                                 headers={"Content-Type": "application/json"})
+                                 headers={"Content-Type": "application/json", "X-MBQ": "1"})
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             data = r.read().decode()
@@ -861,7 +918,7 @@ def cmd_daemon(_args) -> None:
         time.sleep(0.25)
         try:
             api("GET", "/status")
-            print(f"mbq: server started on http://127.0.0.1:{PORT}")
+            print(f"mbq: server started; dashboard at http://127.0.0.1:{PORT}/")
             return
         except SystemExit:
             continue

@@ -18,6 +18,19 @@ python python/scheduler/mbq.py add 12-1 12-5 --moves 13 --until 14
   whole job: about 3h 45m left, done around 21:40
 ```
 
+## Dashboard
+
+Open **http://127.0.0.1:8766/** while the server runs. It refreshes every 3
+seconds and shows the running job (phase, progress bar, this phase's ETA and
+the whole job's finish time, phase steps with their durations), the live
+solver log, the queue with any wait reason, finished jobs with their results
+and notes, the solved count, free disk space, and pause / resume / cancel
+buttons. It is served by the scheduler itself: no internet, nothing to install.
+
+The server only answers requests addressed to 127.0.0.1 / localhost, and
+commands (POST) need an `X-MBQ: 1` header, so other web pages open in the
+same browser cannot send it commands.
+
 ## Commands
 
 | Command | What it does |

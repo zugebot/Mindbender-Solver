@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solver Queue</title>
+<style>
+  :root {
+    --bg: #15171c; --panel: #1e2128; --line: #2e323c; --text: #e4e6eb; --dim: #8d93a1;
+    --accent: #5aa9ff; --good: #4fc27a; --warn: #f0b847; --bad: #e86060; --bar: #2a2f3a;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f4f5f7; --panel: #ffffff; --line: #dde0e6; --text: #1d2026; --dim: #677080;
+      --accent: #1f6fd1; --good: #1f8f4c; --warn: #b07a00; --bad: #c43a3a; --bar: #e6e9ef;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--dim); font-weight: 600;
+       text-transform: uppercase; letter-spacing: .04em; }
+  .chip { padding: 2px 10px; border-radius: 999px; background: var(--bar); color: var(--dim); font-size: 12.5px; }
+  .chip.good { color: var(--good); } .chip.warn { color: var(--warn); } .chip.bad { color: var(--bad); }
+  .spacer { flex: 1; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+           padding: 16px; margin-bottom: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat .v { font-size: 20px; font-weight: 600; }
+  .stat .k { color: var(--dim); font-size: 12.5px; }
+  .job-title { font-size: 20px; font-weight: 600; }
+  .muted { color: var(--dim); }
+  .bar { height: 12px; background: var(--bar); border-radius: 6px; overflow: hidden; margin: 10px 0 6px; }
+  .bar > div { height: 100%; background: var(--accent); transition: width .6s ease; }
+  .phases { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .phase { padding: 3px 10px; border-radius: 6px; background: var(--bar); color: var(--dim); font-size: 12.5px; }
+  .phase.done { color: var(--good); } .phase.now { background: var(--accent); color: #fff; }
+  pre { margin: 0; max-height: 260px; overflow: auto; background: var(--bg); border: 1px solid var(--line);
+        border-radius: 8px; padding: 10px; font: 12px/1.4 Consolas, monospace; white-space: pre-wrap; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 12.5px; }
+  td.r { text-align: right; white-space: nowrap; }
+  .notes { color: var(--dim); font-size: 12.5px; }
+  button { font: inherit; color: var(--text); background: var(--bar); border: 1px solid var(--line);
+           border-radius: 7px; padding: 4px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.danger:hover { border-color: var(--bad); color: var(--bad); }
+  .banner { display: none; background: var(--bad); color: #fff; padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; }
+  .table-wrap { overflow-x: auto; }
+  @media (max-width: 640px) { .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="banner" id="offline">Can't reach the scheduler. Is it running? (python python/scheduler/mbq.py daemon)</div>
+  <header>
+    <h1>Mindbender solver queue</h1>
+    <span class="chip" id="solved">-</span>
+    <span class="chip" id="state">-</span>
+    <span class="spacer"></span>
+    <span class="muted" id="updated">-</span>
+    <button id="pauseBtn">Pause</button>
+  </header>
+
+  <section class="panel" id="current"></section>
+
+  <section class="panel">
+    <div class="grid" id="stats"></div>
+  </section>
+
+  <section class="panel" id="logPanel" hidden>
+    <h2>Solver log</h2>
+    <pre id="log"></pre>
+  </section>
+
+  <section class="panel">
+    <h2>Queue</h2>
+    <div class="table-wrap"><table id="queue"></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Finished</h2>
+    <div class="table-wrap"><table id="history"></table></div>
+  </section>
+</main>
+
+<script>
+const POLL_MS = 3000;
+const PHASES = ["d6-build", "d6-index", "d7-index", "probe", "d7-confirm", "verify", "recovery"];
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+
+function dur(s) {
+  if (s == null || !isFinite(s)) return "unknown";
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h ? `${h}h ${String(m).padStart(2, "0")}m` : m ? `${m}m ${String(sec).padStart(2, "0")}s` : `${sec}s`;
+}
+const clock = (t) => t ? new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "-";
+const when = (t) => t ? new Date(t * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"}) : "-";
+const kind = (j) => j.engine === "ssd" ? `<${j.seed_depth},3,${j.table_depth}>` : "in-RAM";
+
+async function api(method, path) {
+  const r = await fetch(path, {method, headers: method === "POST" ? {"X-MBQ": "1"} : {}});
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+  return path.endsWith("/log") || path.includes("/log?") ? r.text() : r.json();
+}
+
+function renderCurrent(s) {
+  const el = $("current");
+  const j = s.running;
+  if (!j) {
+    const fin = s.finalizing;
+    el.innerHTML = fin
+      ? `<div class="job-title">${esc(fin.puzzle)} at ${fin.moves} moves</div><div class="muted">Search finished, validating results...</div>`
+      : `<div class="job-title">Nothing running</div><div class="muted">${s.pending.length ? esc(s.pending[0].wait_reason || "Starting the next job...") : "The queue is empty."}</div>`;
+    $("logPanel").hidden = !fin;
+    return;
+  }
+  const e = j.eta || {};
+  const pct = e.percent ?? 0;
+  const needs = j.needs || {};
+  const shown = PHASES.filter((p) => {
+    if (j.engine !== "ssd") return false;
+    if (p.startsWith("d7") && j.table_depth !== 7) return false;
+    if ((p === "d6-build" || p === "d6-index" || p === "d7-index") && !needs[p] && e.phase !== p && !(j.phases || {})[p]) return false;
+    return true;
+  });
+  const idx = shown.indexOf(e.phase);
+  const chips = shown.map((p, i) => {
+    const t = (j.phases || {})[p];
+    const cls = p === e.phase ? "now" : (idx >= 0 && i < idx) || t ? "done" : "";
+    return `<span class="phase ${cls}">${esc(p)}${t ? " " + dur(t) : ""}</span>`;
+  }).join("");
+  const finish = e.total_remaining != null
+    ? `Whole job: about <b>${dur(e.total_remaining)}</b> left, done around <b>${clock(e.finish_at)}</b>`
+    : `Whole job: estimate appears once later phases have history`;
+  el.innerHTML = `
+    <div class="job-title">${esc(j.puzzle)} at ${j.moves} moves <span class="muted">${kind(j)}${j.fat ? " · 2x2 piece" : ""} · job #${j.id}</span></div>
+    <div class="muted">${esc(e.phase || "starting")} ${esc(e.detail || "")}</div>
+    <div class="bar"><div style="width:${pct}%"></div></div>
+    <div>${pct.toFixed ? pct.toFixed(1) : pct}% of this phase · elapsed ${dur(e.elapsed)} · this phase ends in <b>${dur(e.phase_remaining)}</b></div>
+    <div style="margin-top:4px">${finish}</div>
+    <div class="phases">${chips}</div>
+    <div style="margin-top:12px"><button class="danger" data-cancel="${j.id}">Cancel this job</button></div>`;
+  $("logPanel").hidden = false;
+}
+
+function renderStats(s) {
+  const q = s.queue_estimate || {};
+  const qText = q.known_seconds != null ? dur(q.known_seconds) + (q.unknown_jobs ? ` + ${q.unknown_jobs} unestimated` : "") : "-";
+  const items = [
+    ["Solved", `${s.solved}/100`],
+    ["Queued jobs", s.pending.length],
+    ["Queue after this job", qText],
+    ["Free on table drive", `${s.table_root_free_gb} GB`],
+    ["Finished today", s.finished_today],
+  ];
+  $("stats").innerHTML = items.map(([k, v]) => `<div class="stat"><div class="v">${esc(v)}</div><div class="k">${esc(k)}</div></div>`).join("");
+}
+
+function renderQueue(s) {
+  const rows = s.pending.map((j, i) => `<tr>
+      <td>${i + 1}</td><td><b>${esc(j.puzzle)}</b></td><td>${j.moves}${j.until ? " → " + j.until : ""}</td>
+      <td class="hide-sm">${kind(j)}${j.fat ? " · 2x2" : ""}</td>
+      <td class="notes">${esc(j.wait_reason || "")}</td>
+      <td class="r"><button class="danger" data-cancel="${j.id}">Remove</button></td></tr>`).join("");
+  $("queue").innerHTML = rows ? `<tr><th>#</th><th>Puzzle</th><th>Moves</th><th class="hide-sm">Search</th><th>Note</th><th></th></tr>${rows}`
+                              : `<tr><td class="muted">Nothing queued.</td></tr>`;
+}
+
+function renderHistory(jobs) {
+  const done = jobs.filter((j) => !["running", "queued", "waiting", "finalizing"].includes(j.status)).reverse().slice(0, 60);
+  const rows = done.map((j) => {
+    const res = j.result === "solved" ? `<span class="chip good">solved · ${j.solutions}</span>`
+              : j.result === "none" ? `<span class="chip">no solution</span>`
+              : j.status === "cancelled" ? `<span class="chip warn">cancelled</span>`
+              : `<span class="chip bad">${esc(j.result || j.status)}</span>`;
+    const took = j.started && j.finished ? dur(j.finished - j.started) : "-";
+    return `<tr><td><b>${esc(j.puzzle)}</b></td><td>${j.moves}</td><td>${res}</td><td class="r">${took}</td>
+      <td class="r hide-sm">${when(j.finished)}</td>
+      <td class="notes">${esc(j.message || "")}${(j.notes || []).length ? "<br>" + j.notes.map(esc).join("<br>") : ""}</td></tr>`;
+  }).join("");
+  $("history").innerHTML = rows ? `<tr><th>Puzzle</th><th>Moves</th><th>Result</th><th class="r">Took</th><th class="r hide-sm">Finished</th><th>Details</th></tr>${rows}`
+                                : `<tr><td class="muted">Nothing finished yet.</td></tr>`;
+}
+
+async function refresh() {
+  try {
+    const [s, jobs] = await Promise.all([api("GET", "/status"), api("GET", "/jobs")]);
+    $("offline").style.display = "none";
+    $("solved").textContent = `${s.solved}/100 solved`;
+    const st = $("state");
+    st.textContent = s.paused ? "paused" : s.running ? "running" : s.pending.length ? "waiting" : "idle";
+    st.className = "chip " + (s.paused ? "warn" : s.running ? "good" : "");
+    $("pauseBtn").textContent = s.paused ? "Resume" : "Pause";
+    $("pauseBtn").dataset.paused = s.paused ? "1" : "";
+    renderCurrent(s); renderStats(s); renderQueue(s); renderHistory(jobs);
+    const live = s.running || s.finalizing;
+    if (live) {
+      const pre = $("log");
+      const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
+      pre.textContent = await api("GET", `/jobs/${live.id}/log?tail=40`);
+      if (atBottom) pre.scrollTop = pre.scrollHeight;
+    }
+    $("updated").textContent = "updated " + new Date().toLocaleTimeString();
+  } catch (err) {
+    $("offline").style.display = "block";
+  }
+}
+
+document.addEventListener("click", async (ev) => {
+  const c = ev.target.closest("[data-cancel]");
+  if (c && confirm(`Cancel job #${c.dataset.cancel}?`)) { await api("POST", `/jobs/${c.dataset.cancel}/cancel`).catch(alert); refresh(); }
+  if (ev.target.id === "pauseBtn") { await api("POST", ev.target.dataset.paused ? "/resume" : "/pause").catch(alert); refresh(); }
+});
+
+refresh();
+setInterval(refresh, POLL_MS);
+</script>
+</body>
+</html>
