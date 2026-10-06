@@ -7,3 +7,4 @@ cmake-build-*/
 /project.zip
 /python/demo_app/user_data/
 /python/viewer/*.dll
+/python/scheduler/state/

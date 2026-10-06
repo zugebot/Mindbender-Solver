@@ -37,9 +37,16 @@
 //                        [--no-recover] [--batched] [--ram-gb GB] [--no-large-pages]
 //                        [--solutions file]
 //                        [--table-depth 6|7 [--d7-partitions N [--d7-first-partition F]]]
+//                        [--progress-file path.json [--progress-interval SECONDS]]
+//
+// --progress-file: a background thread rewrites a small JSON status (phase,
+// done/total units, elapsed) every few seconds for python/scheduler; workers
+// only add to an atomic counter once per seed / partition. Log lines are
+// flushed as they are written, so a redirected log can be followed live.
 //                        [--d7-sample N [--d7-pass-budget STATES]]
 
 #include "src/chuzzles/include.hpp"
+#include "src/utils/progress_reporter.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -95,6 +102,8 @@ namespace {
         u32 tableDepth = 6;
         u32 d7Partitions = 256;   // depth 7: build/probe only key partitions
         u32 d7FirstPartition = 0; //   [first, first + count)
+        std::string progressFile;
+        double progressInterval = 5.0;
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }
         MUND bool d7Subset() const { return tableDepth == 7 && (d7FirstPartition != 0 || d7End() != PARTITION_COUNT); }
@@ -171,6 +180,7 @@ namespace {
         fs::create_directories(dir);
 
         Timer d5Timer;
+        g_progress.phase("d6-build", 0, "depth-5 frontier");
         JVec<B1B2> depth5;
         JVec<u64> depth5Hashes;
         buildUniqueNoneDepthFrontierB1B2<5>(root, depth5, depth5Hashes, false);
@@ -211,6 +221,7 @@ namespace {
             buf.clear();
         };
 
+        g_progress.phase("d6-build", chunkCount, "expand depth 5 -> 6");
         parallelFor(threads, chunkCount, [&](const u32 t, const std::size_t c) {
             B1B2 children[60];
             u64 childHashes[60];
@@ -231,6 +242,7 @@ namespace {
                     }
                 }
             }
+            g_progress.add();
         });
         for (u32 t = 0; t < threads; ++t) {
             for (u32 p = 0; p < PARTITION_COUNT; ++p) {
@@ -270,6 +282,7 @@ namespace {
         Timer sortTimer;
         std::vector<u64> uniqueCounts(PARTITION_COUNT, 0);
         const u32 sortThreads = std::max(1U, threads / 2);
+        g_progress.phase("d6-build", PARTITION_COUNT, "sort + de-dupe partitions");
         parallelFor(sortThreads, PARTITION_COUNT, [&](u32, const std::size_t p) {
             const fs::path raw = rawPath(dir, static_cast<u32>(p));
             std::vector<B1B2> states = readAll<B1B2>(raw);
@@ -291,6 +304,7 @@ namespace {
             writeAll(sortedPath(dir, static_cast<u32>(p)), states.data(), states.size());
             fs::remove(raw);
             uniqueCounts[p] = w;
+            g_progress.add();
         });
         u64 uniqueTotal = 0;
         for (const u64 c : uniqueCounts) {
@@ -737,7 +751,8 @@ namespace {
 
         AlignedWords bloom;
         std::vector<u32> starts(bucketsPerPartition + 1);
-        for (u32 p = 0; p < PARTITION_COUNT; ++p) {
+        g_progress.phase("d6-index", PARTITION_COUNT, "fingerprint index of the depth-6 table");
+        for (u32 p = 0; p < PARTITION_COUNT; ++p, g_progress.add()) {
             const std::vector<B1B2> states = readAll<B1B2>(sortedPath(dir, p));
             std::vector<u64> keys(states.size());
             bloom.allocate(meta.bloomBlocksPerPartition * 8);
@@ -948,15 +963,20 @@ namespace {
         std::vector<KeyedState> candidates;
         double loadSeconds = 0.0, probeSeconds = 0.0;
         u64 streamedTotal = 0, inRangeTotal = 0, bloomPassTotal = 0;
+        g_progress.phase("probe", static_cast<u64>(passes.size()) * seeds.size(),
+                         "pass 1/" + std::to_string(passes.size()) + " loading index");
 
         for (std::size_t pass = 0; pass < passes.size(); ++pass) {
             const auto [pBegin, pEnd] = passes[pass];
+            const std::string passLabel = "pass " + std::to_string(pass + 1) + "/" + std::to_string(passes.size());
+            g_progress.detail(passLabel + " loading index");
 
             Timer loadTimer;
             FingerprintRange index;
             index.load(files, meta, counts, pBegin, pEnd);
             const double passLoad = loadTimer.getSeconds();
             loadSeconds += passLoad;
+            g_progress.detail(passLabel + " streaming");
 
             Timer probeTimer;
             std::mutex candidateLock;
@@ -1003,6 +1023,7 @@ namespace {
                     std::lock_guard<std::mutex> lock(candidateLock);
                     candidates.insert(candidates.end(), sink.found.begin(), sink.found.end());
                 }
+                g_progress.add();   // one relaxed atomic add per seed (~ms of work)
             });
             const double passProbe = probeTimer.getSeconds();
             probeSeconds += passProbe;
@@ -1042,6 +1063,7 @@ namespace {
     std::vector<B1B2> verifyAgainstTable(const fs::path& dir, const FingerprintMeta& meta,
                                          const std::vector<KeyedState>& candidates) {
         Timer verifyTimer;
+        g_progress.phase("verify", candidates.size(), "candidates against the depth-6 states on disk");
         constexpr std::size_t SEQUENTIAL_READ_THRESHOLD = 4096;
         const u64 bucketsPer = meta.bucketsPerPartition();
         const u32 shift = meta.bucketShift();
@@ -1088,6 +1110,7 @@ namespace {
                 } else {
                     ++falseMatches;
                 }
+                g_progress.add();
             }
         }
         std::sort(middles.begin(), middles.end());
@@ -1140,6 +1163,7 @@ namespace {
                     }
                 }
             });
+            g_progress.add();   // one depth-6 partition scanned
         }
     }
 
@@ -1208,7 +1232,9 @@ namespace {
         const Timer total;
 
         // Pass 0: exact raw child count per partition, to size every buffer.
+        // Progress unit: one depth-6 partition scanned (256 per pass).
         Timer countTimer;
+        g_progress.phase("d7-index", PARTITION_COUNT, "count pass");
         std::vector<std::vector<u64>> rawPer(threads, std::vector<u64>(PARTITION_COUNT, 0));
         scanDepth6Children(dir, isFat, threads, [&](const u32 t, const u64 key) {
             ++rawPer[t][key >> PARTITION_SHIFT];
@@ -1253,6 +1279,7 @@ namespace {
             groups.emplace_back(p, q);
             p = q;
         }
+        g_progress.total(static_cast<u64>(PARTITION_COUNT) * (1 + groups.size()));
         tcout << "depth-7 index build: 2^" << meta.bucketBits << " buckets/partition, "
               << meta.bloomBlocksPerPartition << " Bloom blocks/partition, RAM budget " << budget / 1e9
               << " GB -> " << groups.size() << " pass(es) over the depth-6 table\n";
@@ -1268,6 +1295,8 @@ namespace {
         for (std::size_t g = 0; g < groups.size(); ++g) {
             const auto [g0, g1] = groups[g];
             const u32 gN = g1 - g0;
+            g_progress.detail("pass " + std::to_string(g + 1) + "/" + std::to_string(groups.size())
+                              + " partitions [" + std::to_string(g0) + "," + std::to_string(g1) + ")");
             Timer scanTimer;
             std::vector<std::unique_ptr<u64[]>> keys(gN);
             std::vector<std::atomic<u64>> fill(gN);
@@ -1407,6 +1436,7 @@ namespace {
         std::vector<std::pair<KeyedState, u32>> hits;   // (depth-6 fingerprint hit, candidate)
         std::mutex hitLock;
         constexpr std::size_t CHUNK = 4096;
+        g_progress.phase("d7-confirm", (candidates.size() + CHUNK - 1) / CHUNK, "neighbours vs depth-6 index");
         parallelFor(threads, (candidates.size() + CHUNK - 1) / CHUNK, [&](u32, const std::size_t c) {
             std::vector<std::pair<KeyedState, u32>> local;
             std::vector<KeyedState> found;
@@ -1434,6 +1464,7 @@ namespace {
                 std::lock_guard<std::mutex> lock(hitLock);
                 hits.insert(hits.end(), local.begin(), local.end());
             }
+            g_progress.add();
         });
         std::sort(hits.begin(), hits.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
         std::vector<KeyedState> uniqueChildren;
@@ -1676,6 +1707,8 @@ namespace {
             else if (a == "--table-depth") cfg.tableDepth = static_cast<u32>(std::stoul(next()));
             else if (a == "--d7-partitions") cfg.d7Partitions = static_cast<u32>(std::stoul(next()));
             else if (a == "--d7-first-partition") cfg.d7FirstPartition = static_cast<u32>(std::stoul(next()));
+            else if (a == "--progress-file") cfg.progressFile = next();
+            else if (a == "--progress-interval") cfg.progressInterval = std::stod(next());
             else cfg.puzzle = a;
         }
         if (cfg.threads == 0) {
@@ -1697,6 +1730,8 @@ namespace {
 int main(const int argc, char** argv) {
     const Config cfg = parseArgs(argc, argv);
     g_largePagesWanted = cfg.largePages;
+    tcout << std::unitbuf;   // flush every line: a redirected log can be followed live
+    g_progress.start(cfg.progressFile, cfg.progressInterval);
     const BoardPair* pair = BoardLookup::getBoardPair(cfg.puzzle);
     if (pair == nullptr) {
         tcout << "Unknown puzzle: " << cfg.puzzle << '\n';
@@ -1792,6 +1827,7 @@ int main(const int argc, char** argv) {
 
     double recoverSeconds = 0.0;
     if (cfg.recover && !middles.empty()) {
+        g_progress.phase("recovery", middles.size(), "full solutions through the middles");
         const Timer recoverTimer;
         BoardSolverFrontier solver(pair);
         solver.setWriteDirectory((dir / "solutions").string());
@@ -1814,5 +1850,7 @@ int main(const int argc, char** argv) {
 
     tcout << "TOTAL: " << total.getSeconds() << "s (build " << buildSeconds << "s, probe "
           << probeSeconds << "s, recovery " << recoverSeconds << "s)\n";
+    g_progress.phase("done", 0, "exit " + std::to_string(status));
+    g_progress.stop();
     return status;
 }
