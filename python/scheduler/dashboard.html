@@ -204,7 +204,18 @@ async function refresh() {
     if (live) {
       const pre = $("log");
       const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
-      pre.textContent = await api("GET", `/jobs/${live.id}/log?tail=40`);
+      let text = await api("GET", `/jobs/${live.id}/log?tail=40`);
+      // The solver only logs between steps (a probe pass can take minutes to
+      // hours), so show the live counter under the last log line.
+      const e = (s.running && s.running.eta) || {};
+      if (s.running && e.total) {
+        const unit = e.phase === "probe" ? "seeds" : e.phase && e.phase.endsWith("index") ? "partitions" : "units";
+        text += `\n> now: ${e.phase} ${e.detail || ""} - ${Number(e.done).toLocaleString()} / ${Number(e.total).toLocaleString()} ${unit}`
+              + ` (${e.percent}%), ${dur(e.phase_remaining)} left in this step - the log adds a line when it finishes\n`;
+      } else if (s.finalizing) {
+        text += `\n> now: validating and recording the results\n`;
+      }
+      pre.textContent = text;
       if (atBottom) pre.scrollTop = pre.scrollHeight;
     }
     $("updated").textContent = "updated " + new Date().toLocaleTimeString();
