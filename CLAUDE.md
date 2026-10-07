@@ -108,7 +108,7 @@ Done (2026-10-06, verified):
    6.7 B states) and it is disk-bound. X: (Team T253 1 TB SATA) measured **32 MB/s sustained write**
    once its cache is exhausted. `--ram-build` (in-RAM sort, no raw spill) is correct (6-2: identical 64
    solutions) but slower here (475 s vs ~200 s) because the disk build's writes hit the OS file cache.
-   **Next: build no table at all**: keep the index in RAM (built from 8-byte keys per pass, like the
+   **Done 2026-10-07 (no-table mode, see item 3 under "Done")**: keep the index in RAM (built from 8-byte keys per pass, like the
    depth-7 builder) and confirm candidates by regenerating depth 6 from depth 5 once. Est. 16-3 build
    55 min -> ~2-4 min, and ~140 GB less written per puzzle. Fall back to disk when the index > RAM.
 
