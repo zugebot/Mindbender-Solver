@@ -1,0 +1,28 @@
+[0:00:00.000] puzzle 18-3 <4,3,6> = 13 moves, forward, threads 16, table dir X:\mindbender_d6\18-3_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\18-3_goal_d6
+[0:00:09.581] depth-5 exact unique: 114415235 states in 9.58027s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:21.911] depth-6 raw children: 6840497262, de-dupe ratio 0.637069 -> ~4357866021 unique (counted in 21.9107s)
+[0:00:21.911] fingerprint index: 18.7491 GB over partitions [0,256), RAM budget 43.2037 GB -> 1 pass(es)
+[0:00:22.239] left seeds (exact depth 4): 4108333 in 0.327493s
+[0:00:22.520]   index build: 26.3678 GB for keys -> about 3 regeneration(s) of depth 6
+[0:03:05.283]   index for partitions [0,256) built in RAM: 4355862316 unique states in 163.053s
+[0:03:25.429] calibrate: 49536 seeds in 20.1328s, ns/state per thread: 32/plain=64.4674 32/pipelined=64.3669 64/plain=60.7475 64/pipelined=60.8603 128/plain=58.9119 128/pipelined=59.2842 -> 128/plain (1.0943x vs 32/plain)
+[0:29:01.098]   pass 1/1 partitions [0,256): load 18.7491 GB (large pages) in 163.054s, stream+probe 419695854798 left states in 1555.8s (269.762 M/s), Bloom pass 1.14689%
+[0:29:01.120] probe totals: load 163.054s, stream+probe 1555.8s, 419695854798 left states streamed, 167682 unique candidates
+[0:29:01.148] depth-6 exact unique: 4355862316 (index-only, in RAM; no table written)
+[0:29:01.149] BUILD fingerprint index: 4355862316 states, 2^22 buckets/partition, built in RAM in 163.042s
+[0:29:01.149] BUILD depth-6 table: 21.9107s (no table; depth-5 frontier + counts)
+[0:29:15.034] verify: 0 confirmed, 167682 fingerprint false matches, 13.8852s (by regeneration)
+[0:29:15.114] unique middle states (7 from left, 6 from table side): 0
+[0:29:15.114] PROBE phase: 1755.11s
+[0:29:15.114] TOTAL: 1755.11s (build 0s, probe 1755.11s, recovery 0s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        313055
+delete calls:     313055
+malloc calls:     8532615
+free calls:       8535518
+calloc calls:     3
+realloc calls:    38
