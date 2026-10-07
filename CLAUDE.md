@@ -82,6 +82,13 @@ Done (2026-10-06, verified):
 2. RAM budget = free RAM at start - max(3 GB, 10% of RAM) - the run's own seeds, instead of
    60% of free: 16.6 GB vs 12.8 GB on this machine, so a ~13 GB index (12-1) needs 1 pass, not 2
    (saves one full left stream, ~6 min of ~47 for 12-1).
+3. No-table depth 6 (2026-10-07, default for `--table-depth 6`): the depth-5 frontier stays in RAM,
+   each probe pass builds its index slice in RAM from regenerated depth-6 keys, and hits are confirmed
+   by regenerating depth 6 once more. Nothing is written, so X:'s slow sustained writes (32-70 MB/s)
+   no longer matter. Exact on 6-2/9-2 (12 moves) and 9-3 (13 moves, 13 solutions); 9-3 index built in
+   84 s, 24.6 min total vs 40+ min disk builds. An existing complete table (e.g. 6-4) is still reused;
+   `--disk-table` forces the old path. De-dupe is by 64-bit key, so the "unique" count is a little
+   below the exact state count (StateHash collides); the final check compares full states.
 - Background CPU users slow runs: the MuMu Android emulator (`MuMuVMMHeadless`) cost ~6%.
 - RAM upgraded 2026-10-06 to 64 GB (2x32 GB Corsair CMK64GX4M2E3200C16). The Lenovo BIOS has no
   XMP, so it runs at JEDEC 2133 MHz (old Crucial 2x16 GB ran at 2933). Measured anyway: 6-4 13-move

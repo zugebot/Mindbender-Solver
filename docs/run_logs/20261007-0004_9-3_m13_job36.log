@@ -1,0 +1,35 @@
+[0:00:00.001] puzzle 9-3 <4,3,6> = 13 moves, forward, threads 16, table dir X:\mindbender_d6\9-3_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\9-3_goal_d6
+[0:00:06.020] depth-5 exact unique: 64932828 states in 6.01937s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:12.962] depth-6 raw children: 3854649856, de-dupe ratio 0.563754 -> ~2173073473 unique (counted in 12.9617s)
+[0:00:12.963] fingerprint index: 9.35612 GB over partitions [0,256), RAM budget 43.916 GB -> 1 pass(es)
+[0:00:13.267] left seeds (exact depth 4): 3681166 in 0.304522s
+[0:01:37.574]   index for partitions [0,256) built in RAM: 2173039544 unique states in 84.305s
+[0:01:57.582] calibrate: 52224 seeds in 20.0062s, ns/state per thread: 32/plain=63.2355 32/pipelined=62.979 64/plain=60.0295 64/pipelined=59.9113 128/plain=57.9761 128/pipelined=58.5262 -> 128/plain (1.09072x vs 32/plain)
+[0:24:28.256]   pass 1/1 partitions [0,256): load 9.35612 GB (large pages) in 84.3057s, stream+probe 360210164941 left states in 1370.68s (262.797 M/s), Bloom pass 1.14789%
+[0:24:28.275] probe totals: load 84.3057s, stream+probe 1370.68s, 360210164941 left states streamed, 115704 unique candidates
+[0:24:28.296] depth-6 exact unique: 2173039544 (index-only, in RAM; no table written)
+[0:24:28.296] BUILD fingerprint index: 2173039544 states, 2^21 buckets/partition, built in RAM in 84.3049s
+[0:24:28.296] BUILD depth-6 table: 12.9617s (no table; depth-5 frontier + counts)
+[0:24:36.152] verify: 2 confirmed, 115702 fingerprint false matches, 7.85632s (by regeneration)
+[0:24:36.226] unique middle states (7 from left, 6 from table side): 2
+[0:24:36.226] PROBE phase: 1476.23s
+[0:24:37.089] 
+[0:24:37.089] Finalizing exact solver results...
+[0:24:37.090] Original exact solutions: 13
+[0:24:37.090] Valid exact solutions: 13
+[0:24:37.090] Skipped exact solutions: 0
+[0:24:37.090] Final exact solutions: 13
+[0:24:37.090] Saving expanded results to "X:\\mindbender_d6\\9-3_goal_d6\\solutions\\levels\\9-3_c13_13.txt".
+[0:24:37.090] RECOVERY: 13 solutions of 13 moves in 0.863219s (written under X:\mindbender_d6\9-3_goal_d6\solutions\levels)
+[0:24:37.091] TOTAL: 1477.09s (build 0s, probe 1476.23s, recovery 0.863219s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        268060
+delete calls:     268060
+malloc calls:     7633547
+free calls:       7636783
+calloc calls:     5
+realloc calls:    65

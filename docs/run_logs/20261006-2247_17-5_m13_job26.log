@@ -1,0 +1,5 @@
+[0:00:00.001] puzzle 17-5 <4,3,6> = 13 moves, forward, threads 16, table dir X:\mindbender_d6\17-5_goal_d6
+[0:00:13.854] depth-5 exact unique: 162040755 states in 13.8524s
+[0:16:18.855] depth-6 raw children: 9714818545 (155.437 GB) written in 965.001s = 161.075 MB/s
+[0:16:18.856] partition sizes (mixed key): min 37921506, max 37988305, avg 37948509
+[0:16:18.856] same split on StateHash top 8 bits would be: 108/256 partitions used, max 1549406272
