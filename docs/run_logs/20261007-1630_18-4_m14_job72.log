@@ -1,0 +1,48 @@
+[0:00:00.001] puzzle 18-4 <4,3,7> = 14 moves, forward, threads 16, table dir X:\mindbender_d6\18-4_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\18-4_goal_d6
+[0:00:04.231] depth-5 exact unique: 50434243 states in 4.23027s (no table: depth 7 is regenerated in RAM, nothing is written)
+[0:00:04.261] bucket counts: 4.29497 GB, large pages yes
+[0:07:18.506]     regenerated depth 7 for partitions [0,256): 80646660468 keys in blocks of ~400000000, generate 155.905s, group+write 278.34s
+[0:07:21.020] depth-7 raw descendants: 80646660468 (1599.11 per depth-5 state), de-dupe ratio 0.571171 -> ~46063019164 unique; 2^23 buckets/partition, largest bucket 3229 (counted in 436.762s)
+[0:07:21.021] fingerprint index: 228.645 GB over partitions [0,256), RAM budget 37.4053 GB -> 7 pass(es)
+[0:07:21.174] left seeds (exact depth 4): 1625148 in 0.141555s
+[0:12:17.341]     regenerated depth 7 for partitions [0,41): 12916041694 keys in blocks of ~250000000, generate 114.159s, group+write 180.258s
+[0:12:42.939]   index for partitions [0,41) built in RAM: raw 12916041694 -> 7382137031 fingerprints in 321.762s
+[0:13:02.952] calibrate: 224256 seeds in 20.0119s, ns/state per thread: 32/plain=25.7636 32/pipelined=25.9377 64/plain=25.5595 64/pipelined=25.4875 128/plain=24.873 128/pipelined=24.9545 -> 128/plain (1.03581x vs 32/plain)
+[0:15:02.885]   pass 1/7 partitions [0,41): load 36.6188 GB (normal pages) in 321.763s, stream+probe 82975071951 left states in 139.946s (592.91 M/s), Bloom pass 1.15753%
+[0:20:12.649]     regenerated depth 7 for partitions [41,82): 12916622964 keys in blocks of ~250000000, generate 127.291s, group+write 180.433s
+[0:20:38.699]   index for partitions [41,82) built in RAM: raw 12916622964 -> 7382249387 fingerprints in 335.811s
+[0:23:10.654]   pass 2/7 partitions [41,82): load 36.62 GB (normal pages) in 335.812s, stream+probe 82975071951 left states in 151.954s (546.054 M/s), Bloom pass 1.15893%
+[0:28:32.373]     regenerated depth 7 for partitions [82,123): 12915342513 keys in blocks of ~250000000, generate 139.685s, group+write 181.377s
+[0:28:58.902]   index for partitions [82,123) built in RAM: raw 12915342513 -> 7382139241 fingerprints in 348.246s
+[0:31:42.005]   pass 3/7 partitions [82,123): load 36.6174 GB (normal pages) in 348.248s, stream+probe 82975071951 left states in 163.101s (508.733 M/s), Bloom pass 1.1581%
+[0:37:09.248]     regenerated depth 7 for partitions [123,164): 12916687698 keys in blocks of ~250000000, generate 143.897s, group+write 181.292s
+[0:37:34.978]   index for partitions [123,164) built in RAM: raw 12916687698 -> 7382216909 fingerprints in 352.972s
+[0:40:22.284]   pass 4/7 partitions [123,164): load 36.6201 GB (normal pages) in 352.972s, stream+probe 82975071951 left states in 167.305s (495.95 M/s), Bloom pass 1.15834%
+[0:45:40.554]     regenerated depth 7 for partitions [164,205): 12916001630 keys in blocks of ~250000000, generate 137.896s, group+write 179.577s
+[0:46:05.993]   index for partitions [164,205) built in RAM: raw 12916001630 -> 7382208963 fingerprints in 343.706s
+[0:48:45.731]   pass 5/7 partitions [164,205): load 36.6188 GB (normal pages) in 343.707s, stream+probe 82975071951 left states in 159.737s (519.447 M/s), Bloom pass 1.15763%
+[0:53:46.717]     regenerated depth 7 for partitions [205,246): 12915883096 keys in blocks of ~250000000, generate 119.198s, group+write 181s
+[0:54:13.366]   index for partitions [205,246) built in RAM: raw 12915883096 -> 7382101391 fingerprints in 327.632s
+[0:56:36.521]   pass 6/7 partitions [205,246): load 36.6185 GB (normal pages) in 327.633s, stream+probe 82975071951 left states in 143.155s (579.619 M/s), Bloom pass 1.15757%
+[0:58:48.572]     regenerated depth 7 for partitions [246,256): 3150080873 keys in blocks of ~250000000, generate 98.567s, group+write 33.312s
+[0:58:56.230]   index for partitions [246,256) built in RAM: raw 3150080873 -> 1800458663 fingerprints in 139.707s
+[1:00:22.301]   pass 7/7 partitions [246,256): load 8.93108 GB (normal pages) in 139.708s, stream+probe 82975071951 left states in 86.0694s (964.048 M/s), Bloom pass 1.15637%
+[1:00:22.324] probe totals: load 2169.84s, stream+probe 1011.27s, 580825503657 left states streamed, 174534 unique candidates
+[1:00:23.167] BUILD depth-7 index: 46093511585 fingerprints (bucket-unique; raw 80646660468), built in RAM in 2169.84s
+[1:00:23.168] BUILD depth-7 setup: 441.02s (no table; depth-5 frontier + count pass)
+[1:03:48.623] verify: 0 confirmed, 174534 fingerprint false matches, 205.455s (by regeneration)
+[1:03:48.623] depth-7 confirmed middles: 0 of 174534 fingerprint hits
+[1:03:48.713] unique middle states (7 from left, 7 from table side): 0
+[1:03:48.713] PROBE phase: 3828.71s
+[1:03:48.713] TOTAL: 3828.71s (build 0s, probe 3828.71s, recovery 0s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        516692
+delete calls:     516692
+malloc calls:     931120532
+free calls:       931147737
+calloc calls:     3
+realloc calls:    38
