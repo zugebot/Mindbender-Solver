@@ -1,0 +1,27 @@
+[0:00:00.001] puzzle 17-5 <4,3,6> = 13 moves, forward, threads 16, table dir X:\mindbender_d6\17-5_goal_d6
+[0:00:00.008] no-table mode: nothing is written to X:\mindbender_d6\17-5_goal_d6
+[0:00:13.556] depth-5 exact unique: 162040755 states in 13.5485s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:31.006] depth-6 raw children: 9714818545, de-dupe ratio 0.63943 -> ~6211945169 unique (counted in 30.9981s)
+[0:00:31.006] fingerprint index: 29.1914 GB over partitions [0,256), RAM budget 40.8961 GB -> 1 pass(es)
+[0:00:31.335] left seeds (exact depth 4): 3995235 in 0.329369s
+[0:10:08.875]   index for partitions [0,256) built in RAM: 6212639568 unique states in 577.537s
+[0:10:29.026] calibrate: 28416 seeds in 20.1621s, ns/state per thread: 32/plain=112.257 32/pipelined=114.44 64/plain=109.879 64/pipelined=109.744 128/plain=105.991 128/pipelined=106.055 -> 128/plain (1.05912x vs 32/plain)
+[0:57:10.686]   pass 1/1 partitions [0,256): load 29.1914 GB (normal pages) in 577.538s, stream+probe 404765076021 left states in 2821.81s (143.442 M/s), Bloom pass 1.15131%
+[0:57:10.709] probe totals: load 577.538s, stream+probe 2821.81s, 404765076021 left states streamed, 110837 unique candidates
+[0:57:10.958] depth-6 exact unique: 6212639568 (index-only, in RAM; no table written)
+[0:57:10.958] BUILD fingerprint index: 6212639568 states, 2^23 buckets/partition, built in RAM in 577.537s
+[0:57:10.958] BUILD depth-6 table: 30.9981s (no table; depth-5 frontier + counts)
+[0:57:30.297] verify: 0 confirmed, 110837 fingerprint false matches, 19.3387s (by regeneration)
+[0:57:31.291] unique middle states (7 from left, 6 from table side): 0
+[0:57:31.291] PROBE phase: 3451.28s
+[0:57:31.291] TOTAL: 3451.29s (build 0s, probe 3451.28s, recovery 0s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        226240
+delete calls:     226240
+malloc calls:     8220116
+free calls:       8223531
+calloc calls:     3
+realloc calls:    38
