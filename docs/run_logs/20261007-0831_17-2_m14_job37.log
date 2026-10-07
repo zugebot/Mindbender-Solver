@@ -1,0 +1,9 @@
+[0:00:00.001] puzzle 17-2 <5,3,6> = 14 moves, forward, threads 16, table dir X:\mindbender_d6\17-2_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\17-2_goal_d6
+[0:00:04.083] depth-5 exact unique: 46102215 states in 4.08248s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:07.651] depth-6 raw children: 2202153848, de-dupe ratio 0.603958 -> ~1330008259 unique (counted in 7.65002s)
+[0:00:07.651] fingerprint index: 6.56025 GB over partitions [0,256), RAM budget 44.7511 GB -> 1 pass(es)
+[0:00:11.436] left seeds (exact depth 5): 43104702 in 3.78465s
+[0:00:11.525]   index build: 39.3832 GB for keys -> about 1 regeneration(s) of depth 6
+[0:00:52.752]   index for partitions [0,256) built in RAM: 1330149874 unique states in 41.3267s
+[0:01:12.797] calibrate: 110976 seeds in 20.0309s, ns/state per thread: 32/plain=59.3262 32/pipelined=59.6799 64/plain=57.1009 64/pipelined=56.7033 128/plain=54.0644 128/pipelined=54.4013 -> 128/plain (1.09733x vs 32/plain)
