@@ -1,0 +1,10 @@
+[0:00:00.000] puzzle 14-3 <4,3,6> = 13 moves, forward, threads 16, table dir X:\mindbender_d6\14-3_goal_d6
+[0:00:09.519] depth-5 exact unique: 113692978 states in 9.51751s
+[0:04:17.342] depth-6 raw children: 6773887310 (108.382 GB) written in 247.823s = 437.337 MB/s
+[0:04:17.342] partition sizes (mixed key): min 26429891, max 26487646, avg 26460497
+[0:04:17.342] same split on StateHash top 8 bits would be: 196/256 partitions used, max 1608743404
+[0:20:38.840] depth-6 exact unique: 4255641059 (68.0903 GB on disk), sort+dedupe 981.498s
+[0:20:38.840] BUILD depth-6 table: 1238.84s
+[0:24:53.753] BUILD fingerprint index: 4255641059 states, 2^22 buckets/partition, 18.1295 GB (4.26012 B/state) in 254.912s
+[0:24:53.820] fingerprint index: 18.1295 GB over partitions [0,256), RAM budget 17.8044 GB -> 2 pass(es)
+[0:24:54.454] left seeds (exact depth 4): 3966119 in 0.288826s

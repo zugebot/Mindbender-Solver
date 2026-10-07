@@ -1,0 +1,26 @@
+[0:00:00.000] puzzle 17-2 <4,3,6> = 13 moves, forward, threads 16, table dir X:\mindbender_d6\17-2_goal_d6
+[0:00:03.924] depth-5 exact unique: 46102215 states in 3.92319s
+[0:01:17.692] depth-6 raw children: 2202153848 (35.2345 GB) written in 73.767s = 477.646 MB/s
+[0:01:17.692] partition sizes (mixed key): min 8581116, max 8618666, avg 8602163
+[0:01:17.692] same split on StateHash top 8 bits would be: 192/256 partitions used, max 486007680
+[0:03:04.053] depth-6 exact unique: 1330161993 (21.2826 GB on disk), sort+dedupe 106.361s
+[0:03:04.053] BUILD depth-6 table: 184.052s
+[0:04:13.904] BUILD fingerprint index: 1330161993 states, 2^20 buckets/partition, 5.39844 GB (4.05849 B/state) in 69.851s
+[0:04:13.985] fingerprint index: 5.39844 GB over partitions [0,256), RAM budget 12.2615 GB -> 1 pass(es)
+[0:04:14.113] left seeds (exact depth 4): 1483208 in 0.127212s
+[0:08:58.867]   pass 1/1 partitions [0,256): load 5.39844 GB (normal pages) in 6.02183s, stream+probe 72346885442 left states in 278.73s (259.559 M/s), Bloom pass 1.25881%
+[0:08:59.271] probe totals: load 6.02183s, stream+probe 278.73s, 72346885442 left states streamed, 32551 unique candidates
+[0:09:03.020] verify: 0 confirmed, 32551 fingerprint false matches, 3.7451s
+[0:09:03.020] unique middle states (7 from left, 6 from table side): 0
+[0:09:03.020] PROBE phase: 358.967s
+[0:09:03.020] TOTAL: 543.02s (build 184.052s, probe 358.967s, recovery 0s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        129298
+delete calls:     129298
+malloc calls:     3100472
+free calls:       3105239
+calloc calls:     3
+realloc calls:    38

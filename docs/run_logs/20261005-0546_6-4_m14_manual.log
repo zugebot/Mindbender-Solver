@@ -1,0 +1,20 @@
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        2199472
+delete calls:     2199472
+malloc calls:     103486814
+free calls:       103487247
+calloc calls:     1
+realloc calls:    21
+[0:00:00.000] puzzle 6-4 <5,3,6> = 14 moves, forward, threads 16, table dir X:/mindbender_d6\6-4_goal_d6
+[0:00:00.028] reusing depth-6 table: 1531940396 states (24.511 GB)
+[0:00:00.029] fingerprint index: 7.12901 GB total, RAM budget 13.868 GB -> 1 pass(es)
+[0:00:04.088] left seeds (exact depth 5): 50643457 in 4.05966s
+[2:33:01.747]   pass 1/1 partitions [0,256): load 7.12901 GB (large pages) in 18.3014s, stream+probe 2590469330054 left states in 9159.36s (282.822 M/s), Bloom pass 1.25676%
+[2:33:02.067] probe totals: load 18.3014s, stream+probe 9159.36s, 2590469330054 left states streamed, 770967 unique candidates
+[2:35:14.520] verify: 0 confirmed, 770967 fingerprint false matches, 132.452s
+[2:35:14.617] unique middle states (8 from left, 6 from table side): 0
+[2:35:14.617] PROBE phase: 9314.59s
+[2:35:14.617] TOTAL: 9314.62s (build 0s, probe 9314.59s, recovery 0s)

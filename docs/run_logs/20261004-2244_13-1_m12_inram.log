@@ -1,0 +1,61 @@
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        2796
+delete calls:     2796
+malloc calls:     8464
+free calls:       14316
+calloc calls:     23
+realloc calls:    5137
+[0:00:00.000] 4 3 0 5 3 0   0 3 3 4 4 3
+[0:00:00.000] 5 3 0 3 3 3   3 3 4 4 3 3
+[0:00:00.000] 3 3 4 0 4 3   3 4 4 3 3 0
+[0:00:00.000] 3 3 3 0 4 0   4 4 3 3 0 0
+[0:00:00.000] 0 5 4 3 4 4   4 3 3 0 0 5
+[0:00:00.000] 3 3 3 4 0 4   3 3 0 0 5 5
+[0:00:00.000] 
+[0:00:00.000] solver mode: exact-state exhaustive
+[0:00:00.000] right frontier validation: full board state
+[0:00:00.000] solution recovery: global exact-depth recovery
+[0:00:00.001] search direction: auto -> forward
+[0:00:00.002] seed(2) exact unique task count: 2512
+[0:00:10.737] right frontier(5) exact unique size: 121456234
+[0:00:13.134] right frontier exact index built for 121456234 states across 121453917 hash buckets
+[0:14:08.161] 
+[0:14:08.161] Finalizing exact solver results...
+[0:14:08.162] Original exact solutions: 68
+[0:14:08.162] Valid exact solutions: 68
+[0:14:08.162] Skipped exact solutions: 0
+[0:14:08.162] Final exact solutions: 68
+[0:14:08.162] Saving expanded results to "C:/Users/jerrin/CLionProjects/Mindbender-Solver\\levels\\13-1_c12_68.txt".
+[0:14:08.164] 
+[0:14:08.164] Total Time: 848.163
+[0:14:08.165] Puzzle: 13-1
+[0:14:08.165] Total depth: 12
+[0:14:08.165] Left seed depth: 2
+[0:14:08.165] Left stream depth: 5
+[0:14:08.165] Right exact frontier depth: 5
+[0:14:08.165] Search direction: forward
+[0:14:08.165] 
+[0:14:08.165] ========== TIMING SUMMARY (COPY/PASTE) ==========
+[0:14:08.165] right frontier gen time: 13.1314s
+[0:14:08.165] left frontier gen time: 0.000704s
+[0:14:08.165] left seed permstream time: 3972.49s (aggregate CPU, exclusive of probe/append)
+[0:14:08.165] left seed probe time: 9312.25s (aggregate CPU, exact full-state lookup)
+[0:14:08.165] left seed total time: 834.904s (worker wall time + global exact recovery)
+[0:14:08.165] left seed worker time: 834.137s (thread launch through final worker join)
+[0:14:08.165] de-dupe at end time: 0.000473s (validation and final exact set ordering)
+[0:14:08.165] left seed post-probe time: 17.0635s (aggregate CPU; append + per-task middle sort/de-dupe)
+[0:14:08.165] left seed aggregate task time: 13301.8s (aggregate CPU across all seed tasks)
+[0:14:08.165] global recovery time: 0.76687s
+[0:14:08.165] global middle sort time: 1.4e-05s
+[0:14:08.165] global middle de-dupe time: 0s
+[0:14:08.165] global path recovery time: 0.647435s
+[0:14:08.165] left seed tasks: 2512
+[0:14:08.165] left streamed states: 366384452203
+[0:14:08.165] left primary hash hits: 154
+[0:14:08.165] left full-state equality checks: 154
+[0:14:08.165] left exact candidate matches: 6
+[0:14:08.165] unique exact middle states: 2
+[0:14:08.165] =================================================

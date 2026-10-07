@@ -1,0 +1,34 @@
+[0:00:00.000] puzzle 18-5 <4,3,6> = 13 moves, forward, threads 16, table dir X:\mindbender_d6\18-5_goal_d6
+[0:00:04.052] depth-5 exact unique: 49326311 states in 4.05049s
+[0:01:25.903] depth-6 raw children: 2364380860 (37.8301 GB) written in 81.8514s = 462.18 MB/s
+[0:01:25.903] partition sizes (mixed key): min 9219964, max 9253385, avg 9235862
+[0:01:25.903] same split on StateHash top 8 bits would be: 192/256 partitions used, max 441641584
+[0:03:43.311] depth-6 exact unique: 1491221896 (23.8596 GB on disk), sort+dedupe 137.407s
+[0:03:43.311] BUILD depth-6 table: 223.31s
+[0:05:04.833] BUILD fingerprint index: 1491221896 states, 2^21 buckets/partition, 6.99594 GB (4.69142 B/state) in 81.5096s
+[0:05:04.888] fingerprint index: 6.99594 GB over partitions [0,256), RAM budget 11.8124 GB -> 1 pass(es)
+[0:05:05.028] left seeds (exact depth 4): 1624034 in 0.139599s
+[0:10:44.570]   pass 1/1 partitions [0,256): load 6.99594 GB (normal pages) in 11.8075s, stream+probe 82595721753 left states in 327.731s (252.023 M/s), Bloom pass 1.25867%
+[0:10:45.062] probe totals: load 11.8075s, stream+probe 327.731s, 82595721753 left states streamed, 23714 unique candidates
+[0:10:49.236] verify: 1 confirmed, 23713 fingerprint false matches, 4.17073s
+[0:10:49.236] unique middle states (7 from left, 6 from table side): 1
+[0:10:49.236] PROBE phase: 425.925s
+[0:10:49.573] 
+[0:10:49.573] Finalizing exact solver results...
+[0:10:49.573] Original exact solutions: 36
+[0:10:49.573] Valid exact solutions: 36
+[0:10:49.573] Skipped exact solutions: 0
+[0:10:49.573] Final exact solutions: 36
+[0:10:49.574] Saving expanded results to "X:\\mindbender_d6\\18-5_goal_d6\\solutions\\levels\\18-5_c13_36.txt".
+[0:10:49.574] RECOVERY: 36 solutions of 13 moves in 0.337043s (written under X:\mindbender_d6\18-5_goal_d6\solutions\levels)
+[0:10:49.575] TOTAL: 649.575s (build 223.31s, probe 425.925s, recovery 0.337043s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        100024
+delete calls:     100024
+malloc calls:     3353046
+free calls:       3358055
+calloc calls:     5
+realloc calls:    55

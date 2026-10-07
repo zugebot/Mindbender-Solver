@@ -1,0 +1,20 @@
+[0:00:00.000] puzzle 9-3 <4,3,6> = 13 moves, forward, threads 16, table dir X:/mindbender_d6\9-3_goal_d6
+[0:00:00.040] reusing depth-6 table: 2173198627 states (34.7712 GB)
+[0:00:00.046] fingerprint index: 9.21366 GB total, RAM budget 13.2179 GB -> 1 pass(es)
+[0:00:00.365] left seeds (exact depth 4): 3681166 in 0.319278s
+[0:20:56.122]   pass 1/1 partitions [0,256): load 9.21366 GB (large pages) in 21.1184s, stream+probe 360210164941 left states in 1234.64s (291.754 M/s), Bloom pass 1.25745%
+[0:20:56.222] probe totals: load 21.1184s, stream+probe 1234.64s, 360210164941 left states streamed, 126668 unique candidates
+[0:21:21.496] verify: 2 confirmed, 126666 fingerprint false matches, 25.274s
+[0:21:21.498] unique middle states (7 from left, 6 from table side): 2
+[0:21:21.498] PROBE phase: 1281.46s
+[0:21:21.511] middle validation vs C:/Users/jerrin/CLionProjects/Mindbender-Solver/build/levels_final/9-3_c13_13.txt: expected 2, missing 0, extra 0  -> EXACT MATCH
+[0:21:22.198] 
+[0:21:22.198] Finalizing exact solver results...
+[0:21:22.198] Original exact solutions: 13
+[0:21:22.198] Valid exact solutions: 13
+[0:21:22.198] Skipped exact solutions: 0
+[0:21:22.198] Final exact solutions: 13
+[0:21:22.198] Saving expanded results to "X:/mindbender_d6\\9-3_goal_d6\\solutions\\levels\\9-3_c13_13.txt".
+[0:21:22.198] RECOVERY: 13 solutions of 13 moves in 0.687185s (written under X:/mindbender_d6\9-3_goal_d6\solutions\levels)
+[0:21:22.198] solution validation: known 13, recovered 13  -> IDENTICAL SET
+[0:21:22.198] TOTAL: 1282.2s (build 0s, probe 1281.46s, recovery 0.687185s)

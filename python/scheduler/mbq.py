@@ -49,6 +49,9 @@ from ctypes import wintypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import run_history  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[2]
 STATE = Path(os.environ.get("MBQ_STATE", Path(__file__).resolve().parent / "state"))
 JOBS_FILE = STATE / "jobs.json"
@@ -417,7 +420,8 @@ class Scheduler:
             job["status"] = "cancelled"
             job["finished"] = now()
             self.save()
-            return job
+        threading.Thread(target=self._record, args=(job,), daemon=True).start()
+        return job
 
     # ---- worker ----------------------------------------------------------
     def loop(self) -> None:
@@ -441,6 +445,7 @@ class Scheduler:
         if job is not None:
             if exited:
                 self._finalize(job)
+                self._record(job)
                 with self.lock:
                     self.save()
             return
@@ -523,7 +528,8 @@ class Scheduler:
         with open(log, "wb") as out:
             popen = subprocess.Popen(cmd, cwd=cwd, stdout=out, stderr=subprocess.STDOUT, creationflags=flags)
         self.proc = ProcessHandle(popen.pid, popen)
-        job.update(status="running", wait_reason="", started=now(), pid=popen.pid, cmd=cmd)
+        job.update(status="running", wait_reason="", started=now(), pid=popen.pid, cmd=cmd,
+                   machine=run_history.machine_label(), solver_commit=run_history.git_commit())
         self.last_seen_phase = None
         self.save()
 
@@ -608,6 +614,13 @@ class Scheduler:
                                 "keep_table": job["keep_table"], "front": True, "parent": job["id"]})
                 notes.append(f"queued {puzzle} at {moves + 1} moves as job {nxt['id']}")
         self._cleanup(job)
+
+    def _record(self, job: dict) -> None:
+        """Permanent history: a row in docs/run_history.csv + the log in docs/run_logs/."""
+        try:
+            run_history.record_job(job, JOB_ROOT / str(job["id"]) / "log.txt")
+        except Exception as exc:
+            job.setdefault("notes", []).append(f"run history not written: {exc}")
 
     def _cleanup(self, job: dict) -> None:
         if job["engine"] != "ssd" or job["keep_table"]:

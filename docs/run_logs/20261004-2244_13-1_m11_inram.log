@@ -1,0 +1,55 @@
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        663
+delete calls:     663
+malloc calls:     1218
+free calls:       1894
+calloc calls:     1
+realloc calls:    179
+[0:00:00.000] 4 3 0 5 3 0   0 3 3 4 4 3
+[0:00:00.000] 5 3 0 3 3 3   3 3 4 4 3 3
+[0:00:00.000] 3 3 4 0 4 3   3 4 4 3 3 0
+[0:00:00.000] 3 3 3 0 4 0   4 4 3 3 0 0
+[0:00:00.000] 0 5 4 3 4 4   4 3 3 0 0 5
+[0:00:00.000] 3 3 3 4 0 4   3 3 0 0 5 5
+[0:00:00.000] 
+[0:00:00.000] solver mode: exact-state exhaustive
+[0:00:00.000] right frontier validation: full board state
+[0:00:00.000] solution recovery: global exact-depth recovery
+[0:00:00.002] search direction: auto -> forward
+[0:00:00.002] seed(1) exact unique task count: 60
+[0:00:10.319] right frontier(5) exact unique size: 121456234
+[0:00:12.705] right frontier exact index built for 121456234 states across 121453917 hash buckets
+[0:00:34.101] No solutions found...
+[0:00:34.101] 
+[0:00:34.101] Total Time: 34.0997
+[0:00:34.101] Puzzle: 13-1
+[0:00:34.101] Total depth: 11
+[0:00:34.101] Left seed depth: 1
+[0:00:34.101] Left stream depth: 5
+[0:00:34.101] Right exact frontier depth: 5
+[0:00:34.101] Search direction: forward
+[0:00:34.101] 
+[0:00:34.101] ========== TIMING SUMMARY (COPY/PASTE) ==========
+[0:00:34.101] right frontier gen time: 12.7036s
+[0:00:34.101] left frontier gen time: 8.1e-05s
+[0:00:34.101] left seed permstream time: 92.4766s (aggregate CPU, exclusive of probe/append)
+[0:00:34.101] left seed probe time: 215.657s (aggregate CPU, exact full-state lookup)
+[0:00:34.101] left seed total time: 21.264s (worker wall time + global exact recovery)
+[0:00:34.101] left seed worker time: 21.264s (thread launch through final worker join)
+[0:00:34.101] de-dupe at end time: 0s (validation and final exact set ordering)
+[0:00:34.101] left seed post-probe time: 0.434745s (aggregate CPU; append + per-task middle sort/de-dupe)
+[0:00:34.101] left seed aggregate task time: 308.569s (aggregate CPU across all seed tasks)
+[0:00:34.101] global recovery time: 1.4e-05s
+[0:00:34.101] global middle sort time: 0s
+[0:00:34.101] global middle de-dupe time: 0s
+[0:00:34.101] global path recovery time: 0s
+[0:00:34.101] left seed tasks: 60
+[0:00:34.101] left streamed states: 8804660419
+[0:00:34.101] left primary hash hits: 0
+[0:00:34.101] left full-state equality checks: 0
+[0:00:34.101] left exact candidate matches: 0
+[0:00:34.101] unique exact middle states: 0
+[0:00:34.101] =================================================

@@ -1,0 +1,34 @@
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        400667
+delete calls:     400667
+malloc calls:     6602463
+free calls:       6607798
+calloc calls:     5
+realloc calls:    241
+[0:00:00.000] puzzle 10-3 <4,3,6> = 13 moves, forward, threads 16, table dir X:/mindbender_d6\10-3_goal_d6
+[0:00:03.727] depth-5 exact unique: 38186838 states in 3.72699s
+[0:01:19.065] depth-6 raw children: 2228203902 (35.6513 GB) written in 75.3373s = 473.222 MB/s
+[0:01:19.065] partition sizes (mixed key): min 8685854, max 8722634, avg 8703921
+[0:01:19.065] same split on StateHash top 8 bits would be: 32/256 partitions used, max 851561982
+[0:03:42.669] depth-6 exact unique: 1153581528 (18.4573 GB on disk), sort+dedupe 143.604s
+[0:03:42.669] BUILD depth-6 table: 222.669s
+[0:04:09.915] BUILD fingerprint index: 1153581528 states, 2^20 buckets/partition, 4.82484 GB (4.18249 B/state) in 27.2455s
+[0:04:09.978] fingerprint index: 4.82484 GB total, RAM budget 12.8792 GB -> 1 pass(es)
+[0:04:10.252] left seeds (exact depth 4): 3098416 in 0.273536s
+[0:20:43.872]   pass 1/1 partitions [0,256): load 4.82484 GB (large pages) in 2.89461s, stream+probe 286905498542 left states in 990.726s (289.591 M/s), Bloom pass 1.25301%
+[0:20:43.962] probe totals: load 2.89461s, stream+probe 990.726s, 286905498542 left states streamed, 93078 unique candidates
+[0:20:49.163] verify: 33 confirmed, 93045 fingerprint false matches, 5.20104s
+[0:20:49.169] unique middle states (7 from left, 6 from table side): 33
+[0:20:49.169] PROBE phase: 1026.5s
+[0:20:50.196] 
+[0:20:50.196] Finalizing exact solver results...
+[0:20:50.203] Original exact solutions: 1648
+[0:20:50.203] Valid exact solutions: 1648
+[0:20:50.203] Skipped exact solutions: 0
+[0:20:50.203] Final exact solutions: 1648
+[0:20:50.204] Saving expanded results to "X:/mindbender_d6\\10-3_goal_d6\\solutions\\levels\\10-3_c13_1648.txt".
+[0:20:50.205] RECOVERY: 1648 solutions of 13 moves in 1.03561s (written under X:/mindbender_d6\10-3_goal_d6\solutions\levels)
+[0:20:50.206] TOTAL: 1250.21s (build 222.669s, probe 1026.5s, recovery 1.03561s)

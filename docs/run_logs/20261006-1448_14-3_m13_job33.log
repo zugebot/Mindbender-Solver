@@ -1,0 +1,20 @@
+[0:00:00.000] puzzle 14-3 <4,3,6> = 13 moves, forward, threads 16, table dir X:\mindbender_d6\14-3_goal_d6
+[0:00:00.042] reusing depth-6 table: 4255641059 states (68.0903 GB)
+[0:00:00.050] fingerprint index: 18.1295 GB over partitions [0,256), RAM budget 48.3288 GB -> 1 pass(es)
+[0:00:00.374] left seeds (exact depth 4): 3966119 in 0.323307s
+[0:25:41.224]   pass 1/1 partitions [0,256): load 18.1295 GB (large pages) in 40.2708s, stream+probe 400738237714 left states in 1500.58s (267.056 M/s), Bloom pass 1.2607%
+[0:25:41.254] probe totals: load 40.2708s, stream+probe 1500.58s, 400738237714 left states streamed, 165320 unique candidates
+[0:26:19.167] verify: 0 confirmed, 165320 fingerprint false matches, 37.8838s
+[0:26:19.167] unique middle states (7 from left, 6 from table side): 0
+[0:26:19.168] PROBE phase: 1579.13s
+[0:26:19.168] TOTAL: 1579.17s (build 0s, probe 1579.13s, recovery 0s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        484522
+delete calls:     484522
+malloc calls:     8416994
+free calls:       8417221
+calloc calls:     3
+realloc calls:    17

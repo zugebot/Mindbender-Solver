@@ -1,0 +1,86 @@
+[0:00:00.000] puzzle 6-4 <5,3,7> = 15 moves, forward, threads 16, table dir X:/mindbender_d6\6-4_goal_d6
+[0:00:00.029] reusing depth-6 table: 1531940396 states (24.511 GB)
+[0:01:10.426] depth-7 raw children in partitions [0,256): 73423799668 (count pass 70.3967s)
+[0:01:10.435] depth-7 index build: 2^23 buckets/partition, 7845132 Bloom blocks/partition, RAM budget 17 GB -> 52 pass(es) over the depth-6 table
+[0:03:28.651]   pass 1/52 partitions [0,5): scan 75.06s, sort+merge 63.1557s, raw 1434098228 -> unique 908276350
+[0:05:48.584]   pass 2/52 partitions [5,10): scan 75.9648s, sort+merge 63.702s, raw 1434128849 -> unique 908240729
+[0:08:08.812]   pass 3/52 partitions [10,15): scan 76.8495s, sort+merge 63.1226s, raw 1434041695 -> unique 908275675
+[0:10:30.257]   pass 4/52 partitions [15,20): scan 77.8195s, sort+merge 63.3676s, raw 1434033196 -> unique 908290764
+[0:12:52.979]   pass 5/52 partitions [20,25): scan 79.0188s, sort+merge 63.4256s, raw 1433908439 -> unique 908261272
+[0:15:19.957]   pass 6/52 partitions [25,30): scan 80.5727s, sort+merge 66.1271s, raw 1434043017 -> unique 908276444
+[0:17:44.725]   pass 7/52 partitions [30,35): scan 81.741s, sort+merge 62.7387s, raw 1434181244 -> unique 908333890
+[0:20:08.415]   pass 8/52 partitions [35,40): scan 79.6315s, sort+merge 63.7801s, raw 1434205365 -> unique 908311729
+[0:22:27.893]   pass 9/52 partitions [40,45): scan 80.8087s, sort+merge 58.4365s, raw 1434012054 -> unique 908245566
+[0:24:49.567]   pass 10/52 partitions [45,50): scan 81.7193s, sort+merge 59.7112s, raw 1434174253 -> unique 908295204
+[0:27:13.271]   pass 11/52 partitions [50,55): scan 85.3073s, sort+merge 58.1559s, raw 1434030850 -> unique 908292653
+[0:29:37.116]   pass 12/52 partitions [55,60): scan 84.7691s, sort+merge 58.8479s, raw 1434049177 -> unique 908297206
+[0:32:04.759]   pass 13/52 partitions [60,65): scan 87.4879s, sort+merge 59.9135s, raw 1434091916 -> unique 908298523
+[0:34:31.309]   pass 14/52 partitions [65,70): scan 86.7573s, sort+merge 59.5393s, raw 1434008857 -> unique 908313085
+[0:37:12.578]   pass 15/52 partitions [70,75): scan 92.2499s, sort+merge 68.7868s, raw 1433980142 -> unique 908268086
+[0:39:58.726]   pass 16/52 partitions [75,80): scan 98.2988s, sort+merge 67.5184s, raw 1434088741 -> unique 908282286
+[0:42:43.402]   pass 17/52 partitions [80,85): scan 96.5708s, sort+merge 67.8413s, raw 1434115800 -> unique 908310646
+[0:45:30.385]   pass 18/52 partitions [85,90): scan 98.161s, sort+merge 68.5651s, raw 1433960634 -> unique 908270958
+[0:48:19.871]   pass 19/52 partitions [90,95): scan 102.928s, sort+merge 66.2777s, raw 1433966010 -> unique 908275141
+[0:50:57.273]   pass 20/52 partitions [95,100): scan 98.0973s, sort+merge 59.0625s, raw 1434019996 -> unique 908300846
+[0:53:37.583]   pass 21/52 partitions [100,105): scan 100.434s, sort+merge 59.5512s, raw 1433920074 -> unique 908242681
+[0:56:20.785]   pass 22/52 partitions [105,110): scan 100.006s, sort+merge 62.9146s, raw 1434064276 -> unique 908311243
+[0:59:03.526]   pass 23/52 partitions [110,115): scan 97.4577s, sort+merge 65.0526s, raw 1433993323 -> unique 908214427
+[1:01:42.314]   pass 24/52 partitions [115,120): scan 99.7058s, sort+merge 58.8152s, raw 1434092742 -> unique 908289158
+[1:04:19.858]   pass 25/52 partitions [120,125): scan 98.4418s, sort+merge 58.8596s, raw 1433808778 -> unique 908208349
+[1:06:59.694]   pass 26/52 partitions [125,130): scan 98.5157s, sort+merge 61.0845s, raw 1434224656 -> unique 908332301
+[1:09:38.749]   pass 27/52 partitions [130,135): scan 99.6401s, sort+merge 59.1525s, raw 1434040368 -> unique 908259472
+[1:12:19.488]   pass 28/52 partitions [135,140): scan 101.699s, sort+merge 58.7997s, raw 1434103572 -> unique 908317242
+[1:14:56.596]   pass 29/52 partitions [140,145): scan 97.6589s, sort+merge 59.2139s, raw 1434049413 -> unique 908289227
+[1:17:32.693]   pass 30/52 partitions [145,150): scan 97.0364s, sort+merge 58.8111s, raw 1433986536 -> unique 908275478
+[1:20:07.867]   pass 31/52 partitions [150,155): scan 96.19s, sort+merge 58.7378s, raw 1433979744 -> unique 908261849
+[1:22:45.828]   pass 32/52 partitions [155,160): scan 97.0363s, sort+merge 60.6887s, raw 1433993366 -> unique 908207603
+[1:25:18.909]   pass 33/52 partitions [160,165): scan 94.3228s, sort+merge 58.4965s, raw 1434205850 -> unique 908291493
+[1:27:51.070]   pass 34/52 partitions [165,170): scan 93.036s, sort+merge 58.87s, raw 1434106368 -> unique 908287512
+[1:30:22.000]   pass 35/52 partitions [170,175): scan 92.0233s, sort+merge 58.6828s, raw 1434115638 -> unique 908323559
+[1:32:53.671]   pass 36/52 partitions [175,180): scan 90.6263s, sort+merge 60.787s, raw 1434063302 -> unique 908253759
+[1:35:23.494]   pass 37/52 partitions [180,185): scan 90.912s, sort+merge 58.6433s, raw 1433978749 -> unique 908267537
+[1:37:51.097]   pass 38/52 partitions [185,190): scan 88.3109s, sort+merge 59.0518s, raw 1434109223 -> unique 908314239
+[1:40:17.268]   pass 39/52 partitions [190,195): scan 87.775s, sort+merge 58.1637s, raw 1434078550 -> unique 908237752
+[1:42:41.931]   pass 40/52 partitions [195,200): scan 85.6766s, sort+merge 58.748s, raw 1434101824 -> unique 908298400
+[1:45:05.503]   pass 41/52 partitions [200,205): scan 84.7426s, sort+merge 58.5771s, raw 1434213840 -> unique 908287082
+[1:47:27.373]   pass 42/52 partitions [205,210): scan 82.8245s, sort+merge 58.7999s, raw 1433992951 -> unique 908212127
+[1:49:49.591]   pass 43/52 partitions [210,215): scan 82.2611s, sort+merge 59.7093s, raw 1434027832 -> unique 908262760
+[1:52:09.105]   pass 44/52 partitions [215,220): scan 80.7046s, sort+merge 58.5686s, raw 1433976786 -> unique 908273252
+[1:54:28.247]   pass 45/52 partitions [220,225): scan 80.0709s, sort+merge 58.8267s, raw 1434012370 -> unique 908254374
+[1:56:46.539]   pass 46/52 partitions [225,230): scan 79.0562s, sort+merge 58.9912s, raw 1434115016 -> unique 908328108
+[1:59:03.311]   pass 47/52 partitions [230,235): scan 78.3244s, sort+merge 58.2178s, raw 1434235673 -> unique 908293979
+[2:01:18.639]   pass 48/52 partitions [235,240): scan 76.2395s, sort+merge 58.8318s, raw 1433941914 -> unique 908237516
+[2:03:32.818]   pass 49/52 partitions [240,245): scan 75.2615s, sort+merge 58.6804s, raw 1434081848 -> unique 908348332
+[2:05:46.241]   pass 50/52 partitions [245,250): scan 74.25s, sort+merge 58.9212s, raw 1434169514 -> unique 908288503
+[2:07:57.867]   pass 51/52 partitions [250,255): scan 72.3294s, sort+merge 59.0412s, raw 1434080297 -> unique 908287054
+[2:09:38.842]   pass 52/52 partitions [255,256): scan 71.081s, sort+merge 29.6487s, raw 286796812 -> unique 181652993
+[2:09:38.901] BUILD depth-7 index: 46503926414 unique states in partitions [0,256), 165.865 GB (3.56669 B/state) in 7778.87s
+[2:09:39.000] fingerprint index: 165.865 GB over partitions [0,256), RAM budget 17 GB -> 10 pass(es)
+[2:09:42.971] left seeds (exact depth 5): 50643457 in 3.97067s
+[3:08:20.202]   pass 1/10 partitions [0,26): load 16.8456 GB (normal pages) in 41.2723s, stream+probe 2590469330054 left states in 3475.95s (745.256 M/s), Bloom pass 0.79777%
+[4:10:57.735]   pass 2/10 partitions [26,52): load 16.8458 GB (normal pages) in 39.0114s, stream+probe 2590469330054 left states in 3717.4s (696.85 M/s), Bloom pass 0.797926%
+[5:17:49.097]   pass 3/10 partitions [52,78): load 16.8458 GB (normal pages) in 39.8031s, stream+probe 2590469330054 left states in 3970.44s (652.439 M/s), Bloom pass 0.797765%
+[6:30:55.615]   pass 4/10 partitions [78,104): load 16.8457 GB (normal pages) in 39.7822s, stream+probe 2590469330054 left states in 4345.57s (596.118 M/s), Bloom pass 0.797722%
+[7:49:44.390]   pass 5/10 partitions [104,130): load 16.8456 GB (normal pages) in 39.2761s, stream+probe 2590469330054 left states in 4688.15s (552.557 M/s), Bloom pass 0.797591%
+[9:08:11.130]   pass 6/10 partitions [130,156): load 16.8457 GB (normal pages) in 40.7929s, stream+probe 2590469330054 left states in 4664.45s (555.364 M/s), Bloom pass 0.797668%
+[10:20:28.685]   pass 7/10 partitions [156,182): load 16.8456 GB (normal pages) in 40.175s, stream+probe 2590469330054 left states in 4296.1s (602.982 M/s), Bloom pass 0.797711%
+[11:29:16.622]   pass 8/10 partitions [182,208): load 16.8456 GB (normal pages) i
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        7342087
+delete calls:     7342087
+malloc calls:     1020470701
+free calls:       1020716602
+calloc calls:     13571
+realloc calls:    21
+n 39.9067s, stream+probe 2590469330054 left states in 4086.9s (633.846 M/s), Bloom pass 0.797782%
+[12:32:01.987]   pass 9/10 partitions [208,234): load 16.8457 GB (normal pages) in 39.7384s, stream+probe 2590469330054 left states in 3724.46s (695.528 M/s), Bloom pass 0.797764%
+[13:25:04.499]   pass 10/10 partitions [234,256): load 14.2541 GB (normal pages) in 33.4616s, stream+probe 2590469330054 left states in 3147.92s (822.914 M/s), Bloom pass 0.797851%
+[13:25:06.186] probe totals: load 393.22s, stream+probe 40117.3s, 25904693300540 left states streamed, 3727309 unique candidates
+[13:25:23.518] depth-7 confirmation: 3727309 fingerprint hits, 135 neighbours pass the depth-6 index (17.2556s)
+[13:25:24.434] verify: 0 confirmed, 134 fingerprint false matches, 0.903538s
+[13:25:24.434] depth-7 confirmed middles: 0 of 3727309 fingerprint hits
+[13:25:24.804] unique middle states (8 from left, 7 from table side): 0
+[13:25:24.804] PROBE phase: 48324.8s
+[13:25:24.804] TOTAL: 48324.8s (build 0s, probe 48324.8s, recovery 0s)

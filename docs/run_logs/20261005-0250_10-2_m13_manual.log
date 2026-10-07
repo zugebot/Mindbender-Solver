@@ -1,0 +1,35 @@
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        419602
+delete calls:     419602
+malloc calls:     15497465
+free calls:       15502544
+calloc calls:     5
+realloc calls:    73
+[0:00:00.000] puzzle 10-2 <4,3,6> = 13 moves, forward, threads 16, table dir X:/mindbender_d6\10-2_goal_d6
+[0:00:10.107] depth-5 exact unique: 114073488 states in 10.107s
+[0:04:17.078] depth-6 raw children: 6841538712 (109.465 GB) written in 246.971s = 443.229 MB/s
+[0:04:17.078] partition sizes (mixed key): min 26693267, max 26758556, avg 26724760
+[0:04:17.078] same split on StateHash top 8 bits would be: 32/256 partitions used, max 1873551930
+[0:16:31.258] depth-6 exact unique: 3929773437 (62.8764 GB on disk), sort+dedupe 734.18s
+[0:16:31.258] BUILD depth-6 table: 991.259s
+[0:20:25.291] BUILD fingerprint index: 3929773437 states, 2^22 buckets/partition, 17.0702 GB (4.34382 B/state) in 234.02s
+[0:20:25.341] fingerprint index: 17.0702 GB total, RAM budget 13.4629 GB -> 2 pass(es)
+[0:20:25.639] left seeds (exact depth 4): 3768224 in 0.298369s
+[0:43:42.940]   pass 1/2 partitions [0,201): load 13.4029 GB (normal pages) in 34.0467s, stream+probe 375194762855 left states in 1363.25s (275.22 M/s), Bloom pass 1.25844%
+[0:53:05.423]   pass 2/2 partitions [201,256): load 3.66734 GB (large pages) in 7.69545s, stream+probe 375194762855 left states in 554.168s (677.042 M/s), Bloom pass 1.25778%
+[0:53:05.533] probe totals: load 41.7421s, stream+probe 1917.42s, 750389525710 left states streamed, 126755 unique candidates
+[0:53:28.936] verify: 3 confirmed, 126752 fingerprint false matches, 23.4023s
+[0:53:28.942] unique middle states (7 from left, 6 from table side): 3
+[0:53:28.942] PROBE phase: 2217.68s
+[0:53:29.700] 
+[0:53:29.700] Finalizing exact solver results...
+[0:53:29.700] Original exact solutions: 32
+[0:53:29.700] Valid exact solutions: 32
+[0:53:29.700] Skipped exact solutions: 0
+[0:53:29.700] Final exact solutions: 32
+[0:53:29.702] Saving expanded results to "X:/mindbender_d6\\10-2_goal_d6\\solutions\\levels\\10-2_c13_32.txt".
+[0:53:29.702] RECOVERY: 32 solutions of 13 moves in 0.760061s (written under X:/mindbender_d6\10-2_goal_d6\solutions\levels)
+[0:53:29.703] TOTAL: 3209.7s (build 991.259s, probe 2217.68s, recovery 0.760061s)
