@@ -97,6 +97,14 @@ Done (2026-10-06, verified):
    here; pipelining never helped. Its own per-thread estimate (~10.8%) overstates the real gain, so
    the bottleneck is probably not memory-level parallelism (page walks / raw latency instead).
 
+3b. Depth-6 build (2026-10-06): on big tables it is half the run (16-3: 43 min table + 12 min index,
+   6.7 B states) and it is disk-bound. X: (Team T253 1 TB SATA) measured **32 MB/s sustained write**
+   once its cache is exhausted. `--ram-build` (in-RAM sort, no raw spill) is correct (6-2: identical 64
+   solutions) but slower here (475 s vs ~200 s) because the disk build's writes hit the OS file cache.
+   **Next: build no table at all**: keep the index in RAM (built from 8-byte keys per pass, like the
+   depth-7 builder) and confirm candidates by regenerating depth 6 from depth 5 once. Est. 16-3 build
+   55 min -> ~2-4 min, and ~140 GB less written per puzzle. Fall back to disk when the index > RAM.
+
 Next (medium, days):
 3. Smaller index: binary fuse filter with 16-bit fingerprints (~2.3 B/state vs ~3.7 now) ->
    ~40% fewer passes, but 3 memory reads per lookup instead of 1; prototype and measure.
