@@ -77,10 +77,7 @@ SOLVER_PROCESS_RE = re.compile(
 # Tests only: start jobs even while another solver runs.
 IGNORE_EXTERNAL = os.environ.get("MBQ_IGNORE_EXTERNAL") == "1"
 
-SSD_PHASES = ["d6-build", "d6-index", "d7-index", "probe", "d7-confirm", "verify", "recovery"]
-# Rough disk needs when a table must be built (largest seen: 10-2 depth-6 75 GB;
-# 6-4 depth-7 index 166 GB, normal boards up to ~3x that).
-DISK_NEED_GB = {6: 100, 7: 550}
+SSD_PHASES = ["d6-build", "d6-index", "d7-build", "d7-index", "probe", "d7-confirm", "verify", "recovery"]
 
 kernel32 = ctypes.windll.kernel32
 SYNCHRONIZE = 0x00100000
@@ -487,14 +484,9 @@ class Scheduler:
         return TABLE_ROOT / f"{job['puzzle']}_goal_d6"
 
     def _disk_need_gb(self, job: dict) -> int:
-        if job["engine"] != "ssd":
-            return 0
-        d = self._table_dir(job)
-        have6 = (d / "fp16meta.txt").exists()
-        have7 = (d / "d7_meta.txt").exists()
-        if job["table_depth"] == 7:
-            return 0 if have7 else DISK_NEED_GB[7] + (0 if have6 else DISK_NEED_GB[6])
-        return 0 if have6 else DISK_NEED_GB[6]
+        # The solver builds no table on disk any more (no-table mode, depth 6
+        # and 7): it either reuses a complete one or keeps everything in RAM.
+        return 0
 
     def _start(self, job: dict) -> None:
         jdir = JOB_ROOT / str(job["id"])
