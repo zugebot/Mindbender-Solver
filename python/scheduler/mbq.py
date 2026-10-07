@@ -381,8 +381,13 @@ class Scheduler:
             raise ValueError("ssd engine supports 10-15 moves")
         if engine == "inram" and not 3 <= moves <= 12:
             raise ValueError("inram engine supports 3-12 moves")
-        table_depth = 7 if moves >= 15 else 6
+        # Depth-7 goal table for 15 moves, and for 14 on 2x2 boards (their depth-7
+        # set fits in a few RAM passes, so the left side shrinks ~30x).
+        table_depth = int(spec.get("table_depth") or (7 if moves >= 15 or (moves == 14 and puzzle_is_fat(puzzle))
+                                                      else 6))
         seed_depth = moves - 3 - table_depth
+        if engine == "ssd" and (table_depth not in (6, 7) or not 2 <= seed_depth <= 5):
+            raise ValueError(f"no <S,3,{table_depth}> split for {moves} moves")
         with self.lock:
             job = {
                 "id": self.next_id, "puzzle": puzzle, "moves": moves, "until": spec.get("until"),
@@ -894,7 +899,8 @@ def cmd_add(args) -> None:
         job = api("POST", "/jobs", {"puzzle": puzzle, "moves": args.moves, "until": args.until,
                                     "engine": args.engine, "ram_gb": args.ram_gb, "threads": args.threads,
                                     "promote": not args.no_promote,
-                                    "keep_table": args.keep_table, "front": args.front})
+                                    "keep_table": args.keep_table, "front": args.front,
+                                    "table_depth": args.table_depth})
         print("queued " + describe(job))
 
 
@@ -957,6 +963,8 @@ def main() -> None:
     a.add_argument("--no-promote", action="store_true", help="don't update levels_final / README / config")
     a.add_argument("--keep-table", action="store_true", help="keep the depth-6/7 table afterwards")
     a.add_argument("--front", action="store_true", help="put ahead of the other queued jobs")
+    a.add_argument("--table-depth", type=int, choices=[6, 7],
+                   help="goal-side table depth (default: 7 for 15 moves and 14-move 2x2 boards)")
     c = sub.add_parser("cancel", help="cancel a queued or running job")
     c.add_argument("id", type=int)
     lg = sub.add_parser("log", help="tail a job's solver log")
