@@ -89,6 +89,14 @@ Done (2026-10-06, verified):
    84 s, 24.6 min total vs 40+ min disk builds. An existing complete table (e.g. 6-4) is still reused;
    `--disk-table` forces the old path. De-dupe is by 64-bit key, so the "unique" count is a little
    below the exact state count (StateHash collides); the final check compares full states.
+4. No-table depth 7 (2026-10-07, default for `--table-depth 7` without a disk index): depth-5 frontier
+   in RAM; a count pass records raw fingerprints per bucket (u16), then each probe pass regenerates
+   depth 7 with the canonical 2-move stream (PermStream, ~1575/parent on 2x2 boards, ~520 M/s) and
+   fills its buckets; keys are routed to the thread owning their partition and grouped by bucket and
+   by Bloom block before writing (no atomics: locked random RMWs ran at ~116 M/s). 6-2 <2,3,7>: exact
+   (64 solutions), 38 min = count 6.3 min + 6 passes x 5.3 min (generate ~2 min + group/write ~3 min).
+   14-move 2x2 puzzles use <4,3,7> (~50 min vs 2.6 h for <5,3,6>). Normal boards' depth-7 set is ~6x
+   bigger (~30 passes), so they stay on <5,3,6> (~1.3x at best with depth 7).
 - Background CPU users slow runs: the MuMu Android emulator (`MuMuVMMHeadless`) cost ~6%.
 - RAM upgraded 2026-10-06 to 64 GB (2x32 GB Corsair CMK64GX4M2E3200C16). The Lenovo BIOS has no
   XMP, so it runs at JEDEC 2133 MHz (old Crucial 2x16 GB ran at 2933). Measured anyway: 6-4 13-move
