@@ -1549,9 +1549,11 @@ namespace {
             std::memset(idx.bloom.data(), 0, parts * bloomPer * sizeof(u32));
             idx.partitionFirst.assign(1, 0);
 
-            // Sub-groups of partitions whose raw keys fit the leftover RAM
-            // (measured now; the index buffers above count as used).
-            const u64 indexBytes = cap * sizeof(u16) + parts * dirPer * sizeof(u32);
+            // Sub-groups of partitions whose raw keys fit the leftover RAM,
+            // measured now. Large-page buffers are already out of free RAM;
+            // untouched normal pages are not yet, so count those as used.
+            const u64 indexBytes = (idx.fingerprints.largePages() ? 0 : cap * sizeof(u16))
+                                   + (idx.starts.largePages() ? 0 : parts * dirPer * sizeof(u32));
             const u64 avail = cfg.ramBytes != 0 ? keyReserve
                                                 : std::max(keyReserve, defaultRamBudgetBytes(indexBytes));
             u64 fill = 0;   // fingerprints written so far in this range
@@ -1562,6 +1564,10 @@ namespace {
                     bytes += raw[s1++] * sizeof(u64);
                 }
                 const u32 gN = s1 - s0;
+                if (s0 == p0) {
+                    tcout << "  index build: " << avail / 1e9 << " GB for keys -> about "
+                          << (parts + gN - 1) / gN << " regeneration(s) of depth 6\n";
+                }
                 std::vector<std::unique_ptr<u64[]>> keys(gN);
                 std::vector<std::atomic<u64>> got(gN);
                 for (u32 i = 0; i < gN; ++i) {
