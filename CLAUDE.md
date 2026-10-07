@@ -44,6 +44,8 @@ python python\scheduler\mbq.py status
 - `src/utils/progress_reporter.hpp`: cheap progress JSON (one atomic add per seed).
 - `build/levels_final/`: canonical answers `<p>_c<moves>_<count>.txt` (tracked). `levels/` = scratch output.
 - `python/scheduler/mbq.py`: job queue + dashboard (http://127.0.0.1:8766/). Use it for long runs.
+- `docs/run_history.csv` + `docs/run_logs/`: one row and the full log per solver run (written by
+  the scheduler via `python/scheduler/run_history.py`; backfilled from 2026-10-04). Use it for timings.
 - `python/demo_app/`: pygame app (solutions, real-game playback via posted window messages, saves).
 - `python/viewer/`: mouse-route studio; `mouse/`: C mouse-path library (`libchuzzle_mouse.dll`).
 - `python/deluxe_clone/`, `python/automation/legacy/`: older Chuzzle 1 projects merged in.

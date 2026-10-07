@@ -73,6 +73,10 @@ localhost only.
 - **Cleanup**: a table the scheduler created is deleted when no queued job
   for that puzzle needs it (`--keep-table` keeps it). Tables it did not
   create are never deleted.
+- **History**: every job that ran gets a row in `docs/run_history.csv` (times per
+  phase, table and index sizes, passes, large pages, M states/s, probe variant,
+  machine, solver commit) and its full log in `docs/run_logs/`. Both are tracked
+  in git; `run_history.py backfill` added the runs from before the scheduler.
 - **Restarts**: jobs live in `state/jobs.json` (git-ignored). If the server
   stops while a solver runs, the solver keeps going and the next server
   adopts it and records its result.
