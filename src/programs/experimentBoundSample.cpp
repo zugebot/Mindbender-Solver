@@ -433,12 +433,281 @@ namespace {
         allThreads("lane-table bound", [&](const B1B2& s) { return colourMixBoundTables(s, tabs); });
         return mismatches == 0 && tableMismatches == 0 ? 0 : 1;
     }
+
+    // ------------------------------------------------------------------
+    // Pattern databases: one colour at a time, solved exactly.
+    //
+    // Abstract board for colour c: the same B1B2 with every cell of colour c
+    // set to 1 and every other cell 0 (the 2x2 piece's position bits kept).
+    // Moves only permute cells, so the real move code runs on it unchanged.
+    // Any real solution is also a solution of the abstract puzzle, so the
+    // exact abstract distance (BFS over every placement of c's k cells, times
+    // the 25 piece positions on 2x2 boards) is an admissible lower bound.
+    // ------------------------------------------------------------------
+    constexpr u64 LOW_BITS = 0111111111111111111ULL;   // low bit of each of 18 3-bit cells
+
+    u64 BINOM[37][37];
+
+    struct BinomInit {
+        BinomInit() {
+            for (u32 n = 0; n <= 36; ++n) {
+                BINOM[n][0] = 1;
+                for (u32 k = 1; k <= 36; ++k) {
+                    BINOM[n][k] = n == 0 ? 0 : BINOM[n - 1][k - 1] + BINOM[n - 1][k];
+                }
+            }
+        }
+    } binomInit;
+
+    FORCEINLINE u64 colourFlags(const u64 half, const u32 c) {
+        const u64 x = ~(half ^ (static_cast<u64>(c) * LOW_BITS));
+        return x & (x >> 1) & (x >> 2) & LOW_BITS;
+    }
+
+    FORCEINLINE B1B2 abstractBoard(const B1B2& s, const u32 c) {
+        return {(s.b1 & ~((1ULL << 54) - 1)) | colourFlags(s.b1, c), colourFlags(s.b2, c)};
+    }
+
+    struct ColourPdb {
+        u32 colour = 0, cells = 0;
+        bool fat = false;
+        std::vector<u8> dist;   // 255 = unreachable
+        u32 maxDist = 0;
+        double buildSeconds = 0.0;
+
+        FORCEINLINE u64 indexOfAbstract(const B1B2& a) const {
+            u64 m = (my_pext_u64(a.b1, LOW_BITS) << 18) | my_pext_u64(a.b2, LOW_BITS);
+            u64 r = 0;
+            for (u32 i = 1; m != 0; ++i, m &= m - 1) {
+                r += BINOM[__builtin_ctzll(m)][i];
+            }
+            return fat ? r * 25 + a.getFatXY() : r;
+        }
+
+        FORCEINLINE u32 lookup(const B1B2& s) const {
+            return dist[indexOfAbstract(abstractBoard(s, colour))];
+        }
+    };
+
+    ColourPdb buildColourPdb(const B1B2& target, const u32 colour, const u32 threads) {
+        Timer timer;
+        ColourPdb p;
+        p.colour = colour;
+        p.fat = target.getFatBool();
+        const B1B2 goal = abstractBoard(target, colour);
+        p.cells = static_cast<u32>(__builtin_popcountll(goal.b1 & LOW_BITS) + __builtin_popcountll(goal.b2 & LOW_BITS));
+        p.dist.assign(BINOM[36][p.cells] * (p.fat ? 25 : 1), 255);
+        p.dist[p.indexOfAbstract(goal)] = 0;
+        std::vector<B1B2> frontier{goal};
+        for (u32 d = 0; !frontier.empty(); ++d) {
+            std::vector<std::vector<B1B2>> next(threads);
+            constexpr std::size_t CHUNK = 4096;
+            parallelFor(threads, (frontier.size() + CHUNK - 1) / CHUNK, [&](const u32 t, const std::size_t ch) {
+                B1B2 children[60];
+                u64 hashes[60];
+                const std::size_t end = std::min(frontier.size(), (ch + 1) * CHUNK);
+                for (std::size_t i = ch * CHUNK; i < end; ++i) {
+                    const std::size_t n = p.fat
+                            ? frontier_recovery_detail::emitNoneChildren<true>(frontier[i], children, hashes)
+                            : frontier_recovery_detail::emitNoneChildren<false>(frontier[i], children, hashes);
+                    for (std::size_t k = 0; k < n; ++k) {
+                        u8* slot = &p.dist[p.indexOfAbstract(children[k])];
+                        u8 expected = 255;
+                        if (*slot == 255 && __atomic_compare_exchange_n(slot, &expected, static_cast<u8>(d + 1), false,
+                                                                        __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+                            next[t].push_back(children[k]);
+                        }
+                    }
+                }
+            });
+            frontier.clear();
+            for (auto& v : next) {
+                frontier.insert(frontier.end(), v.begin(), v.end());
+            }
+            if (!frontier.empty()) {
+                p.maxDist = d + 1;
+            }
+        }
+        p.buildSeconds = timer.getSeconds();
+        return p;
+    }
+
+    // Colour-mix vs pattern databases vs both, on real left states and on
+    // nodes one move above the leaves (whole last level skippable).
+    int runPdb(const std::string& puzzle, const u32 seedDepth, const u32 tableDepth, const u32 samples,
+               const u32 threads, const u32 kMax) {
+        const BoardPair* pair = BoardLookup::getBoardPair(puzzle);
+        if (pair == nullptr) {
+            tcout << "Unknown puzzle: " << puzzle << "\n";
+            return 1;
+        }
+        const Board start = pair->getStartState();
+        const Board goal = pair->getEndState();
+        const bool fat = start.getFatBool();
+        const int T = static_cast<int>(tableDepth);
+        tcout << puzzle << (fat ? " (2x2)" : "") << " <" << seedDepth << ",3," << tableDepth << ">, threads " << threads
+              << "\n";
+
+        LaneTables mix;
+        buildLaneTables(goal.asB1B2(), mix);
+        u32 counts[8] = {};
+        for (u64 y = 0; y < 6; ++y) {
+            for (u64 x = 0; x < 6; ++x) {
+                ++counts[goal.getColor(x, y)];
+            }
+        }
+        std::vector<ColourPdb> pdbs;
+        for (u32 c = 0; c < 8; ++c) {
+            if (counts[c] == 0 || counts[c] > kMax) {
+                continue;
+            }
+            pdbs.push_back(buildColourPdb(goal.asB1B2(), c, threads));
+            const ColourPdb& p = pdbs.back();
+            const B1B2 sa = start.asB1B2();
+            tcout << "  pdb colour " << c << ": " << p.cells << " cells, " << p.dist.size() << " entries, max distance "
+                  << p.maxDist << ", h(start) = " << p.lookup(sa) << ", built in " << p.buildSeconds << "s\n";
+        }
+        tcout << "  colour-mix h(start) = " << colour_mix::bound(start.asB1B2(), mix) << "\n";
+        if (pdbs.empty()) {
+            tcout << "  no colour with <= " << kMax << " cells\n";
+        }
+        auto pdbMax = [&](const B1B2& s) {
+            u32 h = 0;
+            for (const ColourPdb& p : pdbs) {
+                h = std::max(h, p.lookup(s));
+            }
+            return static_cast<int>(h);
+        };
+
+        JVec<B1B2> seeds;
+        buildFrontier(start, seedDepth, seeds);
+        const std::size_t step = std::max<std::size_t>(1, seeds.size() / samples);
+        std::atomic<u64> leaves{0}, lMix{0}, lPdb{0}, lAny{0};
+        std::atomic<u64> nodes{0}, nMix{0}, nPdb{0}, nAny{0};
+        std::atomic<u64> pdbWins{0};
+        Histogram pdbH, mixH;
+        parallelFor(threads, (seeds.size() + step - 1) / step, [&](u32, const std::size_t k) {
+            streamFrom(seeds[k * step], 2, [&](const B1B2& node) {
+                const int nm = colour_mix::bound(node, mix), np = pdbMax(node);
+                nodes.fetch_add(1, std::memory_order_relaxed);
+                nMix.fetch_add(nm > T + 1, std::memory_order_relaxed);
+                nPdb.fetch_add(np > T + 1, std::memory_order_relaxed);
+                nAny.fetch_add(std::max(nm, np) > T + 1, std::memory_order_relaxed);
+                streamFrom(node, 1, [&](const B1B2& leaf) {
+                    const int hm = colour_mix::bound(leaf, mix), hp = pdbMax(leaf);
+                    leaves.fetch_add(1, std::memory_order_relaxed);
+                    lMix.fetch_add(hm > T, std::memory_order_relaxed);
+                    lPdb.fetch_add(hp > T, std::memory_order_relaxed);
+                    lAny.fetch_add(std::max(hm, hp) > T, std::memory_order_relaxed);
+                    pdbWins.fetch_add(hp > hm, std::memory_order_relaxed);
+                    pdbH.add(hp);
+                    mixH.add(hm);
+                });
+            });
+        });
+        auto pct = [](const std::atomic<u64>& a, const std::atomic<u64>& n) {
+            return 100.0 * static_cast<double>(a.load()) / static_cast<double>(std::max<u64>(1, n.load()));
+        };
+        tcout << "  leaves (" << leaves.load() << "): skip colour-mix " << pct(lMix, leaves) << "%, pdb " << pct(lPdb, leaves)
+              << "%, either " << pct(lAny, leaves) << "% (pdb higher on " << pct(pdbWins, leaves) << "%)\n";
+        tcout << "  nodes (" << nodes.load() << "): whole last level skip colour-mix " << pct(nMix, nodes) << "%, pdb "
+              << pct(nPdb, nodes) << "%, either " << pct(nAny, nodes) << "%\n";
+        pdbH.print("  pdb h on leaves", T);
+        mixH.print("  colour-mix h on leaves", T);
+        return 0;
+    }
+
+    // Every known optimal path: the pattern-database bound never exceeds the
+    // true distance to the goal (a sanity check of the BFS and the ranking).
+    int runPdbCheck(const u32 threads, const u32 kMax) {
+        const std::regex name(R"((\d+-\d+)_c(\d+)_(\d+)\.txt)");
+        u64 states = 0, violations = 0;
+        for (const auto& e : fs::directory_iterator("build/levels_final")) {
+            std::smatch m;
+            const std::string fn = e.path().filename().string();
+            if (!std::regex_match(fn, m, name)) {
+                continue;
+            }
+            const BoardPair* pair = BoardLookup::getBoardPair(m[1].str());
+            if (pair == nullptr) {
+                continue;
+            }
+            const Board start = pair->getStartState();
+            const Board goal = pair->getEndState();
+            const bool fat = start.getFatBool();
+            u32 counts[8] = {};
+            for (u64 y = 0; y < 6; ++y) {
+                for (u64 x = 0; x < 6; ++x) {
+                    ++counts[goal.getColor(x, y)];
+                }
+            }
+            std::vector<ColourPdb> pdbs;
+            for (u32 c = 0; c < 8; ++c) {
+                if (counts[c] != 0 && counts[c] <= kMax) {
+                    pdbs.push_back(buildColourPdb(goal.asB1B2(), c, threads));
+                }
+            }
+            std::ifstream in(e.path());
+            std::string line;
+            int best = 0;
+            while (std::getline(in, line)) {
+                while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
+                    line.pop_back();
+                }
+                if (line.empty()) {
+                    continue;
+                }
+                const std::vector<u8> moves = fat ? Memory::parseFatMoveString(line) : Memory::parseNormMoveString(line);
+                const int n = static_cast<int>(moves.size());
+                Board b = start;
+                for (int i = 0; i <= n; ++i) {
+                    for (const ColourPdb& p : pdbs) {
+                        const int h = static_cast<int>(p.lookup(b.asB1B2()));
+                        if (i == 0) {
+                            best = std::max(best, h);
+                        }
+                        ++states;
+                        if (h > n - i) {
+                            if (violations < 10) {
+                                tcout << "VIOLATION " << fn << " step " << i << " colour " << p.colour << ": h=" << h
+                                      << " > " << n - i << "\n";
+                            }
+                            ++violations;
+                        }
+                    }
+                    if (i < n) {
+                        allActStructList[moves[i]].action(b);
+                    }
+                }
+            }
+            tcout << m[1].str() << (fat ? " (2x2)" : "") << ": optimal " << m[2].str() << ", pdb h(start) = " << best
+                  << " (" << pdbs.size() << " colours)\n";
+        }
+        tcout << "PDB CHECK: " << states << " lookups on known optimal paths, " << violations << " violations -> "
+              << (violations == 0 ? "ADMISSIBLE" : "NOT ADMISSIBLE") << "\n";
+        return violations == 0 ? 0 : 1;
+    }
 }
 
 int main(const int argc, char** argv) {
     tcout << std::unitbuf;
     if (argc >= 2 && std::string(argv[1]) == "--check") {
         return runCheck();
+    }
+    if (argc >= 2 && (std::string(argv[1]) == "--pdb" || std::string(argv[1]) == "--pdb-check")) {
+        u32 seedDepth = 5, tableDepth = 6, samples = 300, threads = 4, kMax = 8;
+        const bool check = std::string(argv[1]) == "--pdb-check";
+        const int first = check ? 2 : 3;
+        for (int i = first; i + 1 < argc; i += 2) {
+            const std::string a = argv[i];
+            const u32 v = static_cast<u32>(std::stoul(argv[i + 1]));
+            if (a == "--seed-depth") seedDepth = v;
+            else if (a == "--table-depth") tableDepth = v;
+            else if (a == "--samples") samples = v;
+            else if (a == "--threads") threads = v;
+            else if (a == "--kmax") kMax = v;
+        }
+        return check ? runPdbCheck(threads, kMax) : runPdb(argv[2], seedDepth, tableDepth, samples, threads, kMax);
     }
     if (argc >= 3 && std::string(argv[1]) == "--colors") {
         for (int i = 2; i < argc; ++i) {
