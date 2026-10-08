@@ -253,6 +253,7 @@ add_solver_program(benchmarkLeftStream    "${CMAKE_SOURCE_DIR}/src/programs/benc
 add_solver_program(CFCC                   "${CMAKE_SOURCE_DIR}/src/programs/CFCC.cpp")
 add_solver_program(expandAllLevels        "${CMAKE_SOURCE_DIR}/src/programs/expandAllLevels.cpp")
 add_solver_program(benchmarkMatchingBound "${CMAKE_SOURCE_DIR}/src/programs/benchmarkMatchingBound.cpp")
+add_solver_program(experimentBoundSample  "${CMAKE_SOURCE_DIR}/src/programs/experimentBoundSample.cpp")
 add_solver_program(debughIntersection4_4  "${CMAKE_SOURCE_DIR}/src/programs/debug_intersection_4_4.cpp")
 add_solver_program(generateMLTrainingData "${CMAKE_SOURCE_DIR}/src/programs/generate_ml_training_data.cpp")
 add_solver_program(analyzeLevelsFinalHeuristic "${CMAKE_SOURCE_DIR}/src/programs/analyzeLevelsFinalHeuristic.cpp")
