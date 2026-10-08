@@ -44,7 +44,7 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 20-2: at least 14 moves
 20-3: at least 14 moves
 20-4: at least 14 moves
-20-5: at least 14 moves
+20-5: at least 15 moves
 
 
 
