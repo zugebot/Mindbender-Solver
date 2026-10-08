@@ -97,6 +97,16 @@ Done (2026-10-06, verified):
    (64 solutions), 38 min = count 6.3 min + 6 passes x 5.3 min (generate ~2 min + group/write ~3 min).
    14-move 2x2 puzzles use <4,3,7> (~50 min vs 2.6 h for <5,3,6>). Normal boards' depth-7 set is ~6x
    bigger (~30 passes), so they stay on <5,3,6> (~1.3x at best with depth 7).
+5. Colour-mix lower bound (2026-10-07, `--bound auto`, default; src/solver/colour_mix_bound.hpp):
+   h = worst row colour-multiset mismatch + worst column's (a row move keeps row multisets and
+   changes one cell per column, and vice versa; halved on 2x2 boards, where it prunes nothing).
+   Admissible: 0 violations on all 1.89 M states of known optimal paths (experimentBoundSample
+   --check). Fast form: per-puzzle lane tables, ~7.5 ns/state. Leaf mode skips lookups with
+   h > table depth; "both" also skips the last PermStream level under nodes with h > depth + 1
+   (PARENT_PRUNE hook in stream_lanes_dfs; no-op by default, same output and speed). Each run
+   audits it on its own seeds, then times off/leaf/both for 20 s and keeps the fastest. Exact on
+   9-2, 9-3, 10-3; 9-3 13 moves 24.6 -> 6.3 min. Skip rates vary per puzzle (23-99.9% at 14 moves);
+   normal-board 14-move queue estimate 12.6 -> ~4.7 days.
 - Background CPU users slow runs: the MuMu Android emulator (`MuMuVMMHeadless`) cost ~6%.
 - RAM upgraded 2026-10-06 to 64 GB (2x32 GB Corsair CMK64GX4M2E3200C16). The Lenovo BIOS has no
   XMP, so it runs at JEDEC 2133 MHz (old Crucial 2x16 GB ran at 2933). Measured anyway: 6-4 13-move
