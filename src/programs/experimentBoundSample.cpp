@@ -31,6 +31,7 @@
 #include "src/solver/colour_mix_bound.hpp"
 
 #include <array>
+#include <immintrin.h>
 #include <bitset>
 #include <cstring>
 #include <atomic>
@@ -687,12 +688,279 @@ namespace {
               << (violations == 0 ? "ADMISSIBLE" : "NOT ADMISSIBLE") << "\n";
         return violations == 0 ? 0 : 1;
     }
+
+    // ------------------------------------------------------------------
+    // Grouped pattern databases: colours mapped to classes A (value 1),
+    // B (value 2) and blank (0). One class = several colours merged; A and B =
+    // two colour groups told apart. Index = rank of A's cells, then rank of
+    // B's cells among the remaining positions (x 25 piece positions on 2x2
+    // boards). BFS layer by layer over the distance array (no frontier kept).
+    // ------------------------------------------------------------------
+    FORCEINLINE u64 colexRank(u64 m) {
+        u64 r = 0;
+        for (u32 i = 1; m != 0; ++i, m &= m - 1) {
+            r += BINOM[__builtin_ctzll(m)][i];
+        }
+        return r;
+    }
+
+    // k-subset of n positions with colex rank r
+    FORCEINLINE u64 colexUnrank(u64 r, const u32 k, const u32 n) {
+        u64 m = 0;
+        u32 p = n;
+        for (u32 i = k; i >= 1; --i) {
+            do {
+                --p;
+            } while (BINOM[p][i] > r);
+            r -= BINOM[p][i];
+            m |= 1ULL << p;
+        }
+        return m;
+    }
+
+    struct GroupPdb {
+        u8 classOf[8] = {};       // 0 blank, 1 A, 2 B
+        u32 a = 0, b = 0;
+        bool fat = false;
+        u64 bStates = 1, entries = 0;
+        std::vector<u8> dist;
+        u32 maxDist = 0;
+        double buildSeconds = 0.0;
+        std::string name;
+
+        FORCEINLINE B1B2 abstractOf(const B1B2& s) const {
+            u64 h[2] = {s.b1, s.b2}, out[2] = {0, 0};
+            for (u32 c = 0; c < 8; ++c) {
+                if (classOf[c] == 0) {
+                    continue;
+                }
+                for (u32 k = 0; k < 2; ++k) {
+                    out[k] |= colourFlags(h[k], c) << (classOf[c] - 1);
+                }
+            }
+            return {(s.b1 & ~((1ULL << 54) - 1)) | out[0], out[1]};
+        }
+
+        FORCEINLINE u64 indexOfAbstract(const B1B2& x) const {
+            const u64 mA = (my_pext_u64(x.b1, LOW_BITS) << 18) | my_pext_u64(x.b2, LOW_BITS);
+            const u64 mB = (my_pext_u64(x.b1 >> 1, LOW_BITS) << 18) | my_pext_u64(x.b2 >> 1, LOW_BITS);
+            const u64 free = ~mA & ((1ULL << 36) - 1);
+            const u64 r = colexRank(mA) * bStates + colexRank(my_pext_u64(mB, free));
+            return fat ? r * 25 + x.getFatXY() : r;
+        }
+
+        B1B2 boardOfIndex(u64 idx, const B1B2& meta) const {
+            u32 fatXY = 0;
+            if (fat) {
+                fatXY = static_cast<u32>(idx % 25);
+                idx /= 25;
+            }
+            const u64 mA = colexUnrank(idx / bStates, a, 36);
+            const u64 free = ~mA & ((1ULL << 36) - 1);
+            const u64 mB = _pdep_u64(colexUnrank(idx % bStates, b, 36 - a), free);
+            B1B2 x((meta.b1 & ~((1ULL << 54) - 1)) | _pdep_u64(mA >> 18, LOW_BITS) | (_pdep_u64(mB >> 18, LOW_BITS) << 1),
+                   _pdep_u64(mA & ((1ULL << 18) - 1), LOW_BITS) | (_pdep_u64(mB & ((1ULL << 18) - 1), LOW_BITS) << 1));
+            if (fat) {
+                x.setFatXY(fatXY / 5, fatXY % 5);
+            }
+            return x;
+        }
+
+        FORCEINLINE u32 lookup(const B1B2& s) const {
+            return dist[indexOfAbstract(abstractOf(s))];
+        }
+    };
+
+    GroupPdb buildGroupPdb(const B1B2& target, const std::vector<u32>& groupA, const std::vector<u32>& groupB,
+                           const u32 threads) {
+        Timer timer;
+        GroupPdb p;
+        p.fat = target.getFatBool();
+        for (const u32 c : groupA) p.classOf[c] = 1;
+        for (const u32 c : groupB) p.classOf[c] = 2;
+        p.name = "{";
+        for (const u32 c : groupA) p.name += std::to_string(c);
+        p.name += "}";
+        if (!groupB.empty()) {
+            p.name += "+{";
+            for (const u32 c : groupB) p.name += std::to_string(c);
+            p.name += "}";
+        }
+        const B1B2 goal = p.abstractOf(target);
+        const u64 mA = (my_pext_u64(goal.b1, LOW_BITS) << 18) | my_pext_u64(goal.b2, LOW_BITS);
+        const u64 mB = (my_pext_u64(goal.b1 >> 1, LOW_BITS) << 18) | my_pext_u64(goal.b2 >> 1, LOW_BITS);
+        p.a = static_cast<u32>(__builtin_popcountll(mA));
+        p.b = static_cast<u32>(__builtin_popcountll(mB));
+        p.bStates = BINOM[36 - p.a][p.b];
+        p.entries = BINOM[36][p.a] * p.bStates * (p.fat ? 25 : 1);
+        p.dist.assign(p.entries, 255);
+        p.dist[p.indexOfAbstract(goal)] = 0;
+        for (u32 d = 0;; ++d) {
+            std::atomic<u64> added{0};
+            constexpr u64 CHUNK = 1ULL << 16;
+            parallelFor(threads, (p.entries + CHUNK - 1) / CHUNK, [&](u32, const std::size_t ch) {
+                B1B2 children[60];
+                u64 hashes[60];
+                const u64 end = std::min<u64>(p.entries, (ch + 1) * CHUNK);
+                u64 local = 0;
+                for (u64 i = ch * CHUNK; i < end; ++i) {
+                    if (p.dist[i] != d) {
+                        continue;
+                    }
+                    const B1B2 x = p.boardOfIndex(i, goal);
+                    const std::size_t n = p.fat
+                            ? frontier_recovery_detail::emitNoneChildren<true>(x, children, hashes)
+                            : frontier_recovery_detail::emitNoneChildren<false>(x, children, hashes);
+                    for (std::size_t k = 0; k < n; ++k) {
+                        u8* slot = &p.dist[p.indexOfAbstract(children[k])];
+                        u8 expected = 255;
+                        if (*slot == 255 && __atomic_compare_exchange_n(slot, &expected, static_cast<u8>(d + 1), false,
+                                                                        __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+                            ++local;
+                        }
+                    }
+                }
+                added.fetch_add(local);
+            });
+            if (added.load() == 0) {
+                break;
+            }
+            p.maxDist = d + 1;
+        }
+        p.buildSeconds = timer.getSeconds();
+        return p;
+    }
+
+    int runPdb2(const std::string& puzzle, const u32 seedDepth, const u32 tableDepth, const u32 samples,
+                const u32 threads, const u64 maxEntries) {
+        const BoardPair* pair = BoardLookup::getBoardPair(puzzle);
+        if (pair == nullptr) {
+            tcout << "Unknown puzzle: " << puzzle << "\n";
+            return 1;
+        }
+        const Board start = pair->getStartState();
+        const Board goal = pair->getEndState();
+        const bool fat = start.getFatBool();
+        const int T = static_cast<int>(tableDepth);
+        tcout << puzzle << (fat ? " (2x2)" : "") << " <" << seedDepth << ",3," << tableDepth << ">, threads " << threads
+              << ", tables up to " << maxEntries / 1000000 << " M entries\n";
+        u32 counts[8] = {};
+        for (u64 y = 0; y < 6; ++y) {
+            for (u64 x = 0; x < 6; ++x) {
+                ++counts[goal.getColor(x, y)];
+            }
+        }
+        std::vector<u32> colours;
+        for (u32 c = 0; c < 8; ++c) {
+            if (counts[c] != 0) {
+                colours.push_back(c);
+                tcout << "  colour " << c << ": " << counts[c] << " cells\n";
+            }
+        }
+        const u64 mul = fat ? 25 : 1;
+        // Candidates: every merged pair / triple (one class), every pair told
+        // apart (two classes), that fits; keep the 6 largest.
+        struct Cand { std::vector<u32> A, B; u64 entries; };
+        std::vector<Cand> cands;
+        const std::size_t nc = colours.size();
+        for (std::size_t i = 0; i < nc; ++i) {
+            for (std::size_t j = i + 1; j < nc; ++j) {
+                const u32 a2 = counts[colours[i]] + counts[colours[j]];
+                if (BINOM[36][a2] * mul <= maxEntries) {
+                    cands.push_back({{colours[i], colours[j]}, {}, BINOM[36][a2] * mul});
+                }
+                for (std::size_t k = j + 1; k < nc; ++k) {
+                    const u32 a3 = a2 + counts[colours[k]];
+                    if (BINOM[36][a3] * mul <= maxEntries) {
+                        cands.push_back({{colours[i], colours[j], colours[k]}, {}, BINOM[36][a3] * mul});
+                    }
+                }
+                for (const auto& [x, y] : {std::pair{i, j}, std::pair{j, i}}) {
+                    const u32 ca = counts[colours[x]], cb = counts[colours[y]];
+                    const u64 e = BINOM[36][ca] * BINOM[36 - ca][cb] * mul;
+                    if (e <= maxEntries && x < y) {
+                        cands.push_back({{colours[x]}, {colours[y]}, e});
+                    }
+                }
+            }
+        }
+        std::sort(cands.begin(), cands.end(), [](const Cand& p, const Cand& q) { return p.entries > q.entries; });
+        if (cands.size() > 3) {
+            cands.resize(3);
+        }
+        std::vector<GroupPdb> pdbs;
+        for (const Cand& c : cands) {
+            pdbs.push_back(buildGroupPdb(goal.asB1B2(), c.A, c.B, threads));
+            const GroupPdb& p = pdbs.back();
+            tcout << "  pdb " << p.name << ": " << p.a << "+" << p.b << " cells, " << p.entries / 1000000.0
+                  << " M entries, max distance " << p.maxDist << ", h(start) = " << p.lookup(start.asB1B2())
+                  << ", built in " << p.buildSeconds << "s\n";
+        }
+        LaneTables mix;
+        buildLaneTables(goal.asB1B2(), mix);
+        tcout << "  colour-mix h(start) = " << colour_mix::bound(start.asB1B2(), mix) << "\n";
+
+        JVec<B1B2> seeds;
+        buildFrontier(start, seedDepth, seeds);
+        const std::size_t step = std::max<std::size_t>(1, seeds.size() / samples);
+        const std::size_t np = pdbs.size();
+        std::vector<std::atomic<u64>> lSkip(np + 2), nSkip(np + 2);   // per pdb, then colour-mix, then all
+        std::atomic<u64> leaves{0}, nodes{0};
+        parallelFor(threads, (seeds.size() + step - 1) / step, [&](u32, const std::size_t k) {
+            streamFrom(seeds[k * step], 2, [&](const B1B2& node) {
+                nodes.fetch_add(1, std::memory_order_relaxed);
+                int best = colour_mix::bound(node, mix);
+                nSkip[np].fetch_add(best > T + 1, std::memory_order_relaxed);
+                for (std::size_t q = 0; q < np; ++q) {
+                    const int h = static_cast<int>(pdbs[q].lookup(node));
+                    nSkip[q].fetch_add(h > T + 1, std::memory_order_relaxed);
+                    best = std::max(best, h);
+                }
+                nSkip[np + 1].fetch_add(best > T + 1, std::memory_order_relaxed);
+                streamFrom(node, 1, [&](const B1B2& leaf) {
+                    leaves.fetch_add(1, std::memory_order_relaxed);
+                    int lb = colour_mix::bound(leaf, mix);
+                    lSkip[np].fetch_add(lb > T, std::memory_order_relaxed);
+                    for (std::size_t q = 0; q < np; ++q) {
+                        const int h = static_cast<int>(pdbs[q].lookup(leaf));
+                        lSkip[q].fetch_add(h > T, std::memory_order_relaxed);
+                        lb = std::max(lb, h);
+                    }
+                    lSkip[np + 1].fetch_add(lb > T, std::memory_order_relaxed);
+                });
+            });
+        });
+        auto pct = [](const u64 a, const u64 n) { return 100.0 * static_cast<double>(a) / static_cast<double>(std::max<u64>(1, n)); };
+        tcout << "  skip (leaves " << leaves.load() << " | whole last level, nodes " << nodes.load() << "):\n";
+        for (std::size_t q = 0; q < np; ++q) {
+            tcout << "    pdb " << pdbs[q].name << ": " << pct(lSkip[q].load(), leaves.load()) << "% | "
+                  << pct(nSkip[q].load(), nodes.load()) << "%\n";
+        }
+        tcout << "    colour-mix: " << pct(lSkip[np].load(), leaves.load()) << "% | " << pct(nSkip[np].load(), nodes.load()) << "%\n";
+        tcout << "    all combined: " << pct(lSkip[np + 1].load(), leaves.load()) << "% | "
+              << pct(nSkip[np + 1].load(), nodes.load()) << "%\n";
+        return 0;
+    }
 }
 
 int main(const int argc, char** argv) {
     tcout << std::unitbuf;
     if (argc >= 2 && std::string(argv[1]) == "--check") {
         return runCheck();
+    }
+    if (argc >= 3 && std::string(argv[1]) == "--pdb2") {
+        u32 seedDepth = 5, tableDepth = 6, samples = 150, threads = 4;
+        u64 maxEntries = 300'000'000ULL;
+        for (int i = 3; i + 1 < argc; i += 2) {
+            const std::string a = argv[i];
+            const u64 v = std::stoull(argv[i + 1]);
+            if (a == "--seed-depth") seedDepth = static_cast<u32>(v);
+            else if (a == "--table-depth") tableDepth = static_cast<u32>(v);
+            else if (a == "--samples") samples = static_cast<u32>(v);
+            else if (a == "--threads") threads = static_cast<u32>(v);
+            else if (a == "--max-mentries") maxEntries = v * 1000000ULL;
+        }
+        return runPdb2(argv[2], seedDepth, tableDepth, samples, threads, maxEntries);
     }
     if (argc >= 2 && (std::string(argv[1]) == "--pdb" || std::string(argv[1]) == "--pdb-check")) {
         u32 seedDepth = 5, tableDepth = 6, samples = 300, threads = 4, kMax = 8;

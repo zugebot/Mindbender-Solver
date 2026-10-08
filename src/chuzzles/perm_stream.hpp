@@ -157,12 +157,13 @@ namespace perm_stream_detail {
             i32 prevNormalCol,
             u32 prevAmount);
 
-    // Optional prune for stream_lanes_dfs: skip(node) is asked for every node
-    // one move above the leaves, and true drops that node's whole last level.
-    // The default compiles to nothing (if constexpr on ENABLED).
+    // Optional prune for stream_lanes_dfs: skipMask(nodes) is asked once per
+    // lane for its 5 shifted nodes one move above the leaves (bit k set: drop
+    // node k's whole last level). Five at a time so a pruner can overlap its
+    // memory reads. The default compiles to nothing (if constexpr on ENABLED).
     struct NoParentPrune {
         static constexpr bool ENABLED = false;
-        static FORCEINLINE bool skip(const B1B2&) { return false; }
+        static FORCEINLINE u32 skipMask(const B1B2 (&)[5]) { return 0; }
     };
 
     template<i32 CUR_DEPTH, i32 MAX_DEPTH,

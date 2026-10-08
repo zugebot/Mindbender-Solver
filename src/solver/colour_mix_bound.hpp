@@ -197,6 +197,13 @@ namespace colour_mix {
         static FORCEINLINE bool skip(const B1B2& node) {
             return bound(node, *g_parentTables) > g_parentLimit + 1;
         }
+        static FORCEINLINE u32 skipMask(const B1B2 (&nodes)[5]) {
+            u32 m = 0;
+            for (u32 k = 0; k < 5; ++k) {
+                m |= static_cast<u32>(skip(nodes[k])) << k;
+            }
+            return m;
+        }
     };
 
 } // namespace colour_mix

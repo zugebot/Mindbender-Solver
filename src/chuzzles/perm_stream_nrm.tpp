@@ -283,6 +283,11 @@ namespace perm_stream_detail {
                     lane_rotations::colShifts(board, static_cast<u32>(sect), shifted);
                 }
 
+                u32 pruneMask = 0;
+                if constexpr (PARENT_PRUNE::ENABLED && CUR_DEPTH + 2 == MAX_DEPTH) {
+                    pruneMask = PARENT_PRUNE::skipMask(shifted);
+                }
+
                 for (u32 k = 0; k < 5; ++k) {
                     if constexpr (CHECK_SIM) {
                         if (shifted[k] == board) {
@@ -296,7 +301,7 @@ namespace perm_stream_detail {
                         emitStateB1B2(shifted[k], chunk, sink);
                     } else {
                         if constexpr (PARENT_PRUNE::ENABLED && CUR_DEPTH + 2 == MAX_DEPTH) {
-                            if (PARENT_PRUNE::skip(shifted[k])) {
+                            if (pruneMask & (1u << k)) {
                                 continue;   // no child of this node can be wanted
                             }
                         }

@@ -74,6 +74,14 @@
 // and pruned vs full streams keeping identical wanted leaves), then times
 // off / leaf / both on real seeds and keeps the fastest. Any audit failure
 // turns it off. 2x2 boards: off (the halved bound prunes nothing).
+// --pdb auto|off|on adds grouped pattern databases (src/solver/group_pdb.hpp):
+// up to 3 merged-colour classes solved exactly at startup (2 bits per entry),
+// asked at the same parent nodes ("pdb") and optionally at leaves
+// ("pdbleaf"); audited the same way and timed with the other modes. auto:
+// normal boards, 14+ moves (seed depth >= 5), when colour-mix leaves room.
+// "parent" / "pdbparent" prune only at parents, with no per-leaf check: on
+// puzzles where the leaf check skips little (16-4: 39%) it costs more than
+// the lookups it saves, while a parent check covers ~40 leaves.
 //
 // --progress-file: a background thread rewrites a small JSON status (phase,
 // done/total units, elapsed) every few seconds for python/scheduler; workers
@@ -84,6 +92,7 @@
 #include "src/chuzzles/include.hpp"
 #include "src/utils/progress_reporter.hpp"
 #include "src/solver/colour_mix_bound.hpp"
+#include "src/solver/group_pdb.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -151,7 +160,10 @@ namespace {
         double calibrateSeconds = 20.0;
         int forcedGroup = 0;          // --probe-variant G:P
         int forcedPipeline = 0;
-        int boundMode = -1;           // --bound: -1 auto, 0 off, 1 leaf, 2 both (see header)
+        int boundMode = -1;           // --bound: -1 auto, 0 off, 1 leaf, 2 both, 3 pdb, 4 pdbleaf,
+                                      //          5 parent, 6 pdbparent (see header)
+        int pdbMode = -1;             // --pdb: -1 auto, 0 off, 1 on
+        u64 pdbMaxEntries = 300'000'000ULL;
         double boundCalibrateSeconds = 20.0;
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }
@@ -666,6 +678,38 @@ namespace {
     // probes into a multi-GB array then mostly avoid TLB misses / page walks.
     bool g_largePagesWanted = true;
     B1B2 g_rightRoot;   // the table side's root: the colour-mix bound's target
+
+    // Parent-level prune: colour-mix, then the grouped pattern databases.
+    // Per lane (5 nodes): every table entry still needed is located and
+    // prefetched first, then tested, so the cache misses overlap instead of
+    // waiting one after another.
+    struct ParentPrunePdb {
+        static constexpr bool ENABLED = true;
+        static FORCEINLINE u32 skipMask(const B1B2 (&nodes)[5]) {
+            u32 m = colour_mix::ParentPrune::skipMask(nodes);
+            const u32 nt = group_pdb::g_tableCount;
+            if (m == 31U || nt == 0) {
+                return m;
+            }
+            u64 idx[4][5];
+            for (u32 i = 0; i < nt; ++i) {
+                for (u32 k = 0; k < 5; ++k) {
+                    if ((m & (1U << k)) == 0) {
+                        idx[i][k] = group_pdb::g_tables[i]->indexOf(nodes[k]);
+                        group_pdb::g_tables[i]->prefetchAt(idx[i][k]);
+                    }
+                }
+            }
+            for (u32 i = 0; i < nt; ++i) {
+                for (u32 k = 0; k < 5; ++k) {
+                    if ((m & (1U << k)) == 0 && (group_pdb::g_tables[i]->codeAt(idx[i][k]) & 2U) != 0) {
+                        m |= 1U << k;
+                    }
+                }
+            }
+            return m;
+        }
+    };
     bool g_indexBuiltWithTable = false;   // set by the in-RAM depth-6 build
 
     bool enableLockMemoryPrivilege() {
@@ -1052,7 +1096,7 @@ namespace {
     // previous batch's tests.
     // LEAF_BOUND: in-range states whose colour-mix bound exceeds `limit`
     // cannot be within the table depth of the right root and are not probed.
-    template<bool LEAF_BOUND>
+    template<bool LEAF_BOUND, bool LEAF_PDB = false>
     struct ProbeSinkT {
         const FingerprintRange& index;
         ProbeVariant variant;
@@ -1108,6 +1152,16 @@ namespace {
                 ++inRange;
                 if constexpr (LEAF_BOUND) {
                     if (colour_mix::bound(chunkStates[i], *tables) > limit) {
+                        ++boundSkipped;
+                        continue;
+                    }
+                }
+                if constexpr (LEAF_PDB) {
+                    bool isFar = false;
+                    for (u32 k = 0; k < group_pdb::g_tableCount && !isFar; ++k) {
+                        isFar = group_pdb::g_tables[k]->farLeaf(chunkStates[i]);
+                    }
+                    if (isFar) {
                         ++boundSkipped;
                         continue;
                     }
@@ -1319,6 +1373,88 @@ namespace {
         return a;
     }
 
+    // Grouped pattern databases on this run's seeds: zero at the target; on
+    // sampled real edges, every child of a "> limit + 1" node is "> limit";
+    // the pruned stream (colour-mix + tables at parents) keeps exactly the
+    // leaves the full stream has that neither bound rules out. Also measures
+    // the extra share of whole last levels the tables skip.
+    BoundAudit auditGroupPdb(const JVec<B1B2>& seeds, const colour_mix::LaneTables& tabs, const int limit,
+                             const u32 threads) {
+        BoundAudit a;
+        std::atomic<u64> nodes{0}, edges{0}, nodeSkipMix{0}, nodeSkipAny{0}, bad{0}, checks{0};
+        std::mutex whyLock;
+        std::string firstWhy;
+        auto fail = [&](const std::string& why) {
+            bad.fetch_add(1);
+            std::lock_guard<std::mutex> lock(whyLock);
+            if (firstWhy.empty()) {
+                firstWhy = why;
+            }
+        };
+        for (u32 i = 0; i < group_pdb::g_tableCount; ++i) {
+            if (group_pdb::g_tables[i]->code(g_rightRoot) != 0) {
+                fail("table " + group_pdb::g_tables[i]->name() + " is not 0 at the target");
+            }
+        }
+        auto anyFar = [](const B1B2& s, const bool node) {
+            for (u32 i = 0; i < group_pdb::g_tableCount; ++i) {
+                if (node ? group_pdb::g_tables[i]->farNode(s) : group_pdb::g_tables[i]->farLeaf(s)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const std::size_t samples = std::min<std::size_t>(256, seeds.size());
+        const std::size_t step = std::max<std::size_t>(1, seeds.size() / std::max<std::size_t>(1, samples));
+        parallelFor(threads, (seeds.size() + step - 1) / step, [&](u32, const std::size_t k) {
+            streamStates<LEFT_STREAM_DEPTH - 1, perm_stream_detail::NoParentPrune>(seeds[k * step], [&](const B1B2& node) {
+                nodes.fetch_add(1, std::memory_order_relaxed);
+                const bool mixFar = colour_mix::bound(node, tabs) > limit + 1;
+                const bool pdbFar = anyFar(node, true);
+                nodeSkipMix.fetch_add(mixFar, std::memory_order_relaxed);
+                nodeSkipAny.fetch_add(mixFar || pdbFar, std::memory_order_relaxed);
+                if (pdbFar) {
+                    streamStates<1, perm_stream_detail::NoParentPrune>(node, [&](const B1B2& leaf) {
+                        edges.fetch_add(1, std::memory_order_relaxed);
+                        if (!anyFar(leaf, false)) {
+                            fail("a far node has a child within the limit");
+                        }
+                    });
+                }
+            });
+        });
+        const std::size_t streamSeeds = std::min<std::size_t>(32, seeds.size());
+        const std::size_t sstep = std::max<std::size_t>(1, seeds.size() / std::max<std::size_t>(1, streamSeeds));
+        parallelFor(threads, (seeds.size() + sstep - 1) / sstep, [&](u32, const std::size_t k) {
+            std::vector<B1B2> full, pruned;
+            auto wanted = [&](const B1B2& s) { return colour_mix::bound(s, tabs) <= limit && !anyFar(s, false); };
+            streamStates<LEFT_STREAM_DEPTH, perm_stream_detail::NoParentPrune>(seeds[k * sstep], [&](const B1B2& s) {
+                if (wanted(s)) {
+                    full.push_back(s);
+                }
+            });
+            streamStates<LEFT_STREAM_DEPTH, ParentPrunePdb>(seeds[k * sstep], [&](const B1B2& s) {
+                if (wanted(s)) {
+                    pruned.push_back(s);
+                }
+            });
+            std::sort(full.begin(), full.end());
+            std::sort(pruned.begin(), pruned.end());
+            if (full != pruned) {
+                fail("pruned stream lost or added a wanted leaf");
+            }
+            checks.fetch_add(full.size(), std::memory_order_relaxed);
+        });
+        a.nodes = nodes.load();
+        a.edges = edges.load();
+        a.streamChecks = checks.load();
+        a.parentSkip = static_cast<double>(nodeSkipAny.load()) / static_cast<double>(std::max<u64>(1, a.nodes));
+        a.leafSkip = static_cast<double>(nodeSkipMix.load()) / static_cast<double>(std::max<u64>(1, a.nodes));
+        a.ok = bad.load() == 0;
+        a.why = firstWhy;
+        return a;
+    }
+
     // Streams the whole left side once per RAM-sized range of the index's
     // partitions and returns the unique fingerprint hits (key, state), sorted.
     // `builder`, if given, fills the index for a pass in RAM instead of
@@ -1386,7 +1522,8 @@ namespace {
         static colour_mix::LaneTables boundTables;   // read by colour_mix::ParentPrune
         const int boundLimit = static_cast<int>(cfg.tableDepth);
         int boundMode = 0;
-        int boundMaxMode = 0;
+        std::vector<int> boundModes;   // modes to time (auto)
+        static const char* BOUND_NAMES[7] = {"off", "leaf", "both", "pdb", "pdbleaf", "parent", "pdbparent"};
         if (cfg.boundMode != 0 && !cfg.reverse) {
             if (g_rightRoot.getFatBool()) {
                 tcout << "bound: off (2x2 board; the halved bound prunes nothing)\n";
@@ -1402,12 +1539,55 @@ namespace {
                 if (audit.ok) {
                     colour_mix::g_parentTables = &boundTables;
                     colour_mix::g_parentLimit = boundLimit;
+                    bool pdbReady = false;
+                    const bool wantPdb = cfg.pdbMode == 1
+                                         || (cfg.pdbMode == -1 && cfg.seedDepth >= 5 && audit.parentSkip < 0.9);
+                    if (wantPdb) {
+                        static std::vector<group_pdb::Table> pdbTables;
+                        pdbTables.clear();
+                        Timer pdbTimer;
+                        for (const u8 mask : group_pdb::chooseClasses(g_rightRoot, cfg.pdbMaxEntries, 3)) {
+                            pdbTables.push_back(group_pdb::build(g_rightRoot, mask, boundLimit, threads));
+                            const group_pdb::Table& tb = pdbTables.back();
+                            tcout << "pdb: table " << tb.name() << ": " << tb.cells << " cells, " << tb.entries / 1e6
+                                  << " M entries (" << tb.bits.size() * 8 / 1e6 << " MB), max distance " << tb.maxDist
+                                  << ", built in " << tb.buildSeconds << "s\n";
+                        }
+                        group_pdb::g_tableCount = static_cast<u32>(pdbTables.size());
+                        for (u32 i = 0; i < group_pdb::g_tableCount; ++i) {
+                            group_pdb::g_tables[i] = &pdbTables[i];
+                        }
+                        if (group_pdb::g_tableCount != 0) {
+                            const BoundAudit pa = auditGroupPdb(seeds, boundTables, boundLimit, threads);
+                            tcout << "pdb: audit " << (pa.ok ? "ok" : "FAILED (" + pa.why + ")") << ": " << pa.nodes
+                                  << " nodes, " << pa.edges << " edges below far nodes, " << pa.streamChecks
+                                  << " wanted leaves identical pruned vs full; whole last level skipped "
+                                  << 100.0 * pa.leafSkip << "% -> " << 100.0 * pa.parentSkip << "% with the tables ("
+                                  << pdbTimer.getSeconds() << "s total)\n";
+                            pdbReady = pa.ok;
+                            if (!pa.ok) {
+                                group_pdb::g_tableCount = 0;
+                            }
+                        } else {
+                            tcout << "pdb: no colour class fits " << cfg.pdbMaxEntries / 1000000 << " M entries\n";
+                        }
+                    }
                     if (cfg.boundMode > 0) {
-                        boundMode = cfg.boundMode;
-                        tcout << "bound: " << (boundMode == 2 ? "both" : "leaf") << " (forced)\n";
-                    } else if (audit.leafSkip >= 0.05) {
+                        const bool needsPdb = cfg.boundMode == 3 || cfg.boundMode == 4 || cfg.boundMode == 6;
+                        boundMode = needsPdb && !pdbReady ? 2 : cfg.boundMode;
+                        tcout << "bound: " << BOUND_NAMES[boundMode] << " (forced)\n";
+                    } else if (audit.leafSkip >= 0.05 || pdbReady) {
                         boundMode = -1;
-                        boundMaxMode = audit.parentSkip >= 0.01 ? 2 : 1;
+                        boundModes = {0, 1};
+                        if (audit.parentSkip >= 0.01) {
+                            boundModes.push_back(2);
+                            boundModes.push_back(5);
+                        }
+                        if (pdbReady) {
+                            boundModes.push_back(3);
+                            boundModes.push_back(4);
+                            boundModes.push_back(6);
+                        }
                     } else {
                         tcout << "bound: off (skips under 5% here)\n";
                     }
@@ -1461,13 +1641,30 @@ namespace {
             auto processSeed = [&](const u32 t, const std::size_t s, const ProbeVariant variant,
                                    const int mode = 0) -> u64 {
                 const Board seedBoard = makeBoardFromState(seeds[s]);
-                if (mode == 0) {
+                if (mode == 0 || mode == 5 || mode == 6) {
                     ProbeSinkT<false> sink(index, variant);
-                    PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH>(seedBoard, sink, 4096);
+                    if (mode == 5) {
+                        PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH, colour_mix::ParentPrune>(
+                                seedBoard, sink, 4096);
+                    } else if (mode == 6) {
+                        PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH, ParentPrunePdb>(
+                                seedBoard, sink, 4096);
+                    } else {
+                        PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH>(seedBoard, sink, 4096);
+                    }
+                    return finishSeed(t, sink);
+                }
+                if (mode == 4) {
+                    ProbeSinkT<true, true> sink(index, variant, &boundTables, boundLimit);
+                    PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH, ParentPrunePdb>(
+                            seedBoard, sink, 4096);
                     return finishSeed(t, sink);
                 }
                 ProbeSinkT<true> sink(index, variant, &boundTables, boundLimit);
-                if (mode == 2) {
+                if (mode == 3) {
+                    PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH, ParentPrunePdb>(
+                            seedBoard, sink, 4096);
+                } else if (mode == 2) {
                     PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH, colour_mix::ParentPrune>(
                             seedBoard, sink, 4096);
                 } else {
@@ -1529,7 +1726,7 @@ namespace {
             if (boundMode == -1) {
                 // Time off / leaf / both on consecutive real seeds (same
                 // work, nothing repeated), ns per seed, then keep the fastest.
-                const int nM = boundMaxMode + 1;
+                const int nM = static_cast<int>(boundModes.size());
                 const std::size_t round = static_cast<std::size_t>(threads) * static_cast<std::size_t>(nM) * 4;
                 if (cfg.calibrate && seeds.size() - firstSeed >= round * 40) {
                     g_progress.detail(passLabel + " timing the colour-mix bound");
@@ -1540,12 +1737,13 @@ namespace {
                     }
                     const Timer boundTimer;
                     const std::size_t limitSeed = firstSeed + (seeds.size() - firstSeed) / 4;
-                    while (firstSeed + round <= limitSeed && boundTimer.getSeconds() < cfg.boundCalibrateSeconds) {
+                    const double boundSeconds = cfg.boundCalibrateSeconds * nM / 3.0;   // ~6.7 s per mode
+                    while (firstSeed + round <= limitSeed && boundTimer.getSeconds() < boundSeconds) {
                         const std::size_t base = firstSeed;
                         parallelFor(threads, round, [&](const u32 t, const std::size_t i) {
                             const int m = static_cast<int>(i % static_cast<std::size_t>(nM));
                             const auto t0 = std::chrono::steady_clock::now();
-                            processSeed(t, base + i, chosenVariant, m);
+                            processSeed(t, base + i, chosenVariant, boundModes[m]);
                             const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                                     std::chrono::steady_clock::now() - t0).count();
                             mSeeds[m].fetch_add(1, std::memory_order_relaxed);
@@ -1564,17 +1762,18 @@ namespace {
                     if (best != 0 && nsPerSeed[best] > nsPerSeed[0] * 0.97) {
                         best = 0;   // under 3%: not worth it (noise)
                     }
-                    boundMode = best;
-                    static const char* NAMES[3] = {"off", "leaf", "both"};
+                    boundMode = boundModes[best];
                     tcout << "bound calibrate: " << mSeeds[0].load() * nM << " seeds in " << boundTimer.getSeconds()
                           << "s, us/seed:";
                     for (int m = 0; m < nM; ++m) {
-                        tcout << ' ' << NAMES[m] << '=' << nsPerSeed[m] / 1000.0;
+                        tcout << ' ' << BOUND_NAMES[boundModes[m]] << '=' << nsPerSeed[m] / 1000.0;
                     }
-                    tcout << " -> " << NAMES[boundMode] << " (" << nsPerSeed[0] / nsPerSeed[boundMode] << "x vs off)\n";
+                    tcout << " -> " << BOUND_NAMES[boundMode] << " (" << nsPerSeed[0] / nsPerSeed[best] << "x vs off)\n";
                 } else {
-                    boundMode = boundMaxMode;   // too few seeds to time: the audit's shares were worth it
-                    tcout << "bound: " << (boundMode == 2 ? "both" : "leaf") << " (too few seeds to time)\n";
+                    // too few seeds to time: parents only (never slower than off by much)
+                    boundMode = std::find(boundModes.begin(), boundModes.end(), 6) != boundModes.end() ? 6
+                              : std::find(boundModes.begin(), boundModes.end(), 5) != boundModes.end() ? 5 : 1;
+                    tcout << "bound: " << BOUND_NAMES[boundMode] << " (too few seeds to time)\n";
                 }
                 g_progress.detail(passLabel + " streaming");
             }
@@ -3169,11 +3368,23 @@ namespace {
             else if (a == "--bound-calibrate-seconds") cfg.boundCalibrateSeconds = std::stod(next());
             else if (a == "--bound") {
                 const std::string v = next();
-                cfg.boundMode = v == "auto" ? -1 : v == "off" ? 0 : v == "leaf" ? 1 : v == "both" ? 2 : -2;
+                cfg.boundMode = v == "auto" ? -1 : v == "off" ? 0 : v == "leaf" ? 1 : v == "both" ? 2
+                              : v == "pdb" ? 3 : v == "pdbleaf" ? 4 : v == "parent" ? 5 : v == "pdbparent" ? 6 : -2;
                 if (cfg.boundMode == -2) {
-                    throw std::runtime_error("--bound must be auto, off, leaf or both");
+                    throw std::runtime_error("--bound must be auto, off, leaf, both, pdb, pdbleaf, parent or pdbparent");
+                }
+                if (cfg.boundMode == 3 || cfg.boundMode == 4 || cfg.boundMode == 6) {
+                    cfg.pdbMode = 1;
                 }
             }
+            else if (a == "--pdb") {
+                const std::string v = next();
+                cfg.pdbMode = v == "auto" ? -1 : v == "off" ? 0 : v == "on" ? 1 : -2;
+                if (cfg.pdbMode == -2) {
+                    throw std::runtime_error("--pdb must be auto, off or on");
+                }
+            }
+            else if (a == "--pdb-max-mentries") cfg.pdbMaxEntries = std::stoull(next()) * 1'000'000ULL;
             else if (a == "--probe-variant") {
                 const std::string v = next();
                 const auto colon = v.find(':');
