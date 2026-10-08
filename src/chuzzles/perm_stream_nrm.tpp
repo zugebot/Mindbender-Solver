@@ -243,6 +243,7 @@ namespace perm_stream_detail {
     template<i32 CUR_DEPTH, i32 MAX_DEPTH,
              bool CHECK_CROSS, bool CHECK_SIM,
              eSequenceDir SECT_DIR,
+             typename PARENT_PRUNE,
              typename Sink>
     void stream_lanes_dfs(
             const B1B2& board,
@@ -294,7 +295,12 @@ namespace perm_stream_detail {
                     if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
                         emitStateB1B2(shifted[k], chunk, sink);
                     } else {
-                        stream_lanes_dfs<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS, CHECK_SIM, SECT_DIR>(
+                        if constexpr (PARENT_PRUNE::ENABLED && CUR_DEPTH + 2 == MAX_DEPTH) {
+                            if (PARENT_PRUNE::skip(shifted[k])) {
+                                continue;   // no child of this node can be wanted
+                            }
+                        }
+                        stream_lanes_dfs<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS, CHECK_SIM, SECT_DIR, PARENT_PRUNE>(
                                 shifted[k], chunk, sink, dir, sect, k + 1);
                     }
                 }

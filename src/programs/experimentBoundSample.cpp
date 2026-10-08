@@ -21,10 +21,14 @@
 //       (lookups that could be skipped), of seeds with h(goal) > T + 3 (whole
 //       3-move streams), and of goal-side depth-T states with h(start) > S + 3
 //       (index entries that could be dropped).
+//   experimentBoundSample --bench <puzzle>
+//       Fast (src/solver/colour_mix_bound.hpp) vs reference on 20 M real left
+//       states: identical values, and ns/state on 1 and all threads.
 
 #include "src/chuzzles/include.hpp"
 #include "src/solver/frontier_builder.hpp"
 #include "src/utils/intrinsics/pext_u64.hpp"
+#include "src/solver/colour_mix_bound.hpp"
 
 #include <array>
 #include <bitset>
@@ -40,43 +44,15 @@
 #include <vector>
 
 namespace {
+    using colour_mix::COL_MASK;
+    using LaneMix = colour_mix::LaneMixRef;
+    using colour_mix::LaneTables;
+    using colour_mix::buildLaneTables;
 
-    // Colour multiset of each row and column, as 8 counts of 4 bits packed in a u32.
-    struct LaneMix {
-        u32 rows[6];
-        u32 cols[6];
-    };
+    inline LaneMix laneMix(const B1B2& b) { return colour_mix::laneMixRef(b); }
+    inline int colourMixBound(const B1B2& s, const LaneMix& t, const bool fat) { return colour_mix::referenceBound(s, t, fat); }
+    FORCEINLINE int colourMixBoundTables(const B1B2& s, const LaneTables& t) { return colour_mix::bound(s, t); }
 
-    LaneMix laneMix(const B1B2& b) {
-        LaneMix m{};
-        for (u32 y = 0; y < 6; ++y) {
-            for (u32 x = 0; x < 6; ++x) {
-                const u32 c = b.getColor(static_cast<u64>(x), static_cast<u64>(y));
-                m.rows[y] += 1U << (4 * c);
-                m.cols[x] += 1U << (4 * c);
-            }
-        }
-        return m;
-    }
-
-    // Cells (of 6) that must change for one multiset to become the other.
-    int mixDistance(const u32 a, const u32 b) {
-        int common = 0;
-        for (u32 c = 0; c < 8; ++c) {
-            common += static_cast<int>(std::min((a >> (4 * c)) & 15U, (b >> (4 * c)) & 15U));
-        }
-        return 6 - common;
-    }
-
-    int colourMixBound(const B1B2& state, const LaneMix& target, const bool fat) {
-        const LaneMix s = laneMix(state);
-        int r = 0, c = 0;
-        for (u32 i = 0; i < 6; ++i) {
-            r = std::max(r, mixDistance(s.rows[i], target.rows[i]));
-            c = std::max(c, mixDistance(s.cols[i], target.cols[i]));
-        }
-        return fat ? (r + 1) / 2 + (c + 1) / 2 : r + c;
-    }
 
     // ------------------------------------------------------------------
     // Fast version on the packed board. b1 holds rows 0-2 and b2 rows 3-5,
@@ -94,12 +70,6 @@ namespace {
             }
         }
     } tripleCountsInit;
-
-    // Column x within a half: cell x of each of its three rows (9 bits after pext).
-    constexpr u64 colMask(const u32 x) {
-        return (7ULL << (36 + 15 - 3 * x)) | (7ULL << (18 + 15 - 3 * x)) | (7ULL << (15 - 3 * x));
-    }
-    constexpr u64 COL_MASK[6] = {colMask(0), colMask(1), colMask(2), colMask(3), colMask(4), colMask(5)};
 
     FORCEINLINE u32 rowCounts(const u64 half, const u32 i) {
         const u32 v = static_cast<u32>(half >> ((2 - i) * 18)) & 0x3FFFFU;
@@ -153,120 +123,6 @@ namespace {
         }
         const int r = 6 - static_cast<int>(rowCommon), c = 6 - static_cast<int>(colCommon);
         return g.fat ? (r + 1) / 2 + (c + 1) / 2 : r + c;
-    }
-
-    // ------------------------------------------------------------------
-    // Per-puzzle lane tables: no counting at all at search time.
-    //
-    // A lane's distance is 6 - sum over colours c of min(count_c, goal_c),
-    // where goal_c is how often c appears in that goal lane. A lane's 6 cells
-    // are two triples of 3 cells (9 bits each), so for the pair of triples
-    // only each colour's count up to goal_c matters (more is never shared),
-    // and colours absent from the goal lane don't matter at all. Per lane L:
-    //   first[L][triple]  -> offset of L's table + id * ids_L   (u16)
-    //   second[L][triple] -> id                                 (u8)
-    //   dist[first + second] -> 1 << the lane's distance         (one flat u8 array)
-    // where id numbers the triple's capped colour counts. A lane is 3 loads
-    // and an add: no multiply or shift (pext already uses port 1). Distances
-    // are one-hot, so the max over 6 lanes is 5 ORs and one bit scan. Rows come
-    // straight from the board (two 9-bit fields per row); a column's two
-    // triples are one pext of b1 and one of b2.
-    // ------------------------------------------------------------------
-    struct LaneTables {
-        alignas(64) u16 first[12][512];     // lanes 0-5 rows, 6-11 columns
-        alignas(64) u8 second[12][512];
-        std::vector<u8> dist;
-        u32 ids[12] = {};
-        bool fat = false;
-        u64 bytes = 0;
-    };
-
-    void buildLaneTables(const B1B2& goal, LaneTables& t) {
-        t.fat = goal.getFatBool();
-        u8 cells[12][6];   // goal lane L, cell k
-        for (u32 y = 0; y < 6; ++y) {
-            for (u32 x = 0; x < 6; ++x) {
-                const u8 c = goal.getColor(static_cast<u64>(x), static_cast<u64>(y));
-                cells[y][x] = c;
-                cells[6 + x][y] = c;
-            }
-        }
-        t.dist.clear();
-        for (u32 lane = 0; lane < 12; ++lane) {
-            int classOf[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
-            u32 goalCount[6] = {};
-            u32 m = 0;
-            for (u32 k = 0; k < 6; ++k) {
-                if (classOf[cells[lane][k]] < 0) {
-                    classOf[cells[lane][k]] = static_cast<int>(m++);
-                }
-                ++goalCount[classOf[cells[lane][k]]];
-            }
-            std::map<std::vector<u32>, u32> idOf;
-            std::vector<std::vector<u32>> countsOf;
-            u32 idOfTriple[512];
-            for (u32 v = 0; v < 512; ++v) {
-                std::vector<u32> counts(m, 0);
-                for (u32 k = 0; k < 3; ++k) {
-                    const int c = classOf[(v >> (3 * k)) & 7];
-                    if (c >= 0) {
-                        counts[c] = std::min(counts[c] + 1, goalCount[c]);
-                    }
-                }
-                auto it = idOf.find(counts);
-                if (it == idOf.end()) {
-                    it = idOf.emplace(counts, static_cast<u32>(countsOf.size())).first;
-                    countsOf.push_back(counts);
-                }
-                idOfTriple[v] = it->second;
-            }
-            const u32 ids = static_cast<u32>(countsOf.size());
-            const std::size_t base = t.dist.size();
-            if (base + static_cast<std::size_t>(ids) * ids > 65535) {
-                throw std::runtime_error("lane tables exceed 16-bit offsets");
-            }
-            t.ids[lane] = ids;
-            t.dist.resize(base + static_cast<std::size_t>(ids) * ids);
-            for (u32 a = 0; a < ids; ++a) {
-                for (u32 b = 0; b < ids; ++b) {
-                    u32 common = 0;
-                    for (u32 c = 0; c < m; ++c) {
-                        common += std::min(countsOf[a][c] + countsOf[b][c], goalCount[c]);
-                    }
-                    t.dist[base + a * ids + b] = static_cast<u8>(1U << (6 - common));
-                }
-            }
-            for (u32 v = 0; v < 512; ++v) {
-                t.first[lane][v] = static_cast<u16>(base + idOfTriple[v] * ids);
-                t.second[lane][v] = static_cast<u8>(idOfTriple[v]);
-            }
-        }
-        t.bytes = sizeof(t.first) + sizeof(t.second) + t.dist.size();
-    }
-
-    FORCEINLINE int colourMixBoundTables(const B1B2& s, const LaneTables& t) {
-        const u8* d = t.dist.data();
-        // Unsigned 64-bit indices (no sign extension); each lane finished and
-        // OR-ed in before the next starts, so few values are live at once.
-        auto lane = [&](const u32 L, const u64 a9, const u64 b9) -> u32 {
-            return d[static_cast<u64>(t.first[L][a9]) + static_cast<u64>(t.second[L][b9])];
-        };
-        u64 b1 = s.b1, b2 = s.b2;
-        u32 rowBits = lane(0, (b1 >> 36) & 511U, (b1 >> 45) & 511U);
-        rowBits |= lane(1, (b1 >> 18) & 511U, (b1 >> 27) & 511U);
-        rowBits |= lane(2, b1 & 511U, (b1 >> 9) & 511U);
-        rowBits |= lane(3, (b2 >> 36) & 511U, (b2 >> 45) & 511U);
-        rowBits |= lane(4, (b2 >> 18) & 511U, (b2 >> 27) & 511U);
-        rowBits |= lane(5, b2 & 511U, (b2 >> 9) & 511U);
-        u32 colBits = 0;
-        for (u32 x = 0; x < 6; ++x) {
-            // Empty asm: b1/b2 "change" here, so GCC cannot hoist all twelve
-            // pexts to the top (it did, and spilled them to the stack).
-            asm volatile("" : "+r"(b1), "+r"(b2));
-            colBits |= lane(6 + x, my_pext_u64(b1, COL_MASK[x]), my_pext_u64(b2, COL_MASK[x]));
-        }
-        const u32 r = 31U - static_cast<u32>(__builtin_clz(rowBits)), c = 31U - static_cast<u32>(__builtin_clz(colBits));
-        return t.fat ? static_cast<int>((r + 1) / 2 + (c + 1) / 2) : static_cast<int>(r + c);
     }
 
     template<typename Fn>

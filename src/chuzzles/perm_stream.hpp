@@ -157,9 +157,18 @@ namespace perm_stream_detail {
             i32 prevNormalCol,
             u32 prevAmount);
 
+    // Optional prune for stream_lanes_dfs: skip(node) is asked for every node
+    // one move above the leaves, and true drops that node's whole last level.
+    // The default compiles to nothing (if constexpr on ENABLED).
+    struct NoParentPrune {
+        static constexpr bool ENABLED = false;
+        static FORCEINLINE bool skip(const B1B2&) { return false; }
+    };
+
     template<i32 CUR_DEPTH, i32 MAX_DEPTH,
              bool CHECK_CROSS, bool CHECK_SIM,
              eSequenceDir SECT_DIR,
+             typename PARENT_PRUNE = NoParentPrune,
              typename Sink>
     static void stream_lanes_dfs(
             const B1B2& board,
@@ -255,6 +264,31 @@ public:
         // this assert is arbitrary only for template instantiation
         // and what is a reasonable amount of RAM a PC may have
         static_assert(DEPTH >= 0 && DEPTH <= 5, "DEPTH must be in range 0..5");
+        streamDepthImpl<SECT_DIR, DEPTH>(board_in, sink, chunkCapacity);
+    }
+
+    // streamDepth with PARENT_PRUNE (see perm_stream_detail::NoParentPrune)
+    // asked about every node one move above the leaves. Normal boards with
+    // B1B2 output only; anything else streams unpruned.
+    template<eSequenceDir SECT_DIR, i32 DEPTH, typename PARENT_PRUNE, typename Sink>
+    MU static void streamDepthPruned(const Board& board_in,
+                                     Sink& sink,
+                                     const u32 chunkCapacity = 1u << 20) {
+        static_assert(DEPTH >= 0 && DEPTH <= 5, "DEPTH must be in range 0..5");
+        if constexpr (std::is_same_v<T, B1B2> && DEPTH >= 2) {
+            if (!board_in.getFatBool() && chunkCapacity != 0) {
+                perm_stream_detail::StreamChunk<T> chunk;
+                chunk.data.reserve(chunkCapacity);
+                chunk.data.resize(chunkCapacity);
+                chunk.hashes.reserve(chunkCapacity);
+                chunk.hashes.resize(chunkCapacity);
+                chunk.count = 0;
+                perm_stream_detail::stream_lanes_dfs<0, DEPTH, true, true, SECT_DIR, PARENT_PRUNE>(
+                        board_in.asB1B2(), chunk, sink, -1, -1, 0);
+                perm_stream_detail::flushChunk(chunk, sink);
+                return;
+            }
+        }
         streamDepthImpl<SECT_DIR, DEPTH>(board_in, sink, chunkCapacity);
     }
 
