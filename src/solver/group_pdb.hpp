@@ -14,9 +14,9 @@
 //
 // Index: colex rank of the class's cell positions (or of the blank cells
 // when the class has more than 18), x 25 piece positions on 2x2 boards.
-// Each table keeps 2 bits per entry: bit 0 = distance > limit, bit 1 =
-// distance > limit + 1 (a node one move above the leaves with bit 1 set has
-// no child within `limit`). A 10-cell class: C(36,10) = 254 M entries, 64 MB.
+// Each table keeps 2 bits per entry: code = min(3, max(0, distance - limit)),
+// so a node with BELOW (<= 2) moves still to come below it can be dropped
+// when code > BELOW. A 10-cell class: C(36,10) = 254 M entries, 64 MB.
 //
 // Measured (experimentBoundSample --pdb2, 14 moves, share of leaves |
 // whole last levels skippable, colour-mix alone -> with 3 tables):
@@ -147,8 +147,8 @@ namespace group_pdb {
         }
         FORCEINLINE void prefetchAt(const u64 i) const { __builtin_prefetch(&bits[i >> 5]); }
         FORCEINLINE u32 code(const B1B2& s) const { return codeAt(indexOf(s)); }
-        FORCEINLINE bool farLeaf(const B1B2& s) const { return (code(s) & 1U) != 0; }   // > limit
-        FORCEINLINE bool farNode(const B1B2& s) const { return (code(s) & 2U) != 0; }   // > limit + 1
+        FORCEINLINE bool farLeaf(const B1B2& s) const { return code(s) >= 1U; }   // > limit
+        FORCEINLINE bool farNode(const B1B2& s) const { return code(s) >= 2U; }   // > limit + 1
     };
 
     template<typename Fn>
@@ -226,7 +226,7 @@ namespace group_pdb {
                 for (u64 j = 0; j < 32 && w * 32 + j < t.entries; ++j) {
                     const int dd = dist[w * 32 + j];
                     // unreachable (255) counts as far; it cannot occur for real states
-                    const u64 c = (dd > limit ? 1ULL : 0ULL) | (dd > limit + 1 ? 2ULL : 0ULL);
+                    const u64 c = static_cast<u64>(std::min(3, std::max(0, dd - limit)));
                     word |= c << (2 * j);
                 }
                 t.bits[w] = word;

@@ -284,8 +284,8 @@ namespace perm_stream_detail {
                 }
 
                 u32 pruneMask = 0;
-                if constexpr (PARENT_PRUNE::ENABLED && CUR_DEPTH + 2 == MAX_DEPTH) {
-                    pruneMask = PARENT_PRUNE::skipMask(shifted);
+                if constexpr (PARENT_PRUNE::ENABLED && CUR_DEPTH + 2 <= MAX_DEPTH) {
+                    pruneMask = PARENT_PRUNE::template skipMask<MAX_DEPTH - CUR_DEPTH - 1>(shifted);
                 }
 
                 for (u32 k = 0; k < 5; ++k) {
@@ -300,9 +300,9 @@ namespace perm_stream_detail {
                     if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
                         emitStateB1B2(shifted[k], chunk, sink);
                     } else {
-                        if constexpr (PARENT_PRUNE::ENABLED && CUR_DEPTH + 2 == MAX_DEPTH) {
+                        if constexpr (PARENT_PRUNE::ENABLED) {
                             if (pruneMask & (1u << k)) {
-                                continue;   // no child of this node can be wanted
+                                continue;   // nothing below this node can be wanted
                             }
                         }
                         stream_lanes_dfs<CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS, CHECK_SIM, SECT_DIR, PARENT_PRUNE>(

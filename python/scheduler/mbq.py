@@ -367,7 +367,8 @@ class Scheduler:
             again = self.add({"puzzle": job["puzzle"], "moves": job["moves"], "until": job.get("until"),
                               "engine": job["engine"], "ram_gb": job.get("ram_gb"), "threads": job.get("threads"),
                               "promote": job["promote"], "keep_table": job["keep_table"], "front": True,
-                              "table_depth": job.get("table_depth"), "parent": job["id"]})
+                              "table_depth": job.get("table_depth"), "stream_depth": job.get("stream_depth"),
+                              "parent": job["id"]})
             job["notes"].append(f"re-queued as #{again['id']}")
         self.save()
 
@@ -386,16 +387,22 @@ class Scheduler:
             raise ValueError("inram engine supports 3-12 moves")
         # Depth-7 goal table for 15 moves, and for 14 on 2x2 boards (their depth-7
         # set fits in a few RAM passes, so the left side shrinks ~30x).
-        table_depth = int(spec.get("table_depth") or (7 if moves >= 15 or (moves == 14 and puzzle_is_fat(puzzle))
-                                                      else 6))
-        seed_depth = moves - 3 - table_depth
-        if engine == "ssd" and (table_depth not in (6, 7) or not 2 <= seed_depth <= 5):
-            raise ValueError(f"no <S,3,{table_depth}> split for {moves} moves")
+        # Splits <seed, stream, table>: 2x2 boards use the depth-7 goal table at
+        # 14+ moves (their depth-7 set fits a few RAM passes); normal boards
+        # keep the depth-6 table and, at 15 moves, take a 4-move left stream
+        # (<5,4,6>), which the colour-mix bound prunes at every level.
+        fat = puzzle_is_fat(puzzle)
+        table_depth = int(spec.get("table_depth") or (7 if (fat and moves >= 14) or moves >= 16 else 6))
+        stream_depth = int(spec.get("stream_depth") or (4 if moves - table_depth >= 9 else 3))
+        seed_depth = moves - stream_depth - table_depth
+        if engine == "ssd" and (table_depth not in (6, 7) or stream_depth not in (3, 4) or not 2 <= seed_depth <= 5):
+            raise ValueError(f"no <S,{stream_depth},{table_depth}> split for {moves} moves")
         with self.lock:
             job = {
                 "id": self.next_id, "puzzle": puzzle, "moves": moves, "until": spec.get("until"),
                 "engine": engine, "table_depth": table_depth if engine == "ssd" else None,
                 "seed_depth": seed_depth if engine == "ssd" else None,
+                "stream_depth": stream_depth if engine == "ssd" else None,
                 "ram_gb": spec.get("ram_gb"), "threads": spec.get("threads"),
                 "promote": spec.get("promote", True),
                 "keep_table": spec.get("keep_table", False), "fat": puzzle_is_fat(puzzle),
@@ -513,6 +520,8 @@ class Scheduler:
                    "--progress-file", str(progress), "--progress-interval", "5"]
             if job["table_depth"] == 7:
                 cmd += ["--table-depth", "7"]
+            if job.get("stream_depth", 3) != 3:
+                cmd += ["--stream-depth", str(job["stream_depth"])]
             if job.get("ram_gb"):
                 cmd += ["--ram-gb", str(job["ram_gb"])]
             if job.get("threads"):
@@ -843,7 +852,8 @@ def api(method: str, path: str, body: dict | None = None, raw: bool = False):
 
 
 def describe(job: dict) -> str:
-    kind = f"{job['engine']}" + (f" <{job['seed_depth']},3,{job['table_depth']}>" if job["engine"] == "ssd" else "")
+    kind = f"{job['engine']}" + (f" <{job['seed_depth']},{job.get('stream_depth') or 3},{job['table_depth']}>"
+                                  if job["engine"] == "ssd" else "")
     until = f" (until {job['until']})" if job.get("until") else ""
     return f"#{job['id']:<3} {job['puzzle']:>5} {job['moves']} moves{until}  {kind}  [{job['status']}]"
 
@@ -898,7 +908,7 @@ def cmd_add(args) -> None:
                                     "engine": args.engine, "ram_gb": args.ram_gb, "threads": args.threads,
                                     "promote": not args.no_promote,
                                     "keep_table": args.keep_table, "front": args.front,
-                                    "table_depth": args.table_depth})
+                                    "table_depth": args.table_depth, "stream_depth": args.stream_depth})
         print("queued " + describe(job))
 
 
@@ -961,6 +971,8 @@ def main() -> None:
     a.add_argument("--no-promote", action="store_true", help="don't update levels_final / README / config")
     a.add_argument("--keep-table", action="store_true", help="keep the depth-6/7 table afterwards")
     a.add_argument("--front", action="store_true", help="put ahead of the other queued jobs")
+    a.add_argument("--stream-depth", type=int, choices=[3, 4],
+                   help="left stream moves after the seeds (default: 4 for 15-move normal boards, else 3)")
     a.add_argument("--table-depth", type=int, choices=[6, 7],
                    help="goal-side table depth (default: 7 for 15 moves and 14-move 2x2 boards)")
     c = sub.add_parser("cancel", help="cancel a queued or running job")

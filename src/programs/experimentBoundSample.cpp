@@ -31,6 +31,7 @@
 #include "src/solver/colour_mix_bound.hpp"
 
 #include <array>
+#include <functional>
 #include <immintrin.h>
 #include <bitset>
 #include <cstring>
@@ -941,12 +942,98 @@ namespace {
               << pct(nSkip[np + 1].load(), nodes.load()) << "%\n";
         return 0;
     }
+
+    // A deeper left stream (seed depth S + `streamDepth` moves) pruned at
+    // every level: a node with r moves still to go below it is dropped when
+    // h > T + r (h changes by at most 1 per move). Walks one move at a time
+    // (1-move streams, so a little more than the canonical stream) and
+    // compares states generated and lookups left against no pruning.
+    int runDeep(const std::string& puzzle, const u32 seedDepth, const u32 tableDepth, const u32 streamDepth,
+                const u32 samples, const u32 threads) {
+        const BoardPair* pair = BoardLookup::getBoardPair(puzzle);
+        if (pair == nullptr) {
+            tcout << "Unknown puzzle: " << puzzle << "\n";
+            return 1;
+        }
+        const Board start = pair->getStartState();
+        const Board goal = pair->getEndState();
+        const int T = static_cast<int>(tableDepth);
+        LaneTables mix;
+        buildLaneTables(goal.asB1B2(), mix);
+        tcout << puzzle << (start.getFatBool() ? " (2x2)" : "") << " <" << seedDepth << "," << streamDepth << ","
+              << tableDepth << "> = " << seedDepth + streamDepth + tableDepth << " moves, colour-mix pruned at every level\n";
+        JVec<B1B2> seeds;
+        buildFrontier(start, seedDepth, seeds);
+        const std::size_t step = std::max<std::size_t>(1, seeds.size() / samples);
+        constexpr u32 MAXD = 6;
+        std::array<std::atomic<u64>, MAXD + 1> visited{}, pruned{}, full{};
+        std::atomic<u64> lookups{0};
+        // full[L]: nodes at level L with no pruning (a pruned node's subtree is
+        // counted with the fan-out measured at that level).
+        std::function<void(const B1B2&, u32)> walk = [&](const B1B2& node, const u32 level) {
+            visited[level].fetch_add(1, std::memory_order_relaxed);
+            const int h = colour_mix::bound(node, mix);
+            const int left = static_cast<int>(streamDepth - level);
+            if (level == streamDepth) {
+                lookups.fetch_add(h <= T, std::memory_order_relaxed);
+                return;
+            }
+            if (level > 0 && h > T + left) {
+                pruned[level].fetch_add(1, std::memory_order_relaxed);
+                return;
+            }
+            streamFrom(node, 1, [&](const B1B2& child) { walk(child, level + 1); });
+        };
+        parallelFor(threads, (seeds.size() + step - 1) / step, [&](u32, const std::size_t k) { walk(seeds[k * step], 0); });
+        // Unpruned counts: expand without pruning on a smaller sample.
+        std::array<std::atomic<u64>, MAXD + 1> plain{};
+        std::function<void(const B1B2&, u32)> walkPlain = [&](const B1B2& node, const u32 level) {
+            plain[level].fetch_add(1, std::memory_order_relaxed);
+            if (level == streamDepth) {
+                return;
+            }
+            streamFrom(node, 1, [&](const B1B2& child) { walkPlain(child, level + 1); });
+        };
+        const std::size_t plainStep = step * 8;
+        parallelFor(threads, (seeds.size() + plainStep - 1) / plainStep, [&](u32, const std::size_t k) {
+            walkPlain(seeds[k * plainStep], 0);
+        });
+        const double scale = static_cast<double>(visited[0].load()) / static_cast<double>(std::max<u64>(1, plain[0].load()));
+        u64 genPruned = 0;
+        double genPlain = 0.0;
+        for (u32 L = 1; L <= streamDepth; ++L) {
+            const double pl = static_cast<double>(plain[L].load()) * scale;
+            genPruned += visited[L].load();
+            genPlain += pl;
+            tcout << "  level " << L << " (" << streamDepth - L << " to go): visited " << visited[L].load() << " of ~"
+                  << static_cast<u64>(pl) << " (" << 100.0 * static_cast<double>(visited[L].load()) / std::max(1.0, pl)
+                  << "%), pruned here " << pruned[L].load() << "\n";
+        }
+        const double leavesPlain = static_cast<double>(plain[streamDepth].load()) * scale;
+        tcout << "  states generated: " << 100.0 * static_cast<double>(genPruned) / std::max(1.0, genPlain)
+              << "% of unpruned; lookups: " << 100.0 * static_cast<double>(lookups.load()) / std::max(1.0, leavesPlain)
+              << "% of unpruned leaves\n";
+        return 0;
+    }
 }
 
 int main(const int argc, char** argv) {
     tcout << std::unitbuf;
     if (argc >= 2 && std::string(argv[1]) == "--check") {
         return runCheck();
+    }
+    if (argc >= 3 && std::string(argv[1]) == "--deep") {
+        u32 seedDepth = 5, tableDepth = 6, streamDepth = 4, samples = 200, threads = 4;
+        for (int i = 3; i + 1 < argc; i += 2) {
+            const std::string a = argv[i];
+            const u32 v = static_cast<u32>(std::stoul(argv[i + 1]));
+            if (a == "--seed-depth") seedDepth = v;
+            else if (a == "--table-depth") tableDepth = v;
+            else if (a == "--stream") streamDepth = v;
+            else if (a == "--samples") samples = v;
+            else if (a == "--threads") threads = v;
+        }
+        return runDeep(argv[2], seedDepth, tableDepth, streamDepth, samples, threads);
     }
     if (argc >= 3 && std::string(argv[1]) == "--pdb2") {
         u32 seedDepth = 5, tableDepth = 6, samples = 150, threads = 4;

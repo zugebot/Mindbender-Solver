@@ -79,6 +79,9 @@
 // asked at the same parent nodes ("pdb") and optionally at leaves
 // ("pdbleaf"); audited the same way and timed with the other modes. auto:
 // normal boards, 14+ moves (seed depth >= 5), when colour-mix leaves room.
+// --stream-depth 4 (default 3): a 4-move left stream from the seeds, so
+// <5,4,6> = 15 moves; the parent prune then runs at every level above the
+// leaves (a node with r moves below is dropped when h > depth + r).
 // "parent" / "pdbparent" prune only at parents, with no per-leaf check: on
 // puzzles where the leaf check skips little (16-4: 39%) it costs more than
 // the lookups it saves, while a parent check covers ~40 leaves.
@@ -163,6 +166,7 @@ namespace {
         int boundMode = -1;           // --bound: -1 auto, 0 off, 1 leaf, 2 both, 3 pdb, 4 pdbleaf,
                                       //          5 parent, 6 pdbparent (see header)
         int pdbMode = -1;             // --pdb: -1 auto, 0 off, 1 on
+        u32 streamDepth = 3;          // --stream-depth 3|4: left stream moves after the seeds
         u64 pdbMaxEntries = 300'000'000ULL;
         double boundCalibrateSeconds = 20.0;
 
@@ -685,10 +689,11 @@ namespace {
     // waiting one after another.
     struct ParentPrunePdb {
         static constexpr bool ENABLED = true;
+        template<int BELOW>
         static FORCEINLINE u32 skipMask(const B1B2 (&nodes)[5]) {
-            u32 m = colour_mix::ParentPrune::skipMask(nodes);
+            u32 m = colour_mix::ParentPrune::skipMask<BELOW>(nodes);
             const u32 nt = group_pdb::g_tableCount;
-            if (m == 31U || nt == 0) {
+            if (m == 31U || nt == 0 || BELOW > 2) {   // the tables encode up to limit + 2
                 return m;
             }
             u64 idx[4][5];
@@ -702,7 +707,7 @@ namespace {
             }
             for (u32 i = 0; i < nt; ++i) {
                 for (u32 k = 0; k < 5; ++k) {
-                    if ((m & (1U << k)) == 0 && (group_pdb::g_tables[i]->codeAt(idx[i][k]) & 2U) != 0) {
+                    if ((m & (1U << k)) == 0 && group_pdb::g_tables[i]->codeAt(idx[i][k]) > static_cast<u32>(BELOW)) {
                         m |= 1U << k;
                     }
                 }
@@ -1294,6 +1299,7 @@ namespace {
     // (node -> child) h changes by at most 1, which the parent prune relies
     // on; (3) on 32 seeds the pruned stream keeps exactly the leaves with
     // h <= limit that the full stream has. Also measures the skip shares.
+    template<i32 STREAM_DEPTH>
     BoundAudit auditColourMixBound(const JVec<B1B2>& seeds, const colour_mix::LaneTables& tabs, const int limit,
                                    const u32 threads) {
         BoundAudit a;
@@ -1313,8 +1319,8 @@ namespace {
         };
         parallelFor(threads, (seeds.size() + step - 1) / step, [&](u32, const std::size_t k) {
             const B1B2& seed = seeds[k * step];
-            // nodes one move above the leaves of the LEFT_STREAM_DEPTH stream
-            streamStates<LEFT_STREAM_DEPTH - 1, perm_stream_detail::NoParentPrune>(seed, [&](const B1B2& node) {
+            // nodes one move above the leaves of the STREAM_DEPTH stream
+            streamStates<STREAM_DEPTH - 1, perm_stream_detail::NoParentPrune>(seed, [&](const B1B2& node) {
                 const int hn = colour_mix::bound(node, tabs);
                 if (hn != colour_mix::referenceBound(node, ref, fat)) {
                     fail("fast bound != reference on a node");
@@ -1345,12 +1351,12 @@ namespace {
         std::atomic<u64> checks{0};
         parallelFor(threads, (seeds.size() + sstep - 1) / sstep, [&](u32, const std::size_t k) {
             std::vector<B1B2> full, pruned;
-            streamStates<LEFT_STREAM_DEPTH, perm_stream_detail::NoParentPrune>(seeds[k * sstep], [&](const B1B2& s) {
+            streamStates<STREAM_DEPTH, perm_stream_detail::NoParentPrune>(seeds[k * sstep], [&](const B1B2& s) {
                 if (colour_mix::bound(s, tabs) <= limit) {
                     full.push_back(s);
                 }
             });
-            streamStates<LEFT_STREAM_DEPTH, colour_mix::ParentPrune>(seeds[k * sstep], [&](const B1B2& s) {
+            streamStates<STREAM_DEPTH, colour_mix::ParentPrune>(seeds[k * sstep], [&](const B1B2& s) {
                 if (colour_mix::bound(s, tabs) <= limit) {
                     pruned.push_back(s);
                 }
@@ -1378,6 +1384,7 @@ namespace {
     // the pruned stream (colour-mix + tables at parents) keeps exactly the
     // leaves the full stream has that neither bound rules out. Also measures
     // the extra share of whole last levels the tables skip.
+    template<i32 STREAM_DEPTH>
     BoundAudit auditGroupPdb(const JVec<B1B2>& seeds, const colour_mix::LaneTables& tabs, const int limit,
                              const u32 threads) {
         BoundAudit a;
@@ -1407,7 +1414,7 @@ namespace {
         const std::size_t samples = std::min<std::size_t>(256, seeds.size());
         const std::size_t step = std::max<std::size_t>(1, seeds.size() / std::max<std::size_t>(1, samples));
         parallelFor(threads, (seeds.size() + step - 1) / step, [&](u32, const std::size_t k) {
-            streamStates<LEFT_STREAM_DEPTH - 1, perm_stream_detail::NoParentPrune>(seeds[k * step], [&](const B1B2& node) {
+            streamStates<STREAM_DEPTH - 1, perm_stream_detail::NoParentPrune>(seeds[k * step], [&](const B1B2& node) {
                 nodes.fetch_add(1, std::memory_order_relaxed);
                 const bool mixFar = colour_mix::bound(node, tabs) > limit + 1;
                 const bool pdbFar = anyFar(node, true);
@@ -1428,12 +1435,12 @@ namespace {
         parallelFor(threads, (seeds.size() + sstep - 1) / sstep, [&](u32, const std::size_t k) {
             std::vector<B1B2> full, pruned;
             auto wanted = [&](const B1B2& s) { return colour_mix::bound(s, tabs) <= limit && !anyFar(s, false); };
-            streamStates<LEFT_STREAM_DEPTH, perm_stream_detail::NoParentPrune>(seeds[k * sstep], [&](const B1B2& s) {
+            streamStates<STREAM_DEPTH, perm_stream_detail::NoParentPrune>(seeds[k * sstep], [&](const B1B2& s) {
                 if (wanted(s)) {
                     full.push_back(s);
                 }
             });
-            streamStates<LEFT_STREAM_DEPTH, ParentPrunePdb>(seeds[k * sstep], [&](const B1B2& s) {
+            streamStates<STREAM_DEPTH, ParentPrunePdb>(seeds[k * sstep], [&](const B1B2& s) {
                 if (wanted(s)) {
                     pruned.push_back(s);
                 }
@@ -1461,14 +1468,15 @@ namespace {
     // loading it from `files` (no-table mode); `counts` are then estimates.
     using IndexBuilder = std::function<void(FingerprintRange&, u32, u32)>;
 
-    std::vector<KeyedState> streamAndProbe(const Board& leftRoot,
-                                           const IndexFiles& files,
-                                           const FingerprintMeta& meta,
-                                           const std::vector<u64>& counts,
-                                           const Config& cfg,
-                                           const u32 threads,
-                                           const IndexBuilder* builder = nullptr,
-                                           const u64 builderReserveBytes = 0) {
+    template<i32 STREAM_DEPTH>
+    std::vector<KeyedState> streamAndProbeT(const Board& leftRoot,
+                                            const IndexFiles& files,
+                                            const FingerprintMeta& meta,
+                                            const std::vector<u64>& counts,
+                                            const Config& cfg,
+                                            const u32 threads,
+                                            const IndexBuilder* builder,
+                                            const u64 builderReserveBytes) {
         // Partition ranges whose index fits the RAM budget.
         const u32 pFirst = meta.partitionBegin, pLimit = meta.partitionLimit;
         // Seeds: exact depth-S frontier, ~ (25.4^S) states of 16 B (+ hashes while built).
@@ -1530,7 +1538,7 @@ namespace {
             } else {
                 Timer auditTimer;
                 colour_mix::buildLaneTables(g_rightRoot, boundTables);
-                const BoundAudit audit = auditColourMixBound(seeds, boundTables, boundLimit, threads);
+                const BoundAudit audit = auditColourMixBound<STREAM_DEPTH>(seeds, boundTables, boundLimit, threads);
                 tcout << "bound: audit " << (audit.ok ? "ok" : "FAILED (" + audit.why + ")") << ": " << audit.nodes
                       << " nodes, " << audit.leaves << " leaves, " << audit.edges << " edges (|dh| <= 1), "
                       << audit.streamChecks << " wanted leaves identical pruned vs full; sampled skip: leaf "
@@ -1558,7 +1566,7 @@ namespace {
                             group_pdb::g_tables[i] = &pdbTables[i];
                         }
                         if (group_pdb::g_tableCount != 0) {
-                            const BoundAudit pa = auditGroupPdb(seeds, boundTables, boundLimit, threads);
+                            const BoundAudit pa = auditGroupPdb<STREAM_DEPTH>(seeds, boundTables, boundLimit, threads);
                             tcout << "pdb: audit " << (pa.ok ? "ok" : "FAILED (" + pa.why + ")") << ": " << pa.nodes
                                   << " nodes, " << pa.edges << " edges below far nodes, " << pa.streamChecks
                                   << " wanted leaves identical pruned vs full; whole last level skipped "
@@ -1644,31 +1652,31 @@ namespace {
                 if (mode == 0 || mode == 5 || mode == 6) {
                     ProbeSinkT<false> sink(index, variant);
                     if (mode == 5) {
-                        PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH, colour_mix::ParentPrune>(
+                        PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, colour_mix::ParentPrune>(
                                 seedBoard, sink, 4096);
                     } else if (mode == 6) {
-                        PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH, ParentPrunePdb>(
+                        PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, ParentPrunePdb>(
                                 seedBoard, sink, 4096);
                     } else {
-                        PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH>(seedBoard, sink, 4096);
+                        PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, STREAM_DEPTH>(seedBoard, sink, 4096);
                     }
                     return finishSeed(t, sink);
                 }
                 if (mode == 4) {
                     ProbeSinkT<true, true> sink(index, variant, &boundTables, boundLimit);
-                    PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH, ParentPrunePdb>(
+                    PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, ParentPrunePdb>(
                             seedBoard, sink, 4096);
                     return finishSeed(t, sink);
                 }
                 ProbeSinkT<true> sink(index, variant, &boundTables, boundLimit);
                 if (mode == 3) {
-                    PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH, ParentPrunePdb>(
+                    PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, ParentPrunePdb>(
                             seedBoard, sink, 4096);
                 } else if (mode == 2) {
-                    PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH, colour_mix::ParentPrune>(
+                    PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, colour_mix::ParentPrune>(
                             seedBoard, sink, 4096);
                 } else {
-                    PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, LEFT_STREAM_DEPTH>(seedBoard, sink, 4096);
+                    PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, STREAM_DEPTH>(seedBoard, sink, 4096);
                 }
                 return finishSeed(t, sink);
             };
@@ -1815,6 +1823,21 @@ namespace {
         tcout << "probe totals: load " << loadSeconds << "s, stream+probe " << probeSeconds << "s, "
               << streamedTotal << " left states streamed, " << candidates.size() << " unique candidates\n";
         return candidates;
+    }
+
+    std::vector<KeyedState> streamAndProbe(const Board& leftRoot,
+                                           const IndexFiles& files,
+                                           const FingerprintMeta& meta,
+                                           const std::vector<u64>& counts,
+                                           const Config& cfg,
+                                           const u32 threads,
+                                           const IndexBuilder* builder = nullptr,
+                                           const u64 builderReserveBytes = 0) {
+        switch (cfg.streamDepth) {
+            case 3: return streamAndProbeT<3>(leftRoot, files, meta, counts, cfg, threads, builder, builderReserveBytes);
+            case 4: return streamAndProbeT<4>(leftRoot, files, meta, counts, cfg, threads, builder, builderReserveBytes);
+            default: throw std::runtime_error("--stream-depth must be 3 or 4");
+        }
     }
 
     // Confirms key-sorted candidates against the full depth-6 states on disk.
@@ -3318,12 +3341,13 @@ namespace {
 
     template<int TABLE_DEPTH>
     int recoverWithTableDepth(BoardSolverFrontier& solver, const Config& cfg, const std::vector<B1B2>& middles) {
-        switch (cfg.seedDepth + LEFT_STREAM_DEPTH) {
+        switch (cfg.seedDepth + cfg.streamDepth) {
             case 4: return recoverWithLeftDepth<4, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
             case 5: return recoverWithLeftDepth<5, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
             case 6: return recoverWithLeftDepth<6, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
             case 7: return recoverWithLeftDepth<7, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
             case 8: return recoverWithLeftDepth<8, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
+            case 9: return recoverWithLeftDepth<9, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
             default: throw std::runtime_error("unsupported left depth for recovery");
         }
     }
@@ -3385,6 +3409,7 @@ namespace {
                 }
             }
             else if (a == "--pdb-max-mentries") cfg.pdbMaxEntries = std::stoull(next()) * 1'000'000ULL;
+            else if (a == "--stream-depth") cfg.streamDepth = static_cast<u32>(std::stoul(next()));
             else if (a == "--probe-variant") {
                 const std::string v = next();
                 const auto colon = v.find(':');
@@ -3426,10 +3451,13 @@ int main(const int argc, char** argv) {
     const Board& rightRoot = cfg.reverse ? start : goal;
     g_rightRoot = rightRoot.asB1B2();
     const fs::path dir = cfg.outRoot / (cfg.puzzle + (cfg.reverse ? "_start_d6" : "_goal_d6"));
-    const u32 leftDepth = cfg.seedDepth + LEFT_STREAM_DEPTH;
+    const u32 leftDepth = cfg.seedDepth + cfg.streamDepth;
     const u32 totalDepth = leftDepth + cfg.tableDepth;
 
-    tcout << "puzzle " << cfg.puzzle << " <" << cfg.seedDepth << "," << LEFT_STREAM_DEPTH << ","
+    if (cfg.streamDepth != LEFT_STREAM_DEPTH && cfg.batched) {
+        throw std::runtime_error("--batched supports only --stream-depth 3");
+    }
+    tcout << "puzzle " << cfg.puzzle << " <" << cfg.seedDepth << "," << cfg.streamDepth << ","
           << cfg.tableDepth << "> = "
           << totalDepth << " moves, " << (cfg.reverse ? "reverse" : "forward")
           << ", threads " << cfg.threads << ", table dir " << dir.string() << '\n';

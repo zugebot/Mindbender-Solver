@@ -192,15 +192,14 @@ namespace colour_mix {
     inline const LaneTables* g_parentTables = nullptr;
     inline int g_parentLimit = 0;
 
+    // A node with BELOW moves still to come is dropped when h > limit + BELOW.
     struct ParentPrune {
         static constexpr bool ENABLED = true;
-        static FORCEINLINE bool skip(const B1B2& node) {
-            return bound(node, *g_parentTables) > g_parentLimit + 1;
-        }
+        template<int BELOW>
         static FORCEINLINE u32 skipMask(const B1B2 (&nodes)[5]) {
             u32 m = 0;
             for (u32 k = 0; k < 5; ++k) {
-                m |= static_cast<u32>(skip(nodes[k])) << k;
+                m |= static_cast<u32>(bound(nodes[k], *g_parentTables) > g_parentLimit + BELOW) << k;
             }
             return m;
         }
