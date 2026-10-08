@@ -1,0 +1,30 @@
+[0:00:00.001] puzzle 18-3 <5,3,6> = 14 moves, forward, threads 16, table dir X:\mindbender_d6\18-3_goal_d6
+[0:00:00.002] no-table mode: nothing is written to X:\mindbender_d6\18-3_goal_d6
+[0:00:12.092] depth-5 exact unique: 114415235 states in 12.0899s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:26.663] depth-6 raw children: 6840497262, de-dupe ratio 0.637069 -> ~4357866021 unique (counted in 26.6612s)
+[0:00:26.663] fingerprint index: 18.7491 GB over partitions [0,256), RAM budget 42.0589 GB -> 1 pass(es)
+[0:00:42.338] left seeds (exact depth 5): 160052977 in 15.6746s
+[0:00:45.222] bound: audit ok: 649554 nodes, 38959637 leaves, 38959637 edges (|dh| <= 1), 6875 wanted leaves identical pruned vs full; sampled skip: leaf 99.7499%, whole last level 93.7153%; tables 25374 B, 2.89511s
+[0:00:45.910]   index build: 23.4703 GB for keys -> about 3 regeneration(s) of depth 6
+[0:03:57.622]   index for partitions [0,256) built in RAM: 4355862316 unique states in 192.385s
+[0:04:17.643] calibrate: 44544 seeds in 20.0138s, ns/state per thread: 32/plain=67.6439 32/pipelined=69.7069 64/plain=66.4002 64/pipelined=66.0973 128/plain=62.4608 128/pipelined=62.7296 -> 128/plain (1.08298x vs 32/plain)
+[0:04:44.346] bound calibrate: 137984 seeds in 26.6979s, us/seed: off=4717.35 leaf=3668.61 both=624.361 parent=736.208 -> both (7.55548x vs off)
+[1:11:45.438]   pass 1/1 partitions [0,256): load 18.7491 GB (large pages) in 192.387s, stream+probe 1096383317321 left states in 4067.81s (269.526 M/s), Bloom pass 0.0566067%, bound skipped 1042287192019 lookups
+[1:11:45.455] probe totals: load 192.387s, stream+probe 4067.81s, 1096383317321 left states streamed, 23385 unique candidates
+[1:11:45.920] depth-6 exact unique: 4355862316 (index-only, in RAM; no table written)
+[1:11:45.920] BUILD fingerprint index: 4355862316 states, 2^22 buckets/partition, built in RAM in 192.385s
+[1:11:45.920] BUILD depth-6 table: 26.6612s (no table; depth-5 frontier + counts)
+[1:12:01.493] verify: 0 confirmed, 23385 fingerprint false matches, 15.5728s (by regeneration)
+[1:12:01.784] unique middle states (8 from left, 6 from table side): 0
+[1:12:01.784] PROBE phase: 4321.78s
+[1:12:01.784] TOTAL: 4321.78s (build 0s, probe 4321.78s, recovery 0s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        77923
+delete calls:     77923
+malloc calls:     161555734
+free calls:       321506726
+calloc calls:     3
+realloc calls:    159939481
