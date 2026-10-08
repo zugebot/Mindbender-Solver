@@ -363,6 +363,12 @@ class Scheduler:
             job["status"] = "interrupted"
             job["finished"] = now()
             job["message"] = "solver was no longer running when the server restarted"
+            # e.g. the PC rebooted mid-run: run the same job again, first
+            again = self.add({"puzzle": job["puzzle"], "moves": job["moves"], "until": job.get("until"),
+                              "engine": job["engine"], "ram_gb": job.get("ram_gb"), "threads": job.get("threads"),
+                              "promote": job["promote"], "keep_table": job["keep_table"], "front": True,
+                              "table_depth": job.get("table_depth"), "parent": job["id"]})
+            job["notes"].append(f"re-queued as #{again['id']}")
         self.save()
 
     # ---- jobs ------------------------------------------------------------
