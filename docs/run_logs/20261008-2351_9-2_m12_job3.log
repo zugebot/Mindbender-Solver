@@ -1,0 +1,26 @@
+[0:00:00.001] puzzle 9-2 <3,3,6> = 12 moves, forward, threads 4, table dir C:\Users\jerrin\AppData\Local\Temp\claude\C--Users-jerrin-CLionProjects-Mindbender-Solver\af360b71-9168-4eb8-a292-188ca0bdffcc\scratchpad\mbqshard\tables\9-2_goal_d6
+[0:00:00.002] recovering from 3 shard file(s); no search
+[0:00:00.002]   C:\Users\jerrin\AppData\Local\Temp\claude\C--Users-jerrin-CLionProjects-Mindbender-Solver\af360b71-9168-4eb8-a292-188ca0bdffcc\scratchpad\mbqshard\state\shards\9-2_m12_n3\s0.mid: shard 0/3, 38 middles
+[0:00:00.002]   C:\Users\jerrin\AppData\Local\Temp\claude\C--Users-jerrin-CLionProjects-Mindbender-Solver\af360b71-9168-4eb8-a292-188ca0bdffcc\scratchpad\mbqshard\state\shards\9-2_m12_n3\s1.mid: shard 1/3, 45 middles
+[0:00:00.002]   C:\Users\jerrin\AppData\Local\Temp\claude\C--Users-jerrin-CLionProjects-Mindbender-Solver\af360b71-9168-4eb8-a292-188ca0bdffcc\scratchpad\mbqshard\state\shards\9-2_m12_n3\s2.mid: shard 2/3, 44 middles
+[0:00:00.003] merged 3 shard files: 109 unique middles
+[0:00:00.003] unique middle states (6 from left, 6 from table side): 109 (merged shards)
+[0:00:04.975] 
+[0:00:04.975] Finalizing exact solver results...
+[0:00:04.981] Original exact solutions: 1200
+[0:00:04.982] Valid exact solutions: 1200
+[0:00:04.982] Skipped exact solutions: 0
+[0:00:04.982] Final exact solutions: 1200
+[0:00:04.983] Saving expanded results to "C:\\Users\\jerrin\\AppData\\Local\\Temp\\claude\\C--Users-jerrin-CLionProjects-Mindbender-Solver\\af360b71-9168-4eb8-a292-188ca0bdffcc\\scratchpad\\mbqshard\\tables\\9-2_goal_d6\\solutions\\levels\\9-2_c12_1200.txt".
+[0:00:04.985] RECOVERY: 1200 solutions of 12 moves in 4.98s (written under C:\Users\jerrin\AppData\Local\Temp\claude\C--Users-jerrin-CLionProjects-Mindbender-Solver\af360b71-9168-4eb8-a292-188ca0bdffcc\scratchpad\mbqshard\tables\9-2_goal_d6\solutions\levels)
+[0:00:04.987] TOTAL: 4.98529s (build 0s, probe 0s, recovery 4.98s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        31064
+delete calls:     31064
+malloc calls:     31094
+free calls:       31191
+calloc calls:     5
+realloc calls:    58

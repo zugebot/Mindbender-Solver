@@ -1,0 +1,39 @@
+[0:00:00.004] puzzle 9-2 <3,3,6> = 12 moves, forward, threads 4, table dir C:\Users\jerrin\AppData\Local\Temp\claude\C--Users-jerrin-CLionProjects-Mindbender-Solver\af360b71-9168-4eb8-a292-188ca0bdffcc\scratchpad\mbqshard\tables\9-2_goal_d6
+[0:00:00.005] no-table mode: nothing is written to C:\Users\jerrin\AppData\Local\Temp\claude\C--Users-jerrin-CLionProjects-Mindbender-Solver\af360b71-9168-4eb8-a292-188ca0bdffcc\scratchpad\mbqshard\tables\9-2_goal_d6
+[0:00:09.033] depth-5 exact unique: 36771158 states in 9.02753s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:24.093] depth-6 raw children: 2178240672, de-dupe ratio 0.491922 -> ~1071523730 unique (counted in 24.0874s)
+[0:00:24.093] fingerprint index: 4.62974 GB over partitions [0,256), RAM budget 2 GB -> 3 pass(es)
+[0:00:24.172] left seeds (exact depth 3): 90164 in 0.05515s
+[0:00:24.172] shard 1/3: 30055 of 90164 seeds (index = 1 mod 3)
+[0:00:27.509] bound: audit ok: 620889 nodes, 36835291 leaves, 36835291 edges (|dh| <= 1), 249372 wanted leaves identical pruned vs full; sampled skip: leaf 92.4106%, whole last level 49.8223%; tables 20262 B, 3.33703s
+[0:00:31.083]   index build: 2 GB for keys -> about 4 regeneration(s) of depth 6
+[0:02:20.136]   index for partitions [0,110) built in RAM: 460635377 unique states in 112.612s
+[0:02:29.777] calibrate: 7488 seeds in 9.63902s, ns/state per thread: 32/plain=45.4079 32/pipelined=45.4 64/plain=43.3942 64/pipelined=44.9287 128/plain=44.4094 128/pipelined=45.0578 -> 64/plain (1.04641x vs 32/plain)
+[0:02:34.028] bound calibrate: 5632 seeds in 4.24524s, us/seed: off=2899.73 leaf=2948.41 both=1690.5 parent=1558.59 -> parent (1.86048x vs off)
+[0:02:43.876]   pass 1/3 partitions [0,110): load 1.98944 GB (large pages) in 112.617s, stream+probe 1897627364 left states in 23.7383s (79.9395 M/s), Bloom pass 1.03833%, bound skipped 76809613 lookups
+[0:02:43.977]   index build: 2 GB for keys -> about 4 regeneration(s) of depth 6
+[0:04:36.940]   index for partitions [110,220) built in RAM: 460620575 unique states in 113.057s
+[0:04:48.403]   pass 2/3 partitions [110,220): load 1.98924 GB (large pages) in 113.06s, stream+probe 1428885656 left states in 11.4618s (124.665 M/s), Bloom pass 1.1449%
+[0:04:48.421]   index build: 6.63607 GB for keys -> about 1 regeneration(s) of depth 6
+[0:05:17.758]   index for partitions [220,256) built in RAM: 150757883 unique states in 29.3514s
+[0:05:27.270]   pass 3/3 partitions [220,256): load 0.651062 GB (large pages) in 29.353s, stream+probe 1428885656 left states in 9.50931s (150.262 M/s), Bloom pass 1.14393%
+[0:05:27.271] probe totals: load 255.03s, stream+probe 44.7094s, 4755398676 left states streamed, 734 unique candidates
+[0:05:27.275] depth-6 exact unique: 1072013835 (index-only, in RAM; no table written)
+[0:05:27.275] BUILD fingerprint index: 1072013835 states, 2^20 buckets/partition, built in RAM in 255.02s
+[0:05:27.275] BUILD depth-6 table: 24.0874s (no table; depth-5 frontier + counts)
+[0:05:58.172] verify: 45 confirmed, 689 fingerprint false matches, 30.8972s (by regeneration)
+[0:05:58.336] unique middle states (6 from left, 6 from table side): 45
+[0:05:58.336] PROBE phase: 358.331s
+[0:05:58.338] middles written: C:\Users\jerrin\AppData\Local\Temp\claude\C--Users-jerrin-CLionProjects-Mindbender-Solver\af360b71-9168-4eb8-a292-188ca0bdffcc\scratchpad\mbqshard\state\shards\9-2_m12_n3\s1.mid (45 middles, shard 1/3)
+[0:05:58.338] SHARD 1/3 complete: 45 middles (a partial search: no solution validation)
+[0:05:58.338] TOTAL: 358.333s (build 0s, probe 358.331s, recovery 0s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        13586
+delete calls:     13586
+malloc calls:     1357714
+free calls:       1438797
+calloc calls:     3
+realloc calls:    79893
