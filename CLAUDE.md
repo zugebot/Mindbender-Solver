@@ -144,6 +144,8 @@ Bigger:
 6. More RAM: index passes scale with index size / RAM (64 GB ~ halves passes).
 7. 16 moves: needs seed depth 6 support (`buildSeeds` stops at 5; recovery left depth up to 8 today).
    6-4's depth-6 table and depth-7 index are kept on X: for this.
-8. Split a search across machines: shard seeds (`--shard i/N`) or partitions; only candidate lists
-   cross the network.
+8. Split a search across machines: **done 2026-10-08** as work units (`--shard k/N`,
+   `--middles-out`, `--recover-from`; `mbq add --shards N --remote ...`, `mbq export`, `mbq import`;
+   portable build via `-DMB_MARCH=x86-64-v3 -DMB_OUTPUT_DIR=build_portable`). See
+   python/scheduler/README.md. Exact on 9-2 (3 shards, 1200 solutions).
 9. Research: IDA* with pattern-database lower bounds (abstract colours) for 17+ moves.
