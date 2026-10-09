@@ -103,12 +103,19 @@ kernel32 = ctypes.windll.kernel32
 SYNCHRONIZE = 0x00100000
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 PROCESS_TERMINATE = 0x0001
+PROCESS_SUSPEND_RESUME = 0x0800
 STILL_ACTIVE = 259
 kernel32.OpenProcess.restype = wintypes.HANDLE
 kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
 kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
 kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+# Hold: freeze every thread of the solver in place (what Resource Monitor's
+# "Suspend Process" does) and thaw it later; it carries on from the same point.
+ntdll = ctypes.windll.ntdll
+for _fn in (ntdll.NtSuspendProcess, ntdll.NtResumeProcess):
+    _fn.argtypes = [wintypes.HANDLE]
+    _fn.restype = ctypes.c_long
 
 
 # --------------------------------------------------------------------------
@@ -475,7 +482,8 @@ class Scheduler:
             if job is None:
                 raise KeyError(job_id)
             if job["status"] == "running" and self.proc is not None:
-                self.proc.terminate()
+                self.proc.terminate()       # works on a held (suspended) process too
+                job["held_since"] = None
                 job["message"] = "cancelled while running"
             elif job["status"] in ("queued", "waiting"):
                 job["message"] = "cancelled before starting"
@@ -486,6 +494,41 @@ class Scheduler:
             self.save()
         threading.Thread(target=self._record, args=(job,), daemon=True).start()
         return job
+
+    def hold(self, on: bool) -> dict:
+        """Freeze (on) or thaw the running solver. Its threads stop where they are; its RAM,
+        progress and files stay as they are, so nothing is redone. Survives a server restart
+        (the flag is saved and the process stays suspended), not a reboot."""
+        with self.lock:
+            job = self.running()
+            if job is None:
+                raise ValueError("nothing is running")
+            if bool(job.get("held_since")) == on:
+                return job
+            handle = kernel32.OpenProcess(PROCESS_SUSPEND_RESUME, False, job["pid"])
+            if not handle:
+                raise ValueError(f"cannot open the solver (pid {job['pid']})")
+            try:
+                rc = (ntdll.NtSuspendProcess if on else ntdll.NtResumeProcess)(handle)
+            finally:
+                kernel32.CloseHandle(handle)
+            if rc != 0:
+                raise ValueError(f"{'hold' if on else 'release'} failed (NTSTATUS {rc & 0xFFFFFFFF:#x})")
+            prog = self._progress(job) or {}
+            if on:
+                job["held_since"] = now()
+                job["held_at"] = {"phase": prog.get("phase"), "elapsed": prog.get("elapsed", 0.0)}
+            else:
+                secs = now() - job["held_since"]
+                job.setdefault("holds", []).append(dict(job.get("held_at") or {}, seconds=secs))
+                job["held_since"] = None
+                job["notes"].append(f"held {fmt_dur(secs)} at {fmt_time(now() - secs)}")
+            self.save()
+            return job
+
+    def held_seconds(self, job: dict) -> float:
+        total = sum(h["seconds"] for h in job.get("holds", []))
+        return total + (now() - job["held_since"] if job.get("held_since") else 0.0)
 
     # ---- worker ----------------------------------------------------------
     def loop(self) -> None:
@@ -753,10 +796,16 @@ class Scheduler:
         done, total = prog.get("done", 0), prog.get("total", 0)
         out = {"phase": phase, "detail": prog.get("detail"), "done": done, "total": total,
                "percent": round(100.0 * done / total, 1) if total else None,
-               "elapsed": now() - job["started"] if job.get("started") else None}
+               "elapsed": now() - job["started"] - self.held_seconds(job) if job.get("started") else None,
+               "held_since": job.get("held_since")}
         phase_left = None
         if total and done:
-            phase_left = prog["phase_seconds"] * (total - done) / done
+            # the solver's own clock kept running while it was held: take those seconds out
+            # of this phase's time (holds that began after this phase started)
+            start = prog.get("elapsed", 0.0) - prog["phase_seconds"]
+            held = sum(h["seconds"] for h in job.get("holds", [])
+                       if h.get("phase") == phase and h.get("elapsed", 0.0) >= start - 10)
+            phase_left = max(prog["phase_seconds"] - held, 0.0) * (total - done) / done
         out["phase_remaining"] = phase_left
         if job["engine"] != "ssd" or phase not in SSD_PHASES:
             out["total_remaining"] = phase_left
@@ -893,6 +942,8 @@ def make_handler(sched: Scheduler):
                     self._send(200, {"stopping": True, "note": "a running solver keeps running and is re-adopted"})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
                     return None
+                if parts in (["hold"], ["unhold"]):
+                    return self._send(200, sched.hold(parts == ["hold"]))
                 if parts in (["pause"], ["resume"]):
                     with sched.lock:
                         sched.paused = parts == ["pause"]
@@ -953,6 +1004,8 @@ def cmd_status(_args) -> None:
     if s["paused"]:
         print("queue is PAUSED (mbq resume)")
     job = s["running"]
+    if job and job.get("held_since"):
+        print(f"SOLVER ON HOLD since {time.strftime('%H:%M', time.localtime(job['held_since']))} (mbq unhold)")
     if s.get("finalizing"):
         print(describe(s["finalizing"]) + "  validating results...")
     if job:
@@ -1079,6 +1132,11 @@ def cmd_pause(args) -> None:
     print(api("POST", "/pause" if args.cmd == "pause" else "/resume", {}))
 
 
+def cmd_hold(args) -> None:
+    job = api("POST", "/hold" if args.cmd == "hold" else "/unhold", {})
+    print(describe(job) + ("  ON HOLD" if job.get("held_since") else "  running again"))
+
+
 def cmd_shutdown(_args) -> None:
     print(api("POST", "/shutdown", {}))
 
@@ -1149,11 +1207,13 @@ def main() -> None:
     lg.add_argument("--tail", type=int, default=40)
     sub.add_parser("pause", help="finish the current job, start no new ones")
     sub.add_parser("resume")
+    sub.add_parser("hold", help="freeze the running solver in place (frees the CPU, keeps all progress)")
+    sub.add_parser("unhold", help="let a held solver carry on")
     sub.add_parser("shutdown", help="stop the server (a running solver keeps going)")
     args = ap.parse_args()
     {"serve": lambda a: serve(), "daemon": cmd_daemon, "status": cmd_status, "queue": cmd_queue,
      "history": cmd_history, "add": cmd_add, "cancel": cmd_cancel, "log": cmd_log,
-     "pause": cmd_pause, "resume": cmd_pause, "shutdown": cmd_shutdown,
+     "pause": cmd_pause, "resume": cmd_pause, "hold": cmd_hold, "unhold": cmd_hold, "shutdown": cmd_shutdown,
      "export": cmd_export, "import": cmd_import}[args.cmd](args)
 
 

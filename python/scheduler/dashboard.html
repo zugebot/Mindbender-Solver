@@ -50,6 +50,8 @@
   button:hover { border-color: var(--accent); }
   button.danger:hover { border-color: var(--bad); color: var(--bad); }
   .banner { display: none; background: var(--bad); color: #fff; padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; }
+  .banner.held { background: var(--warn); color: #15171c; }
+  button.on { border-color: var(--warn); color: var(--warn); }
   .table-wrap { overflow-x: auto; }
   @media (max-width: 640px) { .hide-sm { display: none; } }
 </style>
@@ -63,8 +65,10 @@
     <span class="chip" id="state">-</span>
     <span class="spacer"></span>
     <span class="muted" id="updated">-</span>
-    <button id="pauseBtn">Pause</button>
+    <button id="holdBtn" hidden title="Freeze the running solver in place: frees the CPU, keeps all its progress">Hold solver</button>
+    <button id="pauseBtn" title="Let the running job finish, then start no new ones">Pause queue</button>
   </header>
+  <div class="banner held" id="heldBanner"></div>
 
   <section class="panel" id="current"></section>
 
@@ -195,10 +199,20 @@ async function refresh() {
     $("offline").style.display = "none";
     $("solved").textContent = `${s.solved}/100 solved`;
     const st = $("state");
-    st.textContent = s.paused ? "paused" : s.running ? "running" : s.pending.length ? "waiting" : "idle";
-    st.className = "chip " + (s.paused ? "warn" : s.running ? "good" : "");
-    $("pauseBtn").textContent = s.paused ? "Resume" : "Pause";
+    const held = s.running && s.running.held_since;
+    st.textContent = held ? "solver on hold" : s.paused ? "paused" : s.running ? "running" : s.pending.length ? "waiting" : "idle";
+    st.className = "chip " + (held || s.paused ? "warn" : s.running ? "good" : "");
+    $("pauseBtn").textContent = s.paused ? "Resume queue" : "Pause queue";
     $("pauseBtn").dataset.paused = s.paused ? "1" : "";
+    const hb = $("holdBtn");
+    hb.hidden = !s.running;
+    hb.textContent = held ? "Release solver" : "Hold solver";
+    hb.dataset.held = held ? "1" : "";
+    hb.classList.toggle("on", !!held);
+    const banner = $("heldBanner");
+    banner.style.display = held ? "block" : "none";
+    if (held) banner.textContent = `The solver is on hold since ${clock(s.running.held_since)} (${dur(Date.now() / 1000 - s.running.held_since)}). `
+      + `It keeps its progress and carries on from the same point when released - press "Release solver".`;
     renderCurrent(s); renderStats(s); renderQueue(s); renderHistory(jobs);
     const live = s.running || s.finalizing;
     if (live) {
@@ -227,6 +241,7 @@ async function refresh() {
 document.addEventListener("click", async (ev) => {
   const c = ev.target.closest("[data-cancel]");
   if (c && confirm(`Cancel job #${c.dataset.cancel}?`)) { await api("POST", `/jobs/${c.dataset.cancel}/cancel`).catch(alert); refresh(); }
+  if (ev.target.id === "holdBtn") { await api("POST", ev.target.dataset.held ? "/unhold" : "/hold").catch(alert); refresh(); }
   if (ev.target.id === "pauseBtn") { await api("POST", ev.target.dataset.paused ? "/resume" : "/pause").catch(alert); refresh(); }
 });
 

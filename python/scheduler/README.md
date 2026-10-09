@@ -42,6 +42,7 @@ same browser cannot send it commands.
 | `log ID [--tail N]` | the solver's log for a job (written live) |
 | `cancel ID` | drop a queued job, or stop a running one |
 | `pause` / `resume` | finish the current job but start no new ones / continue |
+| `hold` / `unhold` | freeze the running solver in place (all cores free, e.g. to record the game) / let it carry on from the same point. Nothing is lost or redone; the ETA leaves the held time out. Survives a server restart, not a reboot |
 | `shutdown` | stop the server; a running solver keeps going and is re-adopted on the next start |
 | `add P --moves M --shards N [--remote k,...]` | one search as N work units: local shard jobs, then a merge job that waits for every shard's result (see Work units) |
 | `export P --moves M --shards N --which k,...` | a folder for another PC: the portable solver + one `.bat` per shard |
@@ -49,7 +50,7 @@ same browser cannot send it commands.
 
 The same is available as JSON on `http://127.0.0.1:8766` (`GET /status`,
 `GET /jobs`, `GET /jobs/ID`, `GET /jobs/ID/log?tail=N`, `POST /jobs`,
-`POST /jobs/ID/cancel`, `POST /pause`, `/resume`, `/shutdown`). It listens on
+`POST /jobs/ID/cancel`, `POST /pause`, `/resume`, `/hold`, `/unhold`, `/shutdown`). It listens on
 localhost only.
 
 ## What it does with a job
