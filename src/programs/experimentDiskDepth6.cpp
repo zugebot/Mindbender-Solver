@@ -86,6 +86,15 @@
 // puzzles where the leaf check skips little (16-4: 39%) it costs more than
 // the lookups it saves, while a parent check covers ~40 leaves.
 //
+// Work units (searches split across runs or machines):
+//   --shard k/N         search only the left seeds with index = k (mod N); the
+//                       N shards together are exactly the full search
+//   --middles-out FILE  write the confirmed middles (text, with the puzzle,
+//                       split and shard in the header and an "end" line)
+//   --recover-from FILE (repeatable) skip the search: merge the middles of
+//                       shards 0..N-1 of one search (each exactly once, same
+//                       puzzle and split), then recover and validate as usual
+//
 // --progress-file: a background thread rewrites a small JSON status (phase,
 // done/total units, elapsed) every few seconds for python/scheduler; workers
 // only add to an atomic counter once per seed / partition. Log lines are
@@ -167,6 +176,9 @@ namespace {
                                       //          5 parent, 6 pdbparent (see header)
         int pdbMode = -1;             // --pdb: -1 auto, 0 off, 1 on
         u32 streamDepth = 3;          // --stream-depth 3|4: left stream moves after the seeds
+        u32 shardIndex = 0, shardCount = 1;     // --shard k/N
+        std::string middlesOut;                 // --middles-out FILE
+        std::vector<std::string> recoverFrom;   // --recover-from FILE (repeatable)
         u64 pdbMaxEntries = 300'000'000ULL;
         double boundCalibrateSeconds = 20.0;
 
@@ -1524,6 +1536,17 @@ namespace {
         buildSeeds(leftRoot, cfg.seedDepth, seeds);
         tcout << "left seeds (exact depth " << cfg.seedDepth << "): " << seeds.size()
               << " in " << seedTimer.getSeconds() << "s\n";
+        if (cfg.shardCount > 1) {
+            // Interleaved, so every shard gets a similar mix of seeds.
+            const std::size_t all = seeds.size();
+            std::size_t w = 0;
+            for (std::size_t s = cfg.shardIndex; s < all; s += cfg.shardCount) {
+                seeds[w++] = seeds[s];
+            }
+            seeds.resize(w);
+            tcout << "shard " << cfg.shardIndex << "/" << cfg.shardCount << ": " << seeds.size() << " of " << all
+                  << " seeds (index = " << cfg.shardIndex << " mod " << cfg.shardCount << ")\n";
+        }
 
         // Colour-mix bound: eligible modes after the audit (see header).
         // boundMode: 0 off, 1 leaf, 2 leaf + parent; -1 = decide by timing.
@@ -3302,6 +3325,92 @@ namespace {
         return lines;
     }
 
+    // ------------------------------------------------------------------
+    // Middles files (work units)
+    // ------------------------------------------------------------------
+    void writeMiddlesFile(const std::string& path, const Config& cfg, const u64 seedsInShard,
+                          const std::vector<B1B2>& middles) {
+        const std::string tmp = path + ".part";
+        {
+            std::ofstream out(tmp, std::ios::trunc);
+            out << "# mindbender middles v1\n"
+                << "puzzle " << cfg.puzzle << "\n"
+                << "split " << cfg.seedDepth << " " << cfg.streamDepth << " " << cfg.tableDepth << "\n"
+                << "reverse " << (cfg.reverse ? 1 : 0) << "\n"
+                << "shard " << cfg.shardIndex << " " << cfg.shardCount << "\n"
+                << "seeds " << seedsInShard << "\n"
+                << "count " << middles.size() << "\n";
+            out << std::hex;
+            for (const B1B2& m : middles) {
+                out << m.b1 << " " << m.b2 << "\n";
+            }
+            out << std::dec << "end\n";
+            if (!out) {
+                throw std::runtime_error("failed to write " + tmp);
+            }
+        }
+        fs::rename(tmp, path);   // only a complete file ever has the final name
+        tcout << "middles written: " << path << " (" << middles.size() << " middles, shard " << cfg.shardIndex
+              << "/" << cfg.shardCount << ")\n";
+    }
+
+    // Reads shards 0..N-1 of one search (each exactly once) and returns the
+    // union of their middles; refuses mixed puzzles, splits or incomplete files.
+    std::vector<B1B2> readMiddlesFiles(const std::vector<std::string>& paths, const Config& cfg) {
+        std::vector<B1B2> all;
+        std::vector<int> seen;
+        u32 shardCount = 0;
+        for (const std::string& path : paths) {
+            std::ifstream in(path);
+            if (!in) {
+                throw std::runtime_error("cannot open " + path);
+            }
+            std::string line, puzzle;
+            u32 s0 = 0, s1 = 0, s2 = 0, rev = 0, k = 0, n = 0;
+            u64 count = 0;
+            std::getline(in, line);
+            if (line.rfind("# mindbender middles v1", 0) != 0) {
+                throw std::runtime_error(path + ": not a middles file");
+            }
+            std::string key;
+            in >> key >> puzzle >> key >> s0 >> s1 >> s2 >> key >> rev >> key >> k >> n >> key >> line >> key >> count;
+            if (!in || puzzle != cfg.puzzle || s0 != cfg.seedDepth || s1 != cfg.streamDepth || s2 != cfg.tableDepth
+                || (rev != 0) != cfg.reverse) {
+                throw std::runtime_error(path + ": a different puzzle or split than this run");
+            }
+            if (shardCount == 0) {
+                shardCount = n;
+                seen.assign(n, 0);
+            }
+            if (n != shardCount || k >= n || seen[k]++ != 0) {
+                throw std::runtime_error(path + ": shard " + std::to_string(k) + "/" + std::to_string(n)
+                                         + " does not fit the other files (each shard exactly once)");
+            }
+            std::vector<B1B2> mine;
+            in >> std::hex;
+            for (u64 i = 0; i < count; ++i) {
+                B1B2 m;
+                in >> m.b1 >> m.b2;
+                mine.push_back(m);
+            }
+            in >> std::dec >> line;
+            if (!in || line != "end" || mine.size() != count) {
+                throw std::runtime_error(path + ": incomplete");
+            }
+            all.insert(all.end(), mine.begin(), mine.end());
+            tcout << "  " << path << ": shard " << k << "/" << n << ", " << count << " middles\n";
+        }
+        for (u32 k = 0; k < shardCount; ++k) {
+            if (seen[k] == 0) {
+                throw std::runtime_error("shard " + std::to_string(k) + "/" + std::to_string(shardCount) + " is missing");
+            }
+        }
+        std::sort(all.begin(), all.end());
+        all.erase(std::unique(all.begin(), all.end()), all.end());
+        tcout << "merged " << paths.size() << " shard files: " << all.size() << " unique middles\n";
+        return all;
+    }
+
     // Middles implied by a complete optimal solution file: the board after the
     // first `prefixMoves` moves of every solution, applied to the true start.
     B1B2 middleOf(const BoardPair& pair, const std::string& line, const std::size_t prefixMoves) {
@@ -3410,6 +3519,20 @@ namespace {
             }
             else if (a == "--pdb-max-mentries") cfg.pdbMaxEntries = std::stoull(next()) * 1'000'000ULL;
             else if (a == "--stream-depth") cfg.streamDepth = static_cast<u32>(std::stoul(next()));
+            else if (a == "--shard") {
+                const std::string v = next();
+                const std::size_t slash = v.find('/');
+                if (slash == std::string::npos) {
+                    throw std::runtime_error("--shard must be k/N");
+                }
+                cfg.shardIndex = static_cast<u32>(std::stoul(v.substr(0, slash)));
+                cfg.shardCount = static_cast<u32>(std::stoul(v.substr(slash + 1)));
+                if (cfg.shardCount == 0 || cfg.shardIndex >= cfg.shardCount) {
+                    throw std::runtime_error("--shard k/N needs 0 <= k < N");
+                }
+            }
+            else if (a == "--middles-out") cfg.middlesOut = next();
+            else if (a == "--recover-from") cfg.recoverFrom.push_back(next());
             else if (a == "--probe-variant") {
                 const std::string v = next();
                 const auto colon = v.find(':');
@@ -3463,8 +3586,19 @@ int main(const int argc, char** argv) {
           << ", threads " << cfg.threads << ", table dir " << dir.string() << '\n';
 
     const Timer total;
-    std::vector<u64> counts = cfg.rebuild ? std::vector<u64>{} : loadPartitionCounts(dir);
+    if (cfg.batched && cfg.shardCount > 1) {
+        throw std::runtime_error("--batched does not support --shard");
+    }
+    std::vector<B1B2> middles;
+    double probeSeconds = 0.0;
     double buildSeconds = 0.0;
+    if (!cfg.recoverFrom.empty()) {
+        tcout << "recovering from " << cfg.recoverFrom.size() << " shard file(s); no search\n";
+        middles = readMiddlesFiles(cfg.recoverFrom, cfg);
+        tcout << "unique middle states (" << leftDepth << " from left, " << cfg.tableDepth << " from table side): "
+              << middles.size() << " (merged shards)\n";
+    } else {
+    std::vector<u64> counts = cfg.rebuild ? std::vector<u64>{} : loadPartitionCounts(dir);
     // No table unless one is already on disk (with its index) or the run needs it.
     const bool noTable = cfg.tableDepth == 6 && !cfg.reverse && !cfg.batched && !cfg.diskTable && !cfg.ramBuild
                          && cfg.d7Sample == 0 && (counts.empty() || !fs::exists(fp16MetaPath(dir)));
@@ -3495,7 +3629,7 @@ int main(const int argc, char** argv) {
         tcout << "depth-7 TEST SUBSET: only key partitions [" << cfg.d7FirstPartition << "," << cfg.d7End()
               << ") of " << PARTITION_COUNT << "\n";
     }
-    const std::vector<B1B2> middles = noTable
+    middles = noTable
             ? probeNoTable(leftRoot, rightRoot, cfg, cfg.threads)
             : noTable7
             ? probeNoTableDepth7(leftRoot, rightRoot, cfg, cfg.threads)
@@ -3504,10 +3638,18 @@ int main(const int argc, char** argv) {
             : cfg.batched
             ? probeAllBatches(leftRoot, dir, counts, cfg, cfg.threads)
             : probeFingerprint(leftRoot, dir, counts, cfg, cfg.threads);
-    const double probeSeconds = probeTimer.getSeconds();
+    probeSeconds = probeTimer.getSeconds();
     tcout << "unique middle states (" << leftDepth << " from left, " << cfg.tableDepth << " from table side): "
           << middles.size() << '\n';
     tcout << "PROBE phase: " << probeSeconds << "s\n";
+    if (!cfg.middlesOut.empty()) {
+        writeMiddlesFile(cfg.middlesOut, cfg, 0, middles);
+    }
+    if (cfg.shardCount > 1) {
+        tcout << "SHARD " << cfg.shardIndex << "/" << cfg.shardCount << " complete: " << middles.size()
+              << " middles (a partial search: no solution validation)\n";
+    }
+    }
 
     int status = 0;
     std::vector<std::string> known;

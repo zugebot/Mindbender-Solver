@@ -8,6 +8,10 @@ option(USE_SIMT_ROTATIONS "Use a SIMT-friendly rotation implementation with smal
 option(USE_BOARD_HASH "Enable board hashing" OFF)
 option(ENABLE_ALLOC_COUNTERS "Enable global allocation counters and malloc/free wrap hooks" ON)
 option(STATIC_MINGW_RUNTIME "Statically link MinGW libgcc and libstdc++ into executables" ON)
+# CPU target for GCC/Clang builds: native (this machine) or e.g. x86-64-v3 (any AVX2 + BMI2 CPU,
+# for builds that run on other PCs). MB_OUTPUT_DIR: where executables land.
+set(MB_MARCH "native" CACHE STRING "GCC/Clang -march value")
+set(MB_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build" CACHE PATH "Executable output directory")
 
 # ------------------------------------------------------------
 # Project declaration
@@ -156,11 +160,11 @@ function(add_solver_program target_name main_file)
     )
 
     set_target_properties(${target_name} PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build"
-            RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/build"
-            RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/build"
-            RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/build"
-            RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_SOURCE_DIR}/build"
+            RUNTIME_OUTPUT_DIRECTORY "${MB_OUTPUT_DIR}"
+            RUNTIME_OUTPUT_DIRECTORY_DEBUG "${MB_OUTPUT_DIR}"
+            RUNTIME_OUTPUT_DIRECTORY_RELEASE "${MB_OUTPUT_DIR}"
+            RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${MB_OUTPUT_DIR}"
+            RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${MB_OUTPUT_DIR}"
     )
 
     if (TBB_FOUND)
@@ -192,8 +196,8 @@ function(add_solver_program target_name main_file)
         if (USE_CUDA)
             if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
                 target_compile_options(${target_name} PRIVATE
-                        $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native -mbmi2 -funroll-loops -fstrict-aliasing -fomit-frame-pointer>
-                        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O3,-Xcompiler=-march=native,-Xcompiler=-mbmi2,-Xcompiler=-funroll-loops,-Xcompiler=-fstrict-aliasing,-Xcompiler=-fomit-frame-pointer>
+                        $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=${MB_MARCH} -mbmi2 -funroll-loops -fstrict-aliasing -fomit-frame-pointer>
+                        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-O3,-Xcompiler=-march=${MB_MARCH},-Xcompiler=-mbmi2,-Xcompiler=-funroll-loops,-Xcompiler=-fstrict-aliasing,-Xcompiler=-fomit-frame-pointer>
                 )
             else()
                 target_compile_options(${target_name} PRIVATE
@@ -204,7 +208,7 @@ function(add_solver_program target_name main_file)
         else()
             if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
                 target_compile_options(${target_name} PRIVATE
-                        -O3 -march=native -mbmi2 -funroll-loops -fstrict-aliasing -fomit-frame-pointer
+                        -O3 -march=${MB_MARCH} -mbmi2 -funroll-loops -fstrict-aliasing -fomit-frame-pointer
                 )
             else()
                 target_compile_options(${target_name} PRIVATE

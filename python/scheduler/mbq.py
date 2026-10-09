@@ -77,6 +77,26 @@ SOLVER_PROCESS_RE = re.compile(
 # Tests only: start jobs even while another solver runs.
 IGNORE_EXTERNAL = os.environ.get("MBQ_IGNORE_EXTERNAL") == "1"
 
+SHARD_ROOT = STATE / "shards"        # <puzzle>_m<moves>_n<N>/s<k>.mid: one search split into work units
+PORTABLE_EXE = REPO / "build_portable" / "experimentDiskDepth6.exe"   # -DMB_MARCH=x86-64-v3 build
+
+
+def shard_group(puzzle: str, moves: int, count: int) -> str:
+    return f"{puzzle}_m{moves}_n{count}"
+
+
+def read_middles_header(path: Path) -> dict:
+    """Header of a solver middles file (--middles-out); raises if it is not a complete one."""
+    lines = path.read_text(errors="replace").splitlines()
+    if not lines or not lines[0].startswith("# mindbender middles v1") or lines[-1].strip() != "end":
+        raise ValueError(f"{path.name}: not a complete middles file")
+    head = dict(line.split(" ", 1) for line in lines[1:8])
+    seed, stream, table = (int(x) for x in head["split"].split())
+    k, n = (int(x) for x in head["shard"].split())
+    return {"puzzle": head["puzzle"], "seed": seed, "stream": stream, "table": table,
+            "moves": seed + stream + table, "shard": k, "shards": n, "count": int(head["count"])}
+
+
 SSD_PHASES = ["d6-build", "d6-index", "d7-build", "d7-index", "probe", "d7-confirm", "verify", "recovery"]
 
 kernel32 = ctypes.windll.kernel32
@@ -409,6 +429,7 @@ class Scheduler:
                 "status": "queued", "wait_reason": "", "created": now(), "started": None,
                 "finished": None, "pid": None, "exit_code": None, "solutions": None,
                 "result": None, "message": "", "notes": [], "phases": {}, "parent": spec.get("parent"),
+                "shard": spec.get("shard"), "merge": spec.get("merge"),
             }
             self.next_id += 1
             if spec.get("front"):
@@ -419,6 +440,34 @@ class Scheduler:
                 self.jobs.append(job)
             self.save()
             return job
+
+    def add_sharded(self, spec: dict) -> list[dict]:
+        """One search as `shards` work units: local shard jobs (all but `remote`), then a merge
+        job that waits for every shard's middles file and recovers the solutions."""
+        n = int(spec["shards"])
+        remote = set(int(x) for x in spec.get("remote") or [])
+        if n < 2 or any(k < 0 or k >= n for k in remote):
+            raise ValueError("--shards needs N >= 2 and remote shards in 0..N-1")
+        base = {k: v for k, v in spec.items() if k not in ("shards", "remote", "front")}
+        specs = [{**base, "shard": [k, n], "promote": False, "until": None} for k in range(n) if k not in remote]
+        specs.append({**base, "merge": n})
+        if spec.get("front"):
+            # each insert goes first, so add in reverse to keep shards 0..N-1 then the merge
+            jobs = [self.add({**s, "front": True}) for s in reversed(specs)][::-1]
+        else:
+            jobs = [self.add(s) for s in specs]
+        merge = jobs[-1]
+        group = shard_group(merge["puzzle"], merge["moves"], n)
+        (SHARD_ROOT / group).mkdir(parents=True, exist_ok=True)
+        if remote:
+            merge["notes"].append(f"remote shards {sorted(remote)}: `mbq export {merge['puzzle']} --moves "
+                                  f"{merge['moves']} --shards {n} --which {','.join(map(str, sorted(remote)))}`")
+        return jobs
+
+    def shard_files_missing(self, job: dict) -> list[int]:
+        n = int(job["merge"])
+        d = SHARD_ROOT / shard_group(job["puzzle"], job["moves"], n)
+        return [k for k in range(n) if not (d / f"s{k}.mid").exists()]
 
     def cancel(self, job_id: int) -> dict:
         with self.lock:
@@ -455,6 +504,13 @@ class Scheduler:
         # Slow work (process listing, validation) runs outside the lock so the
         # HTTP API always answers quickly.
         with self.lock:
+            for j in self.pending():          # keep merge jobs' "waiting for shards" current
+                if j.get("merge"):
+                    missing = self.shard_files_missing(j)
+                    reason = ("waiting for shard results " + ",".join(map(str, missing))) if missing else ""
+                    if j["wait_reason"] != reason:
+                        j["wait_reason"] = reason
+                        j["status"] = "waiting" if missing else "queued"
             job = self.running()
             exited = job is not None and self._monitor(job)
         if job is not None:
@@ -475,9 +531,19 @@ class Scheduler:
             if self.paused:
                 return
             pending = self.pending()
-            if not pending:
+            ready = []
+            for j in pending:
+                missing = self.shard_files_missing(j) if j.get("merge") else []
+                if missing:
+                    reason = "waiting for shard results " + ",".join(map(str, missing))
+                    if j["wait_reason"] != reason or j["status"] != "waiting":
+                        j["status"], j["wait_reason"] = "waiting", reason
+                        self.save()
+                else:
+                    ready.append(j)
+            if not ready:
                 return
-            job = pending[0]
+            job = ready[0]
             self.external = external
             if external and not IGNORE_EXTERNAL:
                 job["status"], job["wait_reason"] = "waiting", "another solver is running: " + ", ".join(
@@ -526,6 +592,15 @@ class Scheduler:
                 cmd += ["--ram-gb", str(job["ram_gb"])]
             if job.get("threads"):
                 cmd += ["--threads", str(job["threads"])]
+            if job.get("shard"):
+                k, n = job["shard"]
+                out = SHARD_ROOT / shard_group(job["puzzle"], job["moves"], n)
+                out.mkdir(parents=True, exist_ok=True)
+                cmd += ["--shard", f"{k}/{n}", "--middles-out", str(out / f"s{k}.mid"), "--no-recover"]
+            if job.get("merge"):
+                d = SHARD_ROOT / shard_group(job["puzzle"], job["moves"], int(job["merge"]))
+                for k in range(int(job["merge"])):
+                    cmd += ["--recover-from", str(d / f"s{k}.mid")]
             cwd = jdir
         else:
             exe = BIN_DIR / "mbq_inram.exe"
@@ -576,6 +651,16 @@ class Scheduler:
     def _finalize(self, job: dict) -> None:
         log = (JOB_ROOT / str(job["id"]) / "log.txt").read_text(errors="replace")
         puzzle, moves = job["puzzle"], job["moves"]
+        if job.get("shard"):
+            k, n = job["shard"]
+            m = re.search(rf"SHARD {k}/{n} complete: (\d+) middles", log)
+            f = SHARD_ROOT / shard_group(puzzle, moves, n) / f"s{k}.mid"
+            if m and f.exists() and job["exit_code"] in (0, None):
+                job.update(status="done", result="shard", message=f"shard {k}/{n}: {m.group(1)} middles")
+            else:
+                job.update(status="failed", result="error",
+                           message=f"shard {k}/{n} did not complete (exit {job['exit_code']}); see `mbq log {job['id']}`")
+            return
         solutions = None
         if job["engine"] == "ssd":
             m = re.search(r"RECOVERY: (\d+) solutions", log)
@@ -800,7 +885,8 @@ def make_handler(sched: Scheduler):
             parts = [p for p in self.path.split("?")[0].split("/") if p]
             try:
                 if parts == ["jobs"]:
-                    return self._send(200, sched.add(self._body()))
+                    body = self._body()
+                    return self._send(200, sched.add_sharded(body) if body.get("shards") else sched.add(body))
                 if len(parts) == 3 and parts[0] == "jobs" and parts[2] == "cancel":
                     return self._send(200, sched.cancel(int(parts[1])))
                 if parts == ["shutdown"]:
@@ -854,6 +940,10 @@ def api(method: str, path: str, body: dict | None = None, raw: bool = False):
 def describe(job: dict) -> str:
     kind = f"{job['engine']}" + (f" <{job['seed_depth']},{job.get('stream_depth') or 3},{job['table_depth']}>"
                                   if job["engine"] == "ssd" else "")
+    if job.get("shard"):
+        kind += f" shard {job['shard'][0]}/{job['shard'][1]}"
+    if job.get("merge"):
+        kind += f" merge of {job['merge']} shards"
     until = f" (until {job['until']})" if job.get("until") else ""
     return f"#{job['id']:<3} {job['puzzle']:>5} {job['moves']} moves{until}  {kind}  [{job['status']}]"
 
@@ -903,6 +993,17 @@ def cmd_history(args) -> None:
 
 
 def cmd_add(args) -> None:
+    if args.shards:
+        for puzzle in args.puzzles:
+            jobs = api("POST", "/jobs", {"puzzle": puzzle, "moves": args.moves, "engine": args.engine,
+                                         "ram_gb": args.ram_gb, "threads": args.threads,
+                                         "promote": not args.no_promote, "keep_table": args.keep_table,
+                                         "table_depth": args.table_depth, "stream_depth": args.stream_depth,
+                                         "until": args.until, "shards": args.shards,
+                                         "remote": [int(x) for x in args.remote.split(",")] if args.remote else []})
+            for job in jobs:
+                print("queued " + describe(job))
+        return
     for puzzle in args.puzzles:
         job = api("POST", "/jobs", {"puzzle": puzzle, "moves": args.moves, "until": args.until,
                                     "engine": args.engine, "ram_gb": args.ram_gb, "threads": args.threads,
@@ -910,6 +1011,60 @@ def cmd_add(args) -> None:
                                     "keep_table": args.keep_table, "front": args.front,
                                     "table_depth": args.table_depth, "stream_depth": args.stream_depth})
         print("queued " + describe(job))
+
+
+def cmd_export(args) -> None:
+    """A folder for another PC: the portable solver + one .bat per shard (no install, no Python)."""
+    if not PORTABLE_EXE.exists():
+        raise SystemExit(f"no portable build at {PORTABLE_EXE}; build it with -DMB_MARCH=x86-64-v3 "
+                         f"-DMB_OUTPUT_DIR={PORTABLE_EXE.parent}")
+    fat = puzzle_is_fat(args.puzzle)
+    table = args.table_depth or (7 if (fat and args.moves >= 14) or args.moves >= 16 else 6)
+    stream = args.stream_depth or (4 if args.moves - table >= 9 else 3)
+    seed = args.moves - stream - table
+    if not 2 <= seed <= 5:
+        raise SystemExit(f"no <S,{stream},{table}> split for {args.moves} moves")
+    group = shard_group(args.puzzle, args.moves, args.shards)
+    out = Path(args.out) / group
+    out.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(PORTABLE_EXE, out / "experimentDiskDepth6.exe")
+    which = [int(x) for x in args.which.split(",")]
+    for k in which:
+        name = f"{args.puzzle}_m{args.moves}_s{k}of{args.shards}"
+        extra = (" --table-depth 7" if table == 7 else "") + (f" --stream-depth {stream}" if stream != 3 else "")
+        bat = (f'@echo off\r\ncd /d "%~dp0"\r\n'
+               f'echo Mindbender work unit {name}: started %date% %time%\r\n'
+               f'echo Leave this window open. It writes {name}.mid when it is done.\r\n'
+               f'"%~dp0experimentDiskDepth6.exe" {args.puzzle} --out "%~dp0work" --seed-depth {seed}{extra} '
+               f'--shard {k}/{args.shards} --middles-out "{name}.mid" --no-recover > "{name}.log" 2>&1\r\n'
+               f'if exist "{name}.mid" (echo DONE: send back {name}.mid and {name}.log) '
+               f'else (echo FAILED: send back {name}.log)\r\npause\r\n')
+        (out / f"run_{name}.bat").write_bytes(bat.encode())
+    readme = (f"Mindbender solver work units for puzzle {args.puzzle}, {args.moves} moves "
+              f"(shards {args.which} of {args.shards}).\r\n\r\n"
+              "1. Plug the laptop in and set sleep to Never while plugged in "
+              "(Settings > System > Power & sleep).\r\n"
+              "2. Double-click one run_*.bat. Leave its window open; it uses every CPU core.\r\n"
+              "3. When it says DONE, send back the .mid file and the .log file from this folder.\r\n"
+              "   If it says FAILED, send back the .log file.\r\n"
+              "Nothing is installed and nothing is sent anywhere; the program only reads and writes "
+              "files in this folder (a work subfolder is created for its temporary output).\r\n")
+    (out / "README.txt").write_bytes(readme.encode())
+    print(f"exported {len(which)} work unit(s) to {out}")
+
+
+def cmd_import(args) -> None:
+    """Files returned middles from other PCs where the merge job looks for them."""
+    for f in args.files:
+        src = Path(f)
+        h = read_middles_header(src)
+        dst = SHARD_ROOT / shard_group(h["puzzle"], h["moves"], h["shards"]) / f"s{h['shard']}.mid"
+        if dst.exists() and dst.read_bytes() != src.read_bytes():
+            raise SystemExit(f"{dst} already exists with different content; not overwritten")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        print(f"imported {src.name}: {h['puzzle']} {h['moves']} moves, shard {h['shard']}/{h['shards']}, "
+              f"{h['count']} middles -> {dst}")
 
 
 def cmd_cancel(args) -> None:
@@ -971,10 +1126,22 @@ def main() -> None:
     a.add_argument("--no-promote", action="store_true", help="don't update levels_final / README / config")
     a.add_argument("--keep-table", action="store_true", help="keep the depth-6/7 table afterwards")
     a.add_argument("--front", action="store_true", help="put ahead of the other queued jobs")
+    a.add_argument("--shards", type=int, help="split the search into N work units (shard jobs + a merge job)")
+    a.add_argument("--remote", help="with --shards: shard numbers run on other PCs (comma list); see export")
     a.add_argument("--stream-depth", type=int, choices=[3, 4],
                    help="left stream moves after the seeds (default: 4 for 15-move normal boards, else 3)")
     a.add_argument("--table-depth", type=int, choices=[6, 7],
                    help="goal-side table depth (default: 7 for 15 moves and 14-move 2x2 boards)")
+    ex = sub.add_parser("export", help="work units for another PC (portable solver + .bat per shard)")
+    ex.add_argument("puzzle")
+    ex.add_argument("--moves", type=int, required=True)
+    ex.add_argument("--shards", type=int, required=True)
+    ex.add_argument("--which", required=True, help="shard numbers, comma list")
+    ex.add_argument("--table-depth", type=int, choices=[6, 7])
+    ex.add_argument("--stream-depth", type=int, choices=[3, 4])
+    ex.add_argument("--out", default=str(REPO / "workunits"))
+    im = sub.add_parser("import", help="file middles results returned from other PCs")
+    im.add_argument("files", nargs="+")
     c = sub.add_parser("cancel", help="cancel a queued or running job")
     c.add_argument("id", type=int)
     lg = sub.add_parser("log", help="tail a job's solver log")
@@ -986,7 +1153,8 @@ def main() -> None:
     args = ap.parse_args()
     {"serve": lambda a: serve(), "daemon": cmd_daemon, "status": cmd_status, "queue": cmd_queue,
      "history": cmd_history, "add": cmd_add, "cancel": cmd_cancel, "log": cmd_log,
-     "pause": cmd_pause, "resume": cmd_pause, "shutdown": cmd_shutdown}[args.cmd](args)
+     "pause": cmd_pause, "resume": cmd_pause, "shutdown": cmd_shutdown,
+     "export": cmd_export, "import": cmd_import}[args.cmd](args)
 
 
 if __name__ == "__main__":

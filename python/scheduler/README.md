@@ -43,6 +43,9 @@ same browser cannot send it commands.
 | `cancel ID` | drop a queued job, or stop a running one |
 | `pause` / `resume` | finish the current job but start no new ones / continue |
 | `shutdown` | stop the server; a running solver keeps going and is re-adopted on the next start |
+| `add P --moves M --shards N [--remote k,...]` | one search as N work units: local shard jobs, then a merge job that waits for every shard's result (see Work units) |
+| `export P --moves M --shards N --which k,...` | a folder for another PC: the portable solver + one `.bat` per shard |
+| `import FILE...` | file shard results (`.mid`) returned from other PCs |
 
 The same is available as JSON on `http://127.0.0.1:8766` (`GET /status`,
 `GET /jobs`, `GET /jobs/ID`, `GET /jobs/ID/log?tail=N`, `POST /jobs`,
@@ -52,8 +55,10 @@ localhost only.
 ## What it does with a job
 
 - **Engine**: `inram` (`build/findSolutions.exe`, exhaustive) for 3-12 moves,
-  `ssd` (`build/experimentDiskDepth6.exe`) for 10-15 moves: `<S,3,6>` up to
-  14, `<5,3,7>` with the index-only depth-7 table at 15. It runs a copy of the
+  `ssd` (`build/experimentDiskDepth6.exe`) for 10-16 moves, split as
+  `<seed, stream, table>`: normal boards `<S,3,6>` up to 14 and `<5,4,6>` at 15;
+  2x2 boards `<4,3,7>` at 14, `<5,3,7>` at 15; 16 moves `<5,4,7>`
+  (`--table-depth`, `--stream-depth` override). It runs a copy of the
   exe from `state/bin`, so rebuilding `build/` never clashes with a run.
 - **One at a time, safely**: a job never starts while any other solver process
   is running (including one started by hand), and the queue is a single
@@ -87,3 +92,36 @@ The server sleeps between 5-second polls and reads a few small files. In the
 solver, progress is one relaxed atomic add per left seed or partition (each
 milliseconds of work) and a file write every 5 seconds from a background
 thread; there is no printing or locking on the hot path.
+
+## Work units (one search on several PCs)
+
+A search streams every left seed against the same index, and the seeds are
+independent, so `--shards N` cuts it into N work units: shard k searches the
+seeds with index = k (mod N) and writes the middles it found (usually none)
+to a small text file. A merge job waits until all N files exist, then runs
+the solver with `--recover-from` on them: it checks that they are shards
+0..N-1 of the same puzzle and split, each exactly once and complete, merges
+them, recovers the solutions and validates and promotes them like any job.
+Tested end to end on 9-2 (3 shards, one run through an exported package):
+1200 solutions, replay and `testKnownSolutions` 1200/1200.
+
+```bash
+python python/scheduler/mbq.py add 14-3 --moves 15 --shards 8 --remote 6,7
+python python/scheduler/mbq.py export 14-3 --moves 15 --shards 8 --which 6,7   # -> workunits/14-3_m15_n8/
+# ... zip the folder, the other PC double-clicks run_*.bat, sends back the .mid ...
+python python/scheduler/mbq.py import 14-3_m15_s6of8.mid 14-3_m15_s7of8.mid
+```
+
+The export uses `build_portable/experimentDiskDepth6.exe`, built for any
+AVX2 + BMI2 CPU (Intel since 2013, AMD Zen 3+; older Ryzens run `pext` ~50x
+slower):
+
+```bash
+cmake -S . -B <dir> -G Ninja -DCMAKE_BUILD_TYPE=Release -DMB_MARCH=x86-64-v3 -DMB_OUTPUT_DIR=<repo>/build_portable
+cmake --build <dir> --target experimentDiskDepth6
+```
+
+Results come back as files, so nothing on this PC is opened to the network.
+A work unit's middles count is trusted as reported: a missing middle cannot
+be detected without redoing that shard, so use machines you trust (or run a
+shard twice on different PCs and compare the files).
