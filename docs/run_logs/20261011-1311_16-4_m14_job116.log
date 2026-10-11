@@ -1,0 +1,15 @@
+[0:00:00.000] puzzle 16-4 <5,3,6> = 14 moves, forward, threads 16, table dir X:\mindbender_d6\16-4_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\16-4_goal_d6
+[0:00:12.098] depth-5 exact unique: 126716642 states in 12.0974s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:25.994] depth-6 raw children: 7565764242, de-dupe ratio 0.581023 -> ~4395884770 unique (counted in 25.993s)
+[0:00:25.994] fingerprint index: 18.8753 GB over partitions [0,256), RAM budget 37.0961 GB -> 1 pass(es)
+[0:00:36.337] left seeds (exact depth 5): 101387446 in 10.3434s
+[0:00:38.652] bound: audit ok: 611051 nodes, 36207471 leaves, 36207471 edges (|dh| <= 1), 1818556 wanted leaves identical pruned vs full; sampled skip: leaf 40.5911%, whole last level 8.38543%; tables 22532 B, 2.31621s
+[0:01:09.119] pdb: table {012}: 10 cells, 254.187 M entries (63.5467 MB), max distance 10, built in 30.4565s
+[0:01:39.080] pdb: table {013}: 10 cells, 254.187 M entries (63.5467 MB), max distance 10, built in 29.9512s
+[0:02:08.625] pdb: table {014}: 10 cells, 254.187 M entries (63.5467 MB), max distance 10, built in 29.5373s
+[0:02:09.239] pdb: audit ok: 611051 nodes, 12479085 edges below far nodes, 118998 wanted leaves identical pruned vs full; whole last level skipped 8.40028% -> 39.0619% with the tables (90.585s total)
+[0:02:09.809]   index build: 17.5171 GB for keys -> about 4 regeneration(s) of depth 6
+[0:05:23.492]   index for partitions [0,256) built in RAM: 4395696402 unique states in 194.25s
+[0:05:43.586] calibrate: 53760 seeds in 20.093s, ns/state per thread: 32/plain=66.2881 32/pipelined=66.3647 64/plain=63.1137 64/pipelined=62.6224 128/plain=59.8843 128/pipelined=60.4435 -> 128/plain (1.10694x vs 32/plain)
+[0:06:30.413] bound calibrate: 116480 seeds in 46.8082s, us/seed: off=4073.16 leaf=5694.75 both=5669.98 parent=4057.54 pdb=5552.28 pdbleaf=13497.5 pdbparent=4059.03 -> off (1x vs off)
