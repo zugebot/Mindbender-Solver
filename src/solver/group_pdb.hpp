@@ -26,6 +26,8 @@
 #include "src/chuzzles/board.hpp"
 #include "src/solver/frontier_builder.hpp"
 #include "src/utils/intrinsics/pext_u64.hpp"
+#include "src/utils/intrinsics/ctz.hpp"
+#include "src/utils/intrinsics/popcount.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -60,7 +62,7 @@ namespace group_pdb {
     FORCEINLINE u64 colexRank(u64 m) {
         u64 r = 0;
         for (u32 i = 1; m != 0; ++i, m &= m - 1) {
-            r += BINOM.v[__builtin_ctzll(m)][i];
+            r += BINOM.v[my_ctz64(m)][i];
         }
         return r;
     }
@@ -183,7 +185,7 @@ namespace group_pdb {
             }
         }
         const B1B2 goal((target.b1 & ~((1ULL << 54) - 1)) | f1, f2);
-        t.cells = static_cast<u32>(__builtin_popcountll(f1) + __builtin_popcountll(f2));
+        t.cells = static_cast<u32>(my_popcount(f1) + my_popcount(f2));
         t.complement = t.cells > 18;
         t.rankK = t.complement ? 36 - t.cells : t.cells;
         t.entries = BINOM.v[36][t.rankK] * (t.fat ? 25 : 1);
