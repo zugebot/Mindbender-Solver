@@ -1,4 +1,4 @@
-// programs/generate_ml_training_data.cpp
+// src/programs/tools/generate_ml_training_data.cpp
 #include "src/chuzzles/include.hpp"
 #include "src/solver/solver_frontier.hpp"
 #include "src/utils/timer.hpp"

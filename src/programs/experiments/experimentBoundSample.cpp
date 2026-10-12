@@ -1,4 +1,4 @@
-// src/programs/experimentBoundSample.cpp
+// src/programs/experiments/experimentBoundSample.cpp
 //
 // Measures an admissible lower bound on the number of moves between two
 // boards, to see how much of a meet-in-the-middle search it could skip.

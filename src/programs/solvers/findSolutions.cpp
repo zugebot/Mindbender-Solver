@@ -1,4 +1,4 @@
-// programs/findSolutions.cpp
+// src/programs/solvers/findSolutions.cpp
 #include "src/chuzzles/include.hpp"
 
 #include <algorithm>

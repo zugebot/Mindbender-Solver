@@ -37,8 +37,8 @@ python python\scheduler\mbq.py status
   canonical move streams (`perm_stream*`), level data (`levels.hpp`, `levels_cells.hpp`).
 - `src/solver/`: meet-in-the-middle solvers; `solver_frontier.hpp` has the exact
   recovery from middle states (`recoverSolutionsFromMiddles`).
-- `src/programs/findSolutions.cpp`: in-RAM exhaustive solver (3-12 moves), reads `config.json` from cwd.
-- `src/programs/experimentDiskDepth6.cpp`: SSD pipeline. `<S,3,6>` (12-14 moves) with a depth-6
+- `src/programs/solvers/findSolutions.cpp`: in-RAM exhaustive solver (3-12 moves), reads `config.json` from cwd.
+- `src/programs/solvers/experimentDiskDepth6.cpp`: SSD pipeline. `<S,3,6>` (12-14 moves) with a depth-6
   goal table on disk; `--table-depth 7` = index-only depth-7 table for 15 moves. Tables in
   `X:/mindbender_d6/<puzzle>_goal_d6`. `--progress-file` for the scheduler.
 - `src/utils/progress_reporter.hpp`: cheap progress JSON (one atomic add per seed).

@@ -242,24 +242,33 @@ function(add_solver_program target_name main_file)
 endfunction()
 
 # ------------------------------------------------------------
-# Programs
+# Programs (src/programs/<folder>/; old/ is not built)
 # ------------------------------------------------------------
-if (USE_CUDA)   # CUDA kernels
-    add_solver_program(testLayeredDFS         "${CMAKE_SOURCE_DIR}/src/programs/testLayeredDFS.cpp")
-endif()
-add_solver_program(testKnownSolutions     "${CMAKE_SOURCE_DIR}/src/programs/testKnownSolutions.cpp")
-add_solver_program(testExactSolverRegression "${CMAKE_SOURCE_DIR}/src/programs/testExactSolverRegression.cpp")
-add_solver_program(testPuzzlesValid       "${CMAKE_SOURCE_DIR}/src/programs/testPuzzlesValid.cpp")
-add_solver_program(testRotations          "${CMAKE_SOURCE_DIR}/src/programs/testRotations.cpp")
-add_solver_program(findSolutions          "${CMAKE_SOURCE_DIR}/src/programs/findSolutions.cpp")
-add_solver_program(experimentDiskDepth6   "${CMAKE_SOURCE_DIR}/src/programs/experimentDiskDepth6.cpp")
-add_solver_program(benchmarkLeftStream    "${CMAKE_SOURCE_DIR}/src/programs/benchmarkLeftStream.cpp")
-add_solver_program(expandAllLevels        "${CMAKE_SOURCE_DIR}/src/programs/expandAllLevels.cpp")
-add_solver_program(experimentBoundSample  "${CMAKE_SOURCE_DIR}/src/programs/experimentBoundSample.cpp")
-add_solver_program(generateMLTrainingData "${CMAKE_SOURCE_DIR}/src/programs/generate_ml_training_data.cpp")
-add_solver_program(analyzeLevelsFinalHeuristic "${CMAKE_SOURCE_DIR}/src/programs/analyzeLevelsFinalHeuristic.cpp")
-add_solver_program(decompMindbenderScramble "${CMAKE_SOURCE_DIR}/src/programs/DecompMindbenderScramble.cpp")
-add_solver_program(testJVec               "${CMAKE_SOURCE_DIR}/src/programs/testJVec.cpp")
+# solvers
+add_solver_program(experimentDiskDepth6   "${CMAKE_SOURCE_DIR}/src/programs/solvers/experimentDiskDepth6.cpp")
+add_solver_program(findSolutions          "${CMAKE_SOURCE_DIR}/src/programs/solvers/findSolutions.cpp")
+
+# tests
+add_solver_program(testKnownSolutions     "${CMAKE_SOURCE_DIR}/src/programs/tests/testKnownSolutions.cpp")
+add_solver_program(testExactSolverRegression "${CMAKE_SOURCE_DIR}/src/programs/tests/testExactSolverRegression.cpp")
+add_solver_program(testRotations          "${CMAKE_SOURCE_DIR}/src/programs/tests/testRotations.cpp")
+add_solver_program(testPuzzlesValid       "${CMAKE_SOURCE_DIR}/src/programs/tests/testPuzzlesValid.cpp")
+add_solver_program(testJVec               "${CMAKE_SOURCE_DIR}/src/programs/tests/testJVec.cpp")
 if (BOOST_LIBRARY)   # boost::sort
-    add_solver_program(testSorting        "${CMAKE_SOURCE_DIR}/src/programs/testSorting.cpp")
+    add_solver_program(testSorting        "${CMAKE_SOURCE_DIR}/src/programs/tests/testSorting.cpp")
 endif()
+if (USE_CUDA)   # CUDA kernels
+    add_solver_program(testLayeredDFS         "${CMAKE_SOURCE_DIR}/src/programs/tests/testLayeredDFS.cpp")
+endif()
+
+# benchmarks
+add_solver_program(benchmarkLeftStream    "${CMAKE_SOURCE_DIR}/src/programs/benchmarks/benchmarkLeftStream.cpp")
+
+# tools
+add_solver_program(expandAllLevels        "${CMAKE_SOURCE_DIR}/src/programs/tools/expandAllLevels.cpp")
+add_solver_program(generateMLTrainingData "${CMAKE_SOURCE_DIR}/src/programs/tools/generate_ml_training_data.cpp")
+add_solver_program(analyzeLevelsFinalHeuristic "${CMAKE_SOURCE_DIR}/src/programs/tools/analyzeLevelsFinalHeuristic.cpp")
+add_solver_program(decompMindbenderScramble "${CMAKE_SOURCE_DIR}/src/programs/tools/DecompMindbenderScramble.cpp")
+
+# experiments
+add_solver_program(experimentBoundSample  "${CMAKE_SOURCE_DIR}/src/programs/experiments/experimentBoundSample.cpp")

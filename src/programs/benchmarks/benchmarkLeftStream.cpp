@@ -1,4 +1,4 @@
-// programs/benchmarkLeftStream.cpp
+// src/programs/benchmarks/benchmarkLeftStream.cpp
 //
 // Measures raw left-side generation speed: exact depth-S seeds, then the
 // canonical PermStream (ASCENDING, depth 3) from a sample of them, with a sink
