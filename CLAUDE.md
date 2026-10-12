@@ -35,13 +35,21 @@ python python\scheduler\mbq.py status
 
 - `src/chuzzles/`: board (`B1B2` = two u64), moves, lane shifts (`lane_rotations.hpp`, pext/pdep),
   canonical move streams (`perm_stream*`), level data (`levels.hpp`, `levels_cells.hpp`).
-- `src/solver/`: meet-in-the-middle solvers; `solver_frontier.hpp` has the exact
-  recovery from middle states (`recoverSolutionsFromMiddles`).
-- `src/programs/solvers/findSolutions.cpp`: in-RAM exhaustive solver (3-12 moves), reads `config.json` from cwd.
-- `src/programs/solvers/experimentDiskDepth6.cpp`: SSD pipeline. `<S,3,6>` (12-14 moves) with a depth-6
-  goal table on disk; `--table-depth 7` = index-only depth-7 table for 15 moves. Tables in
-  `X:/mindbender_d6/<puzzle>_goal_d6`. `--progress-file` for the scheduler.
-- `src/utils/progress_reporter.hpp`: cheap progress JSON (one atomic add per seed).
+- `src/solver/`: the in-RAM meet-in-the-middle solver (`solver_*.hpp`, `frontier_builder.hpp`,
+  `right_frontier/`); `solver_frontier.hpp` has the exact recovery from middle states
+  (`recoverSolutionsFromMiddles`).
+- `src/solver/bounds/`: pruning bounds. `lane_bound.hpp` (colour-mix and rotation lane bounds,
+  lane tables), `pattern_db.hpp` (grouped pattern databases), `parent_prune.hpp` (PermStream
+  hooks), `audit.hpp` (run-start safety audits), `calibrate.hpp` (per-run mode timing).
+- `src/solver/ssd/`: the SSD solver in parts (README.md lists them); `namespace ssd`.
+- `src/programs/`: `solvers/` (findSolutions: in-RAM 3-12 moves, reads `config.json` from cwd;
+  experimentDiskDepth6: SSD pipeline, `main` + flag docs), `tests/`, `benchmarks/`, `tools/`,
+  `experiments/` (experimentBoundSample). SSD tables in `X:/mindbender_d6/<puzzle>_goal_d6`
+  (only for `--disk-table` and 6-4's depth-7 index; the default modes write none).
+- `src/utils/`: `progress_reporter.hpp` (cheap progress JSON), `parallel_for.hpp`,
+  `intrinsics/` (`my_clz`, `my_ctz64`, `my_pext_u64`, `my_popcount`: use these, not compiler builtins).
+- `old/`: code that no longer builds or is unreferenced, kept for history (not built; see its README).
+- Includes are always `"src/..."` paths.
 - `build/levels_final/`: canonical answers `<p>_c<moves>_<count>.txt` (tracked). `levels/` = scratch output.
 - `python/scheduler/mbq.py`: job queue + dashboard (http://127.0.0.1:8766/). Use it for long runs.
 - `docs/run_history.csv` + `docs/run_logs/`: one row and the full log per solver run (written by
@@ -97,7 +105,7 @@ Done (2026-10-06, verified):
    (64 solutions), 38 min = count 6.3 min + 6 passes x 5.3 min (generate ~2 min + group/write ~3 min).
    14-move 2x2 puzzles use <4,3,7> (~50 min vs 2.6 h for <5,3,6>). Normal boards' depth-7 set is ~6x
    bigger (~30 passes), so they stay on <5,3,6> (~1.3x at best with depth 7).
-5. Colour-mix lower bound (2026-10-07, `--bound auto`, default; src/solver/colour_mix_bound.hpp):
+5. Colour-mix lower bound (2026-10-07, `--bound auto`, default; src/solver/bounds/lane_bound.hpp):
    h = worst row colour-multiset mismatch + worst column's (a row move keeps row multisets and
    changes one cell per column, and vice versa; halved on 2x2 boards, where it prunes nothing).
    Admissible: 0 violations on all 1.89 M states of known optimal paths (experimentBoundSample
@@ -110,6 +118,13 @@ Done (2026-10-06, verified):
    first 1% of seeds rated 16-4's pdbparent 1.1x, full runs 1.5x, now 1.6x). Exact on
    9-2, 9-3, 10-3; 9-3 13 moves 24.6 -> 6.3 min. Skip rates vary per puzzle (23-99.9% at 14 moves);
    normal-board 14-move queue estimate 12.6 -> ~4.7 days.
+6. Rotation lane bound (2026-10-12, `--bound-kind rotation`, default; same file): per row, the
+   fewest cells wrong over its 6 rotations (a row move only rotates its row; a column move
+   changes one cell per row), same for columns; h = worst row + worst column, never below colour
+   mix, |dh| <= 1. Same lane-table evaluation (tables 0.2-1.2 MB). Admissible on all 1.9 M
+   known-path states. States generated vs colour mix: 16-3 68% -> 0.28%, 17-5 97% -> 3.9%,
+   17-3 at 15 moves 64% -> 0.72%. 16-4 at 14 moves 10.8 h -> 1 h 27 min (identical 519
+   solutions); 16-3's timing test: "both" 293x vs off. Prunes nothing on 2x2 boards (halved).
 - Background CPU users slow runs: the MuMu Android emulator (`MuMuVMMHeadless`) cost ~6%.
 - RAM upgraded 2026-10-06 to 64 GB (2x32 GB Corsair CMK64GX4M2E3200C16). The Lenovo BIOS has no
   XMP, so it runs at JEDEC 2133 MHz (old Crucial 2x16 GB ran at 2933). Measured anyway: 6-4 13-move

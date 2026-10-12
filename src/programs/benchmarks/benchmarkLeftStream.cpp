@@ -8,6 +8,7 @@
 // Usage: benchmarkLeftStream <puzzle> [--goal] [--seed-depth 4] [--seeds 200000] [--threads N]
 
 #include "src/chuzzles/include.hpp"
+#include "src/utils/parallel_for.hpp"
 
 #include <atomic>
 #include <string>
@@ -36,22 +37,6 @@ namespace {
             count += n;
         }
     };
-
-    template<typename Fn>
-    void parallelFor(const u32 threads, const std::size_t count, Fn&& fn) {
-        std::atomic<std::size_t> next = 0;
-        std::vector<std::thread> pool;
-        for (u32 t = 0; t < threads; ++t) {
-            pool.emplace_back([&, t] {
-                for (std::size_t i; (i = next.fetch_add(1)) < count;) {
-                    fn(t, i);
-                }
-            });
-        }
-        for (auto& th : pool) {
-            th.join();
-        }
-    }
 
 } // namespace
 

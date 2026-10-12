@@ -23,6 +23,7 @@ Moved here on 2026-10-12, when `src/` was reorganized:
 | `src/heuristics/heuristics.hpp` | only used by `testHeuristicsOnLeftSeed.cpp` |
 | `src/idk/` | scratch mains and heuristics, not referenced anywhere |
 | `src/solver/frontier_right_index.hpp` | not included anywhere; replaced by `frontier_right_index2.hpp` |
+| `src/programs/experiments/experimentBoundSample_research.cpp` | a copy of the bound sampling tool before its research modes were removed: the SWAR colour-mix bound, single-colour pattern databases (`--pdb`, `--pdb-check`) and the prototype of the grouped pattern databases (`--pdb2`; now `src/solver/bounds/pattern_db.hpp`). The live tool keeps `--check`, sampling, `--bench` (both lane-table kinds), `--deep` and `--colors` |
 
 "No longer compiles" was checked with the Release build on 2026-10-12 before
 the move (MinGW g++, C++23).

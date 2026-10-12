@@ -1,5 +1,5 @@
 #pragma once
-// src/solver/colour_mix_bound.hpp
+// src/solver/bounds/lane_bound.hpp
 //
 // Admissible lower bounds on the moves between a state and a fixed target,
 // for skipping meet-in-the-middle work. Two kinds, both of the form
@@ -25,7 +25,9 @@
 // colours), rotation 4 (every rotation has 4 cells wrong).
 //
 // Fast evaluation uses per-target lane tables built at run time (see
-// LaneTables); `referenceBound` is the plain definition, used to audit them.
+// LaneTables); `referenceBound` is the plain definition, used to audit them
+// (bounds/audit.hpp). The PermStream hook that prunes with it is
+// bounds/parent_prune.hpp.
 // Checked on every known optimal solution (experimentBoundSample --check).
 
 #include "src/chuzzles/board.hpp"
@@ -38,7 +40,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace colour_mix {
+namespace lane_bound {
 
     enum class Kind : u8 { Mix = 0, Rotation = 1 };
 
@@ -278,25 +280,4 @@ namespace colour_mix {
         return t.fat ? static_cast<int>((r + 1) / 2 + (c + 1) / 2) : static_cast<int>(r + c);
     }
 
-    // ---------------- stream hook ----------------
-    //
-    // PermStream's parent-level prune (perm_stream.hpp): skip a node one move
-    // above the leaves when no child can be within `limit`. Static so the
-    // stream's template signature is unchanged; set once per run, read-only.
-    inline const LaneTables* g_parentTables = nullptr;
-    inline int g_parentLimit = 0;
-
-    // A node with BELOW moves still to come is dropped when h > limit + BELOW.
-    struct ParentPrune {
-        static constexpr bool ENABLED = true;
-        template<int BELOW>
-        static FORCEINLINE u32 skipMask(const B1B2 (&nodes)[5]) {
-            u32 m = 0;
-            for (u32 k = 0; k < 5; ++k) {
-                m |= static_cast<u32>(bound(nodes[k], *g_parentTables) > g_parentLimit + BELOW) << k;
-            }
-            return m;
-        }
-    };
-
-} // namespace colour_mix
+} // namespace lane_bound

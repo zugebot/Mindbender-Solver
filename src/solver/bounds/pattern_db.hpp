@@ -1,5 +1,5 @@
 #pragma once
-// src/solver/group_pdb.hpp
+// src/solver/bounds/pattern_db.hpp
 //
 // Grouped pattern databases: an admissible lower bound from an exactly
 // solved simpler puzzle, for skipping meet-in-the-middle work.
@@ -36,7 +36,7 @@
 #include <thread>
 #include <vector>
 
-namespace group_pdb {
+namespace pattern_db {
 
     constexpr u64 LOW_BITS = 0111111111111111111ULL;   // low bit of each of 18 3-bit cells
     constexpr u64 MASK36 = (1ULL << 36) - 1;
@@ -290,4 +290,4 @@ namespace group_pdb {
     inline const Table* g_tables[4] = {};
     inline u32 g_tableCount = 0;
 
-} // namespace group_pdb
+} // namespace pattern_db
