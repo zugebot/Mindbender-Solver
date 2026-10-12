@@ -11,10 +11,10 @@
 #include <unordered_set>
 #include <vector>
 
-#include "../chuzzles/intersection.hpp"
-#include "../chuzzles/perm_stream.hpp"
+#include "src/chuzzles/intersection.hpp"
+#include "src/chuzzles/perm_stream.hpp"
 #include "src/solver/right_frontier/right_frontier_table.hpp"
-#include "solver_base.hpp"
+#include "src/solver/solver_base.hpp"
 
 class MU BoardSolverFrontier : public BoardSolverBase {
 public:

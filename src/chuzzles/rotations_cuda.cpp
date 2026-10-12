@@ -1,5 +1,5 @@
 // src/rotations_cuda.cpp
-#include "rotations_cuda.hpp"
+#include "src/chuzzles/rotations_cuda.hpp"
 
 #ifdef USE_CUDA
 #include <cuda_runtime.h>

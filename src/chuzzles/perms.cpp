@@ -1,6 +1,6 @@
 // src/perms.cpp
-#include "perms.hpp"
-#include "rotations.hpp"
+#include "src/chuzzles/perms.hpp"
+#include "src/chuzzles/rotations.hpp"
 
 
 template class Perms<Board>;

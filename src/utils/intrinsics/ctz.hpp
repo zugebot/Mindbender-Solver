@@ -1,5 +1,7 @@
 #pragma once
 
+#include "src/utils/processor.hpp"   // __host__ / __device__ outside CUDA
+
 #include <cstdint>
 
 // For MSVC, declare the intrinsic outside the function

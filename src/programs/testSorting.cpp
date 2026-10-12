@@ -8,8 +8,8 @@
 
 #include "src/chuzzles/board.hpp"
 #include "src/solver/sorter.hpp"
-#include "utils/th_parallel_sort.hpp"
-#include "utils/timer.hpp"
+#include "src/utils/th_parallel_sort.hpp"
+#include "src/utils/timer.hpp"
 
 #include <boost/sort/sort.hpp>
 

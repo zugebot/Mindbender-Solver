@@ -1,7 +1,7 @@
 #pragma once
 // src/rotations.hpp
 
-#include "board.hpp"
+#include "src/chuzzles/board.hpp"
 #include <cstring>
 
 

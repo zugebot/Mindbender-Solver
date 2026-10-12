@@ -4,8 +4,8 @@
 #ifdef BOOST_FOUND
 #include <boost/sort/block_indirect_sort/block_indirect_sort.hpp>
 #else
-#include "../utils/th_parallel_sort.hpp"
-#include "../utils/th_radix_sort.hpp"
+#include "src/utils/th_parallel_sort.hpp"
+#include "src/utils/th_radix_sort.hpp"
 #endif
 
 #include <algorithm>
@@ -14,7 +14,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "utils/jvec.hpp"
+#include "src/utils/jvec.hpp"
 
 template<typename T>
 class BoardSorter {

@@ -1,7 +1,7 @@
 #pragma once
 // src/rotations_cuda.hpp
 
-#include "board.hpp"
+#include "src/chuzzles/board.hpp"
 
 
 #ifdef USE_CUDA

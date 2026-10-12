@@ -11,9 +11,9 @@
 #include <vector>
 #include <cstring>
 
-#include "../chuzzles/include.hpp"
-#include "../utils/processor.hpp"
-#include "../utils/timestamped_cout.hpp"
+#include "src/chuzzles/include.hpp"
+#include "src/utils/processor.hpp"
+#include "src/utils/timestamped_cout.hpp"
 
 struct MemoryPermGenPair {
     u32 start = 0;

@@ -1,4 +1,4 @@
-#include "../chuzzles/include.hpp"
+#include "src/chuzzles/include.hpp"
 #include "src/solver/memory_perm_gen.hpp"
 
 #include <algorithm>

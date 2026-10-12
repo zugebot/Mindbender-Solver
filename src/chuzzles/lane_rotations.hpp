@@ -7,7 +7,7 @@
 // at bit 51 - 18 * (r % 3) - 3 * c, rows 0-2 in b1 and rows 3-5 in b2.
 // Equivalence with allActStructList is checked in testExactSolverRegression.
 
-#include "board.hpp"
+#include "src/chuzzles/board.hpp"
 
 #include <immintrin.h>
 

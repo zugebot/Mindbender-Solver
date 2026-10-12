@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/processor.hpp"
+#include "src/utils/processor.hpp"
 
 
 #ifdef USE_CUDA

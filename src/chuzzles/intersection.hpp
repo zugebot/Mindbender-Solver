@@ -1,6 +1,6 @@
 #pragma once
 
-#include "board.hpp"
+#include "src/chuzzles/board.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -8,8 +8,8 @@
 #include <thread>
 #include <vector>
 
-#include "../utils/hasGetHash.hpp"
-#include "../utils/jvec.hpp"
+#include "src/utils/hasGetHash.hpp"
+#include "src/utils/jvec.hpp"
 
 #ifdef USE_CUDA
 template<typename T>
@@ -301,7 +301,7 @@ std::vector<std::pair<const T*, const T*>> intersection_all_pairs(
 
 #pragma once
 
-#include "board.hpp"
+#include "src/chuzzles/board.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -310,7 +310,7 @@ std::vector<std::pair<const T*, const T*>> intersection_all_pairs(
 #include <utility>
 #include <vector>
 
-#include "../utils/jvec.hpp"
+#include "src/utils/jvec.hpp"
 
 template<typename T>
 MU static void append_equal_state_pairs_in_bucket(

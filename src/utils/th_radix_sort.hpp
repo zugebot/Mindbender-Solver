@@ -9,9 +9,9 @@
 #include <array>
 #include <algorithm>
 
-#include "hasGetHash.hpp"
-#include "utils/jvec.hpp"
-#include "utils/timer.hpp"
+#include "src/utils/hasGetHash.hpp"
+#include "src/utils/jvec.hpp"
+#include "src/utils/timer.hpp"
 
 
 #define RADIX_IF_DEBUG_COUT(str) \

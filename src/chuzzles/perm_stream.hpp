@@ -1,10 +1,10 @@
 #pragma once
 // src/perm_stream.hpp
 
-#include "perms.hpp"
-#include "lane_rotations.hpp"
-#include "../utils/jvec.hpp"
-#include "../utils/processor.hpp"
+#include "src/chuzzles/perms.hpp"
+#include "src/chuzzles/lane_rotations.hpp"
+#include "src/utils/jvec.hpp"
+#include "src/utils/processor.hpp"
 
 #include <array>
 #include <type_traits>
@@ -312,5 +312,5 @@ public:
     }
 };
 
-#include "perm_stream_fat.tpp"
-#include "perm_stream_nrm.tpp"
+#include "src/chuzzles/perm_stream_fat.tpp"
+#include "src/chuzzles/perm_stream_nrm.tpp"

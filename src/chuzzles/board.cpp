@@ -1,17 +1,17 @@
 // src/board.cpp
-#include "board.hpp"
+#include "src/chuzzles/board.hpp"
 
 
 #include <sstream>
 #include <string>
 #include <vector>
 
-#include "rotations.hpp"
-#include "../utils/colors.hpp"
-#include "../utils/intrinsics/clz.hpp"
-#include "../utils/intrinsics/pext_u64.hpp"
-#include "../utils/intrinsics/popcount.hpp"
-#include "../utils/processor.hpp"
+#include "src/chuzzles/rotations.hpp"
+#include "src/utils/colors.hpp"
+#include "src/utils/intrinsics/clz.hpp"
+#include "src/utils/intrinsics/pext_u64.hpp"
+#include "src/utils/intrinsics/popcount.hpp"
+#include "src/utils/processor.hpp"
 
 
 namespace {

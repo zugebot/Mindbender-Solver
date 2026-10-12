@@ -1,5 +1,5 @@
 // programs/findSolutions.cpp
-#include "../chuzzles/include.hpp"
+#include "src/chuzzles/include.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -10,7 +10,7 @@
 
 #include "include/nlohmann/json.hpp"
 #include "src/solver/solver_frontier.hpp"
-#include "utils/get_free_memory.hpp"
+#include "src/utils/get_free_memory.hpp"
 
 
 struct FindSolutionConfig {

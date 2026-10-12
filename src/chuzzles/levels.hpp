@@ -1,8 +1,8 @@
 #pragma once
 
-#include "levels_cells.hpp"
-#include "../utils/processor.hpp"
-#include "board.hpp"
+#include "src/chuzzles/levels_cells.hpp"
+#include "src/utils/processor.hpp"
+#include "src/chuzzles/board.hpp"
 
 #include <array>
 #include <cstring>

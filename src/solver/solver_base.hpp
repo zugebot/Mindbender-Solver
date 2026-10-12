@@ -10,16 +10,16 @@
 #include <unordered_set>
 #include <vector>
 
-#include "../utils/format_bytes.hpp"
-#include "../utils/get_free_memory.hpp"
-#include "utils/timer.hpp"
-#include "utils/timestamped_cout.hpp"
+#include "src/utils/format_bytes.hpp"
+#include "src/utils/get_free_memory.hpp"
+#include "src/utils/timer.hpp"
+#include "src/utils/timestamped_cout.hpp"
 
-#include "../chuzzles/levels.hpp"
-#include "memory_perm_gen.hpp"
-#include "sorter.hpp"
+#include "src/chuzzles/levels.hpp"
+#include "src/solver/memory_perm_gen.hpp"
+#include "src/solver/sorter.hpp"
 
-#include "../utils/allocation_counter.hpp"
+#include "src/utils/allocation_counter.hpp"
 #include "include/ghc/fs_std.hpp"
 
 class MU BoardSolverBase {

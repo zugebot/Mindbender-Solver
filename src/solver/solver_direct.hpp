@@ -5,8 +5,8 @@
 #include <boost/sort/block_indirect_sort/block_indirect_sort.hpp>
 #endif
 
-#include "../chuzzles/intersection.hpp"
-#include "solver_base.hpp"
+#include "src/chuzzles/intersection.hpp"
+#include "src/solver/solver_base.hpp"
 
 #define IF_DEBUG_COUT(stuff) if constexpr (debug) { tcout << stuff; }
 

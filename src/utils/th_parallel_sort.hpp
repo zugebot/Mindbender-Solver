@@ -4,8 +4,8 @@
 #include <thread>
 #include <vector>
 
-#include "hasGetHash.hpp"
-#include "utils/jvec.hpp"
+#include "src/utils/hasGetHash.hpp"
+#include "src/utils/jvec.hpp"
 
 
 
@@ -102,8 +102,8 @@ MU void parallel_sort(JVec<T>& data) {
 #include <thread>
 #include <vector>
 
-#include "utils/jvec.hpp"
-#include "utils/processor.hpp"
+#include "src/utils/jvec.hpp"
+#include "src/utils/processor.hpp"
 
 template<int NUM_THREADS, typename T>
 MU void parallel_sort(JVec<T>& dataStates,

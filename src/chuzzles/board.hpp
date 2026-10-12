@@ -1,7 +1,7 @@
 #pragma once
 // src/board.hpp
 
-#include "../utils/processor.hpp"
+#include "src/utils/processor.hpp"
 
 #include <array>
 #include <string>

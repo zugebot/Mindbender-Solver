@@ -9,12 +9,12 @@
 #include <thread>
 #include <vector>
 
-#include "../utils/format_bytes.hpp"
-#include "../utils/timestamped_cout.hpp"
-#include "utils/timer.hpp"
+#include "src/utils/format_bytes.hpp"
+#include "src/utils/timestamped_cout.hpp"
+#include "src/utils/timer.hpp"
 
-#include "../chuzzles/board.hpp"
-#include "../chuzzles/perms.hpp"
+#include "src/chuzzles/board.hpp"
+#include "src/chuzzles/perms.hpp"
 #include "src/solver/sorter.hpp"
 
 MU static Board makeBoardFromState(const B1B2& state) {

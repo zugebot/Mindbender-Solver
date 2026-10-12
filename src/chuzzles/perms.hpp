@@ -1,10 +1,10 @@
 #pragma once
 // src/perms.hpp
 
-#include "../utils/jvec.hpp"
-#include "../utils/processor.hpp"
-#include "board.hpp"
-#include "rotations.hpp"
+#include "src/utils/jvec.hpp"
+#include "src/utils/processor.hpp"
+#include "src/chuzzles/board.hpp"
+#include "src/chuzzles/rotations.hpp"
 
 #include <array>
 #include <span>
@@ -256,5 +256,5 @@ void Perms<T>::getDepthFunc(
 extern template class Perms<Board>;
 extern template class Perms<B1B2>;
 
-#include "perms_fat.tpp"
-#include "perms_nrm.tpp"
+#include "src/chuzzles/perms_fat.tpp"
+#include "src/chuzzles/perms_nrm.tpp"

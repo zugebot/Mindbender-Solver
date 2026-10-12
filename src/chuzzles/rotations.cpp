@@ -1,5 +1,5 @@
 // src/rotations.cpp
-#include "rotations.hpp"
+#include "src/chuzzles/rotations.hpp"
 
 
 #define ACT_STRUCT_ENTRY(name, index, isColNotFat, tillNext, tillLast) \
