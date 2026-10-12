@@ -104,7 +104,10 @@ Done (2026-10-06, verified):
    --check). Fast form: per-puzzle lane tables, ~7.5 ns/state. Leaf mode skips lookups with
    h > table depth; "both" also skips the last PermStream level under nodes with h > depth + 1
    (PARENT_PRUNE hook in stream_lanes_dfs; no-op by default, same output and speed). Each run
-   audits it on its own seeds, then times off/leaf/both for 20 s and keeps the fastest. Exact on
+   audits it on its own seeds, then times every eligible mode and keeps the fastest (2026-10-12:
+   one mode per block on all threads, compared round by round, seeds visited in a strided order
+   so the timed ones are spread over the sorted seed list; the old side-by-side timing of the
+   first 1% of seeds rated 16-4's pdbparent 1.1x, full runs 1.5x, now 1.6x). Exact on
    9-2, 9-3, 10-3; 9-3 13 moves 24.6 -> 6.3 min. Skip rates vary per puzzle (23-99.9% at 14 moves);
    normal-board 14-move queue estimate 12.6 -> ~4.7 days.
 - Background CPU users slow runs: the MuMu Android emulator (`MuMuVMMHeadless`) cost ~6%.

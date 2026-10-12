@@ -72,8 +72,12 @@
 // child ("both": inside PermStream). auto audits the bound on this run's own
 // seeds (fast tables vs the reference definition, |dh| <= 1 on real edges,
 // and pruned vs full streams keeping identical wanted leaves), then times
-// off / leaf / both on real seeds and keeps the fastest. Any audit failure
-// turns it off. 2x2 boards: off (the halved bound prunes nothing).
+// every eligible mode on real seeds and keeps the fastest: blocks of seeds,
+// one mode on all threads per block, rotating; clearly slower modes are
+// dropped and timing goes on until the rest are told apart, up to 3% of the
+// search (20 s minimum, --bound-calibrate-seconds maximum, default 300).
+// Any audit failure turns it off. 2x2 boards: off (the halved bound prunes
+// nothing).
 // --pdb auto|off|on adds grouped pattern databases (src/solver/group_pdb.hpp):
 // up to 3 merged-colour classes solved exactly at startup (2 bits per entry),
 // asked at the same parent nodes ("pdb") and optionally at leaves
@@ -112,6 +116,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <cmath>
+#include <numeric>
 #include <cpuid.h>
 #include <cstring>
 #include <sstream>
@@ -180,7 +185,7 @@ namespace {
         std::string middlesOut;                 // --middles-out FILE
         std::vector<std::string> recoverFrom;   // --recover-from FILE (repeatable)
         u64 pdbMaxEntries = 300'000'000ULL;
-        double boundCalibrateSeconds = 20.0;
+        double boundCalibrateSeconds = 300.0;   // max; the run uses 3% of its search, >= 20 s
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }
         MUND bool d7Subset() const { return tableDepth == 7 && (d7FirstPartition != 0 || d7End() != PARTITION_COUNT); }
@@ -1637,6 +1642,25 @@ namespace {
             tcout << "probe variant: " << chosenVariant.name() << " (forced)\n";
         }
 
+        // Visiting order: chunks of SEED_CHUNK consecutive seeds, taken with a
+        // large stride (a bijection on the chunks), so any stretch of the order,
+        // in particular the first one that the calibrations time, is spread over
+        // the whole seed list. The list is sorted, similar boards side by side,
+        // and how much the bounds prune differs a lot between its regions: on
+        // 16-4 the first 1% of seeds timed pdbparent at 1.11x vs off, full runs
+        // 1.45-1.5x. Every seed is still visited exactly once; the order does not
+        // affect the results (candidates are sorted afterwards).
+        constexpr std::size_t SEED_CHUNK = 4096;
+        const std::size_t seedChunks = std::max<std::size_t>(1, (seeds.size() + SEED_CHUNK - 1) / SEED_CHUNK);
+        std::size_t chunkStride = static_cast<std::size_t>(0.6180339887 * static_cast<double>(seedChunks)) | 1;
+        while (std::gcd(chunkStride, seedChunks) != 1) {
+            ++chunkStride;
+        }
+        const std::size_t seedPositions = seedChunks * SEED_CHUNK;   // positions >= seeds.size() are skipped
+        auto seedAt = [&](const std::size_t pos) {
+            return (pos / SEED_CHUNK) * chunkStride % seedChunks * SEED_CHUNK + pos % SEED_CHUNK;
+        };
+
         for (std::size_t pass = 0; pass < passes.size(); ++pass) {
             const auto [pBegin, pEnd] = passes[pass];
             const std::string passLabel = "pass " + std::to_string(pass + 1) + "/" + std::to_string(passes.size());
@@ -1656,8 +1680,10 @@ namespace {
             Timer probeTimer;
             std::mutex candidateLock;
             std::vector<u64> streamed(threads, 0), inRange(threads, 0), bloomPasses(threads, 0), boundSkipped(threads, 0);
+            std::atomic<u64> visited = 0;   // seeds streamed this pass: must be every seed, once
             auto finishSeed = [&](const u32 t, auto& sink) -> u64 {
                 sink.drain();
+                visited.fetch_add(1, std::memory_order_relaxed);
                 streamed[t] += sink.streamed;
                 inRange[t] += sink.inRange;
                 bloomPasses[t] += sink.bloomPasses;
@@ -1669,8 +1695,12 @@ namespace {
                 g_progress.add();   // one relaxed atomic add per seed (~ms of work)
                 return sink.streamed;
             };
-            auto processSeed = [&](const u32 t, const std::size_t s, const ProbeVariant variant,
+            auto processSeed = [&](const u32 t, const std::size_t pos, const ProbeVariant variant,
                                    const int mode = 0) -> u64 {
+                const std::size_t s = seedAt(pos);   // pos: place in the visiting order
+                if (s >= seeds.size()) {
+                    return 0;
+                }
                 const Board seedBoard = makeBoardFromState(seeds[s]);
                 if (mode == 0 || mode == 5 || mode == 6) {
                     ProbeSinkT<false> sink(index, variant);
@@ -1704,12 +1734,12 @@ namespace {
                 return finishSeed(t, sink);
             };
 
-            std::size_t firstSeed = 0;
+            std::size_t firstSeed = 0;   // position in the visiting order (seedAt)
             if (pass == 0 && chosenVariant.group == 0) {
                 const auto& variants = probeVariants();
                 const std::size_t nV = variants.size();
                 const std::size_t round = static_cast<std::size_t>(threads) * nV * 4;
-                if (cfg.calibrate && seeds.size() >= round * 40) {
+                if (cfg.calibrate && seedPositions >= round * 40) {
                     // Real seeds, interleaved over all variants until the time is up.
                     g_progress.detail(passLabel + " calibrating probe variants");
                     std::vector<std::atomic<u64>> vStates(nV), vNanos(nV);
@@ -1718,7 +1748,7 @@ namespace {
                         vNanos[v].store(0);
                     }
                     const Timer calibTimer;
-                    while (firstSeed + round <= seeds.size() / 4 && calibTimer.getSeconds() < cfg.calibrateSeconds) {
+                    while (firstSeed + round <= seedPositions / 4 && calibTimer.getSeconds() < cfg.calibrateSeconds) {
                         const std::size_t base = firstSeed;
                         parallelFor(threads, round, [&](const u32 t, const std::size_t i) {
                             const std::size_t v = i % nV;
@@ -1755,51 +1785,165 @@ namespace {
                 g_progress.detail(passLabel + " streaming");
             }
             if (boundMode == -1) {
-                // Time off / leaf / both on consecutive real seeds (same
-                // work, nothing repeated), ns per seed, then keep the fastest.
-                const int nM = static_cast<int>(boundModes.size());
-                const std::size_t round = static_cast<std::size_t>(threads) * static_cast<std::size_t>(nM) * 4;
-                if (cfg.calibrate && seeds.size() - firstSeed >= round * 40) {
-                    g_progress.detail(passLabel + " timing the colour-mix bound");
-                    std::vector<std::atomic<u64>> mSeeds(nM), mNanos(nM);
-                    for (int m = 0; m < nM; ++m) {
-                        mSeeds[m].store(0);
-                        mNanos[m].store(0);
-                    }
+                // Time the eligible modes on real seeds (their work counts;
+                // nothing is redone), the way the run will use them: each block
+                // runs ONE mode on every thread. Timing the modes seed by seed side
+                // by side let their cache and memory traffic disturb each other
+                // (16-4: pdbparent timed at 1.0-1.1x vs 1.5x in full runs).
+                // A round takes the next chunk of seeds and gives each mode every
+                // k-th of them (k = modes still timed), one mode after another in a
+                // rotating order. Neighbouring seeds cost about the same, so the
+                // modes are compared round by round (log of the time ratio), which
+                // cancels both seed-to-seed cost and changes in machine load. After
+                // MIN_ROUNDS a mode clearly slower than the best is dropped; timing
+                // goes on until the rest are told apart (2 standard errors) or known
+                // to ~1%, at least MIN_SECONDS, within a budget of 3% of this pass's
+                // estimated search time (20 s to --bound-calibrate-seconds).
+                const std::size_t nM = boundModes.size();
+                const std::size_t block = static_cast<std::size_t>(threads) * 32;
+                constexpr int MIN_ROUNDS = 4;
+                constexpr double MIN_SECONDS = 5.0;
+                if (cfg.calibrate && seedPositions - firstSeed >= block * nM * MIN_ROUNDS * 4) {
+                    g_progress.detail(passLabel + " timing the lower-bound modes");
+                    // perRound[m][r]: mean ns per seed of mode m in round r (< 0: not timed)
+                    std::vector<std::vector<double>> perRound(nM);
+                    std::vector<int> droppedAt(nM, 0);
+                    auto alive = [&](const std::size_t m) { return droppedAt[m] == 0; };
+                    // mean and standard error of log(time m / time b) over rounds timing both
+                    auto logRatio = [&](const std::size_t m, const std::size_t b) {
+                        std::vector<double> d;
+                        for (std::size_t r = 0; r < perRound[m].size() && r < perRound[b].size(); ++r) {
+                            if (perRound[m][r] > 0.0 && perRound[b][r] > 0.0) {
+                                d.push_back(std::log(perRound[m][r] / perRound[b][r]));
+                            }
+                        }
+                        double mu = 0.0, ss = 0.0;
+                        for (const double v : d) {
+                            mu += v;
+                        }
+                        mu /= static_cast<double>(std::max<std::size_t>(1, d.size()));
+                        for (const double v : d) {
+                            ss += (v - mu) * (v - mu);
+                        }
+                        const double n = static_cast<double>(d.size());
+                        return std::pair<double, double>{mu, d.size() < 2 ? 1e300 : std::sqrt(ss / (n - 1.0) / n)};
+                    };
+                    auto meanOf = [&](const std::size_t m) {
+                        double s = 0.0;
+                        std::size_t n = 0;
+                        for (const double v : perRound[m]) {
+                            if (v > 0.0) {
+                                s += v;
+                                ++n;
+                            }
+                        }
+                        return s / static_cast<double>(std::max<std::size_t>(1, n));
+                    };
                     const Timer boundTimer;
-                    const std::size_t limitSeed = firstSeed + (seeds.size() - firstSeed) / 4;
-                    const double boundSeconds = cfg.boundCalibrateSeconds * nM / 3.0;   // ~6.7 s per mode
-                    while (firstSeed + round <= limitSeed && boundTimer.getSeconds() < boundSeconds) {
+                    const std::size_t limitSeed = firstSeed + (seedPositions - firstSeed) / 4;
+                    double budget = cfg.boundCalibrateSeconds;
+                    int rounds = 0;
+                    std::size_t timedSeeds = 0;
+                    const char* why = "budget";
+                    std::size_t best = 0;
+                    while (true) {
+                        std::vector<std::size_t> live;
+                        for (std::size_t m = 0; m < nM; ++m) {
+                            if (alive(m)) {
+                                live.push_back(m);
+                            }
+                        }
+                        const std::size_t k = live.size();
+                        if (firstSeed + block * k > limitSeed) {
+                            why = "seed limit";
+                            break;
+                        }
                         const std::size_t base = firstSeed;
-                        parallelFor(threads, round, [&](const u32 t, const std::size_t i) {
-                            const int m = static_cast<int>(i % static_cast<std::size_t>(nM));
-                            const auto t0 = std::chrono::steady_clock::now();
-                            processSeed(t, base + i, chosenVariant, boundModes[m]);
-                            const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                    std::chrono::steady_clock::now() - t0).count();
-                            mSeeds[m].fetch_add(1, std::memory_order_relaxed);
-                            mNanos[m].fetch_add(static_cast<u64>(ns), std::memory_order_relaxed);
-                        });
-                        firstSeed += round;
-                    }
-                    std::vector<double> nsPerSeed(nM);
-                    int best = 0;
-                    for (int m = 0; m < nM; ++m) {
-                        nsPerSeed[m] = static_cast<double>(mNanos[m].load()) / static_cast<double>(std::max<u64>(1, mSeeds[m].load()));
-                        if (nsPerSeed[m] < nsPerSeed[best]) {
-                            best = m;
+                        for (std::size_t m = 0; m < nM; ++m) {
+                            perRound[m].push_back(-1.0);
+                        }
+                        for (std::size_t j = 0; j < k; ++j) {
+                            const std::size_t slot = (j + static_cast<std::size_t>(rounds)) % k;
+                            const std::size_t m = live[slot];
+                            std::atomic<u64> nanos = 0;
+                            parallelFor(threads, block, [&](const u32 t, const std::size_t i) {
+                                const auto t0 = std::chrono::steady_clock::now();
+                                processSeed(t, base + i * k + slot, chosenVariant, boundModes[m]);
+                                const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::steady_clock::now() - t0).count();
+                                nanos.fetch_add(static_cast<u64>(ns), std::memory_order_relaxed);
+                            });
+                            perRound[m].back() = static_cast<double>(nanos.load()) / static_cast<double>(block);
+                        }
+                        firstSeed += block * k;
+                        timedSeeds += block * k;
+                        ++rounds;
+
+                        // best = the lowest geometric-mean time among the modes still timed
+                        best = live[0];
+                        for (const std::size_t m : live) {
+                            if (m != best && logRatio(m, best).first < 0.0) {
+                                best = m;
+                            }
+                        }
+                        if (rounds < MIN_ROUNDS) {
+                            continue;
+                        }
+                        bool settled = true;
+                        std::size_t others = 0;
+                        for (const std::size_t m : live) {
+                            if (m == best) {
+                                continue;
+                            }
+                            const auto [mu, se] = logRatio(m, best);
+                            if (mu > std::log(1.05) && mu > 3.0 * se) {
+                                droppedAt[m] = rounds;
+                                continue;
+                            }
+                            ++others;
+                            if (mu <= 2.0 * se && se > 0.01) {
+                                settled = false;   // not told apart yet, and not known to ~1%
+                            }
+                        }
+                        const double passEstimate = meanOf(best) * static_cast<double>(seeds.size()) / threads / 1e9;
+                        budget = std::min(cfg.boundCalibrateSeconds, std::max(20.0, 0.03 * passEstimate));
+                        if (boundTimer.getSeconds() < MIN_SECONDS) {
+                            continue;
+                        }
+                        if (others == 0) {
+                            why = "one mode left";
+                            break;
+                        }
+                        if (settled) {
+                            why = "settled";
+                            break;
+                        }
+                        if (boundTimer.getSeconds() >= budget) {
+                            break;
                         }
                     }
-                    if (best != 0 && nsPerSeed[best] > nsPerSeed[0] * 0.97) {
-                        best = 0;   // under 3%: not worth it (noise)
+                    // off's time relative to the best, from the rounds that timed both
+                    const double offOverBest = best == 0 ? 1.0 : std::exp(logRatio(0, best).first);
+                    if (best != 0 && offOverBest < 1.03) {
+                        best = 0;   // under 3%: not worth it
                     }
                     boundMode = boundModes[best];
-                    tcout << "bound calibrate: " << mSeeds[0].load() * nM << " seeds in " << boundTimer.getSeconds()
-                          << "s, us/seed:";
-                    for (int m = 0; m < nM; ++m) {
-                        tcout << ' ' << BOUND_NAMES[boundModes[m]] << '=' << nsPerSeed[m] / 1000.0;
+                    tcout << "bound calibrate: " << timedSeeds << " seeds, " << rounds << " rounds of " << block
+                          << "-seed blocks per mode in " << boundTimer.getSeconds() << "s (" << why << ", budget "
+                          << budget << "s); time vs " << BOUND_NAMES[boundModes[best]] << ":";
+                    for (std::size_t m = 0; m < nM; ++m) {
+                        const auto [mu, se] = logRatio(m, best);
+                        tcout << ' ' << BOUND_NAMES[boundModes[m]] << '=';
+                        if (m == best) {
+                            tcout << "1 (" << meanOf(m) / 1000.0 << " us/seed)";
+                        } else {
+                            tcout << std::exp(mu) << " +-" << 100.0 * se << '%';
+                        }
+                        if (!alive(m)) {
+                            tcout << " (dropped after " << droppedAt[m] << ")";
+                        }
                     }
-                    tcout << " -> " << BOUND_NAMES[boundMode] << " (" << nsPerSeed[0] / nsPerSeed[best] << "x vs off)\n";
+                    tcout << " -> " << BOUND_NAMES[boundMode] << " (" << offOverBest << "x vs off)\n";
                 } else {
                     // too few seeds to time: parents only (never slower than off by much)
                     boundMode = std::find(boundModes.begin(), boundModes.end(), 6) != boundModes.end() ? 6
@@ -1811,9 +1955,13 @@ namespace {
             const ProbeVariant variant = chosenVariant;
             const int mode = std::max(0, boundMode);
             const std::size_t startSeed = firstSeed;
-            parallelFor(threads, seeds.size() - startSeed, [&](const u32 t, const std::size_t i) {
+            parallelFor(threads, seedPositions - startSeed, [&](const u32 t, const std::size_t i) {
                 processSeed(t, startSeed + i, variant, mode);
             });
+            if (visited.load() != seeds.size()) {
+                throw std::runtime_error(passLabel + ": streamed " + std::to_string(visited.load()) + " seeds of "
+                                         + std::to_string(seeds.size()));
+            }
             const double passProbe = probeTimer.getSeconds();
             probeSeconds += passProbe;
 
