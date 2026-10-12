@@ -64,8 +64,8 @@ localhost only.
 - **One at a time, safely**: a job never starts while any other solver process
   is running (including one started by hand), and the queue is a single
   worker, so two runs can never share a table folder.
-- **Waits for disk**: a job that has to build a table waits until the table
-  drive has room (~100 GB for depth 6, ~550 GB for depth 7).
+- **No disk wait**: the default no-table modes keep the goal side in RAM and
+  write no tables, so jobs do not wait for free space on the table drive.
 - **Progress**: the solver writes `state/jobs/ID/progress.json` every 5 s
   (`--progress-file`); its log is flushed line by line. The whole-job ETA
   adds the median duration of later phases from finished jobs of the same
