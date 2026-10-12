@@ -8,6 +8,22 @@
 #pragma intrinsic(_BitScanReverse)
 #endif
 
+// Leading zeros of a 32-bit value without intrinsics (32 for 0): halves the
+// search range for the highest set bit five times. Used when no compiler
+// intrinsic is available; testable on any compiler.
+__host__ __device__
+        inline int my_clz_portable(int x) {
+    uint32_t v = static_cast<uint32_t>(x);
+    if (v == 0) return 32;
+    int n = 0;
+    if ((v & 0xFFFF0000u) == 0) { n += 16; v <<= 16; }
+    if ((v & 0xFF000000u) == 0) { n += 8; v <<= 8; }
+    if ((v & 0xF0000000u) == 0) { n += 4; v <<= 4; }
+    if ((v & 0xC0000000u) == 0) { n += 2; v <<= 2; }
+    if ((v & 0x80000000u) == 0) { n += 1; }
+    return n;
+}
+
 __host__ __device__
         inline int my_clz(int x) {
 #ifdef __CUDA_ARCH__
@@ -28,9 +44,8 @@ __host__ __device__
         return 32;
     }
 #else
-    // Fallback implementation using bitset
-    if (x == 0) return 32;
-    return 32 - std::bitset<32>(x).count();
+    // Fallback: no intrinsic available
+    return my_clz_portable(x);
 #endif
 #endif
 }
