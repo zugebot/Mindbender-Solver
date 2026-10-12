@@ -1,7 +1,7 @@
 #pragma once
-// src/solver/right_frontier/right_frontier_table.hpp
+// src/solver/inram/right_frontier_table.hpp
 
-#include "src/solver/frontier_right_index2.hpp"
+#include "src/solver/inram/right_frontier_index.hpp"
 
 // The production solver has one right-frontier implementation: a full-state,
 // exact index.  Experimental fingerprint/hash-only tables were removed because

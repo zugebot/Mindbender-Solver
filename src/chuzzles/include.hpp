@@ -7,6 +7,6 @@
 #include "src/chuzzles/perms.hpp"
 #include "src/chuzzles/intersection.hpp"
 #include "src/chuzzles/rotations.hpp"
-#include "src/solver/solver_direct.hpp"
-#include "src/solver/solver_frontier.hpp"
+#include "src/solver/inram/solver_direct.hpp"
+#include "src/solver/inram/solver_frontier.hpp"
 #include "src/solver/sorter.hpp"

@@ -1,5 +1,5 @@
 #pragma once
-// src/solver/memory_perm_gen.hpp
+// src/solver/inram/memory_perm_gen.hpp
 
 #include <algorithm>
 #include <deque>

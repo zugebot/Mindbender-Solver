@@ -1,8 +1,8 @@
 #include "src/chuzzles/include.hpp"
 #include "src/chuzzles/intersection.hpp"
 #include "src/solver/frontier_builder.hpp"
-#include "src/solver/right_frontier/right_frontier_table.hpp"
-#include "src/solver/solver_frontier.hpp"
+#include "src/solver/inram/right_frontier_table.hpp"
+#include "src/solver/inram/solver_frontier.hpp"
 
 #include <algorithm>
 #include <iostream>

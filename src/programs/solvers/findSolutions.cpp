@@ -9,7 +9,7 @@
 #include <string>
 
 #include "include/nlohmann/json.hpp"
-#include "src/solver/solver_frontier.hpp"
+#include "src/solver/inram/solver_frontier.hpp"
 #include "src/utils/get_free_memory.hpp"
 
 

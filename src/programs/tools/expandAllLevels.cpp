@@ -1,5 +1,5 @@
 #include "src/chuzzles/include.hpp"
-#include "src/solver/memory_perm_gen.hpp"
+#include "src/solver/inram/memory_perm_gen.hpp"
 
 #include <algorithm>
 #include <atomic>

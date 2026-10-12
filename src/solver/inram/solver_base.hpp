@@ -1,5 +1,5 @@
 #pragma once
-// src/solver/solver_base.hpp
+// src/solver/inram/solver_base.hpp
 
 #include <fstream>
 #include <limits>
@@ -16,7 +16,7 @@
 #include "src/utils/timestamped_cout.hpp"
 
 #include "src/chuzzles/levels.hpp"
-#include "src/solver/memory_perm_gen.hpp"
+#include "src/solver/inram/memory_perm_gen.hpp"
 #include "src/solver/sorter.hpp"
 
 #include "src/utils/allocation_counter.hpp"

@@ -1,12 +1,12 @@
 #pragma once
-// src/solver/solver_direct.hpp
+// src/solver/inram/solver_direct.hpp
 
 #ifdef BOOST_FOUND
 #include <boost/sort/block_indirect_sort/block_indirect_sort.hpp>
 #endif
 
 #include "src/chuzzles/intersection.hpp"
-#include "src/solver/solver_base.hpp"
+#include "src/solver/inram/solver_base.hpp"
 
 #define IF_DEBUG_COUT(stuff) if constexpr (debug) { tcout << stuff; }
 

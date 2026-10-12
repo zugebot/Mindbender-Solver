@@ -1,5 +1,5 @@
 #pragma once
-// src/solver/frontier_right_index2.hpp
+// src/solver/inram/right_frontier_index.hpp
 
 #include "src/solver/frontier_builder.hpp"
 
