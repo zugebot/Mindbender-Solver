@@ -65,7 +65,9 @@
 // machine in %LOCALAPPDATA%/MindbenderSolver/probe_profile.txt; --no-calibrate
 // uses the cached best, --probe-variant forces one.
 //
-// --bound auto|off|leaf|both: the admissible colour-mix lower bound
+// --bound auto|off|leaf|both: an admissible lane lower bound
+// (--bound-kind rotation, the default: per row / column, the fewest cells wrong
+// over its 6 rotations; or mix: colour multisets only)
 // (src/solver/colour_mix_bound.hpp) skips left states that cannot be within
 // the table depth of the right root ("leaf": before their lookup) and, on
 // normal boards, whole last stream levels under nodes that cannot have such a
@@ -185,7 +187,8 @@ namespace {
         std::string middlesOut;                 // --middles-out FILE
         std::vector<std::string> recoverFrom;   // --recover-from FILE (repeatable)
         u64 pdbMaxEntries = 300'000'000ULL;
-        double boundCalibrateSeconds = 300.0;   // max; the run uses 3% of its search, >= 20 s
+        double boundCalibrateSeconds = 300.0;
+        colour_mix::Kind boundKind = colour_mix::Kind::Rotation;   // --bound-kind mix|rotation   // max; the run uses 3% of its search, >= 20 s
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }
         MUND bool d7Subset() const { return tableDepth == 7 && (d7FirstPartition != 0 || d7End() != PARTITION_COUNT); }
@@ -1320,8 +1323,6 @@ namespace {
     BoundAudit auditColourMixBound(const JVec<B1B2>& seeds, const colour_mix::LaneTables& tabs, const int limit,
                                    const u32 threads) {
         BoundAudit a;
-        const colour_mix::LaneMixRef ref = colour_mix::laneMixRef(g_rightRoot);
-        const bool fat = g_rightRoot.getFatBool();
         const std::size_t samples = std::min<std::size_t>(256, seeds.size());
         const std::size_t step = std::max<std::size_t>(1, seeds.size() / std::max<std::size_t>(1, samples));
         std::atomic<u64> nodes{0}, leaves{0}, edges{0}, nodesSkip{0}, leavesSkip{0}, leavesUnderSkip{0}, bad{0};
@@ -1339,7 +1340,7 @@ namespace {
             // nodes one move above the leaves of the STREAM_DEPTH stream
             streamStates<STREAM_DEPTH - 1, perm_stream_detail::NoParentPrune>(seed, [&](const B1B2& node) {
                 const int hn = colour_mix::bound(node, tabs);
-                if (hn != colour_mix::referenceBound(node, ref, fat)) {
+                if (hn != colour_mix::referenceBound(node, g_rightRoot, tabs.kind)) {
                     fail("fast bound != reference on a node");
                 }
                 nodes.fetch_add(1, std::memory_order_relaxed);
@@ -1347,7 +1348,7 @@ namespace {
                 nodesSkip.fetch_add(skipNode, std::memory_order_relaxed);
                 streamStates<1, perm_stream_detail::NoParentPrune>(node, [&](const B1B2& leaf) {
                     const int hl = colour_mix::bound(leaf, tabs);
-                    if (hl != colour_mix::referenceBound(leaf, ref, fat)) {
+                    if (hl != colour_mix::referenceBound(leaf, g_rightRoot, tabs.kind)) {
                         fail("fast bound != reference on a leaf");
                     }
                     if (hl > hn + 1 || hl < hn - 1) {
@@ -1565,9 +1566,9 @@ namespace {
                 tcout << "bound: off (2x2 board; the halved bound prunes nothing)\n";
             } else {
                 Timer auditTimer;
-                colour_mix::buildLaneTables(g_rightRoot, boundTables);
+                colour_mix::buildLaneTables(g_rightRoot, boundTables, cfg.boundKind);
                 const BoundAudit audit = auditColourMixBound<STREAM_DEPTH>(seeds, boundTables, boundLimit, threads);
-                tcout << "bound: audit " << (audit.ok ? "ok" : "FAILED (" + audit.why + ")") << ": " << audit.nodes
+                tcout << "bound (" << colour_mix::kindName(cfg.boundKind) << "): audit " << (audit.ok ? "ok" : "FAILED (" + audit.why + ")") << ": " << audit.nodes
                       << " nodes, " << audit.leaves << " leaves, " << audit.edges << " edges (|dh| <= 1), "
                       << audit.streamChecks << " wanted leaves identical pruned vs full; sampled skip: leaf "
                       << 100.0 * audit.leafSkip << "%, whole last level " << 100.0 * audit.parentSkip << "%; tables "
@@ -3647,6 +3648,13 @@ namespace {
             else if (a == "--disk-table") cfg.diskTable = true;
             else if (a == "--calibrate-seconds") cfg.calibrateSeconds = std::stod(next());
             else if (a == "--bound-calibrate-seconds") cfg.boundCalibrateSeconds = std::stod(next());
+            else if (a == "--bound-kind") {
+                const std::string v = next();
+                if (v != "mix" && v != "rotation") {
+                    throw std::runtime_error("--bound-kind must be mix or rotation");
+                }
+                cfg.boundKind = v == "mix" ? colour_mix::Kind::Mix : colour_mix::Kind::Rotation;
+            }
             else if (a == "--bound") {
                 const std::string v = next();
                 cfg.boundMode = v == "auto" ? -1 : v == "off" ? 0 : v == "leaf" ? 1 : v == "both" ? 2

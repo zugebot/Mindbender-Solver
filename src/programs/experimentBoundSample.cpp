@@ -28,6 +28,8 @@
 #include "src/chuzzles/include.hpp"
 #include "src/solver/frontier_builder.hpp"
 #include "src/utils/intrinsics/pext_u64.hpp"
+#include "src/utils/intrinsics/ctz.hpp"
+#include "src/utils/intrinsics/popcount.hpp"
 #include "src/solver/colour_mix_bound.hpp"
 
 #include <array>
@@ -205,6 +207,7 @@ namespace {
         }
         std::sort(files.begin(), files.end());
         u64 states = 0, violations = 0;
+        i64 rotGain = 0;
         for (const fs::path& f : files) {
             std::smatch m;
             const std::string fn = f.filename().string();
@@ -236,14 +239,18 @@ namespace {
                 for (int i = 0; i <= n; ++i) {
                     const int hg = colourMixBound(b.asB1B2(), toGoal, fat);
                     const int hs = colourMixBound(b.asB1B2(), toStart, fat);
+                    const int rg = colour_mix::referenceBound(b.asB1B2(), goal.asB1B2(), colour_mix::Kind::Rotation);
+                    const int rs = colour_mix::referenceBound(b.asB1B2(), start.asB1B2(), colour_mix::Kind::Rotation);
                     ++states;
-                    if (hg > n - i || hs > i) {
+                    if (hg > n - i || hs > i || rg > n - i || rs > i || rg < hg) {
                         if (violations < 20) {
-                            tcout << "VIOLATION " << fn << " step " << i << ": h(goal)=" << hg << " vs " << n - i
-                                  << ", h(start)=" << hs << " vs " << i << " in " << line << "\n";
+                            tcout << "VIOLATION " << fn << " step " << i << ": h(goal)=" << hg << " rot " << rg
+                                  << " vs " << n - i << ", h(start)=" << hs << " rot " << rs << " vs " << i << " in "
+                                  << line << "\n";
                         }
                         ++violations;
                     }
+                    rotGain += rg - hg;
                     if (i == 0) {
                         worstGap = std::min(worstGap, n - hg);
                     }
@@ -257,7 +264,10 @@ namespace {
             tcout << m[1].str() << (fat ? " (2x2)" : "") << ": optimal " << m[2].str() << ", h(start->goal) = " << h0
                   << ", " << lines << " solutions checked\n";
         }
-        tcout << "CHECK: " << states << " states on known optimal paths, " << violations << " violations -> "
+        tcout << "rotation bound: mean " << static_cast<double>(rotGain) / static_cast<double>(std::max<u64>(1, states))
+              << " above colour-mix\n";
+        tcout << "CHECK (colour-mix and rotation, to goal and to start): " << states << " states on known optimal paths, "
+              << violations << " violations -> "
               << (violations == 0 ? "ADMISSIBLE" : "NOT ADMISSIBLE") << "\n";
         return violations == 0 ? 0 : 1;
     }
@@ -481,7 +491,7 @@ namespace {
             u64 m = (my_pext_u64(a.b1, LOW_BITS) << 18) | my_pext_u64(a.b2, LOW_BITS);
             u64 r = 0;
             for (u32 i = 1; m != 0; ++i, m &= m - 1) {
-                r += BINOM[__builtin_ctzll(m)][i];
+                r += BINOM[my_ctz64(m)][i];
             }
             return fat ? r * 25 + a.getFatXY() : r;
         }
@@ -497,7 +507,7 @@ namespace {
         p.colour = colour;
         p.fat = target.getFatBool();
         const B1B2 goal = abstractBoard(target, colour);
-        p.cells = static_cast<u32>(__builtin_popcountll(goal.b1 & LOW_BITS) + __builtin_popcountll(goal.b2 & LOW_BITS));
+        p.cells = static_cast<u32>(my_popcount(goal.b1 & LOW_BITS) + my_popcount(goal.b2 & LOW_BITS));
         p.dist.assign(BINOM[36][p.cells] * (p.fat ? 25 : 1), 255);
         p.dist[p.indexOfAbstract(goal)] = 0;
         std::vector<B1B2> frontier{goal};
@@ -700,7 +710,7 @@ namespace {
     FORCEINLINE u64 colexRank(u64 m) {
         u64 r = 0;
         for (u32 i = 1; m != 0; ++i, m &= m - 1) {
-            r += BINOM[__builtin_ctzll(m)][i];
+            r += BINOM[my_ctz64(m)][i];
         }
         return r;
     }
@@ -790,8 +800,8 @@ namespace {
         const B1B2 goal = p.abstractOf(target);
         const u64 mA = (my_pext_u64(goal.b1, LOW_BITS) << 18) | my_pext_u64(goal.b2, LOW_BITS);
         const u64 mB = (my_pext_u64(goal.b1 >> 1, LOW_BITS) << 18) | my_pext_u64(goal.b2 >> 1, LOW_BITS);
-        p.a = static_cast<u32>(__builtin_popcountll(mA));
-        p.b = static_cast<u32>(__builtin_popcountll(mB));
+        p.a = static_cast<u32>(my_popcount(mA));
+        p.b = static_cast<u32>(my_popcount(mB));
         p.bStates = BINOM[36 - p.a][p.b];
         p.entries = BINOM[36][p.a] * p.bStates * (p.fat ? 25 : 1);
         p.dist.assign(p.entries, 255);
@@ -949,7 +959,7 @@ namespace {
     // (1-move streams, so a little more than the canonical stream) and
     // compares states generated and lookups left against no pruning.
     int runDeep(const std::string& puzzle, const u32 seedDepth, const u32 tableDepth, const u32 streamDepth,
-                const u32 samples, const u32 threads) {
+                const u32 samples, const u32 threads, const colour_mix::Kind kind) {
         const BoardPair* pair = BoardLookup::getBoardPair(puzzle);
         if (pair == nullptr) {
             tcout << "Unknown puzzle: " << puzzle << "\n";
@@ -959,9 +969,10 @@ namespace {
         const Board goal = pair->getEndState();
         const int T = static_cast<int>(tableDepth);
         LaneTables mix;
-        buildLaneTables(goal.asB1B2(), mix);
+        buildLaneTables(goal.asB1B2(), mix, kind);
         tcout << puzzle << (start.getFatBool() ? " (2x2)" : "") << " <" << seedDepth << "," << streamDepth << ","
-              << tableDepth << "> = " << seedDepth + streamDepth + tableDepth << " moves, colour-mix pruned at every level\n";
+              << tableDepth << "> = " << seedDepth + streamDepth + tableDepth << " moves, " << colour_mix::kindName(kind)
+              << " bound pruned at every level (tables " << mix.bytes << " B)\n";
         JVec<B1B2> seeds;
         buildFrontier(start, seedDepth, seeds);
         const std::size_t step = std::max<std::size_t>(1, seeds.size() / samples);
@@ -1024,8 +1035,13 @@ int main(const int argc, char** argv) {
     }
     if (argc >= 3 && std::string(argv[1]) == "--deep") {
         u32 seedDepth = 5, tableDepth = 6, streamDepth = 4, samples = 200, threads = 4;
+        colour_mix::Kind kind = colour_mix::Kind::Mix;
         for (int i = 3; i + 1 < argc; i += 2) {
             const std::string a = argv[i];
+            if (a == "--kind") {
+                kind = std::string(argv[i + 1]) == "rotation" ? colour_mix::Kind::Rotation : colour_mix::Kind::Mix;
+                continue;
+            }
             const u32 v = static_cast<u32>(std::stoul(argv[i + 1]));
             if (a == "--seed-depth") seedDepth = v;
             else if (a == "--table-depth") tableDepth = v;
@@ -1033,7 +1049,7 @@ int main(const int argc, char** argv) {
             else if (a == "--samples") samples = v;
             else if (a == "--threads") threads = v;
         }
-        return runDeep(argv[2], seedDepth, tableDepth, streamDepth, samples, threads);
+        return runDeep(argv[2], seedDepth, tableDepth, streamDepth, samples, threads, kind);
     }
     if (argc >= 3 && std::string(argv[1]) == "--pdb2") {
         u32 seedDepth = 5, tableDepth = 6, samples = 150, threads = 4;

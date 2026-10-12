@@ -1,0 +1,15 @@
+[0:00:00.001] puzzle 16-3 <5,3,6> = 14 moves, forward, threads 16, table dir X:\mindbender_d6\16-3_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\16-3_goal_d6
+[0:00:14.942] depth-5 exact unique: 170301392 states in 14.9407s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:33.400] depth-6 raw children: 10217341896, de-dupe ratio 0.657371 -> ~6716588642 unique (counted in 33.3994s)
+[0:00:33.400] fingerprint index: 30.8635 GB over partitions [0,256), RAM budget 37.3847 GB -> 1 pass(es)
+[0:00:48.076] left seeds (exact depth 5): 165190743 in 14.6761s
+[0:00:50.419] bound: audit ok: 652676 nodes, 39153889 leaves, 39153889 edges (|dh| <= 1), 654980 wanted leaves identical pruned vs full; sampled skip: leaf 79.9256%, whole last level 37.1235%; tables 36388 B, 2.34318s
+[0:01:19.241] pdb: table {13}: 10 cells, 254.187 M entries (63.5467 MB), max distance 10, built in 28.8073s
+[0:01:48.207] pdb: table {04}: 10 cells, 254.187 M entries (63.5467 MB), max distance 10, built in 28.9586s
+[0:02:17.003] pdb: table {05}: 10 cells, 254.187 M entries (63.5467 MB), max distance 10, built in 28.7861s
+[0:02:17.448] pdb: audit ok: 652676 nodes, 8966549 edges below far nodes, 37728 wanted leaves identical pruned vs full; whole last level skipped 37.1275% -> 50.4904% with the tables (87.0278s total)
+[0:02:22.454]   index build: 5.30416 GB for keys -> about 16 regeneration(s) of depth 6
+[0:09:01.589]   index for partitions [0,256) built in RAM: 6715851165 unique states in 404.135s
+[0:09:21.774] calibrate: 28416 seeds in 20.1832s, ns/state per thread: 32/plain=111.091 32/pipelined=111.548 64/plain=106.841 64/pipelined=105.663 128/plain=103.914 128/pipelined=104.535 -> 128/plain (1.06907x vs 32/plain)
+[0:09:27.601] bound calibrate: 16384 seeds, 6 rounds of 512-seed blocks per mode in 5.82481s (settled, budget 300s); time vs pdb: off=2.84685 +-14.4656% (dropped after 4) leaf=1.41864 +-8.92206% (dropped after 4) both=1.12458 +-3.09651% (dropped after 4) parent=1.95671 +-8.27965% (dropped after 4) pdb=1 (3495.59 us/seed) pdbleaf=1.10098 +-3.9625% pdbparent=1.63502 +-2.84814% (dropped after 4) -> pdb (2.84685x vs off)
