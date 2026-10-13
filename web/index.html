@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mind Bender Solver</title>
+  <meta name="description" content="Paint a Chuzzle Mind Bender puzzle and find every shortest solution, right in your browser.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <h1>Mind Bender Solver</h1>
+      <p class="lede">Paint the start and goal boards, then solve. It finds <strong>every shortest
+        solution</strong> of up to 10 moves and proves there is nothing shorter. It all runs in your
+        browser; nothing is uploaded.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="toolbar" aria-label="Puzzle">
+      <label class="field">
+        <span>Game puzzle</span>
+        <select id="preset">
+          <option value="">Custom board</option>
+        </select>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="fatToggle">
+        <span>2x2 piece</span>
+      </label>
+      <div class="spacer"></div>
+      <button type="button" class="btn ghost" id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
+      <button type="button" class="btn ghost" id="swapBtn" title="Swap the start and goal boards">Swap boards</button>
+      <button type="button" class="btn ghost" id="shareBtn" title="Copy a link to this puzzle">Copy link</button>
+    </section>
+    <p class="note" id="presetNote" hidden></p>
+
+    <section class="boards">
+      <div class="card board-card">
+        <div class="card-head">
+          <h2>Start</h2>
+          <div class="mini-actions">
+            <button type="button" class="link" data-act="fill" data-board="start">Fill</button>
+            <button type="button" class="link" data-act="copy" data-board="start">Copy goal</button>
+          </div>
+        </div>
+        <div class="board" id="startBoard" role="grid" aria-label="Start board"></div>
+      </div>
+      <div class="arrow" aria-hidden="true">&rarr;</div>
+      <div class="card board-card">
+        <div class="card-head">
+          <h2>Goal</h2>
+          <div class="mini-actions">
+            <button type="button" class="link" data-act="fill" data-board="goal">Fill</button>
+            <button type="button" class="link" data-act="copy" data-board="goal">Copy start</button>
+          </div>
+        </div>
+        <div class="board" id="goalBoard" role="grid" aria-label="Goal board"></div>
+      </div>
+    </section>
+
+    <section class="palette-row" aria-label="Colours">
+      <div class="palette" id="palette"></div>
+      <button type="button" class="btn tool" id="moveTool" hidden title="Click a cell to put the 2x2 piece there (M)">Move 2x2</button>
+      <p class="hint">Click or drag to paint &middot; right-click a cell to pick its colour &middot; keys 1-8</p>
+    </section>
+
+    <section class="counts" id="counts" aria-live="polite"></section>
+
+    <section class="card solve-card">
+      <div class="solve-row">
+        <label class="field">
+          <span>Up to</span>
+          <select id="maxDepth"></select>
+        </label>
+        <label class="field">
+          <span>Threads</span>
+          <select id="threads"></select>
+        </label>
+        <div class="spacer"></div>
+        <button type="button" class="btn primary" id="solveBtn">Solve</button>
+        <button type="button" class="btn" id="cancelBtn" hidden>Cancel</button>
+      </div>
+      <div class="progress" id="progress" hidden>
+        <div class="bar"><div class="fill" id="progressFill"></div></div>
+        <div class="status"><span id="statusText"></span><span id="statusTime"></span></div>
+      </div>
+      <p class="message" id="message" hidden></p>
+    </section>
+
+    <section class="results" id="results" hidden>
+      <div class="results-head">
+        <div>
+          <h2 id="resultTitle"></h2>
+          <p class="sub" id="resultSub"></p>
+        </div>
+        <div class="results-actions">
+          <button type="button" class="btn ghost" id="copyBtn">Copy all</button>
+          <button type="button" class="btn ghost" id="downloadBtn">Download .txt</button>
+        </div>
+      </div>
+      <div class="results-body">
+        <div class="card replay">
+          <div class="board small" id="replayBoard" aria-label="Replay board"></div>
+          <div class="replay-controls">
+            <button type="button" class="btn icon" id="firstBtn" aria-label="First">&#x23EE;</button>
+            <button type="button" class="btn icon" id="prevBtn" aria-label="Previous move">&#x25C0;</button>
+            <button type="button" class="btn icon" id="playBtn" aria-label="Play">&#x25B6;</button>
+            <button type="button" class="btn icon" id="nextBtn" aria-label="Next move">&#x25B6;&#x25B6;</button>
+            <button type="button" class="btn icon" id="lastBtn" aria-label="Last">&#x23ED;</button>
+          </div>
+          <p class="step-text" id="stepText"></p>
+          <div class="chips" id="replayChips"></div>
+        </div>
+        <div class="card list-card">
+          <ol class="solutions" id="solutionList"></ol>
+          <button type="button" class="btn ghost more" id="moreBtn" hidden>Show more</button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <p><strong>Notation:</strong> <code>R14</code> = row 1 shifted right 4, <code>C32</code> = column 3 shifted
+        down 2 (rows count from the top, columns from the left). On 2x2 boards <code>R453</code> = the piece's
+        rows 4 and 5 right 3, and <code>C231</code> = its columns 2 and 3 down 1.</p>
+      <p id="engineNote"></p>
+    </footer>
+  </main>
+
+  <script src="puzzles.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

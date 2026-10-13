@@ -6,7 +6,7 @@ solution and proves nothing shorter exists. C++ solver plus Python tools.
 
 Status (2026-10-12): **78/100 solved**. `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
-History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-12.md`).
+History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-13.md`).
 
 ## Build and test
 
@@ -21,6 +21,8 @@ History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-1
 - Every program compiles the shared sources itself, so building all targets takes ~20 min.
 - Tests: `testExactSolverRegression` (13 cases), `testRotations` (112), `testJVec`,
   `testKnownSolutions` (replays every file in `<repo>/levels`; run from `build/`),
+  `testWebSolver` (the web solver vs `build/levels_final`, all puzzles up to 10 moves; run from
+  the repo root),
   `experimentBoundSample --check` (bounds admissible on all 1.9 M known-optimal-path states; run
   from the repo root), `python -m unittest discover -s python/demo_app/tests`.
 - Exactness check for solver changes: run the solver on a solved puzzle with
@@ -57,6 +59,7 @@ A job cut off by a reboot is re-queued first.
     `pattern_db.hpp` (grouped pattern databases), `parent_prune.hpp` (PermStream hooks),
     `audit.hpp` (run-start safety audits), `calibrate.hpp` (per-run mode timing).
   - `ssd/`: the large solver in parts, `namespace ssd` (its README lists them).
+  - `web/`: `web_solver.hpp`, the browser solver (plain C++, up to 10 moves; see `web/README.md`).
 - `src/programs/`:
   - `solvers/`: `findSolutions` (in-RAM, 3-12 moves, reads `config.json` from cwd) and
     `experimentDiskDepth6` (12-16 moves; `main` + every flag documented at its top). The name is
@@ -73,6 +76,8 @@ A job cut off by a reboot is re-queued first.
   (add/`--until`/`--front`, cancel, pause, hold, shards + export/import). Use it for long runs.
 - `docs/run_history.csv` + `docs/run_logs/`: one row and the full log per solver run (written by
   the scheduler via `python/scheduler/run_history.py`). Use it for timings.
+- `web/`: static solver site (board editor, WebAssembly solver in Web Workers, replay). Serve with
+  `python -m http.server 8770 --directory web`; rebuild the wasm with `web/build_wasm.ps1`.
 - `python/demo_app/`: pygame app (solutions, real-game playback via posted window messages, saves).
 - `python/viewer/`: mouse-route studio; `mouse/`: C mouse-path library (`libchuzzle_mouse.dll`).
 - `python/deluxe_clone/`, `python/automation/legacy/`: older Chuzzle 1 projects merged in.

@@ -254,6 +254,7 @@ add_solver_program(testExactSolverRegression "${CMAKE_SOURCE_DIR}/src/programs/t
 add_solver_program(testRotations          "${CMAKE_SOURCE_DIR}/src/programs/tests/testRotations.cpp")
 add_solver_program(testPuzzlesValid       "${CMAKE_SOURCE_DIR}/src/programs/tests/testPuzzlesValid.cpp")
 add_solver_program(testJVec               "${CMAKE_SOURCE_DIR}/src/programs/tests/testJVec.cpp")
+add_solver_program(testWebSolver          "${CMAKE_SOURCE_DIR}/src/programs/tests/testWebSolver.cpp")
 if (BOOST_LIBRARY)   # boost::sort
     add_solver_program(testSorting        "${CMAKE_SOURCE_DIR}/src/programs/tests/testSorting.cpp")
 endif()
