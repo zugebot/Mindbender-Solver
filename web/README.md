@@ -27,7 +27,7 @@ nothing (see below).
 | File | What it is |
 |---|---|
 | `index.html`, `style.css`, `app.js` | the page: board editor, presets, solve orchestration, results and replay |
-| `solver-worker.js` | one solver per Web Worker; talks to `app.js` by messages |
+| `solver-worker.js` | one solver per Web Worker; talks to `app.js` by messages (the page fetches it and `mb_solver.js` once and starts every worker from one blob, so 16 workers cost no extra downloads; one worker is kept warm between solves) |
 | `mb_solver.js` | the solver as WebAssembly, embedded in one JS file (built, but committed so the folder is deployable) |
 | `puzzles.js` | the game's 100 boards with their known optimum or lower bound (generated) |
 | `build_wasm.ps1` | rebuilds `mb_solver.js` with Emscripten (`emcc` on PATH) |

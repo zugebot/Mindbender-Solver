@@ -338,9 +338,24 @@
   // ---------------------------------------------------------------- solver workers
   class Cancelled extends Error {}
 
+  // Workers start from one blob of mb_solver.js + solver-worker.js, fetched once,
+  // so starting 16 of them costs no network. One worker is kept warm for the next solve.
+  let workerUrl = 'solver-worker.js';
+  const workerUrlReady = Promise.all(['mb_solver.js', 'solver-worker.js'].map((f) =>
+    fetch(f).then((r) => {
+      if (!r.ok) throw new Error(f);
+      return r.text();
+    })))
+    .then(([solver, worker]) => {
+      workerUrl = URL.createObjectURL(new Blob([solver, '\n', worker], { type: 'text/javascript' }));
+    })
+    .catch(() => {});
+  let warm = null;
+  const warmUp = () => workerUrlReady.then(() => { if (!warm && !run) warm = new SolverWorker(); });
+
   class SolverWorker {
     constructor() {
-      this.w = new Worker('solver-worker.js');
+      this.w = new Worker(workerUrl);
       this.next = 1;
       this.pending = new Map();
       this.w.onmessage = (e) => {
@@ -448,7 +463,9 @@
       $('statusTime').textContent = fmtTime((performance.now() - thisRun.t0) / 1000);
     }, 100);
     try {
-      const w0 = new SolverWorker();
+      await workerUrlReady;
+      const w0 = warm || new SolverWorker();
+      warm = null;
       run.workers.push(w0);
       await w0.call('setup', spec);
       setStatus(`Checking 0 to ${Math.min(6, maxDepth)} moves...`, null);
@@ -505,6 +522,7 @@
       $('solveBtn').hidden = false;
       $('cancelBtn').hidden = true;
       $('progress').hidden = true;
+      warmUp();
     }
   }
 
@@ -754,6 +772,7 @@
       }
     }
     changed({ keepPreset: true });
+    warmUp();
   }
 
   function undo() {

@@ -1,7 +1,9 @@
 // web/solver-worker.js - one solver (mb_solver.js, WebAssembly) per worker.
 // The page sends {id, type, ...}; each reply is {id, ok, ...}. "depth" also
 // posts {id, progress: {done, total}} while it runs. Cancelling = terminate().
-importScripts('mb_solver.js');
+// app.js usually starts workers from a blob holding mb_solver.js + this file, so
+// they need no network; loaded on its own, the worker fetches the solver.
+if (typeof createMbSolver === 'undefined') importScripts('mb_solver.js');
 
 let M = null;
 const ready = createMbSolver().then((m) => { M = m; });
