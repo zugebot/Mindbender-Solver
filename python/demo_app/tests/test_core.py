@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from chuzzle_demo import board_sim, game_window as gw, levels as lv, routes, saves  # noqa: E402
+from chuzzle_demo import board_sim, game_window as gw, launcher, levels as lv, routes, saves  # noqa: E402
 
 
 class LevelsAndSimulator(unittest.TestCase):
@@ -34,8 +34,14 @@ class LevelsAndSimulator(unittest.TestCase):
         self.assertGreater(checked, 90000)
 
     def test_unsolved_bounds_come_from_build_readme(self):
-        self.assertEqual(self.levels["6-4"].lower_bound, 15)      # none at 13 or 14
-        self.assertEqual(self.levels["12-1"].lower_bound, 13)
+        # the solver queue raises these over time, so compare with the file itself
+        import re
+        text = lv.paths.BUILD_README.read_text(errors="replace")
+        bounds = {n: int(b) for n, b in re.findall(r"^\s*(\d+-\d+): at least (\d+) moves", text, re.M)}
+        self.assertIn("6-4", bounds)
+        self.assertGreaterEqual(bounds["6-4"], 16)                 # none up to 15
+        for name, bound in bounds.items():
+            self.assertEqual(self.levels[name].lower_bound, bound, name)
         self.assertIsNone(self.levels["10-2"].lower_bound)        # solved
 
     def test_display_is_one_indexed(self):
@@ -146,6 +152,45 @@ class SaveLocator(unittest.TestCase):
         self.assertFalse((folder / "SAVEGAME-SPEEDCHUZZLE.DAT").exists())
         self.assertEqual(stashed.read_bytes(), b"\x01" * 16)
         self.assertIsNone(saves.stash_file(folder / "SAVEGAME-SPEEDCHUZZLE.DAT", "speed", backup_root=self.backups))
+
+
+class Launcher(unittest.TestCase):
+    def test_labels_are_the_shortest_distinct_folder_tail(self):
+        exes = [Path(r"C:\Program Files (x86)\PopCap Games\Chuzzle\Chuzzle.exe"),
+                Path(r"E:\Games\Chuzzles\Chuzzle\Chuzzle.exe"),
+                Path(r"E:\Games\Chuzzles\Chuzzle\Chuzzle-WT.exe"),
+                Path(r"E:\Games\Chuzzle (Christmas Edition)\Chuzzle.exe")]
+        labels = launcher.unique_labels(exes)
+        self.assertEqual(labels[exes[0]], r"PopCap Games\Chuzzle")
+        self.assertEqual(labels[exes[1]], r"Chuzzles\Chuzzle")
+        self.assertEqual(labels[exes[2]], r"Chuzzles\Chuzzle  (Chuzzle-WT.exe)")
+        self.assertEqual(labels[exes[3]], "Chuzzle (Christmas Edition)")
+        self.assertEqual(len(set(labels.values())), len(exes))
+
+    def test_full_scan_finds_game_exes_and_skips_noise(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel in ["Games/Chuzzle Deluxe/Chuzzle.exe", "Games/Chuzzle Deluxe/PopUninstall.exe",
+                        "Games/Other/chuzzle_xmas.exe", "Temp/copy/Chuzzle.exe", "node_modules/x/chuzzle.exe",
+                        "Games/Chuzzle Deluxe/readme.txt"]:
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_bytes(b"MZ")
+            found = {p.relative_to(root).as_posix() for p in launcher.full_scan(roots=[root])}
+            self.assertEqual(found, {"Games/Chuzzle Deluxe/Chuzzle.exe", "Games/Other/chuzzle_xmas.exe"})
+
+    def test_describe_reads_build_date_and_drm_marker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "Chuzzle.exe"
+            header = bytearray(0x100)
+            header[0:2] = b"MZ"
+            header[0x3C:0x40] = (0x80).to_bytes(4, "little")
+            header[0x80:0x84] = b"PE\0\0"
+            header[0x88:0x8C] = (1156198680).to_bytes(4, "little")   # 2006-08-21 22:18 UTC
+            exe.write_bytes(bytes(header) + launcher.DRM_MARKER + b"rest")
+            g = launcher.describe_exe(exe)
+            self.assertEqual(g.build_date, "2006-08-21")
+            self.assertTrue(g.drm_wrapped)
+            self.assertEqual(g.product_version, "")
 
 
 if __name__ == "__main__":

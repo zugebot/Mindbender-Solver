@@ -1,6 +1,6 @@
 # python/demo_app/chuzzle_demo/ui.py
-"""pygame control panel: level grid, solution preview, real-game auto-play
-and save-file tracking."""
+"""pygame control panel: level grid, solution preview, real-game auto-play,
+save-file tracking and a launcher for every Chuzzle exe on the PC."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Callable
 
 import pygame as pg
 
-from . import board_sim, game_window as gw, levels as lv, routes, saves
+from . import board_sim, game_window as gw, launcher, levels as lv, routes, saves
 
 W, H = 1200, 840
 BAR = pg.Rect(12, 776, W - 24, 54)      # game status bar along the bottom
@@ -103,12 +103,25 @@ class App:
         self.confirm_restore_until = 0.0
         self.save_rows: list[tuple[pg.Rect, saves.SaveLocation, saves.Profile | None]] = []
 
-        self.buttons: dict[str, list[Button]] = {"solutions": [], "saves": [], "speed": [], "all": []}
+        # launcher
+        self.games: list[launcher.GameExe] = []
+        self.games_scanned_at: float | None = None
+        self.games_scanning = False
+        self.games_scan_status = ""
+        self.launcher_scroll = 0
+        self.launcher_max_scroll = 0
+        self.launcher_buttons: list[Button] = []
+        self.launcher_inner = pg.Rect(0, 0, 0, 0)
+        self._running_cache: tuple[float, dict[str, gw.GameWindow]] = (0.0, {})
+
+        self.buttons: dict[str, list[Button]] = {"solutions": [], "saves": [], "speed": [], "launcher": [],
+                                                 "all": []}
         self._speed_cache: tuple[float, dict] | None = None
         self._build_buttons()
         self.select_level(self.selected)
         self.find_game(quiet=True)
         self.rescan_saves()
+        self.refresh_games()
         threading.Thread(target=self._watch_loop, daemon=True).start()
 
     # ------------------------------------------------------------------
@@ -147,6 +160,8 @@ class App:
     def _build_buttons(self) -> None:
         b = self.buttons
         b["all"] += [
+            Button(pg.Rect(W - 494, 8, 115, 30), "Launcher", lambda: self.set_tab("launcher"),
+                   active=lambda: self.tab == "launcher"),
             Button(pg.Rect(W - 372, 8, 115, 30), "Solutions", lambda: self.set_tab("solutions"),
                    active=lambda: self.tab == "solutions"),
             Button(pg.Rect(W - 250, 8, 115, 30), "Speed Chuzzle", lambda: self.set_tab("speed"),
@@ -242,6 +257,13 @@ class App:
             Button(pg.Rect(bx, 220, 210, 30), "Open backup folder",
                    lambda: self._open(saves.paths.SAVE_BACKUP_DIR)),
         ]
+        # launcher tab (per-game Launch / Open folder buttons are made while drawing)
+        b["launcher"] += [
+            Button(pg.Rect(bx, 60, 210, 30), lambda: "Scanning drives..." if self.games_scanning else "Scan all drives",
+                   lambda: self.refresh_games(full=True), lambda: not self.games_scanning),
+            Button(pg.Rect(bx, 100, 210, 30), "Re-check list", lambda: self.refresh_games(),
+                   lambda: not self.games_scanning),
+        ]
 
     def set_tab(self, tab: str) -> None:
         self.tab = tab
@@ -320,7 +342,10 @@ class App:
             if not quiet:
                 self.log("No Chuzzle window found. Start the game and press Find game.", WARN)
             return
-        self.window = windows[0]
+        self._use_window(windows[0])
+
+    def _use_window(self, window: gw.GameWindow) -> None:
+        self.window = window
         self.geometry = gw.load_geometry(self.window)
         _, _, cw, ch = self.window.client_rect()
         self.log(f"Found '{self.window.title}' ({cw}x{ch}){' - calibrated' if self.geometry.calibrated else ''}",
@@ -944,6 +969,136 @@ class App:
         if not changes:
             self.text("(watching, none yet)", (side.x + 10, ly), self.small, DIM)
 
+    # ------------------------------------------------------------------
+    # launcher
+    # ------------------------------------------------------------------
+
+    def refresh_games(self, full: bool = False) -> None:
+        """Re-check the cached exes and the usual install folders; with `full` (or when no
+        full scan was ever done) also walk every fixed drive, in the background."""
+        if self.games_scanning:
+            return
+        self.games_scanning = True
+
+        def status(text: str) -> None:
+            self.post(lambda: setattr(self, "games_scan_status", text))
+
+        def show(games, when) -> None:
+            def apply():
+                self.games = games
+                self.games_scanned_at = when
+            self.post(apply)
+
+        def work():
+            cached, when = launcher.load_cache()
+            show(launcher.describe_all(launcher.quick_list(cached)), when)
+            if full or when is None:
+                status("scanning all drives...")
+                exes = launcher.full_scan(lambda folder, n: status(f"{n:,} folders: {folder}"))
+                when = time.time()
+                launcher.save_cache(exes, when)
+                show(launcher.describe_all(launcher.quick_list(exes)), when)
+
+            def done():
+                self.games_scanning = False
+                self.games_scan_status = ""
+                self.log(f"Launcher: {len(self.games)} Chuzzle exes.", GOOD)
+            self.post(done)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _running_games(self) -> dict[str, gw.GameWindow]:
+        """Open game windows by normalized exe path (re-read once a second)."""
+        now = time.time()
+        if now - self._running_cache[0] > 1.0:
+            running: dict[str, gw.GameWindow] = {}
+            for w in gw.find_game_windows():
+                if w.exe is not None:
+                    running.setdefault(os.path.normcase(str(w.exe)), w)
+            self._running_cache = (now, running)
+        return self._running_cache[1]
+
+    def launch_game(self, game: launcher.GameExe) -> None:
+        try:
+            launcher.launch(game.path)
+        except OSError as exc:
+            self.log(f"Could not start {game.label}: {exc}", BAD)
+            return
+        self.log(f"Started {game.label}.", GOOD)
+        self._running_cache = (0.0, {})
+        key = os.path.normcase(str(game.path))
+
+        def attach():
+            # use its window as "the game" (bottom bar, auto-play) once it opens
+            for _ in range(30):
+                time.sleep(1.0)
+                for w in gw.find_game_windows():
+                    if w.exe is not None and os.path.normcase(str(w.exe)) == key:
+                        self.post(lambda w=w: self._use_window(w) if not self.playing() else None)
+                        return
+        threading.Thread(target=attach, daemon=True).start()
+
+    def draw_launcher(self, mouse) -> None:
+        rect = pg.Rect(12, 52, W - 260, 716)
+        self.panel(rect, f"Chuzzle games on this PC ({len(self.games)})")
+        running = self._running_games()
+        inner = rect.inflate(-16, -48).move(0, 16)
+        self.launcher_inner = inner
+        self.launcher_buttons = []
+        clip = self.screen.get_clip()
+        self.screen.set_clip(inner)
+        y = inner.y - self.launcher_scroll
+        for game in self.games:
+            row = pg.Rect(inner.x, y, inner.width, 58)
+            win = running.get(os.path.normcase(str(game.path)))
+            if row.collidepoint(mouse) and inner.collidepoint(mouse):
+                pg.draw.rect(self.screen, (44, 48, 60), row, border_radius=6)
+            self.text(game.label, (row.x + 8, y + 5), self.bold, GOOD if win else TEXT)
+            detail = game.describe() + f", {game.size / 1e6:.1f} MB"
+            if win:
+                detail += f"   |   running: {win.title}"
+            self.text(detail, (row.x + 8, y + 26), self.small, GOOD if win else DIM)
+            self.text(self._elide(str(game.path), self.small, row.width - 270), (row.x + 8, y + 41), self.small, DIM)
+            bx = row.right - 250
+            if win:
+                act = Button(pg.Rect(bx, y + 14, 130, 30), "Bring to front", lambda w=win: w.bring_to_front())
+            else:
+                act = Button(pg.Rect(bx, y + 14, 130, 30), "Launch", lambda g=game: self.launch_game(g))
+            self.launcher_buttons += [act, Button(pg.Rect(bx + 136, y + 14, 106, 30), "Open folder",
+                                                  lambda g=game: self._open(g.path.parent))]
+            y += 64
+        self.launcher_max_scroll = max(0, y + self.launcher_scroll - inner.bottom)
+        for b in self.launcher_buttons:
+            if b.rect.colliderect(inner):
+                self.draw_button(b, mouse)
+        self.screen.set_clip(clip)
+        if not self.games:
+            self.text("Looking for Chuzzle games..." if self.games_scanning else "No Chuzzle exes found.",
+                      (inner.x, inner.y), self.font, DIM)
+
+        side = pg.Rect(W - 240, 52, 228, 716)
+        self.panel(side)
+        y = 146
+        if self.games_scanning and self.games_scan_status:
+            y = self.wrap(self.games_scan_status, side.x + 10, y, side.width - 20, self.small, ACCENT, 15) + 8
+        when = (time.strftime("%Y-%m-%d %H:%M", time.localtime(self.games_scanned_at))
+                if self.games_scanned_at else "never")
+        drives = ", ".join(str(d)[:2] for d in launcher.fixed_drives())
+        y = self.wrap(f"Last full scan of all drives ({drives}): {when}.", side.x + 10, y, side.width - 20,
+                      self.small, TEXT, 16) + 8
+        y = self.wrap("Games start from their own folder, like their shortcuts, so they use their usual "
+                      "data and saves. A started game becomes the app's game (bottom bar) once its "
+                      "window opens. \"PopCap DRM wrapper\" builds unpack the real game when started. "
+                      "Re-check is instant; a full scan walks every drive (minutes) and is cached in "
+                      "user_data/launcher_cache.json.", side.x + 10, y, side.width - 20, self.small, DIM, 16) + 12
+        self.text("Log", (side.x + 10, y), self.bold)
+        y += 24
+        for when_, msg, color in self.log_lines[-10:]:
+            y = self.wrap(f"{time.strftime('%H:%M:%S', time.localtime(when_))}  {msg}", side.x + 10, y,
+                          side.width - 20, self.small, color, 15)
+            if y > side.bottom - 20:
+                break
+
     def draw(self) -> None:
         mouse = pg.mouse.get_pos()
         self.tooltip = None
@@ -957,6 +1112,8 @@ class App:
             self.draw_game_panel()
         elif self.tab == "speed":
             self.draw_speed()
+        elif self.tab == "launcher":
+            self.draw_launcher(mouse)
         else:
             self.draw_saves(mouse)
         self.draw_game_bar()
@@ -980,6 +1137,12 @@ class App:
                     if not self.playing():
                         self.select_level(name)
                     return
+        elif self.tab == "launcher":
+            if self.launcher_inner.collidepoint(pos):
+                for b in self.launcher_buttons:
+                    if b.rect.collidepoint(pos) and b.enabled():
+                        b.action()
+                        return
         elif self.tab == "saves":
             for r, loc, prof in self.save_rows:
                 if r.collidepoint(pos):
@@ -1001,6 +1164,8 @@ class App:
                     self.handle_click(event.pos)
                 elif event.type == pg.MOUSEWHEEL and self.tab == "saves":
                     self.save_scroll = max(0, min(getattr(self, "max_scroll", 0), self.save_scroll - event.y * 40))
+                elif event.type == pg.MOUSEWHEEL and self.tab == "launcher":
+                    self.launcher_scroll = max(0, min(self.launcher_max_scroll, self.launcher_scroll - event.y * 40))
                 elif event.type == pg.KEYDOWN and self.tab == "solutions":
                     if event.key == pg.K_RIGHT:
                         self.set_step(self.preview_step + 1)

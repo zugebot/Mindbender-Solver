@@ -1,6 +1,7 @@
 # Chuzzle Demo app
 
-One pygame window that combines the old Chuzzle 1 tools: browse every
+One pygame window that combines the old Chuzzle 1 tools: launch any Chuzzle
+exe on the PC, browse every
 mindbender and its optimal solutions, play a solution in the **real game**,
 reset Speed Chuzzle, and track every place the game keeps save files.
 
@@ -17,6 +18,27 @@ C:/mingw64/bin/gcc -O3 -shared -Imouse/include mouse/src/chuzzle_mouse.c -o pyth
 ```
 
 (or build the `ChuzzleMouse` CMake target, which writes the same file).
+
+## Launcher tab
+
+Every Chuzzle exe on the PC, with a **Launch** and an **Open folder** button
+each. A running game shows as *running* (with its window title) and its button
+becomes **Bring to front**; a game started here becomes the app's game (bottom
+bar, auto-play) as soon as its window opens.
+
+- Each row: the edition (the shortest part of the folder path that tells the
+  installs apart, plus the exe name when it is not `Chuzzle.exe`), the product
+  version from the exe's version info, its build date (linker timestamp), size,
+  and "PopCap DRM wrapper" for builds whose exe is PopCap's DRM loader with the
+  game appended (the 2006 Deluxe 1.0).
+- Games start from their own folder, like their shortcuts, so they find their
+  data and keep saving where they always do.
+- **Re-check list** (instant, also at every start): the cached exes that still
+  exist plus the usual install folders (`saves.DEFAULT_GAME_SEARCH_ROOTS`).
+- **Scan all drives**: walks every fixed drive once (minutes on big drives;
+  skips Windows, Temp, recycle bins, `.git`, `node_modules` and similar) and
+  caches the result in `user_data/launcher_cache.json`. It runs by itself the
+  first time the app starts.
 
 ## Solutions tab
 
@@ -90,6 +112,7 @@ The running game's exe is always added.
 | `chuzzle_demo/game_window.py` | window lookup by process, DPI-aware client coords, calibration, mouse input |
 | `chuzzle_demo/player.py` | worker thread that performs drags with the safety stops |
 | `chuzzle_demo/saves.py` | save-location discovery, watcher, backup / restore / stash |
+| `chuzzle_demo/launcher.py` | finds every Chuzzle exe (drive scan + cache), version / build date / DRM wrapper, launching |
 | `chuzzle_demo/ui.py` | the pygame window |
 
 Tests: `python -m unittest discover -s python/demo_app/tests`.
