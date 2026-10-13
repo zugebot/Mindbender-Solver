@@ -28,8 +28,8 @@ WARN = (240, 190, 70)
 BAD = (230, 90, 90)
 
 # y positions in the right ("Real game") panel
-RY = {"hint": 84, "play": 120, "stop": 160, "speed": 198, "nav": 246, "world": 276, "arrows": 304,
-      "levels": 340, "log": 392}
+RY = {"hint": 84, "play": 120, "stop": 160, "speed": 198, "sprite": 232, "nav": 280, "world": 310,
+      "arrows": 338, "levels": 374, "log": 426}
 
 MOVES_HELP = ("Moves are 1-indexed. R = row (1 = top) shifted right, C = column (1 = left) shifted "
               "down; the last digit is how many cells. Moves of the 2x2 piece name both of its "
@@ -87,6 +87,8 @@ class App:
         self.speed = 1.0
         self.click_next_after = False
         self.background_input = True
+        self.show_sprite = True         # background mode: draw a pointer sprite where the posted mouse is
+        self.cursor_overlay = None      # cursor_overlay.CursorOverlay, made on first use
         self.player_status = ""
         self.tracked_world = 1
         self.calib_step = 0
@@ -222,6 +224,10 @@ class App:
                    lambda: ("[x] " if self.click_next_after else "[ ] ") + "click Next after",
                    lambda: setattr(self, "click_next_after", not self.click_next_after),
                    active=lambda: self.click_next_after),
+            Button(pg.Rect(x, RY["sprite"], 360, 28),
+                   lambda: ("[x] " if self.show_sprite else "[ ] ") + "show a cursor sprite (background input)",
+                   lambda: setattr(self, "show_sprite", not self.show_sprite),
+                   lambda: self.background_input and not self.playing(), lambda: self.show_sprite),
             Button(pg.Rect(x + 184, RY["world"] - 3, 36, 26), "-", lambda: self.set_tracked_world(self.tracked_world - 1)),
             Button(pg.Rect(x + 224, RY["world"] - 3, 36, 26), "+", lambda: self.set_tracked_world(self.tracked_world + 1)),
             Button(pg.Rect(x, RY["arrows"], 112, 28), "< World", lambda: self.click_world(-1), game),
@@ -414,9 +420,15 @@ class App:
         def status(msg):
             self.post(lambda: setattr(self, "player_status", msg))
 
+        overlay = None
+        if self.background_input and self.show_sprite:
+            if self.cursor_overlay is None:
+                from .cursor_overlay import CursorOverlay
+                self.cursor_overlay = CursorOverlay()
+            overlay = self.cursor_overlay
         self._play_base = self.played_moves
         self.player = Player(self.window, self.geometry, drags, self.speed, background=self.background_input,
-                             after=after, on_progress=progress, on_status=status, on_done=done)
+                             after=after, on_progress=progress, on_status=status, on_done=done, overlay=overlay)
         self.player.start()
 
     def _route(self) -> routes.Route:

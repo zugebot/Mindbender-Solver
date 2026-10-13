@@ -14,7 +14,11 @@ Motion is smooth for recording: each glide and each drag is one eased
 motion whose position comes from the clock (not a step count), pointer
 updates go out every ~4 ms with a 1 ms system timer, and the glide to the
 next press point overlaps the previous move's settle time instead of
-stopping. Each press is still held for a few frames before the drag starts,
+stopping. Glides between drags follow a gentle arc (bowing to alternate
+sides) with a hand-like speed profile (quick start, longer slow-down); the
+drags themselves follow their routes exactly. In background mode an optional
+cursor sprite (cursor_overlay.py) shows the posted pointer, since the real
+cursor does not move. Each press is still held for a few frames before the drag starts,
 and the pointer rests briefly before release, so the game sees every step.
 Esc (held), Stop, or the game window closing stop it at once; the button is
 always released on the way out.
@@ -45,7 +49,8 @@ class Player:
                  after: list[tuple[float, float]] | None = None,
                  on_progress: Callable[[int], None] | None = None,
                  on_status: Callable[[str], None] | None = None,
-                 on_done: Callable[[str], None] | None = None):
+                 on_done: Callable[[str], None] | None = None,
+                 overlay=None):
         self.window = window
         self.geometry = geometry
         self.drags = drags
@@ -60,6 +65,8 @@ class Player:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._down = False
         self._pos: tuple[float, float] | None = None    # client px (background mode)
+        self.overlay = overlay if background else None     # cursor sprite (cursor_overlay.CursorOverlay)
+        self._arc_side = 1.0
 
     def start(self) -> None:
         self._thread.start()
@@ -86,6 +93,7 @@ class Player:
         if self.background:
             gw.post_move(self.window, x, y, self._down)
             self._pos = (x, y)
+            self._show_sprite()
         else:
             left, top, _, _ = self.window.client_rect()
             gw.move_cursor(round(left + x), round(top + y))
@@ -99,6 +107,13 @@ class Player:
         else:
             gw.mouse_up()
         self._down = down
+        if self.background:
+            self._show_sprite()
+
+    def _show_sprite(self) -> None:
+        if self.overlay is not None and self._pos is not None:
+            left, top, _, _ = self.window.client_rect()
+            self.overlay.move(left + self._pos[0], top + self._pos[1], self._down)
 
     # ------------------------------------------------------------------
     # timing
@@ -137,7 +152,33 @@ class Player:
         u = max(0.0, min(1.0, u))
         return u * u * u * (u * (u * 6 - 15) + 10)
 
-    def _glide_path(self, points: list[tuple[float, float]], min_duration: float = 0.0) -> None:
+    @classmethod
+    def _ease_reach(cls, u: float) -> float:
+        """Like a hand reaching for a target: speed peaks early (about 40% of the
+        way through the time) and the approach is slower."""
+        u = max(0.0, min(1.0, u))
+        return cls._ease(u ** 0.8)
+
+    def _approach(self, target: tuple[float, float]) -> list[tuple[float, float]]:
+        """Points of a gentle arc from the pointer to `target` (a quadratic curve
+        bowing sideways by ~12% of the distance, at most ~60 logical px, to
+        alternating sides), for glides between drags."""
+        sx, sy = self._current()
+        tx, ty = target
+        dx, dy = tx - sx, ty - sy
+        dist = math.hypot(dx, dy)
+        _, _, cw, _ = self.window.client_rect()
+        scale = cw / gw.LOGICAL_W
+        if dist < 24 * scale:
+            return [target]
+        self._arc_side = -self._arc_side
+        bend = min(0.12 * dist, 60 * scale) * self._arc_side
+        cx, cy = (sx + tx) / 2 - dy / dist * bend, (sy + ty) / 2 + dx / dist * bend
+        n = 24
+        return [((1 - u) ** 2 * sx + 2 * (1 - u) * u * cx + u * u * tx,
+                 (1 - u) ** 2 * sy + 2 * (1 - u) * u * cy + u * u * ty) for u in (i / n for i in range(1, n + 1))]
+
+    def _glide_path(self, points: list[tuple[float, float]], min_duration: float = 0.0, ease=None) -> None:
         """Move from the current position through `points` as one eased
         motion; the position along the path is a function of elapsed time.
         `min_duration` stretches it (used to arrive just as the board is ready)."""
@@ -159,7 +200,7 @@ class Player:
             u = (time.perf_counter() - t0) / duration
             if u >= 1.0:
                 break
-            s = self._ease(u) * total
+            s = (ease or self._ease)(u) * total
             while segment < len(path) - 2 and s > cumulative[segment + 1]:
                 segment += 1
             a, b = path[segment], path[segment + 1]
@@ -195,10 +236,11 @@ class Player:
         pts = [self.geometry.to_client(self.window, p) for p in drag.points]
         self._prepare_move(first)
         if self.background and self._pos is None:
-            self._move(*pts[0])
+            self._move(*self._rest_point())
         # arrive as the board becomes ready, at most 2x slower than normal
         slack = ready_at - time.perf_counter()
-        self._glide_path([pts[0]], min_duration=min(slack, 0.6 / max(0.1, self.speed)))
+        self._glide_path(self._approach(pts[0]), min_duration=min(slack, 0.6 / max(0.1, self.speed)),
+                         ease=self._ease_reach)
         self._wait_until(ready_at)
         self._hold(self.HOVER_S)
         self._button(True)
@@ -209,6 +251,13 @@ class Player:
         self._hold(self.RELEASE_S)
         self._button(False)
         return time.perf_counter() + self.settle_s / max(0.1, self.speed)
+
+    def _rest_point(self) -> tuple[float, float]:
+        """Where the background pointer starts: the real cursor's position, kept
+        inside the game's client area."""
+        left, top, cw, ch = self.window.client_rect()
+        x, y = gw.cursor_pos()
+        return min(max(x - left, 0), cw - 1), min(max(y - top, 0), ch - 1)
 
     def _click(self, point: tuple[float, float]) -> float:
         return self._drag(Drag("click", [point]), first=True)
@@ -249,4 +298,7 @@ class Player:
                 except Exception:
                     pass
             winmm.timeEndPeriod(1)
+            if self.overlay is not None:
+                time.sleep(0.4)
+                self.overlay.hide()
             self.on_done(message)

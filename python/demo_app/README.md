@@ -59,8 +59,17 @@ bar, auto-play) as soon as its window opens.
     front. Before each move it unpauses the game if it shows "GAME PAUSED"
     (fake focus + a click on the empty pause band), and it waits while your
     cursor is over the game window, since real moves there would mix in.
+    **Cursor sprite** (on by default, *show a cursor sprite* toggles it): since
+    the real cursor doesn't move, a pointer sprite follows the posted mouse
+    (yellow with a ring while the button is held) so recordings show the
+    moves. It is its own always-on-top, click-through window: your mouse and
+    the game are unaffected. Record with display or region capture; a capture
+    of the game window alone does not include it.
   - **Input: real cursor**: moves the real mouse; hands off. Alt-tabbing
     away stops it.
+  - Moves between drags follow a gentle arc (alternating sides) with a
+    hand-like speed curve: quick start, slower approach. The drags themselves
+    follow the solution's routes exactly.
   - Each press is held still for ~60 ms (a few frames) before the drag starts.
     Holding **Esc** or pressing *Stop* stops either mode at once and releases
     the button.
@@ -111,6 +120,7 @@ The running game's exe is always added.
 | `chuzzle_demo/routes.py` | solution -> drags via the mouse library (or simple drags); ranking + cache |
 | `chuzzle_demo/game_window.py` | window lookup by process, DPI-aware client coords, calibration, mouse input |
 | `chuzzle_demo/player.py` | worker thread that performs drags with the safety stops |
+| `chuzzle_demo/cursor_overlay.py` | the cursor sprite: a click-through layered window that shows the posted pointer |
 | `chuzzle_demo/saves.py` | save-location discovery, watcher, backup / restore / stash |
 | `chuzzle_demo/launcher.py` | finds every Chuzzle exe (drive scan + cache), version / build date / DRM wrapper, launching |
 | `chuzzle_demo/ui.py` | the pygame window |

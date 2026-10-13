@@ -212,5 +212,57 @@ class Launcher(unittest.TestCase):
         self.assertFalse(launcher._is_hollow(pe_with_code(b"\x55\x8b\xec" + bytes(61))))
 
 
+
+class PlayerMotion(unittest.TestCase):
+    """The glide between drags: a gentle arc to the exact press point, a hand-like speed profile."""
+
+    def _player(self):
+        from chuzzle_demo.player import Player
+
+        class Win:
+            def client_rect(self):
+                return 0, 0, 800, 600
+
+        p = Player.__new__(Player)
+        p.window = Win()
+        p.background = True
+        p._pos = (100.0, 100.0)
+        p._arc_side = 1.0
+        return p
+
+    def test_arc_ends_on_target_bows_sideways_and_alternates(self):
+        import math
+        p = self._player()
+        a = p._approach((500.0, 100.0))
+        self.assertEqual(a[-1], (500.0, 100.0))
+        bow1 = max(abs(y - 100.0) for _, y in a)
+        self.assertTrue(20 < bow1 <= 60 + 1e-9, bow1)          # ~12% of 400 px, capped at 60
+        side1 = math.copysign(1, a[len(a) // 2][1] - 100.0)
+        b = p._approach((500.0, 100.0))
+        side2 = math.copysign(1, b[len(b) // 2][1] - 100.0)
+        self.assertEqual(side1, -side2)                            # alternating sides
+        self.assertEqual(p._approach((110.0, 105.0)), [(110.0, 105.0)])   # short hops stay straight
+
+    def test_reach_easing_is_monotonic_and_front_loaded(self):
+        from chuzzle_demo.player import Player
+        vals = [Player._ease_reach(i / 100) for i in range(101)]
+        self.assertEqual(vals[0], 0.0)
+        self.assertAlmostEqual(vals[-1], 1.0)
+        self.assertTrue(all(b >= a for a, b in zip(vals, vals[1:])))
+        self.assertGreater(Player._ease_reach(0.5), Player._ease(0.5))   # ahead of the symmetric curve
+
+    def test_sprite_has_alpha_and_a_pressed_variant(self):
+        import os
+        os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+        from chuzzle_demo import cursor_overlay as co
+        up, down = co.render_sprite(False), co.render_sprite(True)
+        self.assertEqual(len(up), co.SIZE * co.SIZE * 4)
+        self.assertNotEqual(up, down)
+        alphas = up[3::4]
+        self.assertIn(0, alphas)                                   # transparent around the arrow
+        self.assertIn(255, alphas)                                 # opaque arrow
+        hx, hy = co.HOTSPOT
+        self.assertGreater(up[(hy * co.SIZE + hx) * 4 + 3], 0)      # the tip is drawn at the hotspot
+
 if __name__ == "__main__":
     unittest.main()
