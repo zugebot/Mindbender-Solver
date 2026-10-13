@@ -5,18 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Mind Bender Solver</title>
   <meta name="description" content="Paint a Chuzzle Mind Bender puzzle and get every shortest solution, solved in your browser.">
-  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#121216" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#0c0a1c">
+  <link rel="preload" href="assets/chuzzles.webp" as="image">
+  <link rel="preload" href="assets/eyes.webp" as="image">
+  <link rel="preload" href="assets/huge.webp" as="image">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="bar">
     <div class="bar-inner">
       <div class="brand">
-        <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="6.5" cy="6.5" r="4.5" fill="var(--c0)"/><circle cx="17.5" cy="6.5" r="4.5" fill="var(--c2)"/>
-          <circle cx="6.5" cy="17.5" r="4.5" fill="var(--c4)"/><circle cx="17.5" cy="17.5" r="4.5" fill="var(--c1)"/>
-        </svg>
+        <span class="logo" aria-hidden="true"></span>
         <span class="brand-name">Mind Bender <span class="brand-sub">Solver</span></span>
       </div>
       <div class="bar-right">

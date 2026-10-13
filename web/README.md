@@ -19,7 +19,7 @@ Then open http://localhost:8770/.
 
 Copy the `web/` folder's files to any static host (GitHub Pages, Netlify, Cloudflare Pages,
 or a plain web server): `index.html`, `style.css`, `app.js`, `solver-worker.js`,
-`mb_solver.js`, `puzzles.js`. No special headers are needed, because the workers share
+`mb_solver.js`, `puzzles.js` and `assets/`. No special headers are needed, because the workers share
 nothing (see below).
 
 ## Files
@@ -31,7 +31,8 @@ nothing (see below).
 | `mb_solver.js` | the solver as WebAssembly, embedded in one JS file (built, but committed so the folder is deployable) |
 | `puzzles.js` | the game's 100 boards with their known optimum or lower bound (generated) |
 | `build_wasm.ps1` | rebuilds `mb_solver.js` with Emscripten (`emcc` on PATH) |
-| `gen_puzzles.py` | regenerates `puzzles.js` from `src/chuzzles/levels*.hpp`, `build/levels_final/`, `build/README.md` |
+| `assets/` | the Chuzzle sprites, eyes, rainbow board frame and backdrop tiles (generated) |
+| `gen_sprites.py` | regenerates `assets/` from the game textures in `python/deluxe_clone/textures/`, the way `python/deluxe_clone/engine/textures.py` builds them: grey body x colour + 60 x highlight, cut by the alpha mask (yellow has its own sheet), then eyes and pupils || `gen_puzzles.py` | regenerates `puzzles.js` from `src/chuzzles/levels*.hpp`, `build/levels_final/`, `build/README.md` |
 
 The solver itself is `src/solver/web/web_solver.hpp` (plain C++, no BMI2, no threads), with
 the WebAssembly entry points in `src/programs/web/wasmSolver.cpp`.
@@ -68,3 +69,11 @@ On 2026-10-13 all 45 puzzles of 10 moves or fewer matched exactly (normal and 2x
 Measured in Chrome on the i7-10700F (with a 16-thread solver job running alongside):
 up to 8 moves under ~2 s; 4-2 (2x2, 9 moves) 1.2 s; 8-1 (10 moves) 11 s on 12 workers;
 6-5 (2x2, 10 moves, the slowest kind: the bound is off on 2x2 boards) 19 s on 16 workers.
+
+## Look
+
+The boards use the game's own art: each ball is a Chuzzle sprite with the idle sway (20 frames, the
+2x2 piece 10) and the game's stretched frame while a lane slides; eye shape and pupil colour stay with
+each Chuzzle through a replay. The board sits in the game's rainbow frame, and the page background is
+the backdrop pattern of the puzzle's world. The art is PopCap's (from the game files), so a public
+host redistributes it.

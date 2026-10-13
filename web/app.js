@@ -49,7 +49,8 @@
     mode: 'edit',           // 'edit' | 'replay'
   };
 
-  const cloneBoard = (b) => ({ cells: b.cells.slice(), fat: b.fat ? { ...b.fat } : null });
+  // ids: which chuzzle sits in each cell (replay moves them, so each keeps its eyes)
+  const cloneBoard = (b) => ({ cells: b.cells.slice(), fat: b.fat ? { ...b.fat } : null, ids: b.ids ? b.ids.slice() : undefined });
   const sameBoard = (a, b) => a.cells.every((v, i) => v === b.cells[i])
     && JSON.stringify(a.fat) === JSON.stringify(b.fat);
   const otherSide = (s) => (s === 'start' ? 'goal' : 'start');
@@ -88,11 +89,14 @@
 
   function applyMove(board, mv) {
     const out = cloneBoard(board);
+    const ids = board.ids || board.cells.map((_, i) => i);
+    out.ids = ids.slice();
     for (const lane of mv.lanes) {
       for (let i = 0; i < 6; i++) {
         const j = (i + mv.n) % 6;
-        if (mv.col) out.cells[j * 6 + lane] = board.cells[i * 6 + lane];
-        else out.cells[lane * 6 + j] = board.cells[lane * 6 + i];
+        const to = mv.col ? j * 6 + lane : lane * 6 + j, from = mv.col ? i * 6 + lane : lane * 6 + i;
+        out.cells[to] = board.cells[from];
+        out.ids[to] = ids[from];
       }
     }
     if (out.fat && mv.lanes.length === 2) {
@@ -135,7 +139,7 @@
         d.className = piece ? 'cell piece' : 'cell';
         d.dataset.r = r;
         d.dataset.c = c;
-        d.style.setProperty('--col', `var(--c${color})`);
+        setChuzzle(d, color, board.ids ? board.ids[r * 6 + c] : r * 6 + c);
         d.style.gridRow = `${r + 1} / span ${piece ? 2 : 1}`;
         d.style.gridColumn = `${c + 1} / span ${piece ? 2 : 1}`;
         d.setAttribute('role', 'gridcell');
@@ -147,8 +151,18 @@
     if (opts.anim && !reducedMotion.matches) slideLanes(el, opts.anim.mv, opts.anim.dir);
   }
 
-  // Each moved ball starts where it was and slides to its new place; a ball that
-  // wrapped round the edge slides in from outside while a copy slides out.
+  // A chuzzle's sprite: colour row, and an eye shape, pupil colour and sway phase that
+  // stay with it (like the game's random ones, but fixed per chuzzle).
+  function setChuzzle(el, color, id) {
+    el.style.setProperty('--k', color);
+    el.style.setProperty('--es', (id * 7 + 3) % 4);
+    el.style.setProperty('--ep', (id * 5 + 1) % 6);
+    el.style.setProperty('--ph', ((id * 37) % 100) / 100);
+  }
+
+  // Each moved ball starts where it was and slides to its new place (in the game's
+  // stretched frame for that direction); a ball that wrapped round the edge slides in
+  // from outside while a copy slides out.
   function slideLanes(el, mv, dir) {
     const any = el.querySelector('.cell:not(.piece)') || el.querySelector('.cell');
     if (!any) return;
@@ -174,9 +188,12 @@
       }
     }
     const tr = (k) => (mv.col ? `translateY(${k * pitch}px)` : `translateX(${k * pitch}px)`);
+    const seg = mv.col ? (d > 0 ? 0 : 3) : (d > 0 ? 2 : 1);      // down, left, right, up
     for (const [node, from] of moving) {
       node.style.transition = 'none';
       node.style.transform = tr(from);
+      node.style.setProperty('--f', (node.classList.contains('piece') ? 10 : 20) + seg);
+      node.classList.add('mv');
     }
     el.getBoundingClientRect();
     const ms = 140 + 45 * mv.n;
@@ -184,7 +201,10 @@
       node.style.transition = `transform ${ms}ms cubic-bezier(.25,.8,.25,1)`;
       node.style.transform = to ? tr(to) : '';
     }
-    setTimeout(() => el.querySelectorAll('.ghost').forEach((g) => g.remove()), ms + 30);
+    setTimeout(() => {
+      el.querySelectorAll('.ghost').forEach((g) => g.remove());
+      for (const [node] of moving) node.classList.remove('mv');
+    }, ms + 30);
   }
 
   function renderThumb(el, board) {
@@ -213,7 +233,7 @@
         s.type = 'button';
         s.className = 'swatch';
         s.setAttribute('role', 'radio');
-        s.style.setProperty('--col', `var(--c${k})`);
+        setChuzzle(s, k, k * 3 + 1);
         s.innerHTML = '<span class="n"></span>';
         s.addEventListener('click', () => selectColour(k));
         el.appendChild(s);
@@ -408,6 +428,10 @@
   function renderInfo() {
     const el = $('info');
     const p = state.preset && presetByName(state.preset);
+    if (p) {   // the game's backdrops, one per world
+      const n = (+p.name.split('-')[0] - 1) % 9 + 1;
+      document.body.style.setProperty('--backdrop', `url("assets/bkg${n}.webp")`);
+    }
     el.classList.remove('warn');
     if (!p) {
       el.textContent = state.start.fat ? 'Custom puzzle with the 2x2 piece' : 'Custom puzzle';
