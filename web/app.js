@@ -6,21 +6,53 @@
   const MAX_DEPTH = 10;
   const LIST_PAGE = 300;
   const $ = (id) => document.getElementById(id);
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+  const ICONS = {
+    help: '<circle cx="12" cy="12" r="9.5"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6.9c0 1.9-2.8 2.7-2.8 2.7"/><path d="M12 17h.01"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+    bucket: '<path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/>',
+    copy: '<rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/>',
+    swap: '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
+    piece: '<rect x="3" y="3" width="11" height="11" rx="3"/><circle cx="18.5" cy="8.5" r="2.5"/><circle cx="8.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
+    move: '<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+    left: '<path d="m15 18-6-6 6-6"/>',
+    right: '<path d="m9 18 6-6-6-6"/>',
+    first: '<path d="m17 18-6-6 6-6"/><path d="M7 6v12"/>',
+    last: '<path d="m7 18 6-6-6-6"/><path d="M17 6v12"/>',
+    play: '<path d="M8 5.5v13a1 1 0 0 0 1.5.9l10.2-6.5a1 1 0 0 0 0-1.7L9.5 4.6A1 1 0 0 0 8 5.5Z" fill="currentColor" stroke="none"/>',
+    pause: '<rect x="6.5" y="5" width="4" height="14" rx="1.2" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="4" height="14" rx="1.2" fill="currentColor" stroke="none"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    pencil: '<path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+    clipboard: '<rect x="8" y="2.5" width="8" height="4" rx="1"/><path d="M16 4.5h2a2 2 0 0 1 2 2V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h2"/>',
+    download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+  };
+  const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+  function setIcon(el, name) {
+    const old = el.querySelector(':scope > svg.i');
+    if (old) old.remove();
+    el.insertAdjacentHTML('afterbegin', icon(name));
+  }
 
   // ---------------------------------------------------------------- model
   const blank = () => ({ cells: Array(36).fill(6), fat: null });
   const state = {
     start: blank(),
     goal: blank(),
-    color: 0,
+    color: 2,
     moveTool: false,
     undo: [],
     preset: '',
+    side: 'start',          // the board being edited (the one shown on phones)
+    mode: 'edit',           // 'edit' | 'replay'
   };
 
   const cloneBoard = (b) => ({ cells: b.cells.slice(), fat: b.fat ? { ...b.fat } : null });
   const sameBoard = (a, b) => a.cells.every((v, i) => v === b.cells[i])
     && JSON.stringify(a.fat) === JSON.stringify(b.fat);
+  const otherSide = (s) => (s === 'start' ? 'goal' : 'start');
 
   function pushUndo() {
     state.undo.push({ start: cloneBoard(state.start), goal: cloneBoard(state.goal), preset: state.preset });
@@ -46,12 +78,12 @@
     for (const i of pieceCells(board.fat)) board.cells[i] = color;
   }
 
-  // ---------------------------------------------------------------- moves (for replay)
+  // ---------------------------------------------------------------- moves (replay)
   // "R14" row 1 right 4, "C32" column 3 down 2, "R453" / "C231" the 2x2 piece's two lanes.
   function parseMove(name) {
     const d = name.slice(1);
     const lanes = d.length === 2 ? [+d[0] - 1] : [+d[0] - 1, +d[1] - 1];
-    return { col: name[0] === 'C', lanes, n: +d[d.length - 1] };
+    return { col: name[0] === 'C', lanes, n: +d[d.length - 1], name };
   }
 
   function applyMove(board, mv) {
@@ -70,25 +102,30 @@
     return out;
   }
 
-  function laneCells(mv) {
-    const s = new Set();
-    for (const lane of mv.lanes) {
-      for (let i = 0; i < 6; i++) s.add(mv.col ? i * 6 + lane : lane * 6 + i);
-    }
-    return s;
-  }
-
   function describeMove(mv) {
     const what = mv.lanes.length === 2
-      ? `${mv.col ? 'columns' : 'rows'} ${mv.lanes[0] + 1} and ${mv.lanes[1] + 1} (the 2x2 piece)`
+      ? `${mv.col ? 'columns' : 'rows'} ${mv.lanes[0] + 1}+${mv.lanes[1] + 1}`
       : `${mv.col ? 'column' : 'row'} ${mv.lanes[0] + 1}`;
     return `${what} ${mv.col ? 'down' : 'right'} ${mv.n}`;
   }
 
-  // ---------------------------------------------------------------- rendering
-  function renderBoard(el, board, highlight) {
+  // ---------------------------------------------------------------- board rendering
+  // opts.band: highlight the lane(s) a move will shift. opts.anim: {mv, dir} slides
+  // the lanes that just moved into place (dir -1 = the move was undone).
+  function renderBoard(el, board, opts = {}) {
     const frag = document.createDocumentFragment();
     const f = board.fat;
+    if (opts.band) {
+      const mv = opts.band;
+      const band = document.createElement('div');
+      band.className = mv.col ? 'band col' : 'band';
+      const lo = Math.min(...mv.lanes) + 1;
+      const span = `${lo} / span ${mv.lanes.length}`;
+      band.style.gridRow = mv.col ? '1 / -1' : span;
+      band.style.gridColumn = mv.col ? span : '1 / -1';
+      band.innerHTML = `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="${mv.col ? 'M1 3h8L5 8z' : 'M3 1v8l5-4z'}"/></svg>`;
+      frag.appendChild(band);
+    }
     for (let r = 0; r < 6; r++) {
       for (let c = 0; c < 6; c++) {
         const piece = inPiece(f, r, c);
@@ -103,72 +140,144 @@
         d.style.gridColumn = `${c + 1} / span ${piece ? 2 : 1}`;
         d.setAttribute('role', 'gridcell');
         d.setAttribute('aria-label', `${piece ? '2x2 piece, ' : ''}row ${r + 1}, column ${c + 1}: ${COLORS[color]}`);
-        if (highlight) {
-          const idx = piece ? pieceCells(f) : [r * 6 + c];
-          if (idx.some((i) => highlight.has(i))) d.classList.add('lane-hl');
-        }
         frag.appendChild(d);
       }
     }
     el.replaceChildren(frag);
+    if (opts.anim && !reducedMotion.matches) slideLanes(el, opts.anim.mv, opts.anim.dir);
   }
 
-  function renderBoards() {
-    renderBoard($('startBoard'), state.start);
-    renderBoard($('goalBoard'), state.goal);
-    $('startBoard').classList.toggle('moving', state.moveTool && !!state.start.fat);
-    $('goalBoard').classList.toggle('moving', state.moveTool && !!state.goal.fat);
+  // Each moved ball starts where it was and slides to its new place; a ball that
+  // wrapped round the edge slides in from outside while a copy slides out.
+  function slideLanes(el, mv, dir) {
+    const any = el.querySelector('.cell:not(.piece)') || el.querySelector('.cell');
+    if (!any) return;
+    const gap = parseFloat(getComputedStyle(el).columnGap) || 4;
+    const pitch = (any.classList.contains('piece') ? (any.offsetWidth - gap) / 2 : any.offsetWidth) + gap;
+    const d = dir * mv.n;
+    const moving = [];
+    for (const cell of el.querySelectorAll('.cell')) {
+      const r = +cell.dataset.r, c = +cell.dataset.c;
+      const piece = cell.classList.contains('piece');
+      const lanes = mv.col ? (piece ? [c, c + 1] : [c]) : (piece ? [r, r + 1] : [r]);
+      if (!lanes.some((l) => mv.lanes.includes(l))) continue;
+      const j = mv.col ? r : c;
+      const w = piece ? 2 : 1;
+      moving.push([cell, -d, 0]);
+      const wrapped = d > 0 ? j - d < 0 : j - d + w - 1 > 5;
+      if (wrapped) {
+        const ghost = cell.cloneNode(true);
+        ghost.classList.add('ghost');
+        ghost.removeAttribute('role');
+        el.appendChild(ghost);
+        moving.push([ghost, d > 0 ? 6 - d : -6 - d, d > 0 ? 6 : -6]);
+      }
+    }
+    const tr = (k) => (mv.col ? `translateY(${k * pitch}px)` : `translateX(${k * pitch}px)`);
+    for (const [node, from] of moving) {
+      node.style.transition = 'none';
+      node.style.transform = tr(from);
+    }
+    el.getBoundingClientRect();
+    const ms = 140 + 45 * mv.n;
+    for (const [node, , to] of moving) {
+      node.style.transition = `transform ${ms}ms cubic-bezier(.25,.8,.25,1)`;
+      node.style.transform = to ? tr(to) : '';
+    }
+    setTimeout(() => el.querySelectorAll('.ghost').forEach((g) => g.remove()), ms + 30);
   }
 
-  function colourCounts(board) {
+  function renderThumb(el, board) {
+    const frag = document.createDocumentFragment();
+    for (const v of board.cells) {
+      const i = document.createElement('i');
+      i.style.setProperty('--col', `var(--c${v})`);
+      frag.appendChild(i);
+    }
+    el.replaceChildren(frag);
+  }
+
+  const colourCounts = (board) => {
     const n = Array(8).fill(0);
     for (const v of board.cells) n[v]++;
     return n;
-  }
-
-  function renderCounts() {
-    const a = colourCounts(state.start), b = colourCounts(state.goal);
-    const el = $('counts');
-    el.replaceChildren();
-    for (let k = 0; k < 8; k++) {
-      if (a[k] === 0 && b[k] === 0) continue;
-      const chip = document.createElement('span');
-      chip.className = a[k] === b[k] ? 'count' : 'count bad';
-      chip.title = `${COLORS[k]}: ${a[k]} on the start board, ${b[k]} on the goal board`;
-      const dot = document.createElement('i');
-      dot.style.setProperty('--col', `var(--c${k})`);
-      chip.append(dot, a[k] === b[k] ? `${a[k]}` : `${a[k]} / ${b[k]}`);
-      el.appendChild(chip);
-    }
-  }
+  };
 
   function renderPalette() {
+    const a = colourCounts(state.start), b = colourCounts(state.goal);
     const el = $('palette');
-    el.replaceChildren();
-    COLORS.forEach((name, k) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'swatch';
-      b.style.setProperty('--col', `var(--c${k})`);
-      b.setAttribute('aria-pressed', String(!state.moveTool && state.color === k));
-      b.setAttribute('aria-label', name);
-      b.title = `${name} (${k + 1})`;
-      const s = document.createElement('span');
-      s.textContent = k + 1;
-      b.appendChild(s);
-      b.addEventListener('click', () => selectColour(k));
-      el.appendChild(b);
+    if (!el.children.length) {
+      COLORS.forEach((name, k) => {
+        const s = document.createElement('button');
+        s.type = 'button';
+        s.className = 'swatch';
+        s.setAttribute('role', 'radio');
+        s.style.setProperty('--col', `var(--c${k})`);
+        s.innerHTML = '<span class="n"></span>';
+        s.addEventListener('click', () => selectColour(k));
+        el.appendChild(s);
+      });
+    }
+    [...el.children].forEach((s, k) => {
+      const ok = a[k] === b[k];
+      s.setAttribute('aria-checked', String(!state.moveTool && state.color === k));
+      s.setAttribute('aria-label', `${COLORS[k]}: ${a[k]} on start, ${b[k]} on goal`);
+      s.title = `${COLORS[k]} (key ${k + 1})${ok ? '' : ` - ${a[k]} on start, ${b[k]} on goal`}`;
+      const n = s.firstChild;
+      n.className = ok ? 'n' : 'n bad';
+      n.textContent = a[k] || b[k] ? (ok ? a[k] : `${a[k]}≠${b[k]}`) : '';
     });
+    const diff = [];
+    for (let k = 0; k < 8; k++) if (a[k] !== b[k]) diff.push(`${COLORS[k].toLowerCase()} ${a[k]}≠${b[k]}`);
+    $('countWarn').hidden = diff.length === 0;
+    $('countWarn').textContent = `Both boards need the same balls (start≠goal: ${diff.join(', ')})`;
+  }
+
+  function render() {
+    const replay = state.mode === 'replay' && result && result.replay;
+    for (const wrap of document.querySelectorAll('.board-wrap')) {
+      wrap.classList.toggle('active', wrap.dataset.side === state.side);
+    }
+    if (!replay) renderBoard($('startBoard'), state.start);
+    renderBoard($('goalBoard'), state.goal);
+    for (const side of ['start', 'goal']) {
+      const b = $(`${side}Board`);
+      b.classList.toggle('moving', !replay && state.moveTool && !!state[side].fat);
+      b.classList.toggle('readonly', side === 'start' && !!replay);
+    }
+    renderThumb($('thumbStart'), replay ? result.replay[result.step] : state.start);
+    renderThumb($('thumbGoal'), state.goal);
+    $('tabStart').setAttribute('aria-selected', String(state.side === 'start'));
+    $('tabGoal').setAttribute('aria-selected', String(state.side === 'goal'));
+    $('tabStartLabel').textContent = replay ? 'Replay' : 'Start';
+    $('startCap').textContent = replay ? 'Replay' : 'Start';
+    $('editDock').hidden = !!replay;
+    $('solSwitch').hidden = !replay;
+    $('info').hidden = !!replay;
+    $('replayDock').hidden = !replay;
     const hasFat = !!state.start.fat;
+    $('fatBtn').setAttribute('aria-pressed', String(hasFat));
+    $('fatBtn').title = hasFat ? 'Remove the 2x2 piece' : 'Add the 2x2 piece';
     $('moveTool').hidden = !hasFat;
     $('moveTool').setAttribute('aria-pressed', String(state.moveTool && hasFat));
+    const other = otherSide(state.side);
+    $('copyBtn').title = `Copy the ${other} board onto the ${state.side} board`;
+    $('copyBtn').setAttribute('aria-label', $('copyBtn').title);
+    $('fillBtn').title = `Fill the ${state.side} board with ${COLORS[state.color].toLowerCase()}`;
+    $('undoBtn').disabled = state.undo.length === 0;
+    renderPalette();
+    if (replay) showStep(result.step);
   }
 
   function selectColour(k) {
     state.color = k;
     state.moveTool = false;
-    renderPalette();
-    renderBoards();
+    render();
+  }
+
+  function setSide(side) {
+    state.side = side;
+    render();
   }
 
   // ---------------------------------------------------------------- editing
@@ -179,6 +288,7 @@
       const cell = t && t.closest('.cell');
       return cell && el.contains(cell) ? cell : null;
     };
+    const editable = () => !(which === 'start' && state.mode === 'replay');
     const apply = (cell) => {
       const r = +cell.dataset.r, c = +cell.dataset.c;
       const b = state[which];
@@ -188,12 +298,16 @@
       if (JSON.stringify(b) !== before) renderBoard(el, b);
     };
     el.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || !editable()) return;
       const cell = cellAt(e);
       if (!cell) return;
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
       pushUndo();
+      if (state.side !== which) {
+        state.side = which;
+        for (const wrap of document.querySelectorAll('.board-wrap')) wrap.classList.toggle('active', wrap.dataset.side === which);
+      }
       painting = true;
       apply(cell);
     });
@@ -213,7 +327,8 @@
       const cell = cellAt(e);
       if (!cell) return;
       e.preventDefault();
-      selectColour(state[which].cells[+cell.dataset.r * 6 + +cell.dataset.c]);
+      const b = which === 'start' && state.mode === 'replay' ? result.replay[result.step] : state[which];
+      selectColour(b.cells[+cell.dataset.r * 6 + +cell.dataset.c]);
     });
   }
 
@@ -225,24 +340,32 @@
       }
     }
     $('preset').value = state.preset;
-    $('fatToggle').checked = !!state.start.fat;
-    renderBoards();
-    renderPalette();
-    renderCounts();
-    renderPresetNote();
+    render();
+    renderInfo();
     writeHash();
     markStale();
-    if (!run) showMessage('');
+    if (!run) showError('');
   }
 
-  function setFat(on) {
+  function toggleFat() {
     pushUndo();
+    const on = !state.start.fat;
     for (const b of [state.start, state.goal]) {
-      if (on && !b.fat) placePiece(b, 2, 2);
-      if (!on) b.fat = null;
+      if (on) placePiece(b, 2, 2);
+      else b.fat = null;
     }
-    if (!on) state.moveTool = false;
+    state.moveTool = on;
     changed();
+  }
+
+  function undo() {
+    const s = state.undo.pop();
+    if (!s) return;
+    state.start = s.start;
+    state.goal = s.goal;
+    state.preset = s.preset;
+    leaveReplay();
+    changed({ keepPreset: true });
   }
 
   // ---------------------------------------------------------------- presets and links
@@ -264,11 +387,8 @@
         group.label = `World ${w}`;
         sel.appendChild(group);
       }
-      const o = document.createElement('option');
-      o.value = p.name;
       const len = p.moves ? `${p.moves} moves` : `${p.atLeast}+ moves`;
-      o.textContent = `${p.name}  ·  ${len}${p.fat ? '  ·  2x2' : ''}`;
-      group.appendChild(o);
+      group.appendChild(new Option(`Puzzle ${p.name} · ${len}${p.fat ? ' · 2x2' : ''}`, p.name));
     }
   }
 
@@ -280,22 +400,23 @@
     state.goal = presetBoard(p, 'goal');
     state.preset = name;
     state.moveTool = false;
+    leaveReplay();
     changed({ keepPreset: true });
   }
 
-  function renderPresetNote() {
-    const el = $('presetNote');
+  function renderInfo() {
+    const el = $('info');
     const p = state.preset && presetByName(state.preset);
-    el.hidden = !p;
     el.classList.remove('warn');
-    if (!p) return;
-    if (p.moves && p.moves <= MAX_DEPTH) {
-      el.textContent = `Puzzle ${p.name}: the shortest solution is ${p.moves} moves (${p.solutions.toLocaleString()} of them).`;
+    if (!p) {
+      el.textContent = state.start.fat ? 'Custom puzzle with the 2x2 piece' : 'Custom puzzle';
+    } else if (p.moves && p.moves <= MAX_DEPTH) {
+      el.innerHTML = `Puzzle <b>${p.name}</b> · shortest is ${p.moves} moves · ${p.solutions.toLocaleString()} solutions`;
     } else if (p.moves) {
-      el.textContent = `Puzzle ${p.name} needs ${p.moves} moves, more than this page searches (${MAX_DEPTH}). The desktop solver found its ${p.solutions.toLocaleString()} solutions.`;
+      el.innerHTML = `Puzzle <b>${p.name}</b> needs ${p.moves} moves, beyond this page's ${MAX_DEPTH}`;
       el.classList.add('warn');
     } else {
-      el.textContent = `Puzzle ${p.name} is not solved yet: it needs at least ${p.atLeast} moves, far beyond what a browser can search.`;
+      el.innerHTML = `Puzzle <b>${p.name}</b> is unsolved: it needs at least ${p.atLeast} moves`;
       el.classList.add('warn');
     }
   }
@@ -307,7 +428,7 @@
       const a = state.start.fat, b = state.goal.fat;
       h += `&f=${a.x}${a.y}${b.x}${b.y}`;
     }
-    if (state.preset) h = `p=${state.preset}&` + h;
+    if (state.preset) h = `p=${state.preset}&${h}`;
     history.replaceState(null, '', `#${h}`);
   }
 
@@ -325,8 +446,8 @@
       state.preset = q.get('p') || '';
       return true;
     }
-    if (q.get('p') && presetByName(q.get('p'))) {
-      const p = presetByName(q.get('p'));
+    const p = presetByName(q.get('p'));
+    if (p) {
       state.start = presetBoard(p, 'start');
       state.goal = presetBoard(p, 'goal');
       state.preset = p.name;
@@ -408,36 +529,31 @@
   let run = null;
   let result = null;
 
-  function setStatus(text, fraction) {
-    $('statusText').textContent = text;
-    const fill = $('progressFill');
-    if (fraction == null) {
-      fill.classList.add('indet');
-      fill.style.width = '';
-    } else {
-      fill.classList.remove('indet');
-      fill.style.width = `${Math.round(fraction * 1000) / 10}%`;
-    }
-  }
-
   const fmtTime = (s) => (s < 10 ? `${s.toFixed(1)} s` : s < 90 ? `${Math.round(s)} s`
     : `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, '0')} s`);
 
-  function showMessage(text, isError) {
-    const el = $('message');
-    el.hidden = !text;
-    el.textContent = text || '';
-    el.classList.toggle('error', !!isError);
+  function setProgress(label, fraction) {
+    $('solveLabel').textContent = label;
+    const fill = $('solveFill');
+    fill.classList.toggle('indet', fraction == null);
+    fill.style.width = fraction == null ? '' : `${Math.round(fraction * 1000) / 10}%`;
+  }
+
+  function showError(text) {
+    const el = $('status');
+    if (text) {
+      el.textContent = text;
+      el.classList.add('error');
+    } else if (el.classList.contains('error')) {
+      el.textContent = '';
+      el.classList.remove('error');
+    }
   }
 
   function problemSpec() {
     const a = colourCounts(state.start), b = colourCounts(state.goal);
-    const diff = [];
-    for (let k = 0; k < 8; k++) {
-      if (a[k] !== b[k]) diff.push(`${COLORS[k].toLowerCase()} ${a[k]} vs ${b[k]}`);
-    }
-    if (diff.length) {
-      return { error: `The boards must have the same colours. Start vs goal: ${diff.join(', ')}.` };
+    if (a.some((v, k) => v !== b[k])) {
+      return { error: 'The start and goal boards need the same balls; the red badges show the difference.' };
     }
     const fat = state.start.fat
       ? { start: [state.start.fat.x, state.start.fat.y], goal: [state.goal.fat.x, state.goal.fat.y] } : null;
@@ -448,27 +564,29 @@
     if (run) return;
     const { spec, error } = problemSpec();
     if (error) {
-      showMessage(error, true);
+      showError(error);
       return;
     }
-    showMessage('');
+    showError('');
     const maxDepth = +$('maxDepth').value;
     const threads = +$('threads').value || hardwareThreads;
     run = { workers: [], cancelled: false, t0: performance.now(), boards: { start: cloneBoard(state.start), goal: cloneBoard(state.goal) } };
     const thisRun = run;
-    $('solveBtn').hidden = true;
+    $('solveBtn').classList.add('running');
+    $('solveBtn').disabled = true;
     $('cancelBtn').hidden = false;
-    $('progress').hidden = false;
+    let detail = '';
     const tick = setInterval(() => {
-      $('statusTime').textContent = fmtTime((performance.now() - thisRun.t0) / 1000);
-    }, 100);
+      $('status').textContent = `${fmtTime((performance.now() - thisRun.t0) / 1000)}${detail}`;
+    }, 200);
     try {
       await workerUrlReady;
       const w0 = warm || new SolverWorker();
       warm = null;
       run.workers.push(w0);
+      setProgress('Starting...', null);
       await w0.call('setup', spec);
-      setStatus(`Checking 0 to ${Math.min(6, maxDepth)} moves...`, null);
+      setProgress(`Up to ${Math.min(6, maxDepth)} moves...`, null);
       const small = await w0.call('small', { maxDepth });
       if (small.depth >= 0) {
         finish(thisRun, { depth: small.depth, count: small.count, text: small.text, threads: 1, maxDepth });
@@ -478,12 +596,12 @@
         finish(thisRun, { depth: -1, threads: 1, maxDepth });
         return;
       }
-      setStatus('Building the table of boards 4 moves from the goal...', null);
+      setProgress('Building tables...', null);
       const g = await w0.call('goal4');
       const perWorker = g.memory * 1.5 + 32e6;
       const n = Math.max(1, Math.min(threads, Math.floor(memoryBudget() / perWorker)));
+      detail = ` · ${n} thread${n > 1 ? 's' : ''}`;
       for (let i = 1; i < n; i++) run.workers.push(new SolverWorker());
-      setStatus(`Building tables on ${n} thread${n > 1 ? 's' : ''}...`, null);
       await Promise.all(run.workers.slice(1).map((w) => w.call('setup', spec).then(() => w.call('goal4'))));
       await Promise.all(run.workers.map((w, i) => w.call('start4', { part: i, parts: n })));
       for (let d = 7; d <= maxDepth; d++) {
@@ -494,10 +612,10 @@
           const total = prog.reduce((s, p) => s + p.total, 0);
           const f = total ? done / total : 0;
           const el = (performance.now() - tStart) / 1000;
-          const eta = f > 0.03 && el > 1.5 ? ` · about ${fmtTime(el * (1 - f) / f)} left` : '';
-          setStatus(`Checking ${d} moves... ${Math.floor(f * 100)}%${eta}`, f);
+          detail = ` · ${n} thread${n > 1 ? 's' : ''}${f > 0.03 && el > 1.5 ? ` · about ${fmtTime(el * (1 - f) / f)} left` : ''}`;
+          setProgress(`${d} moves · ${Math.floor(f * 100)}%`, f);
         };
-        setStatus(`Checking ${d} moves...`, 0);
+        setProgress(`${d} moves...`, 0);
         const res = await Promise.all(run.workers.map((w, i) =>
           w.call('depth', { depth: d }, (p) => { prog[i] = p; update(); })));
         const count = res.reduce((s, r) => s + r.count, 0);
@@ -509,19 +627,19 @@
       finish(thisRun, { depth: -1, threads: n, maxDepth });
     } catch (err) {
       if (!thisRun.cancelled) {
-        let msg = `The solver failed: ${err.message}`;
-        if (location.protocol === 'file:') {
-          msg = 'Browsers block workers on file:// pages. Serve this folder instead, e.g. "python -m http.server" in web/, then open http://localhost:8000/.';
-        }
-        showMessage(msg, true);
+        showError(location.protocol === 'file:'
+          ? 'Browsers block workers on file:// pages. Serve the folder instead (python -m http.server in web/).'
+          : `The solver failed: ${err.message}`);
       }
     } finally {
       clearInterval(tick);
       for (const w of thisRun.workers) w.terminate();
       if (run === thisRun) run = null;
-      $('solveBtn').hidden = false;
+      $('solveBtn').classList.remove('running');
+      $('solveBtn').disabled = false;
       $('cancelBtn').hidden = true;
-      $('progress').hidden = true;
+      setProgress('Solve', 0);
+      if (!$('status').classList.contains('error')) $('status').textContent = thisRun.summary || '';
       warmUp();
     }
   }
@@ -529,8 +647,8 @@
   function cancel() {
     if (!run) return;
     run.cancelled = true;
+    run.summary = 'Cancelled';
     for (const w of run.workers) w.terminate();
-    showMessage('Cancelled.');
   }
 
   // ---------------------------------------------------------------- results
@@ -539,37 +657,40 @@
     const secs = (performance.now() - r.t0) / 1000;
     const lines = res.text ? res.text.split('\n').filter(Boolean).sort() : [];
     result = { ...res, lines, secs, boards: r.boards, shown: 0, selected: -1, step: 0, playing: null };
-    $('results').hidden = false;
     const threads = `${res.threads} thread${res.threads > 1 ? 's' : ''}`;
+    r.summary = `Solved in ${fmtTime(secs)} on ${threads}`;
+    $('results').hidden = false;
+    $('intro').hidden = true;
     if (res.depth < 0) {
-      $('resultTitle').textContent = `No solution in ${res.maxDepth} moves or fewer`;
-      $('resultSub').textContent = `Every move sequence up to ${res.maxDepth} moves was checked (${fmtTime(secs)}, ${threads}).`;
+      $('resultTitle').textContent = `No solution in ${res.maxDepth} moves`;
+      $('resultSub').textContent = `Every sequence of up to ${res.maxDepth} moves was checked.`;
     } else if (res.depth === 0) {
       $('resultTitle').textContent = 'Already solved';
       $('resultSub').textContent = 'The start board is the goal board.';
     } else {
       const n = res.count;
       $('resultTitle').textContent = `${res.depth} move${res.depth > 1 ? 's' : ''}`;
-      let sub = `${n.toLocaleString()} shortest solution${n > 1 ? 's' : ''}, none shorter · ${fmtTime(secs)} on ${threads}`;
-      if (lines.length < n) sub += ` · ${lines.length.toLocaleString()} listed`;
-      $('resultSub').textContent = sub;
+      $('resultSub').textContent = `${n.toLocaleString()} shortest solution${n > 1 ? 's' : ''} · none shorter`
+        + (lines.length < n ? ` · ${lines.length.toLocaleString()} listed` : '') + ` · ${fmtTime(secs)}`;
     }
-    $('copyBtn').hidden = $('downloadBtn').hidden = lines.length === 0;
+    $('copyAllBtn').hidden = $('downloadBtn').hidden = lines.length === 0;
     $('solutionList').replaceChildren();
-    document.querySelector('.results-body').hidden = lines.length === 0;
     showMore();
-    if (lines.length) selectSolution(0);
-    $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    markStale();
+    if (lines.length) {
+      selectSolution(0);
+      if (innerWidth < 1024) document.querySelector('.stage').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      leaveReplay();
+      render();
+    }
   }
 
   function markStale() {
-    if (!result || $('results').hidden) return;
+    if (!result) return;
     const same = sameBoard(result.boards.start, state.start) && sameBoard(result.boards.goal, state.goal);
-    $('results').classList.toggle('stale', !same);
-    const note = ' · the boards have changed since';
-    const sub = $('resultSub');
-    if (!same && !sub.textContent.endsWith(note)) sub.textContent += note;
-    if (same && sub.textContent.endsWith(note)) sub.textContent = sub.textContent.slice(0, -note.length);
+    $('results').classList.toggle('is-stale', !same);
+    $('staleNote').hidden = same;
   }
 
   function showMore() {
@@ -578,69 +699,103 @@
     const frag = document.createDocumentFragment();
     for (let i = result.shown; i < end; i++) {
       const li = document.createElement('li');
-      li.textContent = result.lines[i];
       li.dataset.i = i;
       li.setAttribute('aria-selected', 'false');
+      li.innerHTML = `<span class="k">${i + 1}</span><span></span>`;
+      li.lastChild.textContent = result.lines[i];
       frag.appendChild(li);
     }
     list.appendChild(frag);
     result.shown = end;
     const left = result.lines.length - end;
     $('moreBtn').hidden = left <= 0;
-    $('moreBtn').textContent = `Show more (${left.toLocaleString()} left)`;
+    $('moreBtn').textContent = `Show ${Math.min(left, LIST_PAGE).toLocaleString()} more (${left.toLocaleString()} left)`;
   }
 
   function selectSolution(i) {
+    if (!result || !result.lines.length) return;
+    i = (i + result.lines.length) % result.lines.length;
+    while (i >= result.shown) showMore();
     stopPlay();
     const prev = $('solutionList').querySelector('[aria-selected="true"]');
     if (prev) prev.setAttribute('aria-selected', 'false');
     const li = $('solutionList').querySelector(`[data-i="${i}"]`);
-    if (li) li.setAttribute('aria-selected', 'true');
+    if (li) {
+      li.setAttribute('aria-selected', 'true');
+      // keep it visible when the list scrolls by itself (side panel), without moving the page
+      const list = $('solutionList');
+      if (list.scrollHeight > list.clientHeight + 1) {
+        const top = li.offsetTop, bottom = top + li.offsetHeight;
+        if (top < list.scrollTop) list.scrollTop = top - 4;
+        else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight + 4;
+      }
+    }
     const moves = result.lines[i].split(' ').map(parseMove);
     const boards = [cloneBoard(result.boards.start)];
     for (const mv of moves) boards.push(applyMove(boards[boards.length - 1], mv));
     result.selected = i;
     result.moves = moves;
-    result.names = result.lines[i].split(' ');
     result.replay = boards;
+    result.step = 0;
     const chips = $('replayChips');
     chips.replaceChildren();
-    result.names.forEach((name, k) => {
+    moves.forEach((mv, k) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'chip';
-      b.textContent = name;
-      b.title = describeMove(moves[k]);
+      b.textContent = mv.name;
+      b.title = describeMove(mv);
       b.addEventListener('click', () => showStep(k));
       chips.appendChild(b);
     });
-    showStep(0);
+    $('solLabel').textContent = `Solution ${(i + 1).toLocaleString()} of ${result.lines.length.toLocaleString()}`;
+    $('prevSol').disabled = $('nextSol').disabled = result.lines.length < 2;
+    state.mode = 'replay';
+    state.side = 'start';
+    state.moveTool = false;
+    render();
   }
 
-  function showStep(k) {
+  function leaveReplay() {
+    stopPlay();
+    state.mode = 'edit';
+  }
+
+  function showStep(k, animate = false) {
     if (!result || !result.replay) return;
     const n = result.moves.length;
     k = Math.max(0, Math.min(n, k));
+    const from = result.step;
     result.step = k;
+    let anim = null;
+    if (animate && k === from + 1) anim = { mv: result.moves[from], dir: 1 };
+    if (animate && k === from - 1) anim = { mv: result.moves[k], dir: -1 };
     const next = k < n ? result.moves[k] : null;
-    renderBoard($('replayBoard'), result.replay[k], next ? laneCells(next) : null);
-    $('replayBoard').classList.add('readonly');
-    $('stepText').textContent = next
-      ? `Move ${k + 1} of ${n}: ${describeMove(next)}`
-      : 'Solved!';
+    renderBoard($('startBoard'), result.replay[k], { band: next, anim });
+    renderThumb($('thumbStart'), result.replay[k]);
+    $('stepText').innerHTML = next
+      ? `Move ${k + 1} of ${n}: <b>${describeMove(next)}</b>`
+      : `<b>Solved</b> in ${n} move${n > 1 ? 's' : ''}`;
     [...$('replayChips').children].forEach((c, i) => {
       c.classList.toggle('done', i < k);
       c.classList.toggle('now', i === k);
     });
+    const now = $('replayChips').children[Math.min(k, n - 1)];
+    const strip = $('replayChips');
+    if (now && strip.scrollWidth > strip.clientWidth) {
+      strip.scrollTo({ left: now.offsetLeft - strip.clientWidth / 2 + now.offsetWidth / 2, behavior: 'smooth' });
+    }
+    $('firstBtn').disabled = $('prevBtn').disabled = k === 0;
+    $('nextBtn').disabled = $('lastBtn').disabled = k === n;
   }
 
   function stopPlay() {
     if (result && result.playing) {
       clearInterval(result.playing);
       result.playing = null;
-      $('playBtn').innerHTML = '&#x25B6;';
-      $('playBtn').setAttribute('aria-label', 'Play');
     }
+    setIcon($('playBtn'), 'play');
+    $('playBtn').setAttribute('aria-label', 'Play');
   }
 
   function togglePlay() {
@@ -650,15 +805,15 @@
       return;
     }
     if (result.step >= result.moves.length) showStep(0);
-    $('playBtn').innerHTML = '&#x23F8;';
+    setIcon($('playBtn'), 'pause');
     $('playBtn').setAttribute('aria-label', 'Pause');
     result.playing = setInterval(() => {
       if (result.step >= result.moves.length) {
         stopPlay();
         return;
       }
-      showStep(result.step + 1);
-    }, 750);
+      showStep(result.step + 1, true);
+    }, 900);
   }
 
   function download(name, text) {
@@ -669,19 +824,21 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
+  function flash(btn, iconName = 'check') {
+    setIcon(btn, iconName);
+    setTimeout(() => setIcon(btn, btn.dataset.icon), 1300);
+  }
+
   // ---------------------------------------------------------------- wiring
   function init() {
+    document.querySelectorAll('[data-icon]').forEach((el) => setIcon(el, el.dataset.icon));
     fillPresets();
-    for (let d = 1; d <= MAX_DEPTH; d++) {
-      const o = new Option(`${d} move${d > 1 ? 's' : ''}`, d);
-      $('maxDepth').appendChild(o);
-    }
+    for (let d = 1; d <= MAX_DEPTH; d++) $('maxDepth').appendChild(new Option(`≤ ${d} move${d > 1 ? 's' : ''}`, d));
     $('maxDepth').value = MAX_DEPTH;
     $('threads').appendChild(new Option(`Auto (${hardwareThreads})`, 0));
     for (const t of [1, 2, 4, 8, 12, 16, 24, 32]) {
       if (t < hardwareThreads) $('threads').appendChild(new Option(String(t), t));
     }
-    $('engineNote').textContent = `Runs on up to ${hardwareThreads} threads with WebAssembly. Up to 8 moves takes about a second; 9 and 10 moves take seconds to a few minutes, depending on the puzzle and the device.`;
 
     attachEditor($('startBoard'), 'start');
     attachEditor($('goalBoard'), 'goal');
@@ -689,14 +846,26 @@
     $('preset').addEventListener('change', (e) => {
       if (e.target.value) loadPreset(e.target.value);
       else { state.preset = ''; changed(); }
+      e.target.blur();
     });
-    $('fatToggle').addEventListener('change', (e) => setFat(e.target.checked));
+    $('tabStart').addEventListener('click', () => setSide('start'));
+    $('tabGoal').addEventListener('click', () => setSide('goal'));
+    $('fatBtn').addEventListener('click', toggleFat);
     $('moveTool').addEventListener('click', () => {
       state.moveTool = !state.moveTool;
-      renderPalette();
-      renderBoards();
+      render();
     });
     $('undoBtn').addEventListener('click', undo);
+    $('fillBtn').addEventListener('click', () => {
+      pushUndo();
+      state[state.side].cells.fill(state.color);
+      changed();
+    });
+    $('copyBtn').addEventListener('click', () => {
+      pushUndo();
+      state[state.side] = cloneBoard(state[otherSide(state.side)]);
+      changed();
+    });
     $('swapBtn').addEventListener('click', () => {
       pushUndo();
       [state.start, state.goal] = [state.goal, state.start];
@@ -706,60 +875,67 @@
       writeHash();
       try {
         await navigator.clipboard.writeText(location.href);
-        flash($('shareBtn'), 'Link copied');
+        flash($('shareBtn'));
       } catch {
         prompt('Copy this link:', location.href);
       }
     });
-    document.querySelectorAll('.mini-actions .link').forEach((b) => b.addEventListener('click', () => {
-      const which = b.dataset.board, other = which === 'start' ? 'goal' : 'start';
-      pushUndo();
-      if (b.dataset.act === 'fill') {
-        state[which].cells.fill(state.color);
-      } else {
-        state[which] = cloneBoard(state[other]);
-      }
-      changed();
-    }));
+    $('helpBtn').addEventListener('click', () => $('helpDialog').showModal());
+    $('helpDialog').addEventListener('click', (e) => { if (e.target === $('helpDialog')) $('helpDialog').close(); });
 
     $('solveBtn').addEventListener('click', solve);
     $('cancelBtn').addEventListener('click', cancel);
     $('moreBtn').addEventListener('click', showMore);
     $('solutionList').addEventListener('click', (e) => {
       const li = e.target.closest('li');
-      if (li) selectSolution(+li.dataset.i);
+      if (!li) return;
+      selectSolution(+li.dataset.i);
+      if (innerWidth < 1024) document.querySelector('.stage').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+    $('editBtn').addEventListener('click', () => { leaveReplay(); render(); });
+    $('prevSol').addEventListener('click', () => selectSolution(result.selected - 1));
+    $('nextSol').addEventListener('click', () => selectSolution(result.selected + 1));
     $('firstBtn').addEventListener('click', () => { stopPlay(); showStep(0); });
-    $('prevBtn').addEventListener('click', () => { stopPlay(); showStep(result.step - 1); });
-    $('nextBtn').addEventListener('click', () => { stopPlay(); showStep(result.step + 1); });
+    $('prevBtn').addEventListener('click', () => { stopPlay(); showStep(result.step - 1, true); });
+    $('nextBtn').addEventListener('click', () => { stopPlay(); showStep(result.step + 1, true); });
     $('lastBtn').addEventListener('click', () => { stopPlay(); showStep(Infinity); });
     $('playBtn').addEventListener('click', togglePlay);
-    $('copyBtn').addEventListener('click', async () => {
+    $('copyAllBtn').addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(result.lines.join('\n') + '\n');
-        flash($('copyBtn'), 'Copied');
+        flash($('copyAllBtn'));
       } catch { /* clipboard blocked */ }
     });
     $('downloadBtn').addEventListener('click', () => {
-      const name = (state.preset || 'puzzle') + `_${result.depth}moves_${result.count}.txt`;
-      download(name, result.lines.join('\n') + '\n');
+      download(`${state.preset || 'puzzle'}_${result.depth}moves_${result.count}.txt`, result.lines.join('\n') + '\n');
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.target.closest('select, input, textarea')) return;
+      if (e.target.closest('select, input, textarea, dialog')) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undo();
-      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && /^[1-8]$/.test(e.key)) {
-        selectColour(+e.key - 1);
-      } else if (e.key.toLowerCase() === 'm' && state.start.fat) {
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (state.mode === 'replay' && result && result.replay) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          stopPlay();
+          showStep(result.step + (e.key === 'ArrowRight' ? 1 : -1), true);
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          togglePlay();
+        } else if (e.key === 'Escape') {
+          leaveReplay();
+          render();
+        }
+        return;
+      }
+      if (/^[1-8]$/.test(e.key)) selectColour(+e.key - 1);
+      else if (e.key.toLowerCase() === 'm' && state.start.fat) {
         state.moveTool = !state.moveTool;
-        renderPalette();
-        renderBoards();
-      } else if (result && result.replay && !$('results').hidden && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
-        e.preventDefault();
-        stopPlay();
-        showStep(result.step + (e.key === 'ArrowRight' ? 1 : -1));
+        render();
       }
     });
 
@@ -773,21 +949,6 @@
     }
     changed({ keepPreset: true });
     warmUp();
-  }
-
-  function undo() {
-    const s = state.undo.pop();
-    if (!s) return;
-    state.start = s.start;
-    state.goal = s.goal;
-    state.preset = s.preset;
-    changed({ keepPreset: true });
-  }
-
-  function flash(btn, text) {
-    const old = btn.textContent;
-    btn.textContent = text;
-    setTimeout(() => { btn.textContent = old; }, 1400);
   }
 
   init();

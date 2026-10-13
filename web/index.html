@@ -2,131 +2,166 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Mind Bender Solver</title>
-  <meta name="description" content="Paint a Chuzzle Mind Bender puzzle and find every shortest solution, right in your browser.">
+  <meta name="description" content="Paint a Chuzzle Mind Bender puzzle and get every shortest solution, solved in your browser.">
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121216" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="top">
-    <div class="wrap">
-      <h1>Mind Bender Solver</h1>
-      <p class="lede">Paint the start and goal boards, then solve. It finds <strong>every shortest
-        solution</strong> of up to 10 moves and proves there is nothing shorter. It all runs in your
-        browser; nothing is uploaded.</p>
+  <header class="bar">
+    <div class="bar-inner">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="6.5" cy="6.5" r="4.5" fill="var(--c0)"/><circle cx="17.5" cy="6.5" r="4.5" fill="var(--c2)"/>
+          <circle cx="6.5" cy="17.5" r="4.5" fill="var(--c4)"/><circle cx="17.5" cy="17.5" r="4.5" fill="var(--c1)"/>
+        </svg>
+        <span class="brand-name">Mind Bender <span class="brand-sub">Solver</span></span>
+      </div>
+      <div class="bar-right">
+        <label class="pick">
+          <span class="sr-only">Game puzzle</span>
+          <select id="preset"><option value="">Custom puzzle</option></select>
+        </label>
+        <button type="button" class="icon-btn" id="helpBtn" data-icon="help" aria-label="Help and settings"></button>
+      </div>
     </div>
   </header>
 
-  <main class="wrap">
-    <section class="toolbar" aria-label="Puzzle">
-      <label class="field">
-        <span>Game puzzle</span>
-        <select id="preset">
-          <option value="">Custom board</option>
-        </select>
-      </label>
-      <label class="toggle">
-        <input type="checkbox" id="fatToggle">
-        <span>2x2 piece</span>
-      </label>
-      <div class="spacer"></div>
-      <button type="button" class="btn ghost" id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
-      <button type="button" class="btn ghost" id="swapBtn" title="Swap the start and goal boards">Swap boards</button>
-      <button type="button" class="btn ghost" id="shareBtn" title="Copy a link to this puzzle">Copy link</button>
-    </section>
-    <p class="note" id="presetNote" hidden></p>
-
-    <section class="boards">
-      <div class="card board-card">
-        <div class="card-head">
-          <h2>Start</h2>
-          <div class="mini-actions">
-            <button type="button" class="link" data-act="fill" data-board="start">Fill</button>
-            <button type="button" class="link" data-act="copy" data-board="start">Copy goal</button>
-          </div>
+  <main class="layout">
+    <section class="stage" aria-label="Boards">
+      <p class="info" id="info"></p>
+      <div class="sol-switch" id="solSwitch" hidden>
+        <button type="button" class="text-btn" id="editBtn"><span data-icon="pencil"></span>Edit</button>
+        <div class="sol-nav">
+          <button type="button" class="icon-btn" id="prevSol" data-icon="left" aria-label="Previous solution"></button>
+          <span id="solLabel"></span>
+          <button type="button" class="icon-btn" id="nextSol" data-icon="right" aria-label="Next solution"></button>
         </div>
-        <div class="board" id="startBoard" role="grid" aria-label="Start board"></div>
       </div>
-      <div class="arrow" aria-hidden="true">&rarr;</div>
-      <div class="card board-card">
-        <div class="card-head">
-          <h2>Goal</h2>
-          <div class="mini-actions">
-            <button type="button" class="link" data-act="fill" data-board="goal">Fill</button>
-            <button type="button" class="link" data-act="copy" data-board="goal">Copy start</button>
-          </div>
+
+      <div class="seg" role="tablist" aria-label="Board">
+        <button type="button" role="tab" class="seg-btn" data-side="start" id="tabStart">
+          <span class="thumb" id="thumbStart" aria-hidden="true"></span><span id="tabStartLabel">Start</span>
+        </button>
+        <button type="button" role="tab" class="seg-btn" data-side="goal" id="tabGoal">
+          <span class="thumb" id="thumbGoal" aria-hidden="true"></span><span>Goal</span>
+        </button>
+      </div>
+
+      <div class="boards">
+        <figure class="board-wrap" data-side="start">
+          <figcaption><span class="cap" id="startCap">Start</span></figcaption>
+          <div class="board" id="startBoard" role="grid" aria-label="Start board"></div>
+        </figure>
+        <div class="to" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></div>
+        <figure class="board-wrap" data-side="goal">
+          <figcaption><span class="cap">Goal</span></figcaption>
+          <div class="board" id="goalBoard" role="grid" aria-label="Goal board"></div>
+        </figure>
+      </div>
+
+      <div class="dock" id="editDock">
+        <div class="palette" id="palette" role="radiogroup" aria-label="Paint colour"></div>
+        <div class="tools" role="toolbar" aria-label="Board tools">
+          <button type="button" class="tool" id="undoBtn" data-icon="undo" aria-label="Undo" title="Undo (Ctrl+Z)"></button>
+          <button type="button" class="tool" id="fillBtn" data-icon="bucket" aria-label="Fill board" title="Fill the board with the colour"></button>
+          <button type="button" class="tool" id="copyBtn" data-icon="copy" aria-label="Copy the other board" title="Copy the other board onto this one"></button>
+          <button type="button" class="tool" id="swapBtn" data-icon="swap" aria-label="Swap boards" title="Swap the start and goal boards"></button>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <button type="button" class="tool" id="fatBtn" data-icon="piece" aria-pressed="false" title="Add the 2x2 piece"><span class="tool-text">2x2</span></button>
+          <button type="button" class="tool" id="moveTool" data-icon="move" aria-pressed="false" title="Move the 2x2 piece (M)" hidden><span class="tool-text">Move</span></button>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <button type="button" class="tool" id="shareBtn" data-icon="link" aria-label="Copy a link to this puzzle" title="Copy a link to this puzzle"></button>
         </div>
-        <div class="board" id="goalBoard" role="grid" aria-label="Goal board"></div>
+        <p class="warn" id="countWarn" hidden></p>
+      </div>
+
+      <div class="dock" id="replayDock" hidden>
+        <div class="player">
+          <button type="button" class="icon-btn" id="firstBtn" data-icon="first" aria-label="Back to the start"></button>
+          <button type="button" class="icon-btn" id="prevBtn" data-icon="left" aria-label="Previous move"></button>
+          <button type="button" class="play" id="playBtn" data-icon="play" aria-label="Play"></button>
+          <button type="button" class="icon-btn" id="nextBtn" data-icon="right" aria-label="Next move"></button>
+          <button type="button" class="icon-btn" id="lastBtn" data-icon="last" aria-label="Jump to the end"></button>
+        </div>
+        <p class="step" id="stepText" aria-live="polite"></p>
+        <div class="chips" id="replayChips"></div>
+
       </div>
     </section>
 
-    <section class="palette-row" aria-label="Colours">
-      <div class="palette" id="palette"></div>
-      <button type="button" class="btn tool" id="moveTool" hidden title="Click a cell to put the 2x2 piece there (M)">Move 2x2</button>
-      <p class="hint">Click or drag to paint &middot; right-click a cell to pick its colour &middot; keys 1-8</p>
-    </section>
-
-    <section class="counts" id="counts" aria-live="polite"></section>
-
-    <section class="card solve-card">
-      <div class="solve-row">
-        <label class="field">
-          <span>Up to</span>
-          <select id="maxDepth"></select>
+    <aside class="panel">
+      <div class="solve-box">
+        <label class="depth">
+          <span class="sr-only">Search up to</span>
+          <select id="maxDepth" title="Longest solution to search for"></select>
         </label>
-        <label class="field">
-          <span>Threads</span>
-          <select id="threads"></select>
-        </label>
-        <div class="spacer"></div>
-        <button type="button" class="btn primary" id="solveBtn">Solve</button>
-        <button type="button" class="btn" id="cancelBtn" hidden>Cancel</button>
+        <button type="button" class="solve" id="solveBtn">
+          <span class="solve-fill" id="solveFill"></span>
+          <span class="solve-label" id="solveLabel">Solve</span>
+        </button>
+        <button type="button" class="icon-btn cancel" id="cancelBtn" data-icon="x" aria-label="Cancel" hidden></button>
       </div>
-      <div class="progress" id="progress" hidden>
-        <div class="bar"><div class="fill" id="progressFill"></div></div>
-        <div class="status"><span id="statusText"></span><span id="statusTime"></span></div>
-      </div>
-      <p class="message" id="message" hidden></p>
-    </section>
+      <p class="status" id="status" aria-live="polite"></p>
 
-    <section class="results" id="results" hidden>
-      <div class="results-head">
-        <div>
-          <h2 id="resultTitle"></h2>
-          <p class="sub" id="resultSub"></p>
-        </div>
-        <div class="results-actions">
-          <button type="button" class="btn ghost" id="copyBtn">Copy all</button>
-          <button type="button" class="btn ghost" id="downloadBtn">Download .txt</button>
-        </div>
+      <div class="intro" id="intro">
+        <ol>
+          <li><strong>Paint</strong> both boards, or pick one of the game's 100 puzzles at the top.</li>
+          <li><strong>Solve.</strong> You get every shortest solution up to 10 moves, and proof that none is shorter.</li>
+          <li><strong>Replay</strong> any solution move by move.</li>
+        </ol>
+        <p class="fine">Runs on your device in WebAssembly; nothing is uploaded. Up to 8 moves takes about a second,
+          10 moves from seconds to a minute or two.</p>
       </div>
-      <div class="results-body">
-        <div class="card replay">
-          <div class="board small" id="replayBoard" aria-label="Replay board"></div>
-          <div class="replay-controls">
-            <button type="button" class="btn icon" id="firstBtn" aria-label="First">&#x23EE;</button>
-            <button type="button" class="btn icon" id="prevBtn" aria-label="Previous move">&#x25C0;</button>
-            <button type="button" class="btn icon" id="playBtn" aria-label="Play">&#x25B6;</button>
-            <button type="button" class="btn icon" id="nextBtn" aria-label="Next move">&#x25B6;&#x25B6;</button>
-            <button type="button" class="btn icon" id="lastBtn" aria-label="Last">&#x23ED;</button>
+
+      <div class="results" id="results" hidden>
+        <div class="res-head">
+          <div>
+            <div class="res-title" id="resultTitle"></div>
+            <div class="res-sub" id="resultSub"></div>
           </div>
-          <p class="step-text" id="stepText"></p>
-          <div class="chips" id="replayChips"></div>
+          <div class="res-actions">
+            <button type="button" class="icon-btn" id="copyAllBtn" data-icon="clipboard" aria-label="Copy all solutions" title="Copy all solutions"></button>
+            <button type="button" class="icon-btn" id="downloadBtn" data-icon="download" aria-label="Download solutions" title="Download as .txt"></button>
+          </div>
         </div>
-        <div class="card list-card">
-          <ol class="solutions" id="solutionList"></ol>
-          <button type="button" class="btn ghost more" id="moreBtn" hidden>Show more</button>
-        </div>
+        <p class="stale" id="staleNote" hidden>The boards have changed since this solve.</p>
+        <ol class="solutions" id="solutionList"></ol>
+        <button type="button" class="text-btn more" id="moreBtn" hidden></button>
       </div>
-    </section>
-
-    <footer class="foot">
-      <p><strong>Notation:</strong> <code>R14</code> = row 1 shifted right 4, <code>C32</code> = column 3 shifted
-        down 2 (rows count from the top, columns from the left). On 2x2 boards <code>R453</code> = the piece's
-        rows 4 and 5 right 3, and <code>C231</code> = its columns 2 and 3 down 1.</p>
-      <p id="engineNote"></p>
-    </footer>
+    </aside>
   </main>
+
+  <dialog id="helpDialog" aria-labelledby="helpTitle">
+    <form method="dialog" class="dlg">
+      <div class="dlg-head">
+        <h2 id="helpTitle">How it works</h2>
+        <button class="icon-btn" value="close" data-icon="x" aria-label="Close"></button>
+      </div>
+      <h3>Notation</h3>
+      <dl class="notation">
+        <dt><code>R14</code></dt><dd>row 1 shifted right 4</dd>
+        <dt><code>C32</code></dt><dd>column 3 shifted down 2</dd>
+        <dt><code>R453</code></dt><dd>the 2x2 piece's rows 4 and 5, right 3</dd>
+        <dt><code>C231</code></dt><dd>the 2x2 piece's columns 2 and 3, down 1</dd>
+      </dl>
+      <p class="fine">Rows count from the top, columns from the left.</p>
+      <h3>Editing</h3>
+      <p class="fine">Click or drag to paint. Right-click a cell to pick its colour. Keys 1-8 choose a colour, M moves the
+        2x2 piece, Ctrl+Z undoes. The link button copies a link to the puzzle.</p>
+      <h3>The search</h3>
+      <p class="fine">The solver builds every board within 4 moves of the start and of the goal, and joins the two in
+        the middle. The work is split over several threads, and a lane bound cuts away boards that can't reach the goal in
+        time. It checks every move sequence, so "none shorter" is exact. It stops at 10 moves; longer puzzles need the
+        desktop solver.</p>
+      <label class="setting">
+        <span>Threads</span>
+        <select id="threads"></select>
+      </label>
+    </form>
+  </dialog>
 
   <script src="puzzles.js"></script>
   <script src="app.js"></script>
