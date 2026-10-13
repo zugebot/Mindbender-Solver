@@ -4,7 +4,7 @@ Optimal solver for Chuzzle's Mind Bender puzzles (100 puzzles, 6x6 boards,
 row/column cyclic shifts, some with a 2x2 piece). It finds every shortest
 solution and proves nothing shorter exists. C++ solver plus Python tools.
 
-Status (2026-10-12): **76/100 solved**. `build/README.md` lists the unsolved ones with their
+Status (2026-10-12): **78/100 solved**. `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
 History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-12.md`).
 
@@ -117,6 +117,9 @@ picks: normal boards `<5,3,6>` up to 14 moves, `<5,4,6>` at 15; 2x2 boards `<4,3
 - Code style: includes are always `"src/..."` paths; use the `src/utils/intrinsics/` helpers,
   not compiler builtins; dead code goes to `old/` (never deleted); the repo mixes CRLF and LF,
   and scripted edits must keep each file's line endings.
+- Level data (`src/chuzzles/levels_cells.hpp`) must have the same colour counts in start and
+  goal; 16-1 had a one-cell typo until 2026-10-12, which made it unsolvable. Board data is
+  compiled in: rebuild the solvers after any change to it.
 - Leave alone: the `mouse/` C library, Windows system/security settings (Windows Update, auto
   login are the user's), the MuMu emulator (it costs ~6% CPU; it stays on).
 
