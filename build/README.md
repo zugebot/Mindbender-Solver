@@ -26,7 +26,7 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 15-1: at least 15 moves
 15-3: at least 16 moves
 15-4: at least 16 moves
-16-1: at least 15 moves
+16-1: at least 3 moves (start board fixed 2026-10-12: one cell was wrong, so every earlier 16-1 result was on an unsolvable board; 1-2 moves checked, the rest is being re-checked)
 16-2: at least 15 moves
 16-3: at least 15 moves
 17-1: at least 15 moves
