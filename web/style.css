@@ -23,7 +23,8 @@
   --gap: 4px;
   --pad: 8px;
   --radius: 14px;
-  --cell: min(52px, calc((100vw - 32px - 2 * var(--pad) - 5 * var(--gap)) / 6));
+  /* phones: fit the width, and the height left after header, switch, palette, tools and solve bar */
+  --cell: min(52px, calc((100vw - 32px - 2 * var(--pad) - 5 * var(--gap)) / 6), calc((100svh - 410px) / 6));
   --bar-h: 52px;
   color-scheme: light;
 }
@@ -95,11 +96,17 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .info b { color: var(--text); font-weight: 650; }
 
 /* segmented Start / Goal switch (phones) */
-.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--surface-2); border-radius: 12px; width: calc(6 * var(--cell) + 5 * var(--gap) + 2 * var(--pad)); margin-bottom: 10px; }
-.seg-btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; border: 0; border-radius: 9px; background: transparent; font-weight: 650; font-size: 14px; color: var(--muted); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--surface-2); border-radius: 12px; width: 100%; max-width: 440px; margin-bottom: 10px; }
+.seg-btn { display: flex; align-items: center; justify-content: center; gap: 12px; height: 62px; padding: 0 8px; border: 0; border-radius: 9px; background: transparent; font-weight: 650; font-size: 15px; color: var(--muted); }
 .seg-btn[aria-selected="true"] { background: var(--seg-on); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
-.thumb { display: grid; grid-template-columns: repeat(6, 3px); grid-auto-rows: 3px; gap: 1px; padding: 2px; border-radius: 4px; background: var(--frame); }
-.thumb i { border-radius: 1px; background: var(--col); }
+.thumb { --t: 7px; display: grid; grid-template-columns: repeat(6, var(--t)); grid-auto-rows: var(--t); gap: 1px; padding: 3px; border-radius: 6px; background: var(--frame); flex: none; }
+.thumb i { border-radius: 50%; background: var(--col); }
+.thumb i.p { border-radius: 1.5px; }
+.seg-btn:not([aria-selected="true"]) .thumb { opacity: .8; }
+@media (max-height: 700px) {
+  .seg-btn { height: 52px; }
+  .thumb { --t: 6px; padding: 2px; }
+}
 
 /* boards */
 .boards { display: flex; align-items: center; justify-content: center; gap: 16px; }
@@ -157,7 +164,7 @@ figcaption { display: none; }
 .band svg { width: 14px; height: 14px; margin: 0 -1px; fill: var(--hl); stroke: none; position: relative; z-index: 2; }
 
 /* edit dock */
-.dock { width: calc(6 * var(--cell) + 5 * var(--gap) + 2 * var(--pad)); max-width: 100%; margin-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.dock { width: 100%; max-width: 440px; margin-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; width: 100%; }
 .swatch {
   position: relative; aspect-ratio: 1; max-height: 42px; border: 0; border-radius: 50%; padding: 0; justify-self: center; width: 100%; max-width: 42px;
@@ -189,7 +196,7 @@ figcaption { display: none; }
 .warn { margin: 0; font-size: 13px; color: var(--danger); background: var(--danger-2); padding: 6px 10px; border-radius: 8px; text-align: center; }
 
 /* replay dock */
-.sol-switch { display: flex; align-items: center; justify-content: space-between; width: calc(6 * var(--cell) + 5 * var(--gap) + 2 * var(--pad)); max-width: 100%; margin: -4px 0 6px; }
+.sol-switch { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 440px; margin: -4px 0 6px; }
 .sol-switch .text-btn { padding: 6px 8px 6px 4px; }
 .sol-nav { display: flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 650; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sol-nav .icon-btn { width: 32px; height: 32px; }
@@ -311,6 +318,9 @@ dialog::backdrop { background: rgba(10, 10, 14, .45); }
   .solutions { flex: 1; overflow: auto; min-height: 0; border: 0; padding: 0; background: none; border-radius: 0; margin: 0 -8px; padding: 0 4px; }
 }
 
+@media (max-width: 639px) {
+  .warn { display: none; }   /* the red badges show it; Solve explains */
+}
 @media (max-width: 639px) and (max-height: 700px) {
   .replay-dock-step, #replayDock .step { display: none; }
   #replayDock { gap: 8px; margin-top: 10px; }

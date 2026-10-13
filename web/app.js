@@ -189,11 +189,12 @@
 
   function renderThumb(el, board) {
     const frag = document.createDocumentFragment();
-    for (const v of board.cells) {
+    board.cells.forEach((v, k) => {
       const i = document.createElement('i');
       i.style.setProperty('--col', `var(--c${v})`);
+      if (inPiece(board.fat, Math.floor(k / 6), k % 6)) i.className = 'p';
       frag.appendChild(i);
-    }
+    });
     el.replaceChildren(frag);
   }
 
