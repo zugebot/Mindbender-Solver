@@ -1,0 +1,12 @@
+[0:00:00.000] puzzle 18-1 <5,3,7> = 15 moves, forward, threads 16, table dir X:\mindbender_d6\18-1_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\18-1_goal_d6
+[0:00:04.353] depth-5 exact unique: 50753098 states in 4.35259s (no table: depth 7 is regenerated in RAM, nothing is written)
+[0:00:04.382] bucket counts: 4.29497 GB, large pages yes
+[0:07:12.926]     regenerated depth 7 for partitions [0,256): 81348733124 keys in blocks of ~400000000, generate 158.401s, group+write 270.142s
+[0:07:15.491] depth-7 raw descendants: 81348733124 (1602.72 per depth-5 state), de-dupe ratio 0.583891 -> ~47498756293 unique; 2^23 buckets/partition, largest bucket 3227 (counted in 431.11s)
+[0:07:15.491] fingerprint index: 231.874 GB over partitions [0,256), RAM budget 36.5012 GB -> 7 pass(es)
+[0:07:19.718] left seeds (exact depth 5): 49515744 in 4.215s
+[0:07:19.718] bound: off (2x2 board; the halved bound prunes nothing)
+[0:12:06.127]     regenerated depth 7 for partitions [0,40): 12710530488 keys in blocks of ~250000000, generate 115.132s, group+write 169.328s
+[0:12:31.606]   index for partitions [0,40) built in RAM: raw 12710530488 -> 7412593633 fingerprints in 311.886s
+[0:12:51.628] calibrate: 288768 seeds in 20.0085s, ns/state per thread: 32/plain=19.874 32/pipelined=19.9428 64/plain=19.5742 64/pipelined=19.5413 128/plain=19.2505 128/pipelined=19.4487 -> 128/plain (1.03239x vs 32/plain)
