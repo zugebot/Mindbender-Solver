@@ -1063,7 +1063,8 @@ class App:
             if win:
                 act = Button(pg.Rect(bx, y + 14, 130, 30), "Bring to front", lambda w=win: w.bring_to_front())
             else:
-                act = Button(pg.Rect(bx, y + 14, 130, 30), "Launch", lambda g=game: self.launch_game(g))
+                act = Button(pg.Rect(bx, y + 14, 130, 30), "Launch", lambda g=game: self.launch_game(g),
+                             lambda g=game: not g.hollow)
             self.launcher_buttons += [act, Button(pg.Rect(bx + 136, y + 14, 106, 30), "Open folder",
                                                   lambda g=game: self._open(g.path.parent))]
             y += 64

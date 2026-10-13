@@ -192,6 +192,25 @@ class Launcher(unittest.TestCase):
             self.assertTrue(g.drm_wrapped)
             self.assertEqual(g.product_version, "")
 
+    def test_hollow_shell_is_flagged(self):
+        def pe_with_code(code: bytes) -> bytes:
+            data = bytearray(0x200)
+            data[0:2] = b"MZ"
+            data[0x3C:0x40] = (0x80).to_bytes(4, "little")
+            data[0x80:0x84] = b"PE\0\0"
+            data[0x86:0x88] = (1).to_bytes(2, "little")         # one section
+            data[0x94:0x96] = (0).to_bytes(2, "little")         # no optional header
+            sec = 0x98                                          # section table
+            data[sec:sec + 5] = b".text"
+            data[sec + 16:sec + 20] = len(code).to_bytes(4, "little")      # SizeOfRawData
+            data[sec + 20:sec + 24] = (0x100).to_bytes(4, "little")        # PointerToRawData
+            data[sec + 36:sec + 40] = (0x60000020).to_bytes(4, "little")   # code, execute, read
+            data[0x100:0x100 + len(code)] = code
+            return bytes(data)
+
+        self.assertTrue(launcher._is_hollow(pe_with_code(bytes(64))))
+        self.assertFalse(launcher._is_hollow(pe_with_code(b"\x55\x8b\xec" + bytes(61))))
+
 
 if __name__ == "__main__":
     unittest.main()

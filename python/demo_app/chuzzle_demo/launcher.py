@@ -10,6 +10,7 @@ so they find their data and save where they always do."""
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
 import os
 import struct
@@ -42,13 +43,36 @@ class GameExe:
     build_date: str         # linker timestamp (YYYY-MM-DD)
     size: int
     drm_wrapped: bool       # PopCap DRM loader with the game appended
+    hollow: bool = False    # its code sections are all zeros: a shell another exe fills in
+    sha256: str = ""
+    same_as: str = ""       # label of a byte-identical exe listed before it
 
     def describe(self) -> str:
         parts = [f"v{self.product_version}" if self.product_version else "no version info",
                  f"built {self.build_date}" if self.build_date else ""]
         if self.drm_wrapped:
             parts.append("PopCap DRM wrapper")
+        if self.hollow:
+            parts.append("empty shell (no code; its launcher fills it in), can't run on its own")
+        if self.same_as:
+            parts.append(f"identical to {self.same_as}")
         return ", ".join(p for p in parts if p)
+
+
+def _is_hollow(data: bytes) -> bool:
+    """True when every code section of the PE is stored as zeros. WildTangent's release keeps
+    such a shell next to its launcher (Chuzzle-WT.exe), which supplies the code at run time."""
+    try:
+        pe = struct.unpack_from("<I", data, 0x3C)[0]
+        if data[pe:pe + 4] != b"PE\0\0":
+            return False
+        count = struct.unpack_from("<H", data, pe + 6)[0]
+        table = pe + 24 + struct.unpack_from("<H", data, pe + 20)[0]
+        code = [struct.unpack_from("<II", data, table + 40 * i + 16) for i in range(count)
+                if struct.unpack_from("<I", data, table + 40 * i + 36)[0] & 0x20]   # IMAGE_SCN_CNT_CODE
+        return bool(code) and all(data[ptr:ptr + size].count(0) == size for size, ptr in code)
+    except struct.error:
+        return False
 
 
 def _product_version(path: Path) -> str:
@@ -85,7 +109,8 @@ def _build_date(data: bytes) -> str:
 def describe_exe(path: Path) -> GameExe:
     data = path.read_bytes()
     return GameExe(path=path, label=saves._edition_label(path), product_version=_product_version(path),
-                   build_date=_build_date(data), size=len(data), drm_wrapped=DRM_MARKER in data)
+                   build_date=_build_date(data), size=len(data), drm_wrapped=DRM_MARKER in data,
+                   hollow=_is_hollow(data), sha256=hashlib.sha256(data).hexdigest())
 
 
 def is_candidate(name: str) -> bool:
@@ -172,6 +197,12 @@ def describe_all(exes: list[Path]) -> list[GameExe]:
         g.label = labels[p]
         out.append(g)
     out.sort(key=lambda g: (str(g.path.parent).lower(), g.path.name.lower()))
+    first: dict[str, str] = {}
+    for g in out:
+        if g.sha256 in first:
+            g.same_as = first[g.sha256]
+        else:
+            first[g.sha256] = g.label
     return out
 
 
