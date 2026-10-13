@@ -1,0 +1,29 @@
+[0:00:00.001] puzzle 16-1 <4,3,6> = 13 moves, forward, threads 16, table dir X:\mindbender_d6\16-1_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\16-1_goal_d6
+[0:00:04.024] depth-5 exact unique: 46442349 states in 4.02306s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:08.039] depth-6 raw children: 2227705525, de-dupe ratio 0.626437 -> ~1395517601 unique (counted in 8.03833s)
+[0:00:08.039] fingerprint index: 6.77732 GB over partitions [0,256), RAM budget 34.693 GB -> 1 pass(es)
+[0:00:08.181] left seeds (exact depth 4): 1638036 in 0.141343s
+[0:00:08.181] bound: off (2x2 board; the halved bound prunes nothing)
+[0:00:08.275]   index build: 29.8875 GB for keys -> about 1 regeneration(s) of depth 6
+[0:00:59.197]   index for partitions [0,256) built in RAM: 1394037556 unique states in 51.0144s
+[0:01:19.269] calibrate: 89472 seeds in 20.0697s, ns/state per thread: 32/plain=68.7424 32/pipelined=69.064 64/plain=65.7884 64/pipelined=66.7301 128/plain=63.8189 128/pipelined=64.7651 -> 128/plain (1.07715x vs 32/plain)
+[0:07:06.812]   pass 1/1 partitions [0,256): load 6.77732 GB (large pages) in 51.0151s, stream+probe 83334901905 left states in 367.614s (226.691 M/s), Bloom pass 1.14121%
+[0:07:06.817] probe totals: load 51.0151s, stream+probe 367.614s, 83334901905 left states streamed, 20879 unique candidates
+[0:07:06.861] depth-6 exact unique: 1394037556 (index-only, in RAM; no table written)
+[0:07:06.862] BUILD fingerprint index: 1394037556 states, 2^21 buckets/partition, built in RAM in 51.0144s
+[0:07:06.862] BUILD depth-6 table: 8.03834s (no table; depth-5 frontier + counts)
+[0:07:13.389] verify: 0 confirmed, 20879 fingerprint false matches, 6.52708s (by regeneration)
+[0:07:13.465] unique middle states (7 from left, 6 from table side): 0
+[0:07:13.465] PROBE phase: 433.464s
+[0:07:13.465] TOTAL: 433.464s (build 0s, probe 433.464s, recovery 0s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        49140
+delete calls:     49140
+malloc calls:     1691638
+free calls:       3334144
+calloc calls:     3
+realloc calls:    1638074
