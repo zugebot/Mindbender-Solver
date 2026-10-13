@@ -4,9 +4,9 @@ Optimal solver for Chuzzle's Mind Bender puzzles (100 puzzles, 6x6 boards,
 row/column cyclic shifts, some with a 2x2 piece). It finds every shortest
 solution and proves nothing shorter exists. C++ solver plus Python tools.
 
-Status (2026-10-12): **75/100 solved**. `build/README.md` lists the unsolved ones with their
+Status (2026-10-12): **76/100 solved**. `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
-History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-07-11.md`).
+History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-12.md`).
 
 ## Build and test
 
@@ -168,8 +168,9 @@ Next:
    those runs (each pass re-streams the left side), so 3 reads per lookup instead of 1 hardly
    matters. Prototype and A/B.
 2. A bound that prunes on 2x2 boards (6-4, 15-3, 15-4, 19-2 need >= 16, all 2x2): the halved
-   lane bound tops out at 6 and pruning needs > 7. Double moves only touch the piece's own two
-   lanes; a sharper bound would have to use that.
+   lane bound tops out at 6 and pruning needs > 7, and no lane bound can do better (cover
+   argument in docs/changes-2026-10-12.md section 7). It needs bounds over several lanes at once
+   (pattern tables, e.g. split by move type), or the time has to come from fewer passes / the GPU.
 3. 16 moves: `<5,4,7>` works with today's code. 2x2 boards ~300 h each on this CPU; 6-4 with its
    disk index ~150-160 h (~70-80 h with item 1). Normal boards at 16: try pruning the goal side
    with the bound measured from the start (states must be within the left depth of the start),
