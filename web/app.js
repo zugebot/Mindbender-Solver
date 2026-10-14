@@ -27,6 +27,8 @@
     clipboard: '<rect x="8" y="2.5" width="8" height="4" rx="1"/><path d="M16 4.5h2a2 2 0 0 1 2 2V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h2"/>',
     download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
     check: '<path d="M20 6 9 17l-5-5"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
+    up: '<path d="m18 15-6-6-6 6"/>',
   };
   const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
   function setIcon(el, name) {
@@ -164,7 +166,9 @@
         d.className = piece ? 'cell piece' : 'cell';
         d.dataset.r = r;
         d.dataset.c = c;
-        setChuzzle(d, color, board.ids ? board.ids[r * 6 + c] : r * 6 + c);
+        const id = board.ids ? board.ids[r * 6 + c] : r * 6 + c;
+        setChuzzle(d, color, id);
+        addFace(d, id, piece ? 'piece' : 'normal', `${el.id}:${id}`);
         d.style.gridRow = `${r + 1} / span ${piece ? 2 : 1}`;
         d.style.gridColumn = `${c + 1} / span ${piece ? 2 : 1}`;
         d.setAttribute('role', 'gridcell');
@@ -175,13 +179,216 @@
     el.replaceChildren(frag);
   }
 
-  // A chuzzle's sprite: colour row, and an eye shape, pupil colour and sway phase that
-  // stay with it (like the game's random ones, but fixed per chuzzle).
+  // ---------------------------------------------------------------- chuzzles (engine/chuzzle.py)
+  // Eye shape (0-3) and pupil colour (0-5) are random per chuzzle in the game; here they are
+  // fixed per chuzzle id so a chuzzle keeps its face through a replay.
+  const EYE_PUPIL_CENTERS = [[[34, 60], [53, 62]], [[33, 62], [53, 63]], [[34, 63], [52, 62]], [[35, 62], [54, 62]]];
+  const EYE_PUPIL_TRAVEL = [[4, 5], [5, 4], [4, 4], [5, 4]];
+  // Eyes.png's top-left on the chuzzle's surface: NORMAL_EYES_POS, and FAT_EYES_POS (42, 64) on
+  // the 2x2's surface, which is drawn at (-10, -12) from its top-left cell. (FAT_*_PUPIL_CENTER
+  // in chuzzle.py would put the pupils below the eye whites, so the 2x2 uses the shape's own
+  // pupil centres and travel, like a normal chuzzle.)
+  const EYES_AT = { normal: [-2, -3], piece: [42 - 10, 64 - 12], surface: [42, 64] };
+
   function setChuzzle(el, color, id) {
     el.style.setProperty('--k', color);
-    el.style.setProperty('--es', (id * 7 + 3) % 4);
-    el.style.setProperty('--ep', (id * 5 + 1) % 6);
     el.style.setProperty('--ph', ((id * 37) % 100) / 100);
+  }
+
+  const unit = (n) => `calc(${n} * var(--u))`;
+  // Adds the eyes and pupils; key names the chuzzle for its eye state (look direction).
+  function addFace(el, id, kind, key) {
+    const es = (id * 7 + 3) % 4, ep = (id * 5 + 1) % 6;
+    const [ex, ey] = EYES_AT[kind];
+    el.style.setProperty('--es', es);
+    el.style.setProperty('--ep', ep);
+    const eyes = document.createElement('i');
+    eyes.className = 'eyes';
+    eyes.style.left = unit(ex);
+    eyes.style.top = unit(ey);
+    el.appendChild(eyes);
+    for (const [cx, cy] of EYE_PUPIL_CENTERS[es]) {
+      const pupil = document.createElement('i');
+      pupil.className = 'pupil';
+      pupil.style.left = unit(ex + cx - 7);
+      pupil.style.top = unit(ey + cy - 7);
+      pupil.style.setProperty('--tx', EYE_PUPIL_TRAVEL[es][0]);
+      pupil.style.setProperty('--ty', EYE_PUPIL_TRAVEL[es][1]);
+      el.appendChild(pupil);
+    }
+    if (key) {
+      el.dataset.eye = key;
+      const s = eyeState(key);
+      el.style.setProperty('--dx', s.dx);
+      el.style.setProperty('--dy', s.dy);
+    }
+  }
+
+  // Eye timers (chuzzle.py _update_eye_timers): a blink hides the pupils for 5 frames every
+  // 3-10 s; the idle look direction changes every 5-14 s (a quarter of the time straight
+  // ahead, otherwise a random angle at 0.35-1 of the travel); the pupils ease towards it.
+  const eyes = new Map();
+  const rand = (n) => Math.floor(Math.random() * n);
+  function eyeState(key) {
+    let s = eyes.get(key);
+    if (!s) {
+      const now = performance.now();
+      s = { dx: 0, dy: 0, blinkAt: now + 3000 + rand(7000), lookAt: now + 300 + rand(1500) };
+      eyes.set(key, s);
+    }
+    return s;
+  }
+  function randomLook() {
+    if (Math.random() < 0.25) return [0, 0];
+    const a = Math.random() * Math.PI * 2, r = 0.35 + Math.random() * 0.65;
+    return [Math.cos(a) * r, -Math.sin(a) * r];
+  }
+  let tracked = null;           // the chuzzle the mouse is over (its eyes follow the mouse)
+  function eyeTick() {
+    const now = performance.now();
+    for (const el of document.querySelectorAll('[data-eye]')) {
+      const s = eyeState(el.dataset.eye);
+      if (now >= s.blinkAt) {
+        s.blinkAt = now + 83 + 3000 + rand(7000);
+        el.classList.add('blink');
+        setTimeout(() => el.classList.remove('blink'), 83);
+      }
+      if (el !== tracked && now >= s.lookAt) {
+        s.lookAt = now + 5000 + rand(9000);
+        [s.dx, s.dy] = randomLook();
+        el.style.setProperty('--dx', s.dx.toFixed(3));
+        el.style.setProperty('--dy', s.dy.toFixed(3));
+      }
+    }
+  }
+  // The mouse over a chuzzle: its pupils turn to the mouse (from the centre of its cell, or of
+  // the 2x2's four); leaving holds that direction until the next idle look.
+  function trackMouse(e) {
+    const t = document.elementFromPoint(e.clientX, e.clientY);
+    const el = t && t.closest('.board [data-eye]');
+    if (tracked && tracked !== el) {
+      tracked.classList.remove('track');
+      eyeState(tracked.dataset.eye).lookAt = performance.now() + 5000 + rand(9000);
+      tracked = null;
+    }
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    const s = eyeState(el.dataset.eye);
+    [s.dx, s.dy] = len < 0.5 ? [0, 0] : [dx / len, dy / len];
+    el.style.setProperty('--dx', s.dx.toFixed(3));
+    el.style.setProperty('--dy', s.dy.toFixed(3));
+    el.classList.add('track');
+    tracked = el;
+  }
+
+  // ---------------------------------------------------------------- the game's bitmap font
+  // Bauhaus 93 from textures/fonts (metrics: tools/font/Bauhaus9336.py), drawn onto a canvas:
+  // the glyphs filled with `fill`, a dark outline round them, and a soft shadow.
+  const fontAtlas = new Image();
+  const fontReady = new Promise((res) => { fontAtlas.onload = res; fontAtlas.onerror = res; });
+  fontAtlas.src = 'assets/bauhaus36.webp';
+  const FONT = self.MB_FONT;
+  const fontJobs = new Map();
+  function fontText(el, text, { size = 18, fill = ['#ffffff', '#e8e4ff'], outline = 'rgba(30, 10, 50, .95)' } = {}) {
+    fontJobs.set(el, { text, size, fill, outline });
+    el.classList.add('ftext');
+    el.setAttribute('aria-label', text);
+    drawFontText(el);
+  }
+  function drawFontText(el) {
+    const job = fontJobs.get(el);
+    if (!job || !FONT || !fontAtlas.naturalWidth) return;
+    const { text, size, fill, outline } = job;
+    const s = size / FONT.size, dpr = Math.min(3, window.devicePixelRatio || 1);
+    const o = Math.max(1, Math.round(size / 9));                       // outline width, CSS px
+    let w = 0;
+    for (const ch of text) w += ch === ' ' ? FONT.space : (FONT.glyphs[ch] ? FONT.glyphs[ch].w : FONT.space);
+    const cw = Math.ceil(w * s + 2 * o + 2), ch = Math.ceil(FONT.height * s + 2 * o + 2);
+    let cv = el.querySelector('canvas');
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.setAttribute('aria-hidden', 'true');
+      el.replaceChildren(cv);
+    }
+    cv.width = cw * dpr;
+    cv.height = ch * dpr;
+    cv.style.width = `${cw}px`;
+    cv.style.height = `${ch}px`;
+    const glyphs = document.createElement('canvas');
+    glyphs.width = cv.width;
+    glyphs.height = cv.height;
+    const g = glyphs.getContext('2d');
+    g.scale(dpr, dpr);
+    let x = o + 1;
+    for (const c of text) {
+      const gl = FONT.glyphs[c];
+      if (gl) {
+        const [rx, ry, rw, rh] = gl.r;
+        g.drawImage(fontAtlas, rx, ry, rw, rh, x + gl.o[0] * s, o + 1 + gl.o[1] * s, rw * s, rh * s);
+      }
+      x += (gl ? gl.w : FONT.space) * s;
+    }
+    const tint = (style) => {
+      const c = document.createElement('canvas');
+      c.width = glyphs.width;
+      c.height = glyphs.height;
+      const k = c.getContext('2d');
+      k.drawImage(glyphs, 0, 0);
+      k.globalCompositeOperation = 'source-in';
+      k.fillStyle = style;
+      k.fillRect(0, 0, c.width, c.height);
+      return c;
+    };
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const grad = ctx.createLinearGradient(0, (o + 1 + 8 * s) * dpr, 0, (o + 1 + FONT.ascent * s) * dpr);
+    grad.addColorStop(0, fill[0]);
+    grad.addColorStop(1, fill[1]);
+    const dark = tint(outline);
+    ctx.shadowColor = 'rgba(0, 0, 0, .55)';
+    ctx.shadowBlur = 4 * dpr;
+    ctx.shadowOffsetY = 1.5 * dpr;
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      ctx.drawImage(dark, Math.cos(a) * o * dpr, Math.sin(a) * o * dpr);
+      if (k === 0) ctx.shadowColor = 'transparent';
+    }
+    ctx.drawImage(tint(grad), 0, 0);
+  }
+  const redrawFonts = () => { for (const el of fontJobs.keys()) if (el.isConnected) drawFontText(el); };
+  fontReady.then(redrawFonts);
+  const GOLD_TEXT = { size: 20, fill: ['#fff6b8', '#ffb71e'] };
+  const captionStyle = () => ({ ...GOLD_TEXT, size: Math.round(Math.max(18, Math.min(30, 34 * layout.u))) });
+  const infoSize = () => Math.round(Math.max(15, Math.min(22, innerWidth / 42)));
+
+  // ---------------------------------------------------------------- layout
+  // The boards fill the space between the info bar and the dock: two side by side when that
+  // gives at least ~3/4 of the size one board would get, else one with Start / Goal tabs.
+  // --u (one game pixel) follows; a board is 535 of them.
+  const layout = { u: 0.6, two: false };
+  function layoutStage() {
+    const st = $('stage');
+    const W = st.clientWidth, H = st.clientHeight;
+    if (!W || !H) return;
+    const pad = 16, caption = 36, tabs = 56;
+    const arrow = Math.max(46, Math.min(72, 64 * layout.u)) + 36;
+    const u2 = Math.min((W - pad - arrow) / 1070, (H - pad - caption) / 535);
+    const u1 = Math.min((W - pad) / 535, (H - pad - tabs) / 535);
+    const two = u2 >= u1 * 0.72;
+    const u = Math.max(0.25, Math.min(1.6, two ? u2 : u1));
+    const moved = Math.abs(u - layout.u) > 0.002 || two !== layout.two;
+    layout.u = u;
+    layout.two = two;
+    st.classList.toggle('two', two);
+    st.classList.toggle('one', !two);
+    document.documentElement.style.setProperty('--u', `${u.toFixed(4)}px`);
+    if (moved) {
+      fontText($('startCap'), state.mode === 'replay' ? 'Replay' : 'Start', captionStyle());
+      fontText($('goalCap'), 'Goal', captionStyle());
+      if (state.mode === 'replay' && result && result.replay && !result.playing) showStep(result.step);
+    }
   }
 
   // Sets up a lane slide on a board already showing the state after the move: every moved
@@ -193,6 +400,7 @@
     const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
     const pitch = (any.classList.contains('piece') ? (any.offsetWidth - gap) / 2 : any.offsetWidth) + gap;
     const seg = mv.col ? (d > 0 ? 0 : 3) : (d > 0 ? 2 : 1);      // down, left, right, up
+    const u = pitch / 80;
     const moving = [];
     for (const cell of [...el.querySelectorAll('.cell')]) {
       const r = +cell.dataset.r, c = +cell.dataset.c;
@@ -210,12 +418,27 @@
         moving.push([ghost, d > 0 ? 6 - d : -6 - d, d > 0 ? 6 : -6]);
       }
     }
-    for (const [node] of moving) {
-      node.style.setProperty('--f', (node.classList.contains('piece') ? 10 : 20) + seg);
-      node.classList.add('mv');
-    }
+    for (const [node] of moving) node.classList.add('mv');
+    // chuzzle.py _get_frame_surface: frame = sway count + direction x speed count + speed
+    // index, the speed index from sqrt(speed / (10% of a cell per frame)), the 2x2 at half speed
+    let lastP = 0, lastT = performance.now(), smooth = 0;
+    const frameFor = (piece) => {
+      const t = Math.sqrt(Math.min(1, (piece ? smooth * 0.5 : smooth) / 8));
+      return piece ? 10 + seg * 5 + Math.round(t * 4) : 20 + seg * 10 + Math.round(t * 9);
+    };
     const tr = (k) => (mv.col ? `translateY(${k * pitch}px)` : `translateX(${k * pitch}px)`);
-    const set = (p) => { for (const [node, a, b] of moving) node.style.transform = tr(a + (b - a) * p); };
+    const set = (p) => {
+      const now = performance.now();
+      const frames = Math.max(0.25, (now - lastT) / (1000 / 60));
+      const speed = Math.abs(p - lastP) * Math.abs(d) * 80 / frames;  // game pixels per frame
+      smooth = smooth * 0.5 + speed * 0.5;
+      lastP = p;
+      lastT = now;
+      for (const [node, a, b] of moving) {
+        node.style.transform = tr(a + (b - a) * p);
+        node.style.setProperty('--f', frameFor(node.classList.contains('piece')));
+      }
+    };
     set(0);
     return {
       set,
@@ -256,7 +479,8 @@
         s.className = 'swatch';
         s.setAttribute('role', 'radio');
         setChuzzle(s, k, k * 3 + 1);
-        s.innerHTML = '<span class="n"></span>';
+        addFace(s, k * 3 + 1, 'normal', `sw:${k}`);
+        s.insertAdjacentHTML('beforeend', '<span class="n"></span>');
         s.addEventListener('click', () => selectColour(k));
         el.appendChild(s);
       });
@@ -265,7 +489,8 @@
       big.className = 'swatch big';
       big.id = 'fatSwatch';
       big.setAttribute('role', 'radio');
-      big.innerHTML = '<span class="n">2x2</span>';
+      addFace(big, 40, 'surface', 'sw:big');
+      big.insertAdjacentHTML('beforeend', '<span class="n">2x2</span>');
       big.addEventListener('click', selectFatTool);
       el.appendChild(big);
     }
@@ -275,7 +500,7 @@
       s.setAttribute('aria-checked', String(!state.placing && state.color === k));
       s.setAttribute('aria-label', `${name}: ${a[k]} on start, ${b[k]} on goal`);
       s.title = `${name} (key ${k + 1})${ok ? '' : ` - ${a[k]} on start, ${b[k]} on goal`}`;
-      const n = s.firstChild;
+      const n = s.querySelector('.n');
       n.className = ok ? 'n' : 'n bad';
       n.textContent = a[k] || b[k] ? (ok ? a[k] : `${a[k]}≠${b[k]}`) : '';
     });
@@ -284,10 +509,6 @@
     big.setAttribute('aria-checked', String(state.placing));
     big.setAttribute('aria-label', '2x2 Chuzzle: tap a cell to place it');
     big.title = state.start.fat ? '2x2 Chuzzle: tap a cell to move it (key 9)' : '2x2 Chuzzle: tap a cell to place it (key 9)';
-    const diff = [];
-    for (let k = 0; k < 8; k++) if (a[k] !== b[k]) diff.push(`${COLORS[k].toLowerCase()} ${a[k]}≠${b[k]}`);
-    $('countWarn').hidden = diff.length === 0;
-    $('countWarn').textContent = `Both boards need the same balls (start≠goal: ${diff.join(', ')})`;
   }
 
   function render() {
@@ -307,13 +528,14 @@
     $('tabStart').setAttribute('aria-selected', String(state.side === 'start'));
     $('tabGoal').setAttribute('aria-selected', String(state.side === 'goal'));
     $('tabStartLabel').textContent = replay ? 'Replay' : 'Start';
-    $('startCap').textContent = replay ? 'Replay' : 'Start';
+    fontText($('startCap'), replay ? 'Replay' : 'Start', captionStyle());
+    fontText($('goalCap'), 'Goal', captionStyle());
     $('editDock').hidden = !!replay;
     $('replayDock').hidden = !replay;
     $('solSwitch').hidden = !replay;
     $('info').hidden = !!replay;
     $('guide').hidden = !replay;
-    $('unfatBtn').hidden = !state.start.fat;
+    $('unfatBtn').disabled = !state.start.fat;
     const other = otherSide(state.side);
     $('copyBtn').title = `Copy the ${other} board onto the ${state.side} board`;
     $('copyText').textContent = `Copy ${other}`;
@@ -467,18 +689,19 @@
       const n = (+p.name.split('-')[0] - 1) % 9 + 1;
       document.body.style.setProperty('--backdrop', `url("assets/bkg${n}.webp")`);
     }
-    el.classList.remove('warn');
+    let text, warn = false;
     if (!p) {
-      el.textContent = state.start.fat ? 'Custom puzzle with the 2x2 Chuzzle' : 'Custom puzzle';
+      text = state.start.fat ? 'Custom puzzle with the 2x2 Chuzzle' : 'Custom puzzle';
     } else if (p.moves && p.moves <= MAX_DEPTH) {
-      el.innerHTML = `Puzzle <b>${p.name}</b> · shortest is ${p.moves} moves · ${p.solutions.toLocaleString()} solutions`;
+      text = `Puzzle ${p.name}  -  shortest is ${p.moves} moves  -  ${p.solutions.toLocaleString()} solutions`;
     } else if (p.moves) {
-      el.innerHTML = `Puzzle <b>${p.name}</b> needs ${p.moves} moves, beyond this page's ${MAX_DEPTH}`;
-      el.classList.add('warn');
+      text = `Puzzle ${p.name} needs ${p.moves} moves, beyond this page's ${MAX_DEPTH}`;
+      warn = true;
     } else {
-      el.innerHTML = `Puzzle <b>${p.name}</b> is unsolved: it needs at least ${p.atLeast} moves`;
-      el.classList.add('warn');
+      text = `Puzzle ${p.name} is unsolved: it needs at least ${p.atLeast} moves`;
+      warn = true;
     }
+    fontText(el, text, warn ? { size: infoSize(), fill: ['#ffd2c8', '#ff8f7a'] } : { size: infoSize() });
   }
 
   function writeHash() {
@@ -612,8 +835,10 @@
 
   function problemSpec() {
     const a = colourCounts(state.start), b = colourCounts(state.goal);
-    if (a.some((v, k) => v !== b[k])) {
-      return { error: 'The start and goal boards need the same balls; the red badges show the difference.' };
+    const diff = [];
+    for (let k = 0; k < 8; k++) if (a[k] !== b[k]) diff.push(`${COLORS[k].toLowerCase()} ${a[k]} vs ${b[k]}`);
+    if (diff.length) {
+      return { error: `Both boards need the same balls (start vs goal: ${diff.join(', ')}); the red badges show them.` };
     }
     const fat = state.start.fat
       ? { start: [state.start.fat.x, state.start.fat.y], goal: [state.goal.fat.x, state.goal.fat.y] } : null;
@@ -720,16 +945,15 @@
     const threads = `${res.threads} thread${res.threads > 1 ? 's' : ''}`;
     r.summary = `Solved in ${fmtTime(secs)} on ${threads}`;
     $('results').hidden = false;
-    $('intro').hidden = true;
     if (res.depth < 0) {
-      $('resultTitle').textContent = `No solution in ${res.maxDepth} moves`;
+      fontText($('resultTitle'), `No solution in ${res.maxDepth} moves`, { size: 24, fill: ['#fff6b8', '#ffb71e'] });
       $('resultSub').textContent = `Every sequence of up to ${res.maxDepth} moves was checked.`;
     } else if (res.depth === 0) {
-      $('resultTitle').textContent = 'Already solved';
+      fontText($('resultTitle'), 'Already solved', { size: 24, fill: ['#fff6b8', '#ffb71e'] });
       $('resultSub').textContent = 'The start board is the goal board.';
     } else {
       const n = res.count;
-      $('resultTitle').textContent = `${res.depth} move${res.depth > 1 ? 's' : ''}`;
+      fontText($('resultTitle'), `${res.depth} move${res.depth > 1 ? 's' : ''}`, { size: 30, fill: ['#fff6b8', '#ffb71e'] });
       $('resultSub').textContent = `${n.toLocaleString()} shortest solution${n > 1 ? 's' : ''} · none shorter`
         + (lines.length < n ? ` · ${lines.length.toLocaleString()} listed` : '') + ` · ${fmtTime(secs)}`;
     }
@@ -739,7 +963,7 @@
     markStale();
     if (lines.length) {
       selectSolution(0);
-      if (innerWidth < 1024) document.querySelector('.stage').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       leaveReplay();
       render();
@@ -809,7 +1033,7 @@
       b.addEventListener('click', () => { interrupt(); showStep(k); });
       chips.appendChild(b);
     });
-    $('solLabel').textContent = `Solution ${(i + 1).toLocaleString()} of ${result.lines.length.toLocaleString()}`;
+    fontText($('solLabel'), `Solution ${(i + 1).toLocaleString()} of ${result.lines.length.toLocaleString()}`, { size: infoSize() });
     $('prevSol').disabled = $('nextSol').disabled = result.lines.length < 2;
     state.mode = 'replay';
     state.side = 'start';
@@ -866,12 +1090,9 @@
   // pixels of the board's figure, where the guide layer sits.
   function boardPoint(mv, along, cross) {
     const b = $('startBoard');
-    const pad = parseFloat(getComputedStyle(b).paddingLeft) || 0;
-    const any = b.querySelector('.cell:not(.piece)');
-    const cell = any ? any.offsetWidth : 40;
-    const pitch = cell + (parseFloat(getComputedStyle(b).columnGap) || 0);
-    const ox = b.offsetLeft + b.clientLeft + pad + cell / 2;
-    const oy = b.offsetTop + b.clientTop + pad + cell / 2;
+    const u = b.offsetWidth / 500;                 // the board's clip box is 500 game pixels
+    const pitch = 80 * u;
+    const ox = b.offsetLeft + 10 * u + pitch / 2, oy = b.offsetTop + 10 * u + pitch / 2;
     const r = mv.col ? along : cross, c = mv.col ? cross : along;
     return { x: ox + c * pitch, y: oy + r * pitch };
   }
@@ -879,7 +1100,8 @@
   function placeCursor(p, down = false) {
     guide.at = p;
     const el = $('guideCursor');
-    el.style.transform = `translate(${p.x - HOT.x}px, ${p.y - HOT.y}px)`;
+    const k = (el.offsetWidth || 52) / 52;
+    el.style.transform = `translate(${p.x - HOT.x * k}px, ${p.y - HOT.y * k}px)`;
     el.classList.toggle('down', down);
   }
 
@@ -1032,6 +1254,11 @@
       if (t < hardwareThreads) $('threads').appendChild(new Option(String(t), t));
     }
 
+    setChuzzle($('logo'), 4, 7);
+    addFace($('logo'), 7, 'normal', 'logo');
+    setInterval(eyeTick, 50);
+    addEventListener('pointermove', trackMouse, { passive: true });
+    matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change', redrawFonts);
     attachEditor($('startBoard'), 'start');
     attachEditor($('goalBoard'), 'goal');
 
@@ -1078,9 +1305,11 @@
       const li = e.target.closest('li');
       if (!li) return;
       selectSolution(+li.dataset.i);
-      if (innerWidth < 1024) document.querySelector('.stage').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollTo({ top: 0, behavior: 'smooth' });
     });
     $('editBtn').addEventListener('click', () => { leaveReplay(); render(); });
+    $('listBtn').addEventListener('click', () => $('results').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    $('upBtn').addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
     $('prevSol').addEventListener('click', () => selectSolution(result.selected - 1));
     $('nextSol').addEventListener('click', () => selectSolution(result.selected + 1));
     $('firstBtn').addEventListener('click', () => { interrupt(); showStep(0); });
@@ -1105,13 +1334,8 @@
       changed({ keepPreset: true });
       if (location.hash !== before) history.replaceState(null, '', before);
     });
-    let resizeTimer = 0;
-    addEventListener('resize', () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        if (state.mode === 'replay' && result && result.replay && !result.playing) showStep(result.step);
-      }, 120);
-    });
+    new ResizeObserver(() => layoutStage()).observe($('stage'));
+    addEventListener('resize', renderInfo);
 
     document.addEventListener('keydown', (e) => {
       if (e.target.closest('select, input, textarea, dialog')) return;
@@ -1149,6 +1373,7 @@
         state.preset = p.name;
       }
     }
+    layoutStage();
     changed({ keepPreset: true });
     warmUp();
   }

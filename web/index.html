@@ -10,13 +10,14 @@
   <link rel="preload" href="assets/eyes.webp" as="image">
   <link rel="preload" href="assets/huge.webp" as="image">
   <link rel="preload" href="assets/frame.webp" as="image">
+  <link rel="preload" href="assets/bauhaus36.webp" as="image">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="bar">
-    <div class="bar-inner">
+  <div class="app" id="app">
+    <header class="bar">
       <div class="brand">
-        <span class="logo" aria-hidden="true"></span>
+        <span class="logo" id="logo" aria-hidden="true"></span>
         <span class="brand-name">Mind Bender <span class="brand-sub">Solver</span></span>
       </div>
       <div class="bar-right">
@@ -26,24 +27,23 @@
         </label>
         <button type="button" class="icon-btn" id="helpBtn" data-icon="help" aria-label="Help and settings"></button>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <main class="layout">
-    <section class="stage" aria-label="Boards">
-      <div class="band subbar">
-        <p class="info" id="info"></p>
-        <div class="sol-switch" id="solSwitch" hidden>
-          <button type="button" class="text-btn" id="editBtn"><span data-icon="pencil"></span>Edit</button>
-          <div class="sol-nav">
-            <button type="button" class="icon-btn" id="prevSol" data-icon="left" aria-label="Previous solution"></button>
-            <span id="solLabel"></span>
-            <button type="button" class="icon-btn" id="nextSol" data-icon="right" aria-label="Next solution"></button>
-          </div>
+    <div class="subbar">
+      <p class="info" id="info"></p>
+      <div class="sol-switch" id="solSwitch" hidden>
+        <button type="button" class="text-btn" id="editBtn"><span data-icon="pencil"></span>Edit</button>
+        <div class="sol-nav">
+          <button type="button" class="icon-btn" id="prevSol" data-icon="left" aria-label="Previous solution"></button>
+          <span id="solLabel"></span>
+          <button type="button" class="icon-btn" id="nextSol" data-icon="right" aria-label="Next solution"></button>
         </div>
+        <button type="button" class="text-btn" id="listBtn"><span data-icon="list"></span>All</button>
       </div>
+    </div>
 
-      <div class="band seg" role="tablist" aria-label="Board">
+    <main class="stage" id="stage" aria-label="Boards">
+      <div class="seg" role="tablist" aria-label="Board">
         <button type="button" role="tab" class="seg-btn" data-side="start" id="tabStart">
           <span class="thumb" id="thumbStart" aria-hidden="true"></span><span id="tabStartLabel">Start</span>
         </button>
@@ -51,38 +51,40 @@
           <span class="thumb" id="thumbGoal" aria-hidden="true"></span><span>Goal</span>
         </button>
       </div>
-
       <div class="boards">
-        <figure class="board-wrap" data-side="start" id="startWrap">
-          <figcaption><span class="cap" id="startCap">Start</span></figcaption>
-          <div class="board" id="startBoard" role="grid" aria-label="Start board"></div>
-          <div class="guide" id="guide" aria-hidden="true" hidden>
-            <svg class="guide-arrow" id="guideArrow"><defs><marker id="ah" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto"><path d="M0 0 10 5 0 10z"/></marker></defs><path id="guidePath" marker-end="url(#ah)"/></svg>
-            <div class="guide-ring" id="guideRing"></div>
-            <div class="guide-cursor" id="guideCursor"></div>
+        <figure class="board-wrap" data-side="start">
+          <figcaption><span class="cap" id="startCap"></span></figcaption>
+          <div class="board-frame" id="startFrame">
+            <div class="board" id="startBoard" role="grid" aria-label="Start board"></div>
+            <div class="guide" id="guide" aria-hidden="true" hidden>
+              <svg class="guide-arrow" id="guideArrow"><defs><marker id="ah" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto"><path d="M0 0 10 5 0 10z"/></marker></defs><path id="guidePath" marker-end="url(#ah)"/></svg>
+              <div class="guide-ring" id="guideRing"></div>
+              <div class="guide-cursor" id="guideCursor"></div>
+            </div>
           </div>
         </figure>
-        <div class="to" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></div>
+        <div class="to" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h13m-5.5-6.5L18 12l-6.5 6.5"/></svg></div>
         <figure class="board-wrap" data-side="goal">
-          <figcaption><span class="cap">Goal</span></figcaption>
-          <div class="board" id="goalBoard" role="grid" aria-label="Goal board"></div>
+          <figcaption><span class="cap" id="goalCap"></span></figcaption>
+          <div class="board-frame"><div class="board" id="goalBoard" role="grid" aria-label="Goal board"></div></div>
         </figure>
       </div>
+    </main>
 
-      <div class="band dock" id="editDock">
+    <section class="dock" aria-label="Controls">
+      <div class="dock-inner" id="editDock">
         <div class="palette" id="palette" role="radiogroup" aria-label="Paint colour"></div>
         <div class="tools" role="toolbar" aria-label="Board tools">
           <button type="button" class="tool" id="undoBtn" data-icon="undo" title="Undo (Ctrl+Z)"><span class="tool-text">Undo</span></button>
           <button type="button" class="tool" id="fillBtn" data-icon="bucket"><span class="tool-text">Fill</span></button>
           <button type="button" class="tool" id="copyBtn" data-icon="copy"><span class="tool-text" id="copyText">Copy</span></button>
           <button type="button" class="tool" id="swapBtn" data-icon="swap" title="Swap the start and goal boards"><span class="tool-text">Swap</span></button>
-          <button type="button" class="tool" id="unfatBtn" data-icon="unpiece" title="Remove the 2x2 Chuzzle" hidden><span class="tool-text">No 2x2</span></button>
           <button type="button" class="tool" id="shareBtn" data-icon="link" title="Copy a link to this puzzle"><span class="tool-text">Link</span></button>
+          <button type="button" class="tool" id="unfatBtn" data-icon="unpiece" title="Remove the 2x2 Chuzzle"><span class="tool-text">No 2x2</span></button>
         </div>
-        <p class="warn" id="countWarn" hidden></p>
       </div>
 
-      <div class="band dock" id="replayDock" hidden>
+      <div class="dock-inner" id="replayDock" hidden>
         <div class="player">
           <button type="button" class="icon-btn" id="firstBtn" data-icon="first" aria-label="Back to the start"></button>
           <button type="button" class="icon-btn" id="prevBtn" data-icon="left" aria-label="Previous move"></button>
@@ -90,12 +92,12 @@
           <button type="button" class="icon-btn" id="nextBtn" data-icon="right" aria-label="Next move"></button>
           <button type="button" class="icon-btn" id="lastBtn" data-icon="last" aria-label="Jump to the end"></button>
         </div>
-        <p class="step" id="stepText" aria-live="polite"></p>
-        <div class="chips" id="replayChips"></div>
+        <div class="steps">
+          <p class="step" id="stepText" aria-live="polite"></p>
+          <div class="chips" id="replayChips"></div>
+        </div>
       </div>
-    </section>
 
-    <aside class="panel">
       <div class="solve-box">
         <label class="depth">
           <span class="sr-only">Search up to</span>
@@ -108,34 +110,25 @@
         <button type="button" class="icon-btn cancel" id="cancelBtn" data-icon="x" aria-label="Cancel" hidden></button>
       </div>
       <p class="status" id="status" aria-live="polite"></p>
+    </section>
+  </div>
 
-      <div class="intro" id="intro">
-        <ol>
-          <li><strong>Paint</strong> both boards, or pick one of the game's 100 puzzles at the top.</li>
-          <li><strong>Solve.</strong> You get every shortest solution up to 10 moves, and proof that none is shorter.</li>
-          <li><strong>Replay</strong> any solution: the wand shows each drag.</li>
-        </ol>
-        <p class="fine">Runs on your device in WebAssembly; nothing is uploaded. Up to 8 moves takes about a second,
-          10 moves from seconds to a minute or two.</p>
+  <section class="results" id="results" hidden>
+    <div class="res-head">
+      <div>
+        <div class="res-title" id="resultTitle"></div>
+        <div class="res-sub" id="resultSub"></div>
       </div>
-
-      <div class="results" id="results" hidden>
-        <div class="band res-head">
-          <div>
-            <div class="res-title" id="resultTitle"></div>
-            <div class="res-sub" id="resultSub"></div>
-          </div>
-          <div class="res-actions">
-            <button type="button" class="icon-btn" id="copyAllBtn" data-icon="clipboard" aria-label="Copy all solutions" title="Copy all solutions"></button>
-            <button type="button" class="icon-btn" id="downloadBtn" data-icon="download" aria-label="Download solutions" title="Download as .txt"></button>
-          </div>
-        </div>
-        <p class="stale" id="staleNote" hidden>The boards have changed since this solve.</p>
-        <ol class="solutions" id="solutionList"></ol>
-        <button type="button" class="text-btn more" id="moreBtn" hidden></button>
+      <div class="res-actions">
+        <button type="button" class="icon-btn" id="copyAllBtn" data-icon="clipboard" aria-label="Copy all solutions" title="Copy all solutions"></button>
+        <button type="button" class="icon-btn" id="downloadBtn" data-icon="download" aria-label="Download solutions" title="Download as .txt"></button>
+        <button type="button" class="icon-btn" id="upBtn" data-icon="up" aria-label="Back to the board" title="Back to the board"></button>
       </div>
-    </aside>
-  </main>
+    </div>
+    <p class="stale" id="staleNote" hidden>The boards have changed since this solve.</p>
+    <ol class="solutions" id="solutionList"></ol>
+    <button type="button" class="text-btn more" id="moreBtn" hidden></button>
+  </section>
 
   <dialog id="helpDialog" aria-labelledby="helpTitle">
     <form method="dialog" class="dlg">
@@ -143,6 +136,9 @@
         <h2 id="helpTitle">How it works</h2>
         <button class="icon-btn" value="close" data-icon="x" aria-label="Close"></button>
       </div>
+      <p class="fine">Paint both boards, or pick one of the game's 100 puzzles at the top, then Solve. You get every
+        shortest solution of up to 10 moves, and proof that none is shorter. Replay any of them: the wand shows each
+        drag. It runs on your device in WebAssembly; nothing is uploaded.</p>
       <h3>Notation</h3>
       <dl class="notation">
         <dt><code>R14</code></dt><dd>row 1 shifted right 4</dd>
@@ -159,8 +155,8 @@
       <h3>The search</h3>
       <p class="fine">The solver builds every board within 4 moves of the start and of the goal, and joins the two in
         the middle. The work is split over several threads, and a lane bound cuts away boards that can't reach the goal in
-        time. It checks every move sequence, so "none shorter" is exact. It stops at 10 moves; longer puzzles need the
-        desktop solver.</p>
+        time. It checks every move sequence, so "none shorter" is exact. Up to 8 moves takes about a second, 10 moves
+        seconds to a minute or two. It stops at 10 moves; longer puzzles need the desktop solver.</p>
       <label class="setting">
         <span>Threads</span>
         <select id="threads"></select>
@@ -169,6 +165,7 @@
   </dialog>
 
   <script src="puzzles.js"></script>
+  <script src="font.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

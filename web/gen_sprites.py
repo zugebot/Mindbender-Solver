@@ -1,20 +1,25 @@
-"""web/gen_sprites.py - builds the page's Chuzzle sprites from the game textures in
+"""web/gen_sprites.py - builds the page's art from the game textures in
 python/deluxe_clone/textures/, the same way python/deluxe_clone/engine/textures.py does:
 the grey body sheet multiplied by the colour, plus 60 x the highlight mask, cut by the
-body's alpha mask (yellow uses its own painted sheet), then eyes and pupils on top.
+body's alpha mask (yellow uses its own painted sheet). Eyes and pupils stay separate,
+because the page moves the pupils at run time the way engine/chuzzle.py does.
 
 Writes web/assets/:
-  chuzzles.webp  8 rows (colours 0-7) x 24 frames of 80 px: 20 idle sway frames, then one
-                 stretched frame per direction (down, left, right, up) for sliding
-  huge.webp      the same for the 2x2 piece: 8 rows x 14 frames of 180 px (10 sway + 4)
-  eyes.webp      4 eye shapes x 6 pupil colours, 80 px, laid over a normal ball
-  eyes-huge.webp the same 24 for the 2x2 piece, 180 px
-  frame.webp     the board's rainbow border (Border.png with its alpha)
-  cursors.webp   the game's cursors (the replay guide uses the pink and yellow wands)
-  bkg1-9.webp    the backdrops' pattern, as seamless tiles
+  chuzzles.webp   8 rows (colours 0-7) x 60 frames of 80 px, the game's full bank:
+                  20 idle sway frames, then 4 directions (down, left, right, up) x 10 speeds
+  huge.webp       the 2x2 chuzzle: 8 rows x 30 frames (10 sway + 4 x 5), 179 px in 180 px slots
+  eyes.webp       the 4 eye shapes (Eyes.png, 85 x 88 each)
+  pupils.webp     the 6 pupil colours (Pupils.png, 14 x 14 each)
+  frame.webp      the board's rainbow border (Border.png with its alpha)
+  cursors.webp    the game's cursors (the replay guide uses the pink and yellow wands)
+  bkg1-9.webp     the backdrops' pattern, as seamless tiles
+  bauhaus36.webp  the game's Bauhaus 93 bitmap font (textures/fonts/Bauhaus9336_Alpha.gif)
+and web/font.js, that font's glyph metrics (from tools/font/Bauhaus9336.py).
 
     python web/gen_sprites.py
 """
+import ast
+import json
 import pathlib
 
 import numpy as np
@@ -28,12 +33,6 @@ OUT = ROOT / "web/assets"
 TINTS = {0: (178, 8, 8), 1: (8, 174, 8), 2: (8, 8, 255), 3: (255, 105, 2),
          5: (207, 7, 207), 6: (255, 255, 255), 7: (87, 197, 221)}
 HUGE_YELLOW = (255, 255, 0)
-
-# engine/chuzzle.py: eye placement and pupil centres per eye shape
-NORMAL_EYES_POS = (-2, -3)
-EYE_PUPIL_CENTERS = [((34, 60), (53, 62)), ((33, 62), (53, 63)), ((34, 63), (52, 62)), ((35, 62), (54, 62))]
-
-DIR_SEGMENTS = (0, 1, 2, 3)    # frames 20 + 10s.. (normal) / 10 + 5s.. (huge): down, left, right, up
 
 
 def rgba(name):
@@ -53,96 +52,65 @@ def to_image(a):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGBA")
 
 
+def with_alpha(name, alpha_name):
+    im = Image.open(TEX / name).convert("RGBA")
+    im.putalpha(Image.open(TEX / alpha_name).convert("RGBA").split()[0])
+    return im
+
+
 def build_balls():
+    # loadChuzzleTextures: 60 frames, frame i = (81 i, 2, 80, 80)
     base = rgba("Chuzzle-Base.png")
     hilite = mask("Chuzzle-Hilite_Alpha.png")
     alpha = mask("Chuzzle-Base_Alpha.png")
     yellow = rgba("Chuzzle-Yellow.png")[:base.shape[0], :base.shape[1]]
-    frames = list(range(20)) + [20 + 10 * s + 6 for s in DIR_SEGMENTS]
-    sheet = Image.new("RGBA", (80 * len(frames), 80 * 8))
+    sheet = Image.new("RGBA", (80 * 60, 80 * 8))
     for color in range(8):
-        if color == 4:
-            strip = np.dstack([yellow[..., :3], alpha])
-        else:
-            strip = tinted(base, hilite, alpha, TINTS[color], 60)
+        strip = np.dstack([yellow[..., :3], alpha]) if color == 4 else tinted(base, hilite, alpha, TINTS[color], 60)
         img = to_image(strip)
-        for k, f in enumerate(frames):
-            sheet.paste(img.crop((81 * f, 2, 81 * f + 80, 82)), (80 * k, 80 * color))
+        for f in range(60):
+            sheet.paste(img.crop((81 * f, 2, 81 * f + 80, 82)), (80 * f, 80 * color))
     return sheet
 
 
 def build_huge():
+    # loadChuzzleTexturesFat: 30 frames, frame i = (179 i, 0, 179, 179)
     base = rgba("ChuzzleHuge-Base.png")
     hilite = mask("ChuzzleHuge-Hilite_Alpha.png")
     alpha = mask("ChuzzleHuge-Base_Alpha.png")
-    frames = list(range(10)) + [10 + 5 * s + 3 for s in DIR_SEGMENTS]
-    sheet = Image.new("RGBA", (180 * len(frames), 180 * 8))
+    sheet = Image.new("RGBA", (180 * 30, 180 * 8))
     for color in range(8):
         img = to_image(tinted(base, hilite, alpha, HUGE_YELLOW if color == 4 else TINTS[color], 60))
-        for k, f in enumerate(frames):
-            sheet.paste(img.crop((179 * f, 0, 179 * f + 179, 179)), (180 * k, 180 * color))
+        for f in range(30):
+            sheet.paste(img.crop((179 * f, 0, 179 * f + 179, 179)), (180 * f, 180 * color))
     return sheet
 
 
-def eye_parts():
-    eyes = Image.open(TEX / "Eyes.png").convert("RGBA")
-    eyes.putalpha(Image.open(TEX / "Eyes_Alpha.png").convert("RGBA").split()[0])
-    pupils = Image.open(TEX / "Pupils.png").convert("RGBA")
-    pupils.putalpha(Image.open(TEX / "Pupils_Alpha.png").convert("RGBA").split()[0])
-    ew, pw = eyes.width // 4, pupils.width // 6
-    return ([eyes.crop((ew * i, 0, ew * (i + 1), eyes.height)) for i in range(4)],
-            [pupils.crop((pw * i, 0, pw * (i + 1), pupils.height)) for i in range(6)])
+def build_font():
+    # tools/font/Bauhaus9336.py: CharList / WidthList / RectList / OffsetList, ascent 43, space 12
+    src = (ROOT / "python/deluxe_clone/tools/font/Bauhaus9336.py").read_text()
+    lists = {}
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Attribute):
+            name = node.targets[0].attr
+            if name in ("CharList", "WidthList", "RectList", "OffsetList"):
+                lists[name] = ast.literal_eval(node.value)
+    glyphs = {c: {"r": r, "o": o, "w": w}
+              for c, w, r, o in zip(lists["CharList"], lists["WidthList"], lists["RectList"], lists["OffsetList"])}
+    metrics = {"size": 36, "ascent": 43, "height": 54, "space": 12, "glyphs": glyphs}
+    a = Image.open(TEX / "fonts/Bauhaus9336_Alpha.gif").convert("L")
+    atlas = Image.new("RGBA", a.size, (255, 255, 255, 0))
+    atlas.putalpha(a)
+    return atlas, metrics
 
 
-def build_eyes(size, eyes_pos, centers_for):
-    shapes, pupils = eye_parts()
-    sheet = Image.new("RGBA", (size * 6, size * 4))
-    for s, eye in enumerate(shapes):
-        for p, pupil in enumerate(pupils):
-            tile = Image.new("RGBA", (size, size))
-            tile.alpha_composite(eye, (max(0, eyes_pos[0]), max(0, eyes_pos[1])),
-                                 (max(0, -eyes_pos[0]), max(0, -eyes_pos[1])))
-            for cx, cy in centers_for(s):
-                x = eyes_pos[0] + cx - pupil.width // 2
-                y = eyes_pos[1] + cy - pupil.height // 2
-                tile.alpha_composite(pupil, (x, y))
-            sheet.paste(tile, (size * p, size * s))
-    return sheet
-
-
-def build_eyes_huge(size=180, scale=2.3, left_pupil=(70, 100)):
-    # engine/chuzzle.py puts the 2x2 piece's pupils 45 px apart (70,95 and 115,95), which
-    # is the normal eye texture drawn about 2.3x; scale it and line it up by the pupils.
-    shapes, pupils = eye_parts()
-    big = lambda im: im.resize((round(im.width * scale), round(im.height * scale)), Image.Resampling.LANCZOS)
-    sheet = Image.new("RGBA", (size * 6, size * 4))
-    for s, eye in enumerate(shapes):
-        eye = big(eye)
-        (lx, ly), (rx, ry) = EYE_PUPIL_CENTERS[s]
-        ox = round(left_pupil[0] - lx * scale)
-        oy = round(left_pupil[1] - ly * scale)
-        for p, pupil in enumerate(pupils):
-            pupil = big(pupil)
-            tile = Image.new("RGBA", (size + 64, size + 64))     # margin, cropped below
-            tile.alpha_composite(eye, (ox + 32, oy + 32))
-            for cx, cy in ((lx, ly), (rx, ry)):
-                tile.alpha_composite(pupil, (round(ox + cx * scale - pupil.width / 2) + 32,
-                                             round(oy + cy * scale - pupil.height / 2) + 32))
-            sheet.paste(tile.crop((32, 32, 32 + size, 32 + size)), (size * p, size * s))
-    return sheet
+def build_frame():
+    return with_alpha("Border.png", "Border_Alpha.png")
 
 
 def build_cursors():
     # CustomCursors.png: 5 cursors of 64 px (pink wand, clock, orange wand, I-beam, yellow wand)
-    cur = Image.open(TEX / "CustomCursors.png").convert("RGBA")
-    cur.putalpha(Image.open(TEX / "CustomCursors_Alpha.png").convert("RGBA").split()[0])
-    return cur
-
-
-def build_frame():
-    frame = Image.open(TEX / "Border.png").convert("RGBA")
-    frame.putalpha(Image.open(TEX / "Border_Alpha.png").convert("RGBA").split()[0])
-    return frame
+    return with_alpha("CustomCursors.png", "CustomCursors_Alpha.png")
 
 
 def backdrop_tile(i):
@@ -160,13 +128,22 @@ def backdrop_tile(i):
 
 def main():
     OUT.mkdir(exist_ok=True)
+    for stale in ("eyes-huge.webp",):
+        (OUT / stale).unlink(missing_ok=True)
     save = lambda im, name, q=88: im.save(OUT / name, "WEBP", quality=q, method=6)
-    save(build_balls(), "chuzzles.webp")
+    save(build_balls(), "chuzzles.webp", 84)
     save(build_huge(), "huge.webp", 80)
-    save(build_eyes(80, NORMAL_EYES_POS, lambda s: EYE_PUPIL_CENTERS[s]), "eyes.webp", 92)
-    save(build_eyes_huge(), "eyes-huge.webp", 92)
+    save(with_alpha("Eyes.png", "Eyes_Alpha.png"), "eyes.webp", 94)
+    save(with_alpha("Pupils.png", "Pupils_Alpha.png"), "pupils.webp", 94)
     save(build_frame(), "frame.webp", 90)
     save(build_cursors(), "cursors.webp", 92)
+    atlas, metrics = build_font()
+    atlas.save(OUT / "bauhaus36.webp", "WEBP", lossless=True)
+    (ROOT / "web/font.js").write_text(
+        "// web/font.js - generated by web/gen_sprites.py; do not edit.\n"
+        "// The game's Bauhaus 93 bitmap font (assets/bauhaus36.webp), metrics from\n"
+        "// python/deluxe_clone/tools/font/Bauhaus9336.py: glyph -> atlas rect r, offset o, advance w.\n"
+        f"self.MB_FONT = {json.dumps(metrics, separators=(',', ':'))};\n", newline="\n")
     for i in range(1, 10):
         save(backdrop_tile(i), f"bkg{i}.webp", 82)
     for f in sorted(OUT.iterdir()):

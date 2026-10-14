@@ -7,10 +7,11 @@ code: the solver is C++ compiled to WebAssembly and runs in Web Workers.
 
 ## Run it locally
 
-Browsers block workers on `file://` pages, so serve the folder:
+Browsers block workers on `file://` pages, so serve the folder (`serve.py` turns caching off, so a
+reload never mixes old CSS with new sprite sheets):
 
 ```bash
-python -m http.server 8770 --directory web
+python web/serve.py
 ```
 
 Then open http://localhost:8770/.
@@ -32,6 +33,8 @@ nothing (see below).
 | `puzzles.js` | the game's 100 boards with their known optimum or lower bound (generated) |
 | `build_wasm.ps1` | rebuilds `mb_solver.js` with Emscripten (`emcc` on PATH) |
 | `assets/` | the Chuzzle sprites, eyes, rainbow board frame and backdrop tiles (generated) |
+| `font.js` | the game's Bauhaus 93 bitmap-font metrics (generated with `assets/bauhaus36.webp`) |
+| `serve.py` | local server with caching off |
 | `gen_sprites.py` | regenerates `assets/` from the game textures in `python/deluxe_clone/textures/`, the way `python/deluxe_clone/engine/textures.py` builds them: grey body x colour + 60 x highlight, cut by the alpha mask (yellow has its own sheet), then eyes and pupils |
 | `gen_puzzles.py` | regenerates `puzzles.js` from `src/chuzzles/levels*.hpp`, `build/levels_final/`, `build/README.md` |
 
@@ -80,3 +83,15 @@ the backdrop pattern of the puzzle's world. The replay is guided: the game's wan
 the lane the short way round (right 5 = drag left 1) while it slides along; between moves an arrow on
 the board shows the next drag. The art is PopCap's (from the game files), so a public
 host redistributes it.
+
+## Layout
+
+One layout for every screen: the app fills the window (header, info bar, boards, control dock) and
+`app.js` measures the board area and sets `--u`, one pixel of the game's 800x600 screen. Boards are
+drawn in the game's own coordinates (`python/deluxe_clone/objects/board.py`): 80-unit cells, the 2x2
+Chuzzle's 179-unit sprite at (-10, -12), the 535-unit border 26 / 31 units out from the cells. Two
+boards side by side when that gives at least 3/4 of the size of one, else one with Start / Goal tabs;
+on short wide screens the dock moves to a column on the right. The solutions list is below the app.
+Eyes follow `engine/chuzzle.py`: idle looks every 5-14 s, blinks every 3-10 s, pupils turn to the
+mouse over their chuzzle, and drop half a pixel on sway frames 10-14. Text above the boards uses the
+game's Bauhaus 93 bitmap font (`textures/fonts`), drawn on canvases.
