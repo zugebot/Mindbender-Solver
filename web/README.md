@@ -76,5 +76,7 @@ up to 8 moves under ~2 s; 4-2 (2x2, 9 moves) 1.2 s; 8-1 (10 moves) 11 s on 12 wo
 The boards use the game's own art: each ball is a Chuzzle sprite with the idle sway (20 frames, the
 2x2 piece 10) and the game's stretched frame while a lane slides; eye shape and pupil colour stay with
 each Chuzzle through a replay. The board sits in the game's rainbow frame, and the page background is
-the backdrop pattern of the puzzle's world. The art is PopCap's (from the game files), so a public
+the backdrop pattern of the puzzle's world. The replay is guided: the game's wand cursor glides to a Chuzzle in the lane, presses, and drags
+the lane the short way round (right 5 = drag left 1) while it slides along; between moves an arrow on
+the board shows the next drag. The art is PopCap's (from the game files), so a public
 host redistributes it.

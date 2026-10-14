@@ -10,6 +10,7 @@ Writes web/assets/:
   eyes.webp      4 eye shapes x 6 pupil colours, 80 px, laid over a normal ball
   eyes-huge.webp the same 24 for the 2x2 piece, 180 px
   frame.webp     the board's rainbow border (Border.png with its alpha)
+  cursors.webp   the game's cursors (the replay guide uses the pink and yellow wands)
   bkg1-9.webp    the backdrops' pattern, as seamless tiles
 
     python web/gen_sprites.py
@@ -131,6 +132,13 @@ def build_eyes_huge(size=180, scale=2.3, left_pupil=(70, 100)):
     return sheet
 
 
+def build_cursors():
+    # CustomCursors.png: 5 cursors of 64 px (pink wand, clock, orange wand, I-beam, yellow wand)
+    cur = Image.open(TEX / "CustomCursors.png").convert("RGBA")
+    cur.putalpha(Image.open(TEX / "CustomCursors_Alpha.png").convert("RGBA").split()[0])
+    return cur
+
+
 def build_frame():
     frame = Image.open(TEX / "Border.png").convert("RGBA")
     frame.putalpha(Image.open(TEX / "Border_Alpha.png").convert("RGBA").split()[0])
@@ -158,6 +166,7 @@ def main():
     save(build_eyes(80, NORMAL_EYES_POS, lambda s: EYE_PUPIL_CENTERS[s]), "eyes.webp", 92)
     save(build_eyes_huge(), "eyes-huge.webp", 92)
     save(build_frame(), "frame.webp", 90)
+    save(build_cursors(), "cursors.webp", 92)
     for i in range(1, 10):
         save(backdrop_tile(i), f"bkg{i}.webp", 82)
     for f in sorted(OUT.iterdir()):

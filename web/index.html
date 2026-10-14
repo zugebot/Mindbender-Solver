@@ -9,6 +9,7 @@
   <link rel="preload" href="assets/chuzzles.webp" as="image">
   <link rel="preload" href="assets/eyes.webp" as="image">
   <link rel="preload" href="assets/huge.webp" as="image">
+  <link rel="preload" href="assets/frame.webp" as="image">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -30,17 +31,19 @@
 
   <main class="layout">
     <section class="stage" aria-label="Boards">
-      <p class="info" id="info"></p>
-      <div class="sol-switch" id="solSwitch" hidden>
-        <button type="button" class="text-btn" id="editBtn"><span data-icon="pencil"></span>Edit</button>
-        <div class="sol-nav">
-          <button type="button" class="icon-btn" id="prevSol" data-icon="left" aria-label="Previous solution"></button>
-          <span id="solLabel"></span>
-          <button type="button" class="icon-btn" id="nextSol" data-icon="right" aria-label="Next solution"></button>
+      <div class="band subbar">
+        <p class="info" id="info"></p>
+        <div class="sol-switch" id="solSwitch" hidden>
+          <button type="button" class="text-btn" id="editBtn"><span data-icon="pencil"></span>Edit</button>
+          <div class="sol-nav">
+            <button type="button" class="icon-btn" id="prevSol" data-icon="left" aria-label="Previous solution"></button>
+            <span id="solLabel"></span>
+            <button type="button" class="icon-btn" id="nextSol" data-icon="right" aria-label="Next solution"></button>
+          </div>
         </div>
       </div>
 
-      <div class="seg" role="tablist" aria-label="Board">
+      <div class="band seg" role="tablist" aria-label="Board">
         <button type="button" role="tab" class="seg-btn" data-side="start" id="tabStart">
           <span class="thumb" id="thumbStart" aria-hidden="true"></span><span id="tabStartLabel">Start</span>
         </button>
@@ -50,9 +53,14 @@
       </div>
 
       <div class="boards">
-        <figure class="board-wrap" data-side="start">
+        <figure class="board-wrap" data-side="start" id="startWrap">
           <figcaption><span class="cap" id="startCap">Start</span></figcaption>
           <div class="board" id="startBoard" role="grid" aria-label="Start board"></div>
+          <div class="guide" id="guide" aria-hidden="true" hidden>
+            <svg class="guide-arrow" id="guideArrow"><defs><marker id="ah" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto"><path d="M0 0 10 5 0 10z"/></marker></defs><path id="guidePath" marker-end="url(#ah)"/></svg>
+            <div class="guide-ring" id="guideRing"></div>
+            <div class="guide-cursor" id="guideCursor"></div>
+          </div>
         </figure>
         <div class="to" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></div>
         <figure class="board-wrap" data-side="goal">
@@ -61,23 +69,20 @@
         </figure>
       </div>
 
-      <div class="dock" id="editDock">
+      <div class="band dock" id="editDock">
         <div class="palette" id="palette" role="radiogroup" aria-label="Paint colour"></div>
         <div class="tools" role="toolbar" aria-label="Board tools">
-          <button type="button" class="tool" id="undoBtn" data-icon="undo" aria-label="Undo" title="Undo (Ctrl+Z)"></button>
-          <button type="button" class="tool" id="fillBtn" data-icon="bucket" aria-label="Fill board" title="Fill the board with the colour"></button>
-          <button type="button" class="tool" id="copyBtn" data-icon="copy" aria-label="Copy the other board" title="Copy the other board onto this one"></button>
-          <button type="button" class="tool" id="swapBtn" data-icon="swap" aria-label="Swap boards" title="Swap the start and goal boards"></button>
-          <span class="tool-sep" aria-hidden="true"></span>
-          <button type="button" class="tool" id="fatBtn" data-icon="piece" aria-pressed="false" title="Add the 2x2 piece"><span class="tool-text">2x2</span></button>
-          <button type="button" class="tool" id="moveTool" data-icon="move" aria-pressed="false" title="Move the 2x2 piece (M)" hidden><span class="tool-text">Move</span></button>
-          <span class="tool-sep" aria-hidden="true"></span>
-          <button type="button" class="tool" id="shareBtn" data-icon="link" aria-label="Copy a link to this puzzle" title="Copy a link to this puzzle"></button>
+          <button type="button" class="tool" id="undoBtn" data-icon="undo" title="Undo (Ctrl+Z)"><span class="tool-text">Undo</span></button>
+          <button type="button" class="tool" id="fillBtn" data-icon="bucket"><span class="tool-text">Fill</span></button>
+          <button type="button" class="tool" id="copyBtn" data-icon="copy"><span class="tool-text" id="copyText">Copy</span></button>
+          <button type="button" class="tool" id="swapBtn" data-icon="swap" title="Swap the start and goal boards"><span class="tool-text">Swap</span></button>
+          <button type="button" class="tool" id="unfatBtn" data-icon="unpiece" title="Remove the 2x2 Chuzzle" hidden><span class="tool-text">No 2x2</span></button>
+          <button type="button" class="tool" id="shareBtn" data-icon="link" title="Copy a link to this puzzle"><span class="tool-text">Link</span></button>
         </div>
         <p class="warn" id="countWarn" hidden></p>
       </div>
 
-      <div class="dock" id="replayDock" hidden>
+      <div class="band dock" id="replayDock" hidden>
         <div class="player">
           <button type="button" class="icon-btn" id="firstBtn" data-icon="first" aria-label="Back to the start"></button>
           <button type="button" class="icon-btn" id="prevBtn" data-icon="left" aria-label="Previous move"></button>
@@ -87,7 +92,6 @@
         </div>
         <p class="step" id="stepText" aria-live="polite"></p>
         <div class="chips" id="replayChips"></div>
-
       </div>
     </section>
 
@@ -109,14 +113,14 @@
         <ol>
           <li><strong>Paint</strong> both boards, or pick one of the game's 100 puzzles at the top.</li>
           <li><strong>Solve.</strong> You get every shortest solution up to 10 moves, and proof that none is shorter.</li>
-          <li><strong>Replay</strong> any solution move by move.</li>
+          <li><strong>Replay</strong> any solution: the wand shows each drag.</li>
         </ol>
         <p class="fine">Runs on your device in WebAssembly; nothing is uploaded. Up to 8 moves takes about a second,
           10 moves from seconds to a minute or two.</p>
       </div>
 
       <div class="results" id="results" hidden>
-        <div class="res-head">
+        <div class="band res-head">
           <div>
             <div class="res-title" id="resultTitle"></div>
             <div class="res-sub" id="resultSub"></div>
@@ -143,13 +147,15 @@
       <dl class="notation">
         <dt><code>R14</code></dt><dd>row 1 shifted right 4</dd>
         <dt><code>C32</code></dt><dd>column 3 shifted down 2</dd>
-        <dt><code>R453</code></dt><dd>the 2x2 piece's rows 4 and 5, right 3</dd>
-        <dt><code>C231</code></dt><dd>the 2x2 piece's columns 2 and 3, down 1</dd>
+        <dt><code>R453</code></dt><dd>the 2x2 Chuzzle's rows 4 and 5, right 3</dd>
+        <dt><code>C231</code></dt><dd>the 2x2 Chuzzle's columns 2 and 3, down 1</dd>
       </dl>
-      <p class="fine">Rows count from the top, columns from the left.</p>
+      <p class="fine">Rows count from the top, columns from the left. Shifts of 4 or 5 are easier dragged the other
+        way (right 5 = left 1), so the replay's wand drags the short way.</p>
       <h3>Editing</h3>
-      <p class="fine">Click or drag to paint. Right-click a cell to pick its colour. Keys 1-8 choose a colour, M moves the
-        2x2 piece, Ctrl+Z undoes. The link button copies a link to the puzzle.</p>
+      <p class="fine">Pick a colour and click or drag to paint; right-click a cell to pick its colour. The 2x2 button
+        at the end of the palette places the big Chuzzle: pick it, then tap where its top-left should go. Keys 1-8
+        choose a colour, 9 the 2x2, Ctrl+Z undoes.</p>
       <h3>The search</h3>
       <p class="fine">The solver builds every board within 4 moves of the start and of the goal, and joins the two in
         the middle. The work is split over several threads, and a lane bound cuts away boards that can't reach the goal in

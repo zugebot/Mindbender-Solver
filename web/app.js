@@ -1,4 +1,4 @@
-// web/app.js - board editor, the solver workers, results and replay.
+// web/app.js - board editor, the solver workers, results and the guided replay.
 'use strict';
 
 (() => {
@@ -14,8 +14,7 @@
     bucket: '<path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/>',
     copy: '<rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/>',
     swap: '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
-    piece: '<rect x="3" y="3" width="11" height="11" rx="3"/><circle cx="18.5" cy="8.5" r="2.5"/><circle cx="8.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
-    move: '<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
+    unpiece: '<rect x="3" y="3" width="13" height="13" rx="3.5"/><path d="m15 15 6 6m0-6-6 6"/>',
     link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
     left: '<path d="m15 18-6-6 6-6"/>',
     right: '<path d="m9 18 6-6-6-6"/>',
@@ -42,7 +41,7 @@
     start: blank(),
     goal: blank(),
     color: 2,
-    moveTool: false,
+    placing: false,         // the palette's 2x2 tool: taps place the big chuzzle
     undo: [],
     preset: '',
     side: 'start',          // the board being edited (the one shown on phones)
@@ -62,6 +61,7 @@
 
   const pieceCells = (f) => [f.y * 6 + f.x, f.y * 6 + f.x + 1, (f.y + 1) * 6 + f.x, (f.y + 1) * 6 + f.x + 1];
   const inPiece = (f, r, c) => !!f && r >= f.y && r <= f.y + 1 && c >= f.x && c <= f.x + 1;
+  const pieceColour = (b) => (b.fat ? b.cells[b.fat.y * 6 + b.fat.x] : null);
 
   function paint(board, r, c, color) {
     if (inPiece(board.fat, r, c)) {
@@ -71,16 +71,24 @@
     }
   }
 
-  // The piece's cells take its colour at the new place; the cells it leaves keep theirs.
-  function placePiece(board, r, c) {
-    const x = Math.min(c, 4), y = Math.min(r, 4);
-    const color = board.fat ? board.cells[board.fat.y * 6 + board.fat.x] : board.cells[y * 6 + x];
-    board.fat = { x, y };
+  // The 2x2 chuzzle with its top-left at (r, c), kept inside the board. Its cells take
+  // its colour; the cells it leaves keep theirs.
+  function placePieceAt(board, r, c, color) {
+    board.fat = { x: Math.min(c, 4), y: Math.min(r, 4) };
     for (const i of pieceCells(board.fat)) board.cells[i] = color;
   }
 
-  // ---------------------------------------------------------------- moves (replay)
-  // "R14" row 1 right 4, "C32" column 3 down 2, "R453" / "C231" the 2x2 piece's two lanes.
+  // The 2x2 tool: moves this board's piece there, or places a new one (in the selected
+  // colour). A puzzle has the piece on both boards, so the other board gets one too.
+  function placeFat(which, r, c) {
+    const b = state[which], o = state[otherSide(which)];
+    const color = pieceColour(b) ?? pieceColour(o) ?? state.color;
+    placePieceAt(b, r, c, color);
+    if (!o.fat) placePieceAt(o, r, c, color);
+  }
+
+  // ---------------------------------------------------------------- moves
+  // "R14" row 1 right 4, "C32" column 3 down 2, "R453" / "C231" the 2x2 chuzzle's two lanes.
   function parseMove(name) {
     const d = name.slice(1);
     const lanes = d.length === 2 ? [+d[0] - 1] : [+d[0] - 1, +d[1] - 1];
@@ -106,28 +114,45 @@
     return out;
   }
 
-  function describeMove(mv) {
-    const what = mv.lanes.length === 2
-      ? `${mv.col ? 'columns' : 'rows'} ${mv.lanes[0] + 1}+${mv.lanes[1] + 1}`
-      : `${mv.col ? 'column' : 'row'} ${mv.lanes[0] + 1}`;
-    return `${what} ${mv.col ? 'down' : 'right'} ${mv.n}`;
+  const laneName = (mv) => (mv.lanes.length === 2
+    ? `${mv.col ? 'columns' : 'rows'} ${mv.lanes[0] + 1}+${mv.lanes[1] + 1}`
+    : `${mv.col ? 'column' : 'row'} ${mv.lanes[0] + 1}`);
+  const describeMove = (mv) => `${laneName(mv)} ${mv.col ? 'down' : 'right'} ${mv.n}`;
+
+  // How to make a move by hand: drag the short way round (right 5 = left 1), d cells along
+  // the lane from position s, across the lane at `cross`. A 2x2 lane is grabbed by the big
+  // chuzzle itself when the drag fits.
+  function dragOf(mv, board) {
+    const d = mv.n <= 3 ? mv.n : mv.n - 6;
+    const lo = d > 0 ? 0 : -d, hi = d > 0 ? 5 - d : 5;
+    let s = Math.max(lo, Math.min(hi, Math.round((5 - d) / 2)));
+    let cross = mv.lanes[0];
+    if (mv.lanes.length === 2) {
+      cross += 0.5;
+      const f = board.fat;
+      const along = f ? (mv.col ? f.y : f.x) + 0.5 : -1;
+      if (f && along >= lo && along <= hi) s = along;
+    }
+    return { d, s, cross };
+  }
+
+  function dragText(mv, g) {
+    const dir = mv.col ? (g.d > 0 ? 'down' : 'up') : (g.d > 0 ? 'right' : 'left');
+    return `drag ${laneName(mv)} ${dir} ${Math.abs(g.d)}`;
   }
 
   // ---------------------------------------------------------------- board rendering
-  // opts.band: highlight the lane(s) a move will shift. opts.anim: {mv, dir} slides
-  // the lanes that just moved into place (dir -1 = the move was undone).
+  // opts.band: highlight the lane(s) a move will shift.
   function renderBoard(el, board, opts = {}) {
     const frag = document.createDocumentFragment();
     const f = board.fat;
     if (opts.band) {
       const mv = opts.band;
       const band = document.createElement('div');
-      band.className = mv.col ? 'band col' : 'band';
-      const lo = Math.min(...mv.lanes) + 1;
-      const span = `${lo} / span ${mv.lanes.length}`;
+      band.className = 'band-hl';
+      const span = `${Math.min(...mv.lanes) + 1} / span ${mv.lanes.length}`;
       band.style.gridRow = mv.col ? '1 / -1' : span;
       band.style.gridColumn = mv.col ? span : '1 / -1';
-      band.innerHTML = `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="${mv.col ? 'M1 3h8L5 8z' : 'M3 1v8l5-4z'}"/></svg>`;
       frag.appendChild(band);
     }
     for (let r = 0; r < 6; r++) {
@@ -143,12 +168,11 @@
         d.style.gridRow = `${r + 1} / span ${piece ? 2 : 1}`;
         d.style.gridColumn = `${c + 1} / span ${piece ? 2 : 1}`;
         d.setAttribute('role', 'gridcell');
-        d.setAttribute('aria-label', `${piece ? '2x2 piece, ' : ''}row ${r + 1}, column ${c + 1}: ${COLORS[color]}`);
+        d.setAttribute('aria-label', `${piece ? '2x2 chuzzle, ' : ''}row ${r + 1}, column ${c + 1}: ${COLORS[color]}`);
         frag.appendChild(d);
       }
     }
     el.replaceChildren(frag);
-    if (opts.anim && !reducedMotion.matches) slideLanes(el, opts.anim.mv, opts.anim.dir);
   }
 
   // A chuzzle's sprite: colour row, and an eye shape, pupil colour and sway phase that
@@ -160,17 +184,17 @@
     el.style.setProperty('--ph', ((id * 37) % 100) / 100);
   }
 
-  // Each moved ball starts where it was and slides to its new place (in the game's
-  // stretched frame for that direction); a ball that wrapped round the edge slides in
-  // from outside while a copy slides out.
-  function slideLanes(el, mv, dir) {
+  // Sets up a lane slide on a board already showing the state after the move: every moved
+  // ball starts d cells back and set(p) carries it to its place (in the game's stretched
+  // frame for the direction); a ball that wrapped round the edge slides in from outside
+  // while a copy of it slides out.
+  function prepareSlide(el, mv, d) {
     const any = el.querySelector('.cell:not(.piece)') || el.querySelector('.cell');
-    if (!any) return;
-    const gap = parseFloat(getComputedStyle(el).columnGap) || 4;
+    const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
     const pitch = (any.classList.contains('piece') ? (any.offsetWidth - gap) / 2 : any.offsetWidth) + gap;
-    const d = dir * mv.n;
+    const seg = mv.col ? (d > 0 ? 0 : 3) : (d > 0 ? 2 : 1);      // down, left, right, up
     const moving = [];
-    for (const cell of el.querySelectorAll('.cell')) {
+    for (const cell of [...el.querySelectorAll('.cell')]) {
       const r = +cell.dataset.r, c = +cell.dataset.c;
       const piece = cell.classList.contains('piece');
       const lanes = mv.col ? (piece ? [c, c + 1] : [c]) : (piece ? [r, r + 1] : [r]);
@@ -178,8 +202,7 @@
       const j = mv.col ? r : c;
       const w = piece ? 2 : 1;
       moving.push([cell, -d, 0]);
-      const wrapped = d > 0 ? j - d < 0 : j - d + w - 1 > 5;
-      if (wrapped) {
+      if (d > 0 ? j - d < 0 : j - d + w - 1 > 5) {
         const ghost = cell.cloneNode(true);
         ghost.classList.add('ghost');
         ghost.removeAttribute('role');
@@ -187,24 +210,23 @@
         moving.push([ghost, d > 0 ? 6 - d : -6 - d, d > 0 ? 6 : -6]);
       }
     }
-    const tr = (k) => (mv.col ? `translateY(${k * pitch}px)` : `translateX(${k * pitch}px)`);
-    const seg = mv.col ? (d > 0 ? 0 : 3) : (d > 0 ? 2 : 1);      // down, left, right, up
-    for (const [node, from] of moving) {
-      node.style.transition = 'none';
-      node.style.transform = tr(from);
+    for (const [node] of moving) {
       node.style.setProperty('--f', (node.classList.contains('piece') ? 10 : 20) + seg);
       node.classList.add('mv');
     }
-    el.getBoundingClientRect();
-    const ms = 140 + 45 * mv.n;
-    for (const [node, , to] of moving) {
-      node.style.transition = `transform ${ms}ms cubic-bezier(.25,.8,.25,1)`;
-      node.style.transform = to ? tr(to) : '';
-    }
-    setTimeout(() => {
-      el.querySelectorAll('.ghost').forEach((g) => g.remove());
-      for (const [node] of moving) node.classList.remove('mv');
-    }, ms + 30);
+    const tr = (k) => (mv.col ? `translateY(${k * pitch}px)` : `translateX(${k * pitch}px)`);
+    const set = (p) => { for (const [node, a, b] of moving) node.style.transform = tr(a + (b - a) * p); };
+    set(0);
+    return {
+      set,
+      finish() {
+        el.querySelectorAll('.ghost').forEach((g) => g.remove());
+        for (const [node] of moving) {
+          node.style.transform = '';
+          node.classList.remove('mv');
+        }
+      },
+    };
   }
 
   function renderThumb(el, board) {
@@ -238,16 +260,30 @@
         s.addEventListener('click', () => selectColour(k));
         el.appendChild(s);
       });
+      const big = document.createElement('button');
+      big.type = 'button';
+      big.className = 'swatch big';
+      big.id = 'fatSwatch';
+      big.setAttribute('role', 'radio');
+      big.innerHTML = '<span class="n">2x2</span>';
+      big.addEventListener('click', selectFatTool);
+      el.appendChild(big);
     }
-    [...el.children].forEach((s, k) => {
+    COLORS.forEach((name, k) => {
+      const s = el.children[k];
       const ok = a[k] === b[k];
-      s.setAttribute('aria-checked', String(!state.moveTool && state.color === k));
-      s.setAttribute('aria-label', `${COLORS[k]}: ${a[k]} on start, ${b[k]} on goal`);
-      s.title = `${COLORS[k]} (key ${k + 1})${ok ? '' : ` - ${a[k]} on start, ${b[k]} on goal`}`;
+      s.setAttribute('aria-checked', String(!state.placing && state.color === k));
+      s.setAttribute('aria-label', `${name}: ${a[k]} on start, ${b[k]} on goal`);
+      s.title = `${name} (key ${k + 1})${ok ? '' : ` - ${a[k]} on start, ${b[k]} on goal`}`;
       const n = s.firstChild;
       n.className = ok ? 'n' : 'n bad';
       n.textContent = a[k] || b[k] ? (ok ? a[k] : `${a[k]}≠${b[k]}`) : '';
     });
+    const big = $('fatSwatch');
+    setChuzzle(big, pieceColour(state.start) ?? state.color, 40);
+    big.setAttribute('aria-checked', String(state.placing));
+    big.setAttribute('aria-label', '2x2 Chuzzle: tap a cell to place it');
+    big.title = state.start.fat ? '2x2 Chuzzle: tap a cell to move it (key 9)' : '2x2 Chuzzle: tap a cell to place it (key 9)';
     const diff = [];
     for (let k = 0; k < 8; k++) if (a[k] !== b[k]) diff.push(`${COLORS[k].toLowerCase()} ${a[k]}≠${b[k]}`);
     $('countWarn').hidden = diff.length === 0;
@@ -263,7 +299,7 @@
     renderBoard($('goalBoard'), state.goal);
     for (const side of ['start', 'goal']) {
       const b = $(`${side}Board`);
-      b.classList.toggle('moving', !replay && state.moveTool && !!state[side].fat);
+      b.classList.toggle('placing', !replay && state.placing);
       b.classList.toggle('readonly', side === 'start' && !!replay);
     }
     renderThumb($('thumbStart'), replay ? result.replay[result.step] : state.start);
@@ -273,17 +309,14 @@
     $('tabStartLabel').textContent = replay ? 'Replay' : 'Start';
     $('startCap').textContent = replay ? 'Replay' : 'Start';
     $('editDock').hidden = !!replay;
+    $('replayDock').hidden = !replay;
     $('solSwitch').hidden = !replay;
     $('info').hidden = !!replay;
-    $('replayDock').hidden = !replay;
-    const hasFat = !!state.start.fat;
-    $('fatBtn').setAttribute('aria-pressed', String(hasFat));
-    $('fatBtn').title = hasFat ? 'Remove the 2x2 piece' : 'Add the 2x2 piece';
-    $('moveTool').hidden = !hasFat;
-    $('moveTool').setAttribute('aria-pressed', String(state.moveTool && hasFat));
+    $('guide').hidden = !replay;
+    $('unfatBtn').hidden = !state.start.fat;
     const other = otherSide(state.side);
     $('copyBtn').title = `Copy the ${other} board onto the ${state.side} board`;
-    $('copyBtn').setAttribute('aria-label', $('copyBtn').title);
+    $('copyText').textContent = `Copy ${other}`;
     $('fillBtn').title = `Fill the ${state.side} board with ${COLORS[state.color].toLowerCase()}`;
     $('undoBtn').disabled = state.undo.length === 0;
     renderPalette();
@@ -292,7 +325,12 @@
 
   function selectColour(k) {
     state.color = k;
-    state.moveTool = false;
+    state.placing = false;
+    render();
+  }
+
+  function selectFatTool() {
+    state.placing = !state.placing;
     render();
   }
 
@@ -314,7 +352,7 @@
       const r = +cell.dataset.r, c = +cell.dataset.c;
       const b = state[which];
       const before = JSON.stringify(b);
-      if (state.moveTool && b.fat) placePiece(b, r, c);
+      if (state.placing) placeFat(which, r, c);
       else paint(b, r, c, state.color);
       if (JSON.stringify(b) !== before) renderBoard(el, b);
     };
@@ -368,14 +406,11 @@
     if (!run) showError('');
   }
 
-  function toggleFat() {
+  function removeFat() {
     pushUndo();
-    const on = !state.start.fat;
-    for (const b of [state.start, state.goal]) {
-      if (on) placePiece(b, 2, 2);
-      else b.fat = null;
-    }
-    state.moveTool = on;
+    state.start.fat = null;
+    state.goal.fat = null;
+    state.placing = false;
     changed();
   }
 
@@ -420,7 +455,7 @@
     state.start = presetBoard(p, 'start');
     state.goal = presetBoard(p, 'goal');
     state.preset = name;
-    state.moveTool = false;
+    state.placing = false;
     leaveReplay();
     changed({ keepPreset: true });
   }
@@ -434,7 +469,7 @@
     }
     el.classList.remove('warn');
     if (!p) {
-      el.textContent = state.start.fat ? 'Custom puzzle with the 2x2 piece' : 'Custom puzzle';
+      el.textContent = state.start.fat ? 'Custom puzzle with the 2x2 Chuzzle' : 'Custom puzzle';
     } else if (p.moves && p.moves <= MAX_DEPTH) {
       el.innerHTML = `Puzzle <b>${p.name}</b> · shortest is ${p.moves} moves · ${p.solutions.toLocaleString()} solutions`;
     } else if (p.moves) {
@@ -681,7 +716,7 @@
     if (r.cancelled) return;
     const secs = (performance.now() - r.t0) / 1000;
     const lines = res.text ? res.text.split('\n').filter(Boolean).sort() : [];
-    result = { ...res, lines, secs, boards: r.boards, shown: 0, selected: -1, step: 0, playing: null };
+    result = { ...res, lines, secs, boards: r.boards, shown: 0, selected: -1, step: 0, playing: false };
     const threads = `${res.threads} thread${res.threads > 1 ? 's' : ''}`;
     r.summary = `Solved in ${fmtTime(secs)} on ${threads}`;
     $('results').hidden = false;
@@ -741,7 +776,7 @@
     if (!result || !result.lines.length) return;
     i = (i + result.lines.length) % result.lines.length;
     while (i >= result.shown) showMore();
-    stopPlay();
+    interrupt();
     const prev = $('solutionList').querySelector('[aria-selected="true"]');
     if (prev) prev.setAttribute('aria-selected', 'false');
     const li = $('solutionList').querySelector(`[data-i="${i}"]`);
@@ -762,6 +797,7 @@
     result.moves = moves;
     result.replay = boards;
     result.step = 0;
+    guide.at = null;
     const chips = $('replayChips');
     chips.replaceChildren();
     moves.forEach((mv, k) => {
@@ -770,43 +806,128 @@
       b.className = 'chip';
       b.textContent = mv.name;
       b.title = describeMove(mv);
-      b.addEventListener('click', () => showStep(k));
+      b.addEventListener('click', () => { interrupt(); showStep(k); });
       chips.appendChild(b);
     });
     $('solLabel').textContent = `Solution ${(i + 1).toLocaleString()} of ${result.lines.length.toLocaleString()}`;
     $('prevSol').disabled = $('nextSol').disabled = result.lines.length < 2;
     state.mode = 'replay';
     state.side = 'start';
-    state.moveTool = false;
+    state.placing = false;
     render();
   }
 
   function leaveReplay() {
-    stopPlay();
+    interrupt();
     state.mode = 'edit';
   }
 
-  function showStep(k, animate = false) {
+  // ---------------------------------------------------------------- the guided replay
+  // The game's wand cursor shows each move: it glides to a chuzzle in the lane, presses,
+  // drags the lane (which slides with it) the short way round, and lets go. Between moves
+  // an arrow on the board shows the next drag.
+  const HOT = { x: 12, y: 11 };               // the star's tip in the 52 px wand sprite
+  const guide = { at: null };                 // where the wand is, in the start figure's pixels
+  let animToken = 0;
+  const interrupt = () => {
+    animToken++;
+    if (result) result.playing = false;
+    setIcon($('playBtn'), 'play');
+    $('playBtn').setAttribute('aria-label', 'Play');
+    return animToken;
+  };
+  const wait = (ms, token) => new Promise((res) => setTimeout(() => res(token === animToken), reducedMotion.matches ? 0 : ms));
+  function tween(ms, fn, token) {
+    return new Promise((resolve) => {
+      if (reducedMotion.matches) {
+        fn(1);
+        resolve(token === animToken);
+        return;
+      }
+      const t0 = performance.now();
+      const frame = (now) => {
+        if (token !== animToken) {
+          resolve(false);
+          return;
+        }
+        const p = Math.min(1, (now - t0) / ms);
+        fn(p);
+        if (p < 1) requestAnimationFrame(frame);
+        else resolve(true);
+      };
+      requestAnimationFrame(frame);
+    });
+  }
+  const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+  const easeOut = (t) => 1 - (1 - t) ** 3;
+  const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+
+  // A spot on the start board (lane position `along`, across the lane at `cross`), in the
+  // pixels of the board's figure, where the guide layer sits.
+  function boardPoint(mv, along, cross) {
+    const b = $('startBoard');
+    const pad = parseFloat(getComputedStyle(b).paddingLeft) || 0;
+    const any = b.querySelector('.cell:not(.piece)');
+    const cell = any ? any.offsetWidth : 40;
+    const pitch = cell + (parseFloat(getComputedStyle(b).columnGap) || 0);
+    const ox = b.offsetLeft + b.clientLeft + pad + cell / 2;
+    const oy = b.offsetTop + b.clientTop + pad + cell / 2;
+    const r = mv.col ? along : cross, c = mv.col ? cross : along;
+    return { x: ox + c * pitch, y: oy + r * pitch };
+  }
+
+  function placeCursor(p, down = false) {
+    guide.at = p;
+    const el = $('guideCursor');
+    el.style.transform = `translate(${p.x - HOT.x}px, ${p.y - HOT.y}px)`;
+    el.classList.toggle('down', down);
+  }
+
+  function pulseAt(p) {
+    const ring = $('guideRing');
+    ring.style.left = `${p.x}px`;
+    ring.style.top = `${p.y}px`;
+    ring.classList.remove('pulse');
+    void ring.offsetWidth;
+    ring.classList.add('pulse');
+  }
+
+  function drawArrow(p0, p1) {
+    const path = $('guidePath');
+    const len = Math.hypot(p1.x - p0.x, p1.y - p0.y) || 1;
+    const back = Math.min(10, len / 3);       // leave room for the arrowhead
+    const e = { x: p1.x - (p1.x - p0.x) / len * back, y: p1.y - (p1.y - p0.y) / len * back };
+    path.setAttribute('d', `M${p0.x} ${p0.y}L${e.x} ${e.y}`);
+    $('guideArrow').classList.remove('off');
+  }
+
+  // The still view of step k: the board, the next lane lit, the arrow and the wand on it.
+  function showStep(k, keepCursor = false) {
     if (!result || !result.replay) return;
     const n = result.moves.length;
     k = Math.max(0, Math.min(n, k));
-    const from = result.step;
     result.step = k;
-    let anim = null;
-    if (animate && k === from + 1) anim = { mv: result.moves[from], dir: 1 };
-    if (animate && k === from - 1) anim = { mv: result.moves[k], dir: -1 };
     const next = k < n ? result.moves[k] : null;
-    renderBoard($('startBoard'), result.replay[k], { band: next, anim });
+    renderBoard($('startBoard'), result.replay[k], { band: next });
     renderThumb($('thumbStart'), result.replay[k]);
-    $('stepText').innerHTML = next
-      ? `Move ${k + 1} of ${n}: <b>${describeMove(next)}</b>`
-      : `<b>Solved</b> in ${n} move${n > 1 ? 's' : ''}`;
+    if (next) {
+      const g = dragOf(next, result.replay[k]);
+      const p0 = boardPoint(next, g.s, g.cross), p1 = boardPoint(next, g.s + g.d, g.cross);
+      drawArrow(p0, p1);
+      if (!keepCursor || !guide.at) placeCursor(p0);
+      $('guideCursor').hidden = false;
+      $('stepText').innerHTML = `Move ${k + 1} of ${n}: <b>${dragText(next, g)}</b>${next.n > 3 ? ` <span class="nm">(${next.name})</span>` : ''}`;
+    } else {
+      $('guideArrow').classList.add('off');
+      $('guideCursor').hidden = !keepCursor;
+      $('stepText').innerHTML = `<b>Solved</b> in ${n} move${n > 1 ? 's' : ''}`;
+    }
     [...$('replayChips').children].forEach((c, i) => {
       c.classList.toggle('done', i < k);
       c.classList.toggle('now', i === k);
     });
-    const now = $('replayChips').children[Math.min(k, n - 1)];
     const strip = $('replayChips');
+    const now = strip.children[Math.min(k, n - 1)];
     if (now && strip.scrollWidth > strip.clientWidth) {
       strip.scrollTo({ left: now.offsetLeft - strip.clientWidth / 2 + now.offsetWidth / 2, behavior: 'smooth' });
     }
@@ -814,31 +935,77 @@
     $('nextBtn').disabled = $('lastBtn').disabled = k === n;
   }
 
-  function stopPlay() {
-    if (result && result.playing) {
-      clearInterval(result.playing);
-      result.playing = null;
-    }
-    setIcon($('playBtn'), 'play');
-    $('playBtn').setAttribute('aria-label', 'Play');
+  // Plays move k with the wand: glide to the lane, press, drag (the lane follows), let go.
+  async function animateMove(k, token) {
+    const mv = result.moves[k];
+    const g = dragOf(mv, result.replay[k]);
+    const p0 = boardPoint(mv, g.s, g.cross), p1 = boardPoint(mv, g.s + g.d, g.cross);
+    const from = guide.at || { x: p0.x + 30, y: p0.y + 70 };
+    $('guideCursor').hidden = false;
+    const dist = Math.hypot(p0.x - from.x, p0.y - from.y);
+    if (dist > 2 && !(await tween(Math.min(700, 280 + dist * 1.6), (p) => placeCursor(lerp(from, p0, easeOut(p))), token))) return false;
+    $('guideArrow').classList.add('off');
+    placeCursor(p0, true);
+    pulseAt(p0);
+    if (!(await wait(220, token))) return false;
+    renderBoard($('startBoard'), result.replay[k + 1], { band: mv });
+    const slide = prepareSlide($('startBoard'), mv, g.d);
+    const ok = await tween(260 * Math.abs(g.d) + 240, (p) => {
+      const e = easeInOut(p);
+      slide.set(e);
+      placeCursor(lerp(p0, p1, e), true);
+    }, token);
+    slide.finish();
+    if (!ok) return false;
+    placeCursor(p1, true);
+    if (!(await wait(160, token))) return false;
+    placeCursor(p1, false);
+    showStep(k + 1, true);
+    return true;
   }
 
-  function togglePlay() {
+  // Undoes move k-1 with a quick slide back (no wand).
+  async function animateBack(k, token) {
+    const mv = result.moves[k - 1];
+    const g = dragOf(mv, result.replay[k - 1]);
+    $('guideArrow').classList.add('off');
+    renderBoard($('startBoard'), result.replay[k - 1], { band: mv });
+    const slide = prepareSlide($('startBoard'), mv, -g.d);
+    const ok = await tween(140 * Math.abs(g.d) + 160, (p) => slide.set(easeInOut(p)), token);
+    slide.finish();
+    if (ok) showStep(k - 1);
+    return ok;
+  }
+
+  async function next() {
+    if (!result || result.step >= result.moves.length) return;
+    const token = interrupt();
+    if (!(await animateMove(result.step, token)) && token === animToken) showStep(result.step);
+  }
+
+  async function prev() {
+    if (!result || result.step <= 0) return;
+    const token = interrupt();
+    if (!(await animateBack(result.step, token)) && token === animToken) showStep(result.step);
+  }
+
+  async function togglePlay() {
     if (!result || !result.replay) return;
     if (result.playing) {
-      stopPlay();
+      interrupt();
+      showStep(result.step);
       return;
     }
+    const token = interrupt();
     if (result.step >= result.moves.length) showStep(0);
+    result.playing = true;
     setIcon($('playBtn'), 'pause');
     $('playBtn').setAttribute('aria-label', 'Pause');
-    result.playing = setInterval(() => {
-      if (result.step >= result.moves.length) {
-        stopPlay();
-        return;
-      }
-      showStep(result.step + 1, true);
-    }, 900);
+    while (token === animToken && result.step < result.moves.length) {
+      if (!(await animateMove(result.step, token))) break;
+      if (!(await wait(600, token))) break;
+    }
+    if (token === animToken) interrupt();
   }
 
   function download(name, text) {
@@ -875,11 +1042,7 @@
     });
     $('tabStart').addEventListener('click', () => setSide('start'));
     $('tabGoal').addEventListener('click', () => setSide('goal'));
-    $('fatBtn').addEventListener('click', toggleFat);
-    $('moveTool').addEventListener('click', () => {
-      state.moveTool = !state.moveTool;
-      render();
-    });
+    $('unfatBtn').addEventListener('click', removeFat);
     $('undoBtn').addEventListener('click', undo);
     $('fillBtn').addEventListener('click', () => {
       pushUndo();
@@ -920,10 +1083,10 @@
     $('editBtn').addEventListener('click', () => { leaveReplay(); render(); });
     $('prevSol').addEventListener('click', () => selectSolution(result.selected - 1));
     $('nextSol').addEventListener('click', () => selectSolution(result.selected + 1));
-    $('firstBtn').addEventListener('click', () => { stopPlay(); showStep(0); });
-    $('prevBtn').addEventListener('click', () => { stopPlay(); showStep(result.step - 1, true); });
-    $('nextBtn').addEventListener('click', () => { stopPlay(); showStep(result.step + 1, true); });
-    $('lastBtn').addEventListener('click', () => { stopPlay(); showStep(Infinity); });
+    $('firstBtn').addEventListener('click', () => { interrupt(); showStep(0); });
+    $('prevBtn').addEventListener('click', prev);
+    $('nextBtn').addEventListener('click', next);
+    $('lastBtn').addEventListener('click', () => { interrupt(); showStep(Infinity); });
     $('playBtn').addEventListener('click', togglePlay);
     $('copyAllBtn').addEventListener('click', async () => {
       try {
@@ -933,6 +1096,21 @@
     });
     $('downloadBtn').addEventListener('click', () => {
       download(`${state.preset || 'puzzle'}_${result.depth}moves_${result.count}.txt`, result.lines.join('\n') + '\n');
+    });
+    addEventListener('hashchange', () => {      // a pasted link to another puzzle
+      const before = location.hash;
+      pushUndo();
+      if (!readHash()) return;
+      leaveReplay();
+      changed({ keepPreset: true });
+      if (location.hash !== before) history.replaceState(null, '', before);
+    });
+    let resizeTimer = 0;
+    addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (state.mode === 'replay' && result && result.replay && !result.playing) showStep(result.step);
+      }, 120);
     });
 
     document.addEventListener('keydown', (e) => {
@@ -944,10 +1122,12 @@
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (state.mode === 'replay' && result && result.replay) {
-        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        if (e.key === 'ArrowRight') {
           e.preventDefault();
-          stopPlay();
-          showStep(result.step + (e.key === 'ArrowRight' ? 1 : -1), true);
+          next();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          prev();
         } else if (e.key === ' ') {
           e.preventDefault();
           togglePlay();
@@ -958,10 +1138,7 @@
         return;
       }
       if (/^[1-8]$/.test(e.key)) selectColour(+e.key - 1);
-      else if (e.key.toLowerCase() === 'm' && state.start.fat) {
-        state.moveTool = !state.moveTool;
-        render();
-      }
+      else if (e.key === '9' || e.key.toLowerCase() === 'm') selectFatTool();
     });
 
     if (!readHash()) {
