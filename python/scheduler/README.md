@@ -126,3 +126,17 @@ Results come back as files, so nothing on this PC is opened to the network.
 A work unit's middles count is trusted as reported: a missing middle cannot
 be detected without redoing that shard, so use machines you trust (or run a
 shard twice on different PCs and compare the files).
+
+## Solved alarm
+
+When a job's solutions pass validation, the server loops a loud siren on this PC (a generated WAV at
+full amplitude through `winsound`, so no browser is needed; the PC's volume applies) until it is
+stopped or 15 minutes pass. The dashboard shows a flashing SOLVED banner with **Stop alarm**; its
+**Sound in this tab** button makes the page play a siren too, and the page raises its own alarm if it
+sees the solved count go up.
+
+```bat
+python python\scheduler\mbq.py alarm stop       :: silence it
+python python\scheduler\mbq.py alarm test       :: sound it for 20 s
+python python\scheduler\mbq.py alarm disable    :: no alarm for solves (enable turns it back on)
+```

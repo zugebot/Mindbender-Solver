@@ -50,6 +50,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import alarm  # noqa: E402
 import run_history  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
@@ -352,13 +353,16 @@ class Scheduler:
         self.proc: ProcessHandle | None = None
         self.external: list[tuple[str, int]] = []
         self.last_seen_phase: dict | None = None
+        self.alarm = alarm.Alarm(STATE / "siren.wav")
+        self.alarm.enabled = data.get("alarm_enabled", True)
         self._readopt()
 
     # ---- persistence -----------------------------------------------------
     def save(self) -> None:
         with self.lock:
             write_json_atomic(JOBS_FILE, {"jobs": self.jobs, "tables": self.tables,
-                                          "paused": self.paused, "next_id": self.next_id})
+                                          "paused": self.paused, "next_id": self.next_id,
+                                          "alarm_enabled": self.alarm.enabled})
 
     def job(self, job_id: int) -> dict | None:
         return next((j for j in self.jobs if j["id"] == job_id), None)
@@ -743,6 +747,7 @@ class Scheduler:
             job.update(status="done", result="solved", message=f"{solutions} solutions of {moves} moves")
             if job["promote"]:
                 notes += promote_solved(puzzle, sol_file)
+            self.alarm.start(puzzle, f"{puzzle} solved: {solutions} solutions of {moves} moves")
         else:
             job.update(status="done", result="none", message=f"no {moves}-move solution")
             if job["promote"]:
@@ -859,6 +864,7 @@ class Scheduler:
                     "finalizing": fin,
                     "pending": self.pending(), "external_solvers": external,
                     "solved": solved_count(), "queue_estimate": self.queue_estimate(),
+                    "alarm": self.alarm.state(),
                     "finished_today": sum(1 for j in self.jobs if j.get("finished")
                                           and time.localtime(j["finished"])[:3] == time.localtime()[:3]
                                           and j["status"] == "done"),
@@ -944,6 +950,15 @@ def make_handler(sched: Scheduler):
                     return None
                 if parts in (["hold"], ["unhold"]):
                     return self._send(200, sched.hold(parts == ["hold"]))
+                if len(parts) == 2 and parts[0] == "alarm":
+                    if parts[1] == "stop":
+                        return self._send(200, sched.alarm.stop())
+                    if parts[1] == "test":
+                        return self._send(200, sched.alarm.start("test", "Alarm test (stops by itself in 20 s)", test=True))
+                    if parts[1] in ("enable", "disable"):
+                        state = sched.alarm.set_enabled(parts[1] == "enable")
+                        sched.save()
+                        return self._send(200, state)
                 if parts in (["pause"], ["resume"]):
                     with sched.lock:
                         sched.paused = parts == ["pause"]
@@ -1137,6 +1152,12 @@ def cmd_hold(args) -> None:
     print(describe(job) + ("  ON HOLD" if job.get("held_since") else "  running again"))
 
 
+def cmd_alarm(args) -> None:
+    s = api("POST", f"/alarm/{args.action}", {})
+    a = s.get("active")
+    print(f"alarm {'enabled' if s['enabled'] else 'DISABLED'}" + (f"; sounding: {a['message']}" if a else ""))
+
+
 def cmd_shutdown(_args) -> None:
     print(api("POST", "/shutdown", {}))
 
@@ -1210,11 +1231,13 @@ def main() -> None:
     sub.add_parser("hold", help="freeze the running solver in place (frees the CPU, keeps all progress)")
     sub.add_parser("unhold", help="let a held solver carry on")
     sub.add_parser("shutdown", help="stop the server (a running solver keeps going)")
+    al = sub.add_parser("alarm", help="the solved-puzzle siren: stop it, test it, or turn it on/off")
+    al.add_argument("action", choices=["stop", "test", "enable", "disable"])
     args = ap.parse_args()
     {"serve": lambda a: serve(), "daemon": cmd_daemon, "status": cmd_status, "queue": cmd_queue,
      "history": cmd_history, "add": cmd_add, "cancel": cmd_cancel, "log": cmd_log,
      "pause": cmd_pause, "resume": cmd_pause, "hold": cmd_hold, "unhold": cmd_hold, "shutdown": cmd_shutdown,
-     "export": cmd_export, "import": cmd_import}[args.cmd](args)
+     "export": cmd_export, "import": cmd_import, "alarm": cmd_alarm}[args.cmd](args)
 
 
 if __name__ == "__main__":

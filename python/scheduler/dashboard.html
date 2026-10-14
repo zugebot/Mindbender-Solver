@@ -53,6 +53,13 @@
   .banner.held { background: var(--warn); color: #15171c; }
   button.on { border-color: var(--warn); color: var(--warn); }
   .table-wrap { overflow-x: auto; }
+  .alarm { display: none; align-items: center; gap: 16px; flex-wrap: wrap; padding: 18px 20px; margin-bottom: 14px;
+           border-radius: 12px; color: #fff; font-size: 22px; font-weight: 700;
+           background: linear-gradient(90deg, #d63a3a, #f08a24); animation: flash .6s steps(2) infinite; }
+  .alarm button { font-size: 16px; font-weight: 700; padding: 10px 22px; background: #fff; color: #b22; border: 0; }
+  .alarm .sub { font-size: 14px; font-weight: 500; opacity: .9; }
+  @keyframes flash { 50% { filter: brightness(1.35) saturate(1.3); } }
+  button.armed { border-color: var(--good); color: var(--good); }
   @media (max-width: 640px) { .hide-sm { display: none; } }
 </style>
 </head>
@@ -67,7 +74,15 @@
     <span class="muted" id="updated">-</span>
     <button id="holdBtn" hidden title="Freeze the running solver in place: frees the CPU, keeps all its progress">Hold solver</button>
     <button id="pauseBtn" title="Let the running job finish, then start no new ones">Pause queue</button>
+    <button id="alarmToggle" title="The siren the scheduler plays on this PC when a puzzle is solved">Alarm: on</button>
+    <button id="alarmTest" title="Sound the alarm for 20 seconds">Test alarm</button>
+    <button id="armBtn" title="Also play the siren in this browser tab (browsers need one click before a page may make sound)">Sound in this tab</button>
   </header>
+  <div class="alarm" id="alarmBanner">
+    <div><div id="alarmText"></div><div class="sub" id="alarmSub"></div></div>
+    <span class="spacer"></span>
+    <button id="alarmStop">Stop alarm</button>
+  </div>
   <div class="banner held" id="heldBanner"></div>
 
   <section class="panel" id="current"></section>
@@ -193,6 +208,57 @@ function renderHistory(jobs) {
                                 : `<tr><td class="muted">Nothing finished yet.</td></tr>`;
 }
 
+// ---- the solved-puzzle alarm: the scheduler sounds a siren on this PC (status.alarm); this tab
+// also plays one when armed, and raises its own alarm if it sees the solved count go up.
+const siren = { ctx: null, nodes: null, armed: localStorage.getItem("mbqArmed") === "1" };
+let uiAlarm = null;                 // {message} when this tab noticed a new solve itself
+let lastSolved = localStorage.getItem("mbqSolved") != null ? +localStorage.getItem("mbqSolved") : null;
+function sirenStart() {
+  if (!siren.armed || siren.nodes) return;
+  siren.ctx = siren.ctx || new AudioContext();
+  const ctx = siren.ctx;
+  ctx.resume();
+  const osc = ctx.createOscillator(), lfo = ctx.createOscillator(), depth = ctx.createGain();
+  const gain = ctx.createGain(), comp = ctx.createDynamicsCompressor();
+  osc.type = "square";
+  osc.frequency.value = 1075;
+  lfo.frequency.value = 1.25;               // wail up and down
+  depth.gain.value = 425;                    // 650 - 1500 Hz
+  lfo.connect(depth).connect(osc.frequency);
+  gain.gain.value = 0.9;
+  osc.connect(gain).connect(comp).connect(ctx.destination);
+  osc.start(); lfo.start();
+  siren.nodes = [osc, lfo];
+}
+function sirenStop() {
+  if (!siren.nodes) return;
+  for (const n of siren.nodes) n.stop();
+  siren.nodes = null;
+}
+function renderAlarm(s) {
+  const a = s.alarm || {};
+  if (lastSolved != null && s.solved > lastSolved && !(a.active)) {
+    uiAlarm = { message: `A puzzle was solved: now ${s.solved}/100` };
+  }
+  lastSolved = s.solved;
+  localStorage.setItem("mbqSolved", String(s.solved));
+  const active = a.active || uiAlarm;
+  $("alarmBanner").style.display = active ? "flex" : "none";
+  if (active) {
+    $("alarmText").textContent = a.active && a.active.test ? "Alarm test" : `SOLVED! ${active.message}`;
+    $("alarmSub").textContent = a.active ? `since ${clock(a.active.since)} · the siren stops by itself after 15 minutes` : "noticed by this page";
+    document.title = "SOLVED! - Solver Queue";
+    sirenStart();
+  } else {
+    document.title = "Solver Queue";
+    sirenStop();
+  }
+  $("alarmToggle").textContent = `Alarm: ${a.enabled === false ? "off" : "on"}`;
+  $("alarmToggle").dataset.on = a.enabled === false ? "" : "1";
+  $("armBtn").textContent = siren.armed ? "Sound in this tab: on" : "Sound in this tab";
+  $("armBtn").classList.toggle("armed", siren.armed);
+}
+
 async function refresh() {
   try {
     const [s, jobs] = await Promise.all([api("GET", "/status"), api("GET", "/jobs")]);
@@ -213,7 +279,7 @@ async function refresh() {
     banner.style.display = held ? "block" : "none";
     if (held) banner.textContent = `The solver is on hold since ${clock(s.running.held_since)} (${dur(Date.now() / 1000 - s.running.held_since)}). `
       + `It keeps its progress and carries on from the same point when released - press "Release solver".`;
-    renderCurrent(s); renderStats(s); renderQueue(s); renderHistory(jobs);
+    renderCurrent(s); renderStats(s); renderQueue(s); renderHistory(jobs); renderAlarm(s);
     const live = s.running || s.finalizing;
     if (live) {
       const pre = $("log");
@@ -243,6 +309,18 @@ document.addEventListener("click", async (ev) => {
   if (c && confirm(`Cancel job #${c.dataset.cancel}?`)) { await api("POST", `/jobs/${c.dataset.cancel}/cancel`).catch(alert); refresh(); }
   if (ev.target.id === "holdBtn") { await api("POST", ev.target.dataset.held ? "/unhold" : "/hold").catch(alert); refresh(); }
   if (ev.target.id === "pauseBtn") { await api("POST", ev.target.dataset.paused ? "/resume" : "/pause").catch(alert); refresh(); }
+  if (ev.target.id === "alarmStop") { uiAlarm = null; sirenStop(); await api("POST", "/alarm/stop").catch(alert); refresh(); }
+  if (ev.target.id === "alarmTest") { await api("POST", "/alarm/test").catch(alert); refresh(); }
+  if (ev.target.id === "alarmToggle") { await api("POST", ev.target.dataset.on ? "/alarm/disable" : "/alarm/enable").catch(alert); refresh(); }
+  if (ev.target.id === "armBtn") {
+    siren.armed = !siren.armed;
+    localStorage.setItem("mbqArmed", siren.armed ? "1" : "0");
+    if (siren.armed) { siren.ctx = siren.ctx || new AudioContext(); siren.ctx.resume(); } else sirenStop();
+    refresh();
+  }
+  // any click lets a page that was armed before a reload make sound again
+  if (siren.ctx && siren.ctx.state === "suspended") siren.ctx.resume();
+  else if (siren.armed && !siren.ctx) siren.ctx = new AudioContext();
 });
 
 refresh();
