@@ -23,7 +23,10 @@ RATE = 44100
 
 
 SOUNDS = Path(__file__).resolve().parents[1] / "deluxe_clone" / "sounds"
-JINGLE = ["GetTrophy.ogg", "TrophyJoy.ogg", 3.0]     # the game's trophy jingles back to back, then quiet
+# (sound, start in seconds): the applause comes in on Get Trophy's final chord (its strongest
+# attack, 0.93 s), the two mixed; then QUIET seconds before the loop repeats.
+JINGLE = [("GetTrophy.ogg", 0.0), ("TrophyJoy.ogg", 0.93)]
+QUIET = 3.0
 
 
 def _game_jingle() -> list[float] | None:
@@ -36,14 +39,13 @@ def _game_jingle() -> list[float] | None:
         import pygame
         pygame.mixer.init(frequency=RATE, size=-16, channels=2)
         parts = []
-        for item in JINGLE:
-            if isinstance(item, float):
-                parts.append(np.zeros(int(RATE * item)))
-            else:
-                a = pygame.sndarray.array(pygame.mixer.Sound(str(SOUNDS / item))).astype(np.float64)
-                parts.append(a.mean(axis=1) if a.ndim == 2 else a)
+        for name, at in JINGLE:
+            a = pygame.sndarray.array(pygame.mixer.Sound(str(SOUNDS / name))).astype(np.float64)
+            parts.append((int(RATE * at), a.mean(axis=1) if a.ndim == 2 else a))
         pygame.mixer.quit()
-        out = np.concatenate(parts)
+        out = np.zeros(max(s + len(a) for s, a in parts) + int(RATE * QUIET))
+        for s, a in parts:
+            out[s:s + len(a)] += a
         return list(out / max(1.0, float(np.abs(out).max())))
     except Exception:
         return None
