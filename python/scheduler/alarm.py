@@ -23,7 +23,7 @@ RATE = 44100
 
 
 SOUNDS = Path(__file__).resolve().parents[1] / "deluxe_clone" / "sounds"
-JINGLE = ["GetTrophy.ogg", 0.3, "TrophyJoy.ogg", 3.0]     # the game's trophy jingles, then quiet
+JINGLE = ["GetTrophy.ogg", "TrophyJoy.ogg", 3.0]     # the game's trophy jingles back to back, then quiet
 
 
 def _game_jingle() -> list[float] | None:
