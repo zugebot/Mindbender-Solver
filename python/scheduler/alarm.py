@@ -1,8 +1,8 @@
 """python/scheduler/alarm.py - the "a puzzle was solved" alarm.
 
 The scheduler calls Alarm.start() when a job's solutions pass validation. The daemon then
-loops a loud siren (a generated WAV at full amplitude, played with winsound, so it works with
-no browser open) until someone stops it (dashboard button, `mbq alarm stop`) or it times out.
+loops the game's trophy jingles, loud (a WAV played with winsound, so it works with no browser
+open) until someone stops it (dashboard button, `mbq alarm stop`) or it times out.
 Volume is whatever the PC's volume is; this never changes system settings.
 """
 from __future__ import annotations
@@ -22,19 +22,54 @@ except ImportError:            # not on Windows: the dashboard banner still work
 RATE = 44100
 
 
-def make_siren(path: Path, seconds: float = 4.0) -> Path:
-    """A two-tone emergency siren: a fast 650-1500 Hz wail, square-ish for loudness."""
+SOUNDS = Path(__file__).resolve().parents[1] / "deluxe_clone" / "sounds"
+JINGLE = ["GetTrophy.ogg", 0.3, "TrophyJoy.ogg", 3.0]     # the game's trophy jingles, then quiet
+
+
+def _game_jingle() -> list[float] | None:
+    """The game's trophy sounds decoded to mono floats (needs pygame), or None."""
+    try:
+        import os
+        os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+        os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+        import numpy as np
+        import pygame
+        pygame.mixer.init(frequency=RATE, size=-16, channels=2)
+        parts = []
+        for item in JINGLE:
+            if isinstance(item, float):
+                parts.append(np.zeros(int(RATE * item)))
+            else:
+                a = pygame.sndarray.array(pygame.mixer.Sound(str(SOUNDS / item))).astype(np.float64)
+                parts.append(a.mean(axis=1) if a.ndim == 2 else a)
+        pygame.mixer.quit()
+        out = np.concatenate(parts)
+        return list(out / max(1.0, float(np.abs(out).max())))
+    except Exception:
+        return None
+
+
+def _chime() -> list[float]:
+    """A bright C-major bell arpeggio, if the game sounds can't be decoded."""
+    out = []
+    notes = [523.25, 659.25, 783.99, 1046.5]
+    for k, f in enumerate(notes * 2):
+        n = int(RATE * (0.18 if k < 7 else 0.9))
+        for i in range(n):
+            t = i / RATE
+            env = math.exp(-4.5 * t)
+            out.append(env * (math.sin(2 * math.pi * f * t) + 0.35 * math.sin(4 * math.pi * f * t)))
+    out += [0.0] * int(RATE * 2.5)
+    peak = max(abs(v) for v in out) or 1.0
+    return [v / peak for v in out]
+
+
+def make_siren(path: Path) -> Path:
+    """The alarm sound: the game's trophy jingles (or a chime), loud, then a pause; loops."""
+    samples = _game_jingle() or _chime()
     frames = bytearray()
-    n = int(RATE * seconds)
-    phase = 0.0
-    for i in range(n):
-        t = i / RATE
-        sweep = 0.5 - 0.5 * math.cos(2 * math.pi * t / 0.8)          # up and down every 0.8 s
-        freq = 650 + 850 * sweep
-        phase += 2 * math.pi * freq / RATE
-        s = math.sin(phase) + 0.3 * math.sin(3 * phase) + 0.15 * math.sin(5 * phase)
-        s = math.tanh(2.2 * s)                                       # soft clip: loud, no wrap
-        frames += struct.pack("<h", int(32000 * s))
+    for v in samples:
+        frames += struct.pack("<h", int(31000 * max(-1.0, min(1.0, v))))
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
@@ -84,11 +119,15 @@ class Alarm:
     def state_unlocked(self) -> dict:
         return {"enabled": self.enabled, "active": dict(self.active) if self.active else None}
 
+    def ensure_sound(self) -> Path:
+        if not self.wav.exists():
+            make_siren(self.wav)
+        return self.wav
+
     def _play(self) -> None:
         if winsound is None:
             return
-        if not self.wav.exists():
-            make_siren(self.wav)
+        self.ensure_sound()
         winsound.PlaySound(str(self.wav), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_LOOP)
 
     def _watchdog(self) -> None:

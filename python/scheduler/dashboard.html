@@ -208,32 +208,29 @@ function renderHistory(jobs) {
                                 : `<tr><td class="muted">Nothing finished yet.</td></tr>`;
 }
 
-// ---- the solved-puzzle alarm: the scheduler sounds a siren on this PC (status.alarm); this tab
-// also plays one when armed, and raises its own alarm if it sees the solved count go up.
-const siren = { ctx: null, nodes: null, armed: localStorage.getItem("mbqArmed") === "1" };
+// ---- the solved-puzzle alarm: the scheduler plays the game's trophy jingles on this PC
+// (status.alarm); this tab plays them too when armed, and raises its own alarm if it sees the
+// solved count go up.
+const siren = { audio: null, playing: false, armed: localStorage.getItem("mbqArmed") === "1" };
 let uiAlarm = null;                 // {message} when this tab noticed a new solve itself
 let lastSolved = localStorage.getItem("mbqSolved") != null ? +localStorage.getItem("mbqSolved") : null;
+function sirenAudio() {
+  if (!siren.audio) {
+    siren.audio = new Audio("/alarm.wav");
+    siren.audio.loop = true;
+  }
+  return siren.audio;
+}
 function sirenStart() {
-  if (!siren.armed || siren.nodes) return;
-  siren.ctx = siren.ctx || new AudioContext();
-  const ctx = siren.ctx;
-  ctx.resume();
-  const osc = ctx.createOscillator(), lfo = ctx.createOscillator(), depth = ctx.createGain();
-  const gain = ctx.createGain(), comp = ctx.createDynamicsCompressor();
-  osc.type = "square";
-  osc.frequency.value = 1075;
-  lfo.frequency.value = 1.25;               // wail up and down
-  depth.gain.value = 425;                    // 650 - 1500 Hz
-  lfo.connect(depth).connect(osc.frequency);
-  gain.gain.value = 0.9;
-  osc.connect(gain).connect(comp).connect(ctx.destination);
-  osc.start(); lfo.start();
-  siren.nodes = [osc, lfo];
+  if (!siren.armed || siren.playing) return;
+  siren.playing = true;
+  sirenAudio().play().catch(() => { siren.playing = false; });
 }
 function sirenStop() {
-  if (!siren.nodes) return;
-  for (const n of siren.nodes) n.stop();
-  siren.nodes = null;
+  if (!siren.audio || !siren.playing) return;
+  siren.audio.pause();
+  siren.audio.currentTime = 0;
+  siren.playing = false;
 }
 function renderAlarm(s) {
   const a = s.alarm || {};
@@ -315,12 +312,9 @@ document.addEventListener("click", async (ev) => {
   if (ev.target.id === "armBtn") {
     siren.armed = !siren.armed;
     localStorage.setItem("mbqArmed", siren.armed ? "1" : "0");
-    if (siren.armed) { siren.ctx = siren.ctx || new AudioContext(); siren.ctx.resume(); } else sirenStop();
+    if (siren.armed) sirenAudio().load(); else sirenStop();
     refresh();
   }
-  // any click lets a page that was armed before a reload make sound again
-  if (siren.ctx && siren.ctx.state === "suspended") siren.ctx.resume();
-  else if (siren.armed && !siren.ctx) siren.ctx = new AudioContext();
 });
 
 refresh();

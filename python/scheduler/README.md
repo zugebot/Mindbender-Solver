@@ -129,10 +129,10 @@ shard twice on different PCs and compare the files).
 
 ## Solved alarm
 
-When a job's solutions pass validation, the server loops a loud siren on this PC (a generated WAV at
-full amplitude through `winsound`, so no browser is needed; the PC's volume applies) until it is
+When a job's solutions pass validation, the server loops the game's trophy jingles on this PC, loud (`GetTrophy` + `TrophyJoy`,
+then a pause, through `winsound`, so no browser is needed; the PC's volume applies) until it is
 stopped or 15 minutes pass. The dashboard shows a flashing SOLVED banner with **Stop alarm**; its
-**Sound in this tab** button makes the page play a siren too, and the page raises its own alarm if it
+**Sound in this tab** button makes the page play them too, and the page raises its own alarm if it
 sees the solved count go up.
 
 ```bat

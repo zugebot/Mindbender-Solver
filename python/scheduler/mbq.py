@@ -353,7 +353,7 @@ class Scheduler:
         self.proc: ProcessHandle | None = None
         self.external: list[tuple[str, int]] = []
         self.last_seen_phase: dict | None = None
-        self.alarm = alarm.Alarm(STATE / "siren.wav")
+        self.alarm = alarm.Alarm(STATE / "alarm-trophy.wav")
         self.alarm.enabled = data.get("alarm_enabled", True)
         self._readopt()
 
@@ -916,6 +916,14 @@ def make_handler(sched: Scheduler):
             try:
                 if parts == ["status"]:
                     return self._send(200, sched.status())
+                if parts == ["alarm.wav"]:            # the alarm sound, for the dashboard tab
+                    data = sched.alarm.ensure_sound().read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "audio/wav")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return None
                 if parts == ["jobs"]:
                     return self._send(200, sched.jobs)
                 if len(parts) == 2 and parts[0] == "jobs":
