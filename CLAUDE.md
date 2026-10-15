@@ -4,7 +4,7 @@ Optimal solver for Chuzzle's Mind Bender puzzles (100 puzzles, 6x6 boards,
 row/column cyclic shifts, some with a 2x2 piece). It finds every shortest
 solution and proves nothing shorter exists. C++ solver plus Python tools.
 
-Status (2026-10-13): **79/100 solved**. `build/README.md` lists the unsolved ones with their
+Status (2026-10-14): **82/100 solved**. `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
 History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-13.md`).
 

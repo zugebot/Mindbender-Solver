@@ -1,0 +1,60 @@
+[0:00:00.001] puzzle 18-4 <5,3,7> = 15 moves, forward, threads 16, table dir X:\mindbender_d6\18-4_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\18-4_goal_d6
+[0:00:04.278] depth-5 exact unique: 50434243 states in 4.27701s (no table: depth 7 is regenerated in RAM, nothing is written)
+[0:00:04.308] bucket counts: 4.29497 GB, large pages yes
+[0:07:24.223]     regenerated depth 7 for partitions [0,256): 80646660468 keys in blocks of ~400000000, generate 160.038s, group+write 279.876s
+[0:07:26.765] depth-7 raw descendants: 80646660468 (1599.11 per depth-5 state), de-dupe ratio 0.571171 -> ~46063019164 unique; 2^23 buckets/partition, largest bucket 3229 (counted in 442.459s)
+[0:07:26.765] fingerprint index: 228.645 GB over partitions [0,256), RAM budget 31.0911 GB -> 8 pass(es)
+[0:07:31.259] left seeds (exact depth 5): 49947591 in 4.48157s
+[0:07:31.259] bound: off (2x2 board; the halved bound prunes nothing)
+[0:12:04.743]     regenerated depth 7 for partitions [0,34): 10710950269 keys in blocks of ~250000000, generate 120.705s, group+write 150.423s
+[0:12:29.319]   index for partitions [0,34) built in RAM: raw 10710950269 -> 6121777025 fingerprints in 298.058s
+[0:12:49.324] calibrate: 269952 seeds in 20.0016s, ns/state per thread: 32/plain=20.2886 32/pipelined=20.3466 64/plain=20.0878 64/pipelined=20.1227 128/plain=19.8863 128/pipelined=19.9232 -> 128/plain (1.02023x vs 32/plain)
+[1:12:41.097]   pass 1/8 partitions [0,34): load 30.367 GB (normal pages) in 298.059s, stream+probe 2549718315040 left states in 3611.78s (705.946 M/s), Bloom pass 1.15784%
+[1:16:59.559]     regenerated depth 7 for partitions [34,68): 10711309916 keys in blocks of ~250000000, generate 122.915s, group+write 131.828s
+[1:17:22.664]   index for partitions [34,68) built in RAM: raw 10711309916 -> 6121836535 fingerprints in 281.564s
+[3:12:56.961]   pass 2/8 partitions [34,68): load 30.3677 GB (normal pages) in 281.566s, stream+probe 2549718315040 left states in 6934.3s (367.697 M/s), Bloom pass 1.15806%
+[3:19:14.438]     regenerated depth 7 for partitions [68,102): 10710364055 keys in blocks of ~250000000, generate 178.828s, group+write 197.553s
+[3:19:39.554]   index for partitions [68,102) built in RAM: raw 10710364055 -> 6121801750 fingerprints in 402.588s
+[4:29:08.569]   pass 3/8 partitions [68,102): load 30.3658 GB (normal pages) in 402.589s, stream+probe 2549718315040 left states in 4169.01s (611.588 M/s), Bloom pass 1.15785%
+[4:34:07.346]     regenerated depth 7 for partitions [102,136): 10711003629 keys in blocks of ~250000000, generate 146.022s, group+write 151.995s
+[4:34:31.861]   index for partitions [102,136) built in RAM: raw 10711003629 -> 6121807750 fingerprints in 323.288s
+[5:48:03.272]   pass 4/8 partitions [102,136): load 30.3671 GB (normal pages) in 323.289s, stream+probe 2549718315040 left states in 4411.41s (577.983 M/s), Bloom pass 1.15789%
+[5:52:38.194]     regenerated depth 7 for partitions [136,170): 10711308074 keys in blocks of ~250000000, generate 138.036s, group+write 136.111s
+[5:53:00.921]   index for partitions [136,170) built in RAM: raw 10711308074 -> 6121825261 fingerprints in 297.646s
+[7:02:24.643]   pass 5/8 partitions [136,170): load 30.3677 GB (normal pages) in 297.647s, stream+probe 2549718315040 left states in 4163.72s (612.365 M/s), Bloom pass 1.15784%
+[7:06:40.680]     regenerated depth 7 for partitions [170,204): 10710759773 keys in blocks of ~250000000, generate 128.269s, group+write 127.072s
+[7:07:02.697]   index for partitions [170,204) built in RAM: raw 10710759773 -> 6121876514 fingerprints in 278.052s
+[8:08:07.334]   pass 6/8 partitions [170,204): load 30.3666 GB (normal pages) in 278.053s, stream+probe 2549718315040 left states in 3664.64s (695.763 M/s), Bloom pass 1.15791%
+[8:12:07.469]     regenerated depth 7 for partitions [204,238): 10710729798 keys in blocks of ~250000000, generate 114.372s, group+write 125.215s
+[8:12:29.663]   index for partitions [204,238) built in RAM: raw 10710729798 -> 6121792673 fingerprints in 262.327s
+[9:06:41.849]   pass 7/8 partitions [204,238): load 30.3666 GB (normal pages) in 262.328s, stream+probe 2549718315040 left states in 3252.19s (784.002 M/s), Bloom pass 1.15781%
+[9:09:16.845]     regenerated depth 7 for partitions [238,256): 5670234954 keys in blocks of ~250000000, generate 97.4881s, group+write 57.2081s
+[9:09:30.451]   index for partitions [238,256) built in RAM: raw 5670234954 -> 3240794077 fingerprints in 168.599s
+[9:53:50.875]   pass 8/8 partitions [238,256): load 16.0761 GB (normal pages) in 168.6s, stream+probe 2549718315040 left states in 2660.42s (958.388 M/s), Bloom pass 1.15733%
+[9:53:51.653] probe totals: load 2312.13s, stream+probe 32867.5s, 20397746520320 left states streamed, 5188665 unique candidates
+[9:53:53.499] BUILD depth-7 index: 46093511585 fingerprints (bucket-unique; raw 80646660468), built in RAM in 2312.12s
+[9:53:53.499] BUILD depth-7 setup: 446.765s (no table; depth-5 frontier + count pass)
+[10:01:11.607] verify: 2 confirmed, 5188663 fingerprint false matches, 438.108s (by regeneration)
+[10:01:11.607] depth-7 confirmed middles: 2 of 5188665 fingerprint hits
+[10:01:11.702] unique middle states (8 from left, 7 from table side): 2
+[10:01:11.702] PROBE phase: 36071.7s
+[10:01:13.124] 
+[10:01:13.124] Finalizing exact solver results...
+[10:01:13.124] Original exact solutions: 32
+[10:01:13.124] Valid exact solutions: 32
+[10:01:13.124] Skipped exact solutions: 0
+[10:01:13.124] Final exact solutions: 32
+[10:01:13.125] Saving expanded results to "X:\\mindbender_d6\\18-4_goal_d6\\solutions\\levels\\18-4_c15_32.txt".
+[10:01:13.127] RECOVERY: 32 solutions of 15 moves in 1.42346s (written under X:\mindbender_d6\18-4_goal_d6\solutions\levels)
+[10:01:13.148] TOTAL: 36073.1s (build 0s, probe 36071.7s, recovery 1.42346s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        9994680
+delete calls:     9994680
+malloc calls:     1418298555
+free calls:       1817909461
+calloc calls:     5
+realloc calls:    399580797
