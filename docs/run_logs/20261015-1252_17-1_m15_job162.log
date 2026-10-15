@@ -1,0 +1,38 @@
+[0:00:00.000] puzzle 17-1 <5,4,6> = 15 moves, forward, threads 16, table dir X:\mindbender_d6\17-1_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\17-1_goal_d6
+[0:00:12.362] depth-5 exact unique: 134244445 states in 12.3618s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:26.802] depth-6 raw children: 8017861734, de-dupe ratio 0.606679 -> ~4864271849 unique (counted in 26.8015s)
+[0:00:26.802] fingerprint index: 20.4255 GB over partitions [0,256), RAM budget 37.4585 GB -> 1 pass(es)
+[0:00:39.682] left seeds (exact depth 5): 140654443 in 12.88s
+[0:02:35.316] bound (rotation): audit ok: 25406263 nodes, 1520586133 leaves, 1520586133 edges (|dh| <= 1), 7298 wanted leaves identical pruned vs full; sampled skip: leaf 99.9918%, whole last level 98.9462%; tables 526760 B, 115.646s
+[0:02:38.193]   index build: 15.9611 GB for keys -> about 5 regeneration(s) of depth 6
+[0:06:12.181]   index for partitions [0,256) built in RAM: 4864855767 unique states in 216.85s
+[0:06:32.843] calibrate: 768 seeds in 20.6599s, ns/state per thread: 32/plain=110.707 32/pipelined=110.5 64/plain=106.581 64/pipelined=107.006 128/plain=103.417 128/pipelined=102.343 -> 128/pipelined (1.08172x vs 32/plain)
+[0:07:48.912] bound calibrate: 8192 seeds, 4 rounds of 512-seed blocks per mode in 76.0624s (one mode left, budget 300s); time vs both: off=108.737 +-25.5501% (dropped after 4) leaf=42.1354 +-27.8741% (dropped after 4) both=1 (4269.51 us/seed) parent=1.82264 +-6.10002% (dropped after 4) -> both (108.737x vs off)
+[8:26:23.424]   pass 1/1 partitions [0,256): load 20.4255 GB (normal pages) in 216.851s, stream+probe 5982160902745 left states in 30011.2s (199.331 M/s), Bloom pass 0.0109226%, bound skipped 5925490848124 lookups
+[8:26:23.429] probe totals: load 216.851s, stream+probe 30011.2s, 5982160902745 left states streamed, 24559 unique candidates
+[8:26:24.427] depth-6 exact unique: 4864855767 (index-only, in RAM; no table written)
+[8:26:24.427] BUILD fingerprint index: 4864855767 states, 2^22 buckets/partition, built in RAM in 216.85s
+[8:26:24.427] BUILD depth-6 table: 26.8015s (no table; depth-5 frontier + counts)
+[8:26:40.693] verify: 1 confirmed, 24558 fingerprint false matches, 16.2663s (by regeneration)
+[8:26:40.868] unique middle states (9 from left, 6 from table side): 1
+[8:26:40.869] PROBE phase: 30400.9s
+[8:30:27.991] 
+[8:30:27.993] Finalizing exact solver results...
+[8:30:27.994] Original exact solutions: 96
+[8:30:27.994] Valid exact solutions: 96
+[8:30:27.994] Skipped exact solutions: 0
+[8:30:27.994] Final exact solutions: 96
+[8:30:27.996] Saving expanded results to "X:\\mindbender_d6\\17-1_goal_d6\\solutions\\levels\\17-1_c15_96.txt".
+[8:30:27.999] RECOVERY: 96 solutions of 15 moves in 227.125s (written under X:\mindbender_d6\17-1_goal_d6\solutions\levels)
+[8:30:28.000] TOTAL: 30628s (build 0s, probe 30400.9s, recovery 227.125s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        133452
+delete calls:     133452
+malloc calls:     191178078
+free calls:       332259241
+calloc calls:     5
+realloc calls:    141079327
