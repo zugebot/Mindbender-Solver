@@ -29,6 +29,11 @@
 //                         [--samples N] [--threads N] [--kind mix|rotation]
 //       A left stream pruned at every level: states generated and lookups left,
 //       against no pruning.
+//   experimentBoundSample --goal-side <puzzle> [--table-depth T] [--left-depth L] [--samples N] [--threads N]
+//       The goal side of <S,T2,T> with S + T2 = L: how many goal-side depth-T states (from
+//       sampled depth-5 states, streamed T - 5 moves) have h(start) <= L, i.e. could still be
+//       meeting points, and how many depth-5 states have h(start) <= L + T - 5 (could still have
+//       such descendants). Rotation and colour-mix bounds. Normal boards only.
 //   experimentBoundSample --colors <puzzle>...
 //       Colour codes used by each puzzle.
 // Older research modes (SWAR bound, single-colour and prototype grouped pattern
@@ -431,8 +436,72 @@ namespace {
     }
 }
 
+namespace {
+    int runGoalSide(const std::string& puzzle, const u32 tableDepth, const u32 leftDepth, const u32 samples,
+                    const u32 threads) {
+        const BoardPair* pair = BoardLookup::getBoardPair(puzzle);
+        if (pair == nullptr) {
+            tcout << "unknown puzzle " << puzzle << "\n";
+            return 1;
+        }
+        const Board start = pair->getStartState();
+        const Board goal = pair->getEndState();
+        if (start.getFatBool()) {
+            tcout << puzzle << " has a 2x2 piece: the halved bound prunes nothing there\n";
+            return 1;
+        }
+        LaneTables rot, mix;
+        buildLaneTables(start.asB1B2(), rot, lane_bound::Kind::Rotation);
+        buildLaneTables(start.asB1B2(), mix, lane_bound::Kind::Mix);
+        const int L = static_cast<int>(leftDepth);
+        const u32 extra = tableDepth - 5;
+        Timer timer;
+        JVec<B1B2> depth5;
+        buildFrontier(goal, 5, depth5);
+        tcout << puzzle << ": goal-side depth-5 frontier " << depth5.size() << " (" << timer.getSeconds()
+              << "s); h(start->goal) rotation " << lane_bound::bound(goal.asB1B2(), rot) << "\n";
+        Histogram parentRot, parentMix, rot7, mix7, rot7Kept;
+        const std::size_t step = std::max<std::size_t>(1, depth5.size() / samples);
+        parallelFor(threads, (depth5.size() + step - 1) / step, [&](u32, const std::size_t k) {
+            const B1B2& g = depth5[k * step];
+            const int hr = lane_bound::bound(g, rot);
+            parentRot.add(hr);
+            parentMix.add(lane_bound::bound(g, mix));
+            streamFrom(g, extra, [&](const B1B2& s) {
+                const int r = lane_bound::bound(s, rot);
+                rot7.add(r);
+                mix7.add(lane_bound::bound(s, mix));
+                if (hr <= L + static_cast<int>(extra)) rot7Kept.add(r);
+            });
+        });
+        parentRot.print("  depth-5 states, h(start) rotation", L + static_cast<int>(extra));
+        parentMix.print("  depth-5 states, h(start) colour mix", L + static_cast<int>(extra));
+        rot7.print("  depth-" + std::to_string(tableDepth) + " states, h(start) rotation", L);
+        mix7.print("  depth-" + std::to_string(tableDepth) + " states, h(start) colour mix", L);
+        const double keep = static_cast<double>(rot7.total() - rot7.above(L)) / std::max<double>(1.0, static_cast<double>(rot7.total()));
+        tcout << "  -> a goal side filtered by rotation h(start) <= " << L << " keeps " << 100.0 * keep
+              << "% of depth-" << tableDepth << " states; generating only from depth-5 states with h <= "
+              << L + static_cast<int>(extra) << " streams " << 100.0 * static_cast<double>(rot7Kept.total())
+              << "/" << rot7.total() << " (" << 100.0 * static_cast<double>(rot7Kept.total()) / std::max<double>(1.0, static_cast<double>(rot7.total()))
+              << "%) of them (" << timer.getSeconds() << "s)\n";
+        return 0;
+    }
+}
+
 int main(const int argc, char** argv) {
     tcout << std::unitbuf;
+    if (argc >= 3 && std::string(argv[1]) == "--goal-side") {
+        u32 tableDepth = 7, leftDepth = 9, samples = 20000, threads = 4;
+        for (int i = 3; i + 1 < argc; i += 2) {
+            const std::string a = argv[i];
+            const u32 v = static_cast<u32>(std::stoul(argv[i + 1]));
+            if (a == "--table-depth") tableDepth = v;
+            else if (a == "--left-depth") leftDepth = v;
+            else if (a == "--samples") samples = v;
+            else if (a == "--threads") threads = v;
+        }
+        return runGoalSide(argv[2], tableDepth, leftDepth, samples, threads);
+    }
     if (argc >= 2 && std::string(argv[1]) == "--check") {
         return runCheck();
     }

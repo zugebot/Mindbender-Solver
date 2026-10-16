@@ -5,6 +5,16 @@
 // disk): a count pass, then per pass the canonical 2-move stream from the
 // depth-5 frontier fills the pass's buckets (keys routed to their owner
 // thread and grouped, no atomics); hits confirmed by regeneration.
+//
+// Goal-side filter (normal boards, forward, bound on; --no-goal-filter turns it
+// off): a meeting point is within L = seed + stream depth moves of the start,
+// so depth-7 states whose rotation bound to the start exceeds L are dropped
+// everywhere (count, fill, verify) - exact, and the index shrinks (18-3 at 16
+// moves: to ~54%). The bucket counts (2 B per bucket, 17 GB for 18-3) go to a
+// temp file on the system drive after the count pass and each pass reads only
+// its partitions' slice, so they no longer come out of the index budget
+// (--d7-counts-ram keeps them in RAM). --d7-partitions/--d7-first-partition
+// restrict the whole run to some key partitions (exactness tests).
 
 #include "src/solver/ssd/no_table_d6.hpp"
 
@@ -18,11 +28,23 @@ namespace ssd {
     // state at exact depth 7 is a depth-5 state plus such a pair.
     constexpr u32 NT7_STREAM_DEPTH = 2;
 
+    // Set for the run by probeNoTableDepth7: drop streamed states whose bound
+    // to the left root exceeds `limit` (no meeting point can be among them).
+    struct GoalFilter {
+        const lane_bound::LaneTables* tables = nullptr;
+        int limit = 0;
+    };
+    inline GoalFilter g_goalFilter;
+
     template<typename Fn>
     struct StreamCallbackSink {
         Fn& fn;
         void operator()(JVec<B1B2>& states, JVec<u64>& hashes, const u32 count) {
+            const GoalFilter f = g_goalFilter;
             for (u32 i = 0; i < count; ++i) {
+                if (f.tables != nullptr && lane_bound::bound(states[i], *f.tables) > f.limit) {
+                    continue;
+                }
                 fn(states[i], mixKey(hashes[i]));
             }
         }
@@ -169,6 +191,18 @@ namespace ssd {
         tcout << "depth-5 exact unique: " << depth5.size() << " states in " << buildTimer.getSeconds()
               << "s (no table: depth 7 is regenerated in RAM, nothing is written)\n";
 
+        static lane_bound::LaneTables leftTables;
+        struct FilterReset {
+            ~FilterReset() { g_goalFilter = GoalFilter{}; }
+        } filterReset;
+        if (cfg.goalFilter && !isFat && !cfg.reverse && cfg.boundMode != 0) {
+            lane_bound::buildLaneTables(leftRoot.asB1B2(), leftTables, lane_bound::Kind::Rotation);
+            g_goalFilter = GoalFilter{&leftTables, static_cast<int>(cfg.seedDepth + cfg.streamDepth)};
+            tcout << "goal-side filter: depth-7 states with rotation h(start) > " << g_goalFilter.limit
+                  << " dropped (no meeting point among them)\n";
+        }
+        const u32 P0 = cfg.d7FirstPartition, P1 = cfg.d7End();
+
         // Size the buckets from a sample of the stream's fan-out.
         double fanOut = 0.0;
         {
@@ -192,28 +226,29 @@ namespace ssd {
         // a 1/4096 key sample whose de-dupe ratio sizes the Bloom filters.
         g_progress.detail("counting depth-7 descendants per bucket");
         Timer countTimer;
-        BigArray<u16> bucketCounts;
-        bucketCounts.allocate(static_cast<u64>(PARTITION_COUNT) * bucketsPer);   // zero-filled
+        BigArray<u16> bucketCounts;   // partitions [P0, P1), bucketsPer each
+        bucketCounts.allocate(static_cast<u64>(P1 - P0) * bucketsPer);   // zero-filled
         tcout << "bucket counts: " << bucketCounts.size() * 2 / 1e9 << " GB, large pages "
               << (bucketCounts.largePages() ? "yes" : "no") << "\n";
         std::vector<std::vector<u64>> sample(threads);
-        expandTwiceRouted(depth5, threads, 0, PARTITION_COUNT, fanOut, NT7_COUNT_BLOCK_KEYS, 6, [&](const u32 owner, const u64 key) {
-            ++bucketCounts[(key >> PARTITION_SHIFT) * bucketsPer + ((key >> shift) & (bucketsPer - 1))];
-            if ((key >> (64 - 12)) == 0) {
+        expandTwiceRouted(depth5, threads, P0, P1, fanOut, NT7_COUNT_BLOCK_KEYS, 6, [&](const u32 owner, const u64 key) {
+            ++bucketCounts[((key >> PARTITION_SHIFT) - P0) * bucketsPer + ((key >> shift) & (bucketsPer - 1))];
+            // 1/4096 of the keys (the top bits: partition 0's; mid bits when partition 0 is not probed)
+            if (P0 == 0 ? (key >> (64 - 12)) == 0 : ((key >> 20) & 4095) == 0) {
                 sample[owner].push_back(key);
             }
         });
         std::vector<u64> raw(PARTITION_COUNT, 0);
         u64 maxBucket = 0;
-        parallelFor(threads, PARTITION_COUNT, [&](u32, const std::size_t p) {
+        parallelFor(threads, P1 - P0, [&](u32, const std::size_t i) {
             u64 sum = 0;
             for (u64 b = 0; b < bucketsPer; ++b) {
-                sum += bucketCounts[p * bucketsPer + b];
+                sum += bucketCounts[i * bucketsPer + b];
             }
-            raw[p] = sum;
+            raw[P0 + i] = sum;
         });
         u64 rawTotal = 0, rawMax = 0;
-        for (u32 p = 0; p < PARTITION_COUNT; ++p) {
+        for (u32 p = P0; p < P1; ++p) {
             rawTotal += raw[p];
             rawMax = std::max(rawMax, raw[p]);
         }
@@ -243,6 +278,66 @@ namespace ssd {
               << " -> ~" << static_cast<u64>(static_cast<double>(rawTotal) * ratio) << " unique; 2^" << meta.bucketBits
               << " buckets/partition, largest bucket " << maxBucket << " (counted in " << countTimer.getSeconds()
               << "s)\n";
+        meta.partitionBegin = P0;
+        meta.partitionLimit = P1;
+
+        // Spill the counts to the system drive; each pass reads its slice back.
+        struct CountsFile {
+            fs::path path;
+            ~CountsFile() {
+                std::error_code ec;
+                if (!path.empty()) fs::remove(path, ec);
+            }
+        } countsFile;
+        const u64 countsBytesPerPartition = bucketsPer * sizeof(u16);
+        if (!cfg.d7CountsInRam) {
+            Timer spillTimer;
+            countsFile.path = fs::temp_directory_path()
+                              / ("mb_d7counts_" + cfg.puzzle + "_" + std::to_string(GetCurrentProcessId()) + ".bin");
+            FILE* f = std::fopen(countsFile.path.string().c_str(), "wb");
+            if (f == nullptr) {
+                throw std::runtime_error("cannot write " + countsFile.path.string());
+            }
+            const u64 bytes = bucketCounts.size() * sizeof(u16);
+            const char* src = reinterpret_cast<const char*>(bucketCounts.data());
+            for (u64 off = 0; off < bytes;) {
+                const std::size_t n = static_cast<std::size_t>(std::min<u64>(bytes - off, 1ULL << 28));
+                if (std::fwrite(src + off, 1, n, f) != n) {
+                    std::fclose(f);
+                    throw std::runtime_error("short write to " + countsFile.path.string());
+                }
+                off += n;
+            }
+            std::fclose(f);
+            bucketCounts.reset();
+            tcout << "bucket counts spilled to " << countsFile.path.string() << " (" << bytes / 1e9 << " GB in "
+                  << spillTimer.getSeconds() << "s); each pass reads its partitions' slice\n";
+        }
+        BigArray<u16> passCounts;
+        // counts of partition p (in [p0, p1) of the current pass)
+        auto loadPassCounts = [&](const u32 p0, const u32 p1) -> const u16* {
+            if (cfg.d7CountsInRam) {
+                return bucketCounts.data() + static_cast<u64>(p0 - P0) * bucketsPer;
+            }
+            passCounts.ensure(static_cast<u64>(p1 - p0) * bucketsPer);
+            FILE* f = std::fopen(countsFile.path.string().c_str(), "rb");
+            if (f == nullptr || _fseeki64(f, static_cast<long long>(static_cast<u64>(p0 - P0) * countsBytesPerPartition), SEEK_SET) != 0) {
+                if (f) std::fclose(f);
+                throw std::runtime_error("cannot read " + countsFile.path.string());
+            }
+            const u64 bytes = static_cast<u64>(p1 - p0) * countsBytesPerPartition;
+            char* dst = reinterpret_cast<char*>(passCounts.data());
+            for (u64 off = 0; off < bytes;) {
+                const std::size_t n = static_cast<std::size_t>(std::min<u64>(bytes - off, 1ULL << 28));
+                if (std::fread(dst + off, 1, n, f) != n) {
+                    std::fclose(f);
+                    throw std::runtime_error("short read from " + countsFile.path.string());
+                }
+                off += n;
+            }
+            std::fclose(f);
+            return passCounts.data();
+        };
         const double setupSeconds = buildTimer.getSeconds();
 
         double indexBuildSeconds = 0.0;
@@ -266,8 +361,9 @@ namespace ssd {
             u32* starts = idx.starts.data();
             u16* fps = idx.fingerprints.data();
             u32* bloom = idx.bloom.data();
+            const u16* passC = loadPassCounts(p0, p1);
             parallelFor(threads, parts, [&](u32, const std::size_t i) {
-                const u16* c = bucketCounts.data() + (p0 + i) * bucketsPer;
+                const u16* c = passC + i * bucketsPer;
                 u32* s = starts + i * dirPer;
                 u32 run = 0;
                 for (u64 b = 0; b < bucketsPer; ++b) {
@@ -294,7 +390,7 @@ namespace ssd {
             parallelFor(threads, parts, [&](u32, const std::size_t i) {
                 u32* s = starts + i * dirPer;
                 u16* f = fps + idx.partitionFirst[i];
-                const u16* c = bucketCounts.data() + (p0 + i) * bucketsPer;
+                const u16* c = passC + i * bucketsPer;
                 u32 w = 0, begin = 0;
                 for (u64 b = 0; b < bucketsPer; ++b) {
                     const u32 end = s[b];
@@ -327,8 +423,17 @@ namespace ssd {
                   << " -> " << passUnique << " fingerprints in " << timer.getSeconds() << "s\n";
         };
 
+        // Keep back the fill's key blocks and, with spilled counts, the largest pass's count slice
+        // (estimated from the budget: counts are ~2% of a partition's index).
+        u64 reserve = 5'000'000'000ULL;
+        if (!cfg.d7CountsInRam) {
+            const u64 perPart = std::max<u64>(1, meta.indexBytes(rawTotal / std::max<u32>(1, P1 - P0), 1));
+            const u64 guess = cfg.ramBytes != 0 ? cfg.ramBytes : defaultRamBudgetBytes(0);
+            const u64 parts = std::min<u64>(P1 - P0, guess / perPart + 2);
+            reserve += parts * countsBytesPerPartition;
+        }
         const std::vector<KeyedState> candidates = streamAndProbe(leftRoot, IndexFiles{}, meta, raw, cfg, threads,
-                                                                  &builder, 5'000'000'000ULL);
+                                                                  &builder, reserve);
         tcout << "BUILD depth-7 index: " << uniqueTotal << " fingerprints (bucket-unique; raw " << rawTotal
               << "), built in RAM in " << indexBuildSeconds << "s\n";
         tcout << "BUILD depth-7 setup: " << setupSeconds << "s (no table; depth-5 frontier + count pass)\n";

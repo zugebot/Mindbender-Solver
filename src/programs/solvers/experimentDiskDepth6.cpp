@@ -91,6 +91,10 @@
 // --stream-depth 4 (default 3): a 4-move left stream from the seeds, so
 // <5,4,6> = 15 moves; the parent prune then runs at every level above the
 // leaves (a node with r moves below is dropped when h > depth + r).
+// --stream-depth 5: <5,5,6> = 16 moves with the one-pass depth-6 goal side
+// (normal boards; the bound audits sample fewer seeds at this depth).
+// Depth-7 goal side (no table): --no-goal-filter, --d7-counts-ram and
+// --d7-partitions N [--d7-first-partition F], see ssd/no_table_d7.hpp.
 // "parent" / "pdbparent" prune only at parents, with no per-leaf check: on
 // puzzles where the leaf check skips little (16-4: 39%) it costs more than
 // the lookups it saves, while a parent check covers ~40 leaves.
@@ -168,7 +172,7 @@ int main(const int argc, char** argv) {
     const bool noTable = cfg.tableDepth == 6 && !cfg.reverse && !cfg.batched && !cfg.diskTable && !cfg.ramBuild
                          && cfg.d7Sample == 0 && (counts.empty() || !fs::exists(fp16MetaPath(dir)));
     // Depth 7: no table unless a complete depth-7 index is already on disk (6-4).
-    const bool noTable7 = cfg.tableDepth == 7 && !cfg.reverse && !cfg.diskTable && !cfg.d7Subset()
+    const bool noTable7 = cfg.tableDepth == 7 && !cfg.reverse && !cfg.diskTable
                           && cfg.d7Sample == 0 && !fs::exists(d7Files(dir).meta);
     if (noTable || noTable7) {
         tcout << "no-table mode: nothing is written to " << dir.string() << "\n";

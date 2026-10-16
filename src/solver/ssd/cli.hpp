@@ -33,6 +33,8 @@ namespace ssd {
             else if (a == "--d7-pass-budget") cfg.d7PassBudget = std::stoull(next());
             else if (a == "--table-depth") cfg.tableDepth = static_cast<u32>(std::stoul(next()));
             else if (a == "--d7-partitions") cfg.d7Partitions = static_cast<u32>(std::stoul(next()));
+            else if (a == "--no-goal-filter") cfg.goalFilter = false;
+            else if (a == "--d7-counts-ram") cfg.d7CountsInRam = true;
             else if (a == "--d7-first-partition") cfg.d7FirstPartition = static_cast<u32>(std::stoul(next()));
             else if (a == "--progress-file") cfg.progressFile = next();
             else if (a == "--progress-interval") cfg.progressInterval = std::stod(next());

@@ -56,7 +56,7 @@ namespace bounds {
     BoundAudit auditLaneBound(const JVec<B1B2>& seeds, const lane_bound::LaneTables& tabs, const int limit,
                               const u32 threads, const B1B2& target) {
         BoundAudit a;
-        const std::size_t samples = std::min<std::size_t>(256, seeds.size());
+        const std::size_t samples = std::min<std::size_t>(STREAM_DEPTH >= 5 ? 8 : 256, seeds.size());
         const std::size_t step = std::max<std::size_t>(1, seeds.size() / std::max<std::size_t>(1, samples));
         std::atomic<u64> nodes{0}, leaves{0}, edges{0}, nodesSkip{0}, leavesSkip{0}, leavesUnderSkip{0}, bad{0};
         std::mutex whyLock;
@@ -95,7 +95,7 @@ namespace bounds {
             });
         });
         // (3) pruned vs full stream, wanted leaves identical
-        const std::size_t streamSeeds = std::min<std::size_t>(32, seeds.size());
+        const std::size_t streamSeeds = std::min<std::size_t>(STREAM_DEPTH >= 5 ? 2 : 32, seeds.size());
         const std::size_t sstep = std::max<std::size_t>(1, seeds.size() / std::max<std::size_t>(1, streamSeeds));
         g_laneTables = &tabs;
         g_laneLimit = limit;
@@ -162,7 +162,7 @@ namespace bounds {
             }
             return false;
         };
-        const std::size_t samples = std::min<std::size_t>(256, seeds.size());
+        const std::size_t samples = std::min<std::size_t>(STREAM_DEPTH >= 5 ? 8 : 256, seeds.size());
         const std::size_t step = std::max<std::size_t>(1, seeds.size() / std::max<std::size_t>(1, samples));
         parallelFor(threads, (seeds.size() + step - 1) / step, [&](u32, const std::size_t k) {
             streamStates<STREAM_DEPTH - 1, perm_stream_detail::NoParentPrune>(seeds[k * step], [&](const B1B2& node) {
@@ -181,7 +181,7 @@ namespace bounds {
                 }
             });
         });
-        const std::size_t streamSeeds = std::min<std::size_t>(32, seeds.size());
+        const std::size_t streamSeeds = std::min<std::size_t>(STREAM_DEPTH >= 5 ? 2 : 32, seeds.size());
         const std::size_t sstep = std::max<std::size_t>(1, seeds.size() / std::max<std::size_t>(1, streamSeeds));
         parallelFor(threads, (seeds.size() + sstep - 1) / sstep, [&](u32, const std::size_t k) {
             std::vector<B1B2> full, pruned;

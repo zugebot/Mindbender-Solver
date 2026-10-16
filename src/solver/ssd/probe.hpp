@@ -158,6 +158,15 @@ namespace ssd {
                             boundModes.push_back(4);
                             boundModes.push_back(6);
                         }
+                        if constexpr (STREAM_DEPTH >= 5) {
+                            // "off" and "leaf" generate the whole 5-move tree (16-2: ~47 s per seed
+                            // per thread, a timing block ~25 min): time only the per-level modes.
+                            std::erase_if(boundModes, [](const int m) { return m == 0 || m == 1 || m == 3 || m == 4; });
+                            if (boundModes.size() < 2) {
+                                boundMode = boundModes.empty() ? 2 : boundModes[0];
+                                tcout << "bound: " << BOUND_NAMES[boundMode] << " (5-move stream: per-level pruning only)\n";
+                            }
+                        }
                     } else {
                         tcout << "bound: off (skips under 5% here)\n";
                     }
@@ -398,7 +407,8 @@ namespace ssd {
         switch (cfg.streamDepth) {
             case 3: return streamAndProbeT<3>(leftRoot, files, meta, counts, cfg, threads, builder, builderReserveBytes);
             case 4: return streamAndProbeT<4>(leftRoot, files, meta, counts, cfg, threads, builder, builderReserveBytes);
-            default: throw std::runtime_error("--stream-depth must be 3 or 4");
+            case 5: return streamAndProbeT<5>(leftRoot, files, meta, counts, cfg, threads, builder, builderReserveBytes);
+            default: throw std::runtime_error("--stream-depth must be 3, 4 or 5");
         }
     }
 

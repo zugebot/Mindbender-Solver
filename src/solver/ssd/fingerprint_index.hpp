@@ -156,6 +156,8 @@ namespace ssd {
             }
         }
 
+        void reset() { release(); }   // gives the memory back now
+
         MUND T* data() { return data_; }
         MUND const T* data() const { return data_; }
         MUND u64 size() const { return size_; }

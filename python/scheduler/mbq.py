@@ -18,7 +18,8 @@ solver itself only bumps an atomic counter per seed for --progress-file.
 
 Engines (chosen from --moves unless --engine is given):
   ssd    build/experimentDiskDepth6.exe, 10-16 moves:
-         <S,3,6> up to 14 moves, <S,3,7> (index-only depth-7 table) for 15, <5,4,7> for 16.
+         <S,3,6> up to 14 moves, <S,3,7> (index-only depth-7 table) for 15 on 2x2 boards,
+         <5,4,6> for 15 on normal boards; 16: <5,5,6> normal boards, <5,4,7> 2x2 boards.
   inram  build/findSolutions.exe, 3-12 moves (exhaustive in-RAM search).
 
 After a job: solutions are copied to <repo>/levels and replayed (the demo
@@ -423,10 +424,13 @@ class Scheduler:
         # keep the depth-6 table and, at 15 moves, take a 4-move left stream
         # (<5,4,6>), which the colour-mix bound prunes at every level.
         fat = puzzle_is_fat(puzzle)
-        table_depth = int(spec.get("table_depth") or (7 if (fat and moves >= 14) or moves >= 16 else 6))
-        stream_depth = int(spec.get("stream_depth") or (4 if moves - table_depth >= 9 else 3))
+        # 16 moves: normal boards take a 5-move left stream against the one-pass depth-6 goal
+        # side (<5,5,6>; for 18-3 ~2x the node work of one <5,4,7> pass, which needed 86 passes).
+        table_depth = int(spec.get("table_depth") or (7 if fat and moves >= 14 else 6))
+        stream_depth = int(spec.get("stream_depth") or (5 if moves - table_depth >= 10
+                                                          else 4 if moves - table_depth >= 9 else 3))
         seed_depth = moves - stream_depth - table_depth
-        if engine == "ssd" and (table_depth not in (6, 7) or stream_depth not in (3, 4) or not 2 <= seed_depth <= 5):
+        if engine == "ssd" and (table_depth not in (6, 7) or stream_depth not in (3, 4, 5) or not 2 <= seed_depth <= 5):
             raise ValueError(f"no <S,{stream_depth},{table_depth}> split for {moves} moves")
         with self.lock:
             job = {
@@ -1095,8 +1099,8 @@ def cmd_export(args) -> None:
         raise SystemExit(f"no portable build at {PORTABLE_EXE}; build it with -DMB_MARCH=x86-64-v3 "
                          f"-DMB_OUTPUT_DIR={PORTABLE_EXE.parent}")
     fat = puzzle_is_fat(args.puzzle)
-    table = args.table_depth or (7 if (fat and args.moves >= 14) or args.moves >= 16 else 6)
-    stream = args.stream_depth or (4 if args.moves - table >= 9 else 3)
+    table = args.table_depth or (7 if fat and args.moves >= 14 else 6)
+    stream = args.stream_depth or (5 if args.moves - table >= 10 else 4 if args.moves - table >= 9 else 3)
     seed = args.moves - stream - table
     if not 2 <= seed <= 5:
         raise SystemExit(f"no <S,{stream},{table}> split for {args.moves} moves")
@@ -1215,17 +1219,18 @@ def main() -> None:
     a.add_argument("--front", action="store_true", help="put ahead of the other queued jobs")
     a.add_argument("--shards", type=int, help="split the search into N work units (shard jobs + a merge job)")
     a.add_argument("--remote", help="with --shards: shard numbers run on other PCs (comma list); see export")
-    a.add_argument("--stream-depth", type=int, choices=[3, 4],
-                   help="left stream moves after the seeds (default: 4 for 15-move normal boards, else 3)")
+    a.add_argument("--stream-depth", type=int, choices=[3, 4, 5],
+                   help="left stream moves after the seeds (default: 4 for 15-move and 5 for 16-move normal "
+                        "boards, 4 for 16-move 2x2 boards, else 3)")
     a.add_argument("--table-depth", type=int, choices=[6, 7],
-                   help="goal-side table depth (default: 7 for 16 moves and for 14-15-move 2x2 boards)")
+                   help="goal-side table depth (default: 7 for 2x2 boards at 14+ moves, else 6)")
     ex = sub.add_parser("export", help="work units for another PC (portable solver + .bat per shard)")
     ex.add_argument("puzzle")
     ex.add_argument("--moves", type=int, required=True)
     ex.add_argument("--shards", type=int, required=True)
     ex.add_argument("--which", required=True, help="shard numbers, comma list")
     ex.add_argument("--table-depth", type=int, choices=[6, 7])
-    ex.add_argument("--stream-depth", type=int, choices=[3, 4])
+    ex.add_argument("--stream-depth", type=int, choices=[3, 4, 5])
     ex.add_argument("--out", default=str(REPO / "workunits"))
     im = sub.add_parser("import", help="file middles results returned from other PCs")
     im.add_argument("files", nargs="+")

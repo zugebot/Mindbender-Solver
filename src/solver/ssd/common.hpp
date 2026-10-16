@@ -86,6 +86,8 @@ namespace ssd {
         std::vector<std::string> recoverFrom;   // --recover-from FILE (repeatable)
         u64 pdbMaxEntries = 300'000'000ULL;
         double boundCalibrateSeconds = 300.0;
+        bool goalFilter = true;       // --no-goal-filter: keep every depth-7 goal-side state
+        bool d7CountsInRam = false;   // --d7-counts-ram: keep the depth-7 bucket counts in RAM
         lane_bound::Kind boundKind = lane_bound::Kind::Rotation;   // --bound-kind mix|rotation   // max; the run uses 3% of its search, >= 20 s
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }
