@@ -1,0 +1,30 @@
+[0:00:00.001] puzzle 19-3 <5,4,6> = 15 moves, forward, threads 16, table dir X:\mindbender_d6\19-3_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\19-3_goal_d6
+[0:00:19.074] depth-5 exact unique: 165827078 states in 19.0727s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:37.284] depth-6 raw children: 9946390436, de-dupe ratio 0.647326 -> ~6438561570 unique (counted in 37.2828s)
+[0:00:37.284] fingerprint index: 29.9407 GB over partitions [0,256), RAM budget 31.9175 GB -> 1 pass(es)
+[0:00:51.706] left seeds (exact depth 5): 161127716 in 14.4225s
+[0:02:25.691] bound (rotation): audit ok: 26337681 nodes, 1579258822 leaves, 1579258822 edges (|dh| <= 1), 630 wanted leaves identical pruned vs full; sampled skip: leaf 99.9994%, whole last level 99.7257%; tables 753986 B, 93.9965s
+[0:02:30.244]   index build: 2.48853 GB for keys -> about 32 regeneration(s) of depth 6
+[0:13:05.119]   index for partitions [0,256) built in RAM: 6439728246 unique states in 639.413s
+[0:13:28.567] calibrate: 768 seeds in 23.4468s, ns/state per thread: 32/plain=118.825 32/pipelined=122.007 64/plain=113.983 64/pipelined=112.685 128/plain=111.009 128/pipelined=114.832 -> 128/plain (1.0704x vs 32/plain)
+[0:14:54.543] bound calibrate: 8192 seeds, 4 rounds of 512-seed blocks per mode in 85.9562s (one mode left, budget 300s); time vs both: off=268.074 +-11.9395% (dropped after 4) leaf=106.637 +-12.77% (dropped after 4) both=1 (1804.58 us/seed) parent=1.2007 +-4.9868% (dropped after 4) -> both (268.074x vs off)
+[5:51:03.421]   pass 1/1 partitions [0,256): load 29.9407 GB (normal pages) in 639.414s, stream+probe 1586778877814 left states in 20278.3s (78.2501 M/s), Bloom pass 0.0117045%, bound skipped 1570671102141 lookups
+[5:51:03.422] probe totals: load 639.414s, stream+probe 20278.3s, 1586778877814 left states streamed, 7010 unique candidates
+[5:51:05.805] depth-6 exact unique: 6439728246 (index-only, in RAM; no table written)
+[5:51:05.805] BUILD fingerprint index: 6439728246 states, 2^23 buckets/partition, built in RAM in 639.413s
+[5:51:05.806] BUILD depth-6 table: 37.2829s (no table; depth-5 frontier + counts)
+[5:51:27.673] verify: 0 confirmed, 7010 fingerprint false matches, 21.8675s (by regeneration)
+[5:51:28.123] unique middle states (9 from left, 6 from table side): 0
+[5:51:28.123] PROBE phase: 21088.1s
+[5:51:28.123] TOTAL: 21088.1s (build 0s, probe 21088.1s, recovery 0s)
+
+=== Allocation counters (process total) ===
+stage: at exit
+new/delete tracked via global operators
+new calls:        76069
+delete calls:     76069
+malloc calls:     213476566
+free calls:       375013016
+calloc calls:     3
+realloc calls:    161533729
