@@ -17,8 +17,8 @@ when the server restarts is re-adopted. The server only listens on
 solver itself only bumps an atomic counter per seed for --progress-file.
 
 Engines (chosen from --moves unless --engine is given):
-  ssd    build/experimentDiskDepth6.exe, 10-15 moves:
-         <S,3,6> up to 14 moves, <S,3,7> (index-only depth-7 table) for 15.
+  ssd    build/experimentDiskDepth6.exe, 10-16 moves:
+         <S,3,6> up to 14 moves, <S,3,7> (index-only depth-7 table) for 15, <5,4,7> for 16.
   inram  build/findSolutions.exe, 3-12 moves (exhaustive in-RAM search).
 
 After a job: solutions are copied to <repo>/levels and replayed (the demo
@@ -412,8 +412,8 @@ class Scheduler:
             engine = "inram" if moves <= 12 else "ssd"
         if not re.fullmatch(r"\d+-\d+", puzzle):
             raise ValueError(f"bad puzzle name {puzzle!r}")
-        if engine == "ssd" and not 10 <= moves <= 15:
-            raise ValueError("ssd engine supports 10-15 moves")
+        if engine == "ssd" and not 10 <= moves <= 16:
+            raise ValueError("ssd engine supports 10-16 moves")
         if engine == "inram" and not 3 <= moves <= 12:
             raise ValueError("inram engine supports 3-12 moves")
         # Depth-7 goal table for 15 moves, and for 14 on 2x2 boards (their depth-7
@@ -1218,7 +1218,7 @@ def main() -> None:
     a.add_argument("--stream-depth", type=int, choices=[3, 4],
                    help="left stream moves after the seeds (default: 4 for 15-move normal boards, else 3)")
     a.add_argument("--table-depth", type=int, choices=[6, 7],
-                   help="goal-side table depth (default: 7 for 15 moves and 14-move 2x2 boards)")
+                   help="goal-side table depth (default: 7 for 16 moves and for 14-15-move 2x2 boards)")
     ex = sub.add_parser("export", help="work units for another PC (portable solver + .bat per shard)")
     ex.add_argument("puzzle")
     ex.add_argument("--moves", type=int, required=True)
