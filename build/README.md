@@ -27,7 +27,7 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 16-1: at least 16 moves (start board fixed 2026-10-12: one cell was wrong, so every earlier 16-1 result was on an unsolvable board; 3-15 moves re-checked on the fixed board 2026-10-12/13)
 16-3: at least 16 moves
 17-3: at least 16 moves
-18-3: at least 16 moves
+18-3: at least 17 moves
 19-2: at least 16 moves
 19-3: at least 16 moves
 19-4: at least 16 moves
