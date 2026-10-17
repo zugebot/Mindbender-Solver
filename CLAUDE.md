@@ -4,9 +4,9 @@ Optimal solver for Chuzzle's Mind Bender puzzles (100 puzzles, 6x6 boards,
 row/column cyclic shifts, some with a 2x2 piece). It finds every shortest
 solution and proves nothing shorter exists. C++ solver plus Python tools.
 
-Status (2026-10-15): **85/100 solved**. `build/README.md` lists the unsolved ones with their
+Status (2026-10-16): **85/100 solved**; every unsolved one needs >= 16 (18-3 >= 17). `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
-History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-13.md`).
+History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-16.md`).
 
 ## Build and test
 
@@ -87,13 +87,15 @@ A job cut off by a reboot is re-queued first.
 ## How the large solver works (experimentDiskDepth6)
 
 A search `<S, T2, T>` = S + T2 + T moves: exact depth-S left seeds, each streamed T2 more moves
-(`--stream-depth`, 3 or 4), every state looked up in the goal side's depth-T set. The scheduler
-picks: normal boards `<5,3,6>` up to 14 moves, `<5,4,6>` at 15; 2x2 boards `<4,3,7>` at 14,
-`<5,3,7>` at 15; `<5,4,7>` at 16.
+(`--stream-depth`, 3-5), every state looked up in the goal side's depth-T set. The scheduler
+picks: normal boards `<5,3,6>` up to 14 moves, `<5,4,6>` at 15, `<5,5,6>` at 16 (one pass; a
+depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes); 2x2 boards
+`<4,3,7>` at 14, `<5,3,7>` at 15, `<5,4,7>` at 16.
 - Goal side, no table written (default): depth 6 = the depth-5 frontier in RAM, index slices
   built per pass from regenerated keys; depth 7 = a count pass, then per pass the canonical
-  2-move stream fills the pass's buckets (owner-routed keys, no atomics). Hits are confirmed by
-  regenerating. An index larger than the RAM budget means several passes, each re-streaming the
+  2-move stream fills the pass's buckets (owner-routed keys, no atomics; the bucket counts
+  wait in a temp file, each pass reads its slice; normal boards drop goal states with
+  h(start) > left depth). Hits are confirmed by regenerating. An index larger than the RAM budget means several passes, each re-streaming the
   whole left side (2x2 15-move runs: 6-7 passes).
 - Pruning (normal boards): h = worst row + worst column lane distance, rotation kind by default
   (per lane, the fewest cells wrong over its 6 rotations); |dh| <= 1 per move, so a node with r
@@ -139,7 +141,9 @@ its cache fills, recovers when idle). GPU: GTX 1660 SUPER now; an RTX 5060 Ti fr
 | 14 moves, normal board, rotation bound | 16-3: 24 min; 16-4: 1 h 27 min (was 10.8 h with colour mix + pattern tables) |
 | 14 moves, normal board, colour mix (before 2026-10-12) | 32 min (14-3) to 10.7 h (17-3) |
 | 14 moves, 2x2 board, `<4,3,7>` | 48-68 min |
-| 15 moves, 2x2 board, `<5,3,7>` | 8.9-10.5 h (6-7 passes, ~2.6-2.8 T left states each, ~560 M/s) |
+| 15 moves, 2x2 board, `<5,3,7>` | 7.8-10.5 h (6-7 passes, ~2.6-2.8 T left states each, ~560 M/s) |
+| 15 moves, normal board, `<5,4,6>` | 0.4 h (18-3) to 8.5 h (17-1), one pass |
+| 16 moves, normal board, `<5,5,6>` | 18-3: 8.5 h, one 18.7 GB pass, 4.9 ms/seed |
 | 15 moves, 6-4 (disk depth-7 index) | 13.4 h, 10 passes |
 | 13 moves, normal board, rotation bound | 10-3: 1 min 43 s; 9-3: ~6 min (colour mix: 5-25 min) |
 
@@ -179,10 +183,11 @@ Next:
    lane bound tops out at 6 and pruning needs > 7, and no lane bound can do better (cover
    argument in docs/changes-2026-10-12.md section 7). It needs bounds over several lanes at once
    (pattern tables, e.g. split by move type), or the time has to come from fewer passes / the GPU.
-3. 16 moves: `<5,4,7>` works with today's code. 2x2 boards ~300 h each on this CPU; 6-4 with its
-   disk index ~150-160 h (~70-80 h with item 1). Normal boards at 16: try pruning the goal side
-   with the bound measured from the start (states must be within the left depth of the start),
-   which could make a depth-7 goal side small enough for one pass.
+3. 16 moves on 2x2 boards: `<5,4,7>` (the depth-7 code's count spill and partition subsets are
+   not yet run end to end: test on 18-4 first). ~200-300 h each on this CPU; 6-4 with its disk
+   index ~150-160 h (~70-80 h with item 1). Normal boards run `<5,5,6>` (~8.5 h); the goal-side
+   filter by h(start) keeps 54% on 18-3, too little for a one-pass depth-7 goal side. 17 moves
+   (18-3): `<5,5,7>` or a 6-move stream, not tried.
 4. GPU port of the stream + lookup loop (est. 10-20x): CUDA on the RTX 5060 Ti first, kept
    HIP-portable. Starting points: `src/chuzzles/rotations_cuda.cpp`, `docs/gpu_impl.md`,
    `tests/testLayeredDFS.cpp` (CUDA-only target). Needs MSVC Build Tools + CUDA Toolkit.

@@ -57,9 +57,9 @@ localhost only.
 
 - **Engine**: `inram` (`build/findSolutions.exe`, exhaustive) for 3-12 moves,
   `ssd` (`build/experimentDiskDepth6.exe`) for 10-16 moves, split as
-  `<seed, stream, table>`: normal boards `<S,3,6>` up to 14 and `<5,4,6>` at 15;
-  2x2 boards `<4,3,7>` at 14, `<5,3,7>` at 15; 16 moves `<5,4,7>`
-  (`--table-depth`, `--stream-depth` override). It runs a copy of the
+  `<seed, stream, table>`: normal boards `<S,3,6>` up to 14, `<5,4,6>` at 15 and
+  `<5,5,6>` at 16; 2x2 boards `<4,3,7>` at 14, `<5,3,7>` at 15 and `<5,4,7>` at 16
+  (`--table-depth`, `--stream-depth` 3-5 override). It runs a copy of the
   exe from `state/bin`, so rebuilding `build/` never clashes with a run.
 - **One at a time, safely**: a job never starts while any other solver process
   is running (including one started by hand), and the queue is a single
@@ -129,8 +129,9 @@ shard twice on different PCs and compare the files).
 
 ## Solved alarm
 
-When a job's solutions pass validation, the server loops the game's trophy jingles on this PC, loud (`GetTrophy` + `TrophyJoy`,
-then a pause, through `winsound`, so no browser is needed; the PC's volume applies) until it is
+When a job's solutions pass validation, the server loops the game's trophy jingles on this PC, loud (`GetTrophy` with
+`TrophyJoy` mixed in on its final chord at 0.93 s, then 3 s of quiet, from `alarm.py`, through `winsound`, so no
+browser is needed; the PC's volume applies) until it is
 stopped or 15 minutes pass. The dashboard shows a flashing SOLVED banner with **Stop alarm**; its
 **Sound in this tab** button makes the page play them too, and the page raises its own alarm if it
 sees the solved count go up.
