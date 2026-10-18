@@ -93,6 +93,9 @@
 // leaves (a node with r moves below is dropped when h > depth + r).
 // --stream-depth 5: <5,5,6> = 16 moves with the one-pass depth-6 goal side
 // (normal boards; the bound audits sample fewer seeds at this depth).
+// --recover-stream-depth D (default 5): recovery streams every per-middle half of D+ moves
+// instead of storing all its paths (left depth 10 = two depth-5 halves; stored, the per-middle
+// one alone is ~30 GB). Lower it to test the streamed path against known solutions.
 // Depth-7 goal side (no table): --no-goal-filter, --d7-counts-ram and
 // --d7-partitions N [--d7-first-partition F], see ssd/no_table_d7.hpp.
 // "parent" / "pdbparent" prune only at parents, with no per-leaf check: on

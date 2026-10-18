@@ -75,6 +75,7 @@ namespace ssd {
     }
 
     inline int recoverSolutions(BoardSolverFrontier& solver, const Config& cfg, const std::vector<B1B2>& middles) {
+        BoardSolverFrontier::recoveryStreamMinDepth = cfg.recoverStreamDepth;
         return cfg.tableDepth == 7 ? recoverWithTableDepth<7>(solver, cfg, middles)
                                    : recoverWithTableDepth<6>(solver, cfg, middles);
     }

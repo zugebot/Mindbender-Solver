@@ -87,6 +87,7 @@ namespace ssd {
         u64 pdbMaxEntries = 300'000'000ULL;
         double boundCalibrateSeconds = 300.0;
         bool goalFilter = true;       // --no-goal-filter: keep every depth-7 goal-side state
+        u32 recoverStreamDepth = 5;   // --recover-stream-depth: per-middle recovery halves this deep are streamed
         bool d7CountsInRam = false;   // --d7-counts-ram: keep the depth-7 bucket counts in RAM
         lane_bound::Kind boundKind = lane_bound::Kind::Rotation;   // --bound-kind mix|rotation   // max; the run uses 3% of its search, >= 20 s
 

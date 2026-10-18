@@ -18,6 +18,12 @@
 
 class MU BoardSolverFrontier : public BoardSolverBase {
 public:
+    // Recovery: per-middle halves of at least this many moves are streamed (every path
+    // generated and looked up in the shared half on the fly) instead of stored. An all-paths
+    // depth-5 frontier is 60^5 = 7.8e8 boards (~30 GB); left depth 10 (16-move <5,5,6>) needs
+    // one per middle on top of the shared depth-5 one, which ran 20-2's recovery out of memory.
+    inline static u32 recoveryStreamMinDepth = 5;
+
     enum class SearchDirection : u8 {
         Auto = 0,
         Forward,
@@ -222,6 +228,50 @@ private:
         }
     }
 
+    // fn(board) for every exact-length path from `board` (its moves in board.memory), the same
+    // paths in the same order as enumerateAllRecoveryPaths, without storing them.
+    template<u32 DEPTH, u32 CUR_DEPTH = 0, typename Fn>
+    MU static void forEachRecoveryPath(const Board& board, const u64 packedMoves, Fn& fn) {
+        if constexpr (CUR_DEPTH == DEPTH) {
+            Board stored = board;
+            if constexpr (DEPTH > 0) {
+                stored.memory.template setNextNMove<DEPTH>(packedMoves);
+            }
+            fn(stored);
+        } else {
+            if (board.getFatBool()) {
+                const u8* actionIndexes = fatActionsIndexes[board.getFatXY()];
+                for (u64 relativeIndex = 0; relativeIndex < 48ULL; ++relativeIndex) {
+                    Board next = board;
+                    allActStructList[actionIndexes[relativeIndex]].action(next);
+                    if (next == board) {
+                        continue;
+                    }
+                    const u64 nextPacked = packedMoves |
+                            (relativeIndex << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
+                    forEachRecoveryPath<DEPTH, CUR_DEPTH + 1>(next, nextPacked, fn);
+                }
+            } else {
+                for (u64 direction = 0; direction < 2ULL; ++direction) {
+                    for (u64 section = 0; section < 6ULL; ++section) {
+                        const u64 base = (direction << 5ULL) + section * 5ULL;
+                        for (u64 shift = 0; shift < 5ULL; ++shift) {
+                            const u64 actionIndex = base + shift;
+                            Board next = board;
+                            allActStructList[actionIndex].action(next);
+                            if (next == board) {
+                                continue;
+                            }
+                            const u64 nextPacked = packedMoves |
+                                    (actionIndex << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
+                            forEachRecoveryPath<DEPTH, CUR_DEPTH + 1>(next, nextPacked, fn);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     template<u32 DEPTH>
     MU static void buildBoardAllPathFrontier(const Board& root,
                                              RecoveryBoardFrontierCache& cache) {
@@ -318,6 +368,52 @@ private:
                 }
             }
         }
+    }
+
+    // recoverSplitBySharedLookup with the small side streamed from `smallRoot` (DEPTH moves)
+    // instead of read from a stored frontier: same matches, no memory for the small side.
+    template<bool REVERSE_OUTPUT, bool SMALL_IS_LEFT, u32 DEPTH>
+    MU static void recoverSplitBySharedLookupStreamed(const Board& leftRoot,
+                                                      const Board& rightRoot,
+                                                      const RecoveryBoardFrontierCache& shared,
+                                                      const Board& smallRoot,
+                                                      std::set<std::string>& outPaths) {
+        outPaths.clear();
+
+        const bool leftIsFat = leftRoot.getFatBool();
+        const bool rightIsFat = rightRoot.getFatBool();
+        const u64* sharedHashBegin = shared.hashes.data();
+        const u64* sharedHashEnd = sharedHashBegin + shared.hashes.size();
+
+        auto visit = [&](const Board& smallBoard) {
+            const auto [lo, hi] = std::equal_range(sharedHashBegin, sharedHashEnd, StateHash::computeHash(smallBoard));
+            for (const u64* it = lo; it != hi; ++it) {
+                const Board& sharedBoard = shared.states[static_cast<std::size_t>(it - sharedHashBegin)];
+                if (!(sharedBoard == smallBoard)) {
+                    continue;
+                }
+
+                const Board& leftBoard = SMALL_IS_LEFT ? smallBoard : sharedBoard;
+                const Board& rightBoard = SMALL_IS_LEFT ? sharedBoard : smallBoard;
+
+                const Board temp1 = leftIsFat
+                                            ? makeBoardWithFatMoves(leftRoot, leftBoard.memory)
+                                            : makeBoardWithMoves(leftRoot, leftBoard.memory);
+                const Board temp2 = rightIsFat
+                                            ? makeBoardWithFatMoves(rightRoot, rightBoard.memory)
+                                            : makeBoardWithMoves(rightRoot, rightBoard.memory);
+
+                if (temp1 == temp2) {
+                    outPaths.insert(buildRecoveredPathString<REVERSE_OUTPUT>(
+                            leftRoot,
+                            leftBoard.memory,
+                            rightRoot,
+                            rightBoard.memory
+                            ));
+                }
+            }
+        };
+        forEachRecoveryPath<DEPTH>(smallRoot, 0ULL, visit);
     }
 
     MU static void appendStates(JVec<B1B2>& dstStates,
@@ -536,10 +632,12 @@ private:
         // Each worker holds two per-middle frontiers (states + hashes + sort
         // scratch); keep their combined worst case under ~6 GB.
         const bool fat = searchStartRoot.getFatBool();
+        const bool streamStart = START_PER_MIDDLE_DEPTH >= recoveryStreamMinDepth;
+        const bool streamGoal = GOAL_PER_MIDDLE_DEPTH >= recoveryStreamMinDepth;
         const double perWorkerBytes =
                 2.0 * static_cast<double>(sizeof(Board) + sizeof(u64))
-                * static_cast<double>(recoveryPathUpperBound(fat, START_PER_MIDDLE_DEPTH)
-                                      + recoveryPathUpperBound(fat, GOAL_PER_MIDDLE_DEPTH));
+                * static_cast<double>((streamStart ? 0 : recoveryPathUpperBound(fat, START_PER_MIDDLE_DEPTH))
+                                      + (streamGoal ? 0 : recoveryPathUpperBound(fat, GOAL_PER_MIDDLE_DEPTH)));
         const std::size_t memoryWorkers = std::max<std::size_t>(
                 1, static_cast<std::size_t>(6.0e9 / std::max(1.0, perWorkerBytes)));
         const std::size_t workerCount = std::min<std::size_t>(
@@ -563,22 +661,32 @@ private:
             for (std::size_t i; (i = nextMiddle.fetch_add(1)) < middleMatches.size();) {
                 const Board middleBoard = makeBoardFromState(middleMatches[i]);
 
-                middleFromStartCache.valid = false;
-                ensureCache(middleFromStartCache, middleBoard, START_PER_MIDDLE_DEPTH);
-                recoverSplitBySharedLookup<REVERSE_SEARCH, false>(
-                        searchStartRoot, middleBoard,
-                        startSharedCache, middleFromStartCache,
-                        rootToMiddlePaths);
+                if (streamStart) {
+                    recoverSplitBySharedLookupStreamed<REVERSE_SEARCH, false, START_PER_MIDDLE_DEPTH>(
+                            searchStartRoot, middleBoard, startSharedCache, middleBoard, rootToMiddlePaths);
+                } else {
+                    middleFromStartCache.valid = false;
+                    ensureCache(middleFromStartCache, middleBoard, START_PER_MIDDLE_DEPTH);
+                    recoverSplitBySharedLookup<REVERSE_SEARCH, false>(
+                            searchStartRoot, middleBoard,
+                            startSharedCache, middleFromStartCache,
+                            rootToMiddlePaths);
+                }
                 if (rootToMiddlePaths.empty()) {
                     continue;
                 }
 
-                middleToGoalCache.valid = false;
-                ensureCache(middleToGoalCache, middleBoard, GOAL_PER_MIDDLE_DEPTH);
-                recoverSplitBySharedLookup<REVERSE_SEARCH, true>(
-                        middleBoard, searchGoalRoot,
-                        goalSharedCache, middleToGoalCache,
-                        middleToGoalPaths);
+                if (streamGoal) {
+                    recoverSplitBySharedLookupStreamed<REVERSE_SEARCH, true, GOAL_PER_MIDDLE_DEPTH>(
+                            middleBoard, searchGoalRoot, goalSharedCache, middleBoard, middleToGoalPaths);
+                } else {
+                    middleToGoalCache.valid = false;
+                    ensureCache(middleToGoalCache, middleBoard, GOAL_PER_MIDDLE_DEPTH);
+                    recoverSplitBySharedLookup<REVERSE_SEARCH, true>(
+                            middleBoard, searchGoalRoot,
+                            goalSharedCache, middleToGoalCache,
+                            middleToGoalPaths);
+                }
                 if (middleToGoalPaths.empty()) {
                     continue;
                 }

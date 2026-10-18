@@ -1,0 +1,21 @@
+[0:00:00.000] puzzle 20-2 <5,5,6> = 16 moves, forward, threads 16, table dir X:\mindbender_d6\20-2_goal_d6
+[0:00:00.001] no-table mode: nothing is written to X:\mindbender_d6\20-2_goal_d6
+[0:00:08.120] depth-5 exact unique: 90487620 states in 8.11965s (no table: depth 6 is regenerated in RAM, nothing is written)
+[0:00:17.751] depth-6 raw children: 5419639344, de-dupe ratio 0.637287 -> ~3453865933 unique (counted in 17.7509s)
+[0:00:17.752] fingerprint index: 15.7505 GB over partitions [0,256), RAM budget 34.209 GB -> 1 pass(es)
+[0:00:31.460] left seeds (exact depth 5): 165842380 in 13.7091s
+[0:03:21.376] bound (rotation): audit ok: 37504065 nodes, 2248703106 leaves, 2248703106 edges (|dh| <= 1), 0 wanted leaves identical pruned vs full; sampled skip: leaf 100%, whole last level 99.9981%; tables 747132 B, 169.927s
+[0:03:24.723]   index build: 16.709 GB for keys -> about 3 regeneration(s) of depth 6
+[0:05:41.343]   index for partitions [0,256) built in RAM: 3452103839 unique states in 139.952s
+[0:11:19.679] calibrate: 384 seeds in 338.323s, ns/state per thread: 32/plain=86.1639 32/pipelined=84.445 64/plain=81.358 64/pipelined=82.8013 128/plain=79.1173 128/pipelined=79.6041 -> 128/plain (1.08906x vs 32/plain)
+[0:11:25.123] bound calibrate: 15360 seeds, 15 rounds of 512-seed blocks per mode in 5.42686s (settled, budget 300s); time vs both: both=1 (5175 us/seed) parent=1.04203 +-1.58355% -> both (1x vs both)
+[18:07:33.212]   pass 1/1 partitions [0,256): load 15.7505 GB (normal pages) in 139.953s, stream+probe 2198198111102 left states in 64911.9s (33.8643 M/s), Bloom pass 0.0349164%, bound skipped 2131288469775 lookups
+[18:07:33.216] probe totals: load 139.953s, stream+probe 64911.9s, 2198198111102 left states streamed, 32895 unique candidates
+[18:07:34.198] depth-6 exact unique: 3452103839 (index-only, in RAM; no table written)
+[18:07:34.198] BUILD fingerprint index: 3452103839 states, 2^22 buckets/partition, built in RAM in 139.952s
+[18:07:34.198] BUILD depth-6 table: 17.7509s (no table; depth-5 frontier + counts)
+[18:07:46.342] verify: 2 confirmed, 32893 fingerprint false matches, 12.1448s (by regeneration)
+[18:07:46.554] unique middle states (10 from left, 6 from table side): 2
+[18:07:46.554] PROBE phase: 65266.6s
+terminate called after throwing an instance of 'std::bad_alloc'
+  what():  std::bad_alloc

@@ -648,6 +648,10 @@ class Scheduler:
                 out = SHARD_ROOT / shard_group(job["puzzle"], job["moves"], n)
                 out.mkdir(parents=True, exist_ok=True)
                 cmd += ["--shard", f"{k}/{n}", "--middles-out", str(out / f"s{k}.mid"), "--no-recover"]
+            elif not job.get("merge"):
+                # keep the middles: if recovery fails, `--recover-from` redoes only that part
+                # (20-2's 18 h probe was lost to a recovery crash)
+                cmd += ["--middles-out", str(jdir / "middles.mid")]
             if job.get("merge"):
                 d = SHARD_ROOT / shard_group(job["puzzle"], job["moves"], int(job["merge"]))
                 for k in range(int(job["merge"])):
