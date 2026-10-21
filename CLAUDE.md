@@ -4,7 +4,7 @@ Optimal solver for Chuzzle's Mind Bender puzzles (100 puzzles, 6x6 boards,
 row/column cyclic shifts, some with a 2x2 piece). It finds every shortest
 solution and proves nothing shorter exists. C++ solver plus Python tools.
 
-Status (2026-10-16): **85/100 solved**; every unsolved one needs >= 16 (18-3 >= 17). `build/README.md` lists the unsolved ones with their
+Status (2026-10-21): **87/100 solved** (20-2 and 20-5 at 16 moves); every unsolved one needs >= 16 (14-3, 18-3 >= 17). `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
 History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-16.md`).
 
@@ -143,7 +143,7 @@ its cache fills, recovers when idle). GPU: GTX 1660 SUPER now; an RTX 5060 Ti fr
 | 14 moves, 2x2 board, `<4,3,7>` | 48-68 min |
 | 15 moves, 2x2 board, `<5,3,7>` | 7.8-10.5 h (6-7 passes, ~2.6-2.8 T left states each, ~560 M/s) |
 | 15 moves, normal board, `<5,4,6>` | 0.4 h (18-3) to 8.5 h (17-1), one pass |
-| 16 moves, normal board, `<5,5,6>` | 18-3: 8.5 h, one 18.7 GB pass, 4.9 ms/seed |
+| 16 moves, normal board, `<5,5,6>` | 8.5 h (18-3, 4.9 ms/seed) to 36.5 h (20-5, 12.6 ms/seed, 1.0e13 left states); one pass; recovery ~5 min |
 | 15 moves, 6-4 (disk depth-7 index) | 13.4 h, 10 passes |
 | 13 moves, normal board, rotation bound | 10-3: 1 min 43 s; 9-3: ~6 min (colour mix: 5-25 min) |
 
