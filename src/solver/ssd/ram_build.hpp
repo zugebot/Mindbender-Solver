@@ -14,7 +14,7 @@ namespace ssd {
     // ------------------------------------------------------------------
     // The disk build writes every raw child (~1.5x the table) to 256 files,
     // reads them back to sort, then re-reads the sorted table to index it: on
-    // a SATA SSD that I/O is most of the build (16-3: 55 min). Here the
+    // a SATA SSD that I/O is most of the build. Here the
     // depth-5 frontier stays in RAM; one count pass sizes every partition,
     // then each pass regenerates the children of a RAM-sized group of
     // partitions, sorts and de-dupes them in memory, and writes the sorted

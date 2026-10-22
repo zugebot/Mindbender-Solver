@@ -475,7 +475,6 @@ static GroupResult processGroup(const PuzzleKey& key,
 }
 
 // -----------------------------------------------------------------------------
-// Main
 // -----------------------------------------------------------------------------
 int main() {
     const unsigned int hw = std::thread::hardware_concurrency();

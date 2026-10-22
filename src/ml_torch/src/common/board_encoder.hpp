@@ -27,12 +27,10 @@ inline torch::Tensor encodeBoardPair(
     
     auto accessor = tensor.accessor<float, 3>();
     
-    // Extract colors from both boards
     for (int i = 0; i < kBoardSize; ++i) {
         int row = i / kBoardCols;
         int col = i % kBoardCols;
         
-        // Get colors (0-7)
         uint8_t x = col;
         uint8_t y = row;
         const uint8_t state_color = state_b1b2.getColor(x, y);

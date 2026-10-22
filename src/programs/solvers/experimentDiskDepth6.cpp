@@ -13,9 +13,8 @@
 //           --ram-build: regenerate the children per RAM-sized group of
 //           partitions, sort them in memory and write the table + index in one
 //           go (no raw spill, no re-read). Correct, but on a drive whose
-//           sustained write speed has collapsed (X: measured 32 MB/s) it was
-//           slower (6-2: 475 s vs ~200 s), because the disk build's writes are
-//           absorbed by the OS file cache.
+//           sustained write speed has collapsed it is slower, because the disk
+//           build's writes are absorbed by the OS file cache.
 //   Probe (default): load a compact per-partition index (Bloom filter + u16
 //           fingerprints + bucket offsets, ~4.25 B/state) for as many partitions
 //           as fit --ram-gb, stream the left side once per such range, and

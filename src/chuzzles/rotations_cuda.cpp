@@ -1,4 +1,4 @@
-// src/rotations_cuda.cpp
+// src/chuzzles/rotations_cuda.cpp
 #include "src/chuzzles/rotations_cuda.hpp"
 
 #ifdef USE_CUDA
@@ -46,22 +46,15 @@ namespace my_cuda {
     }
 
 
-    // New R_X_X function that copies and modifies
     MU __device__ void R_X_X_copy(const B1B2* src, B1B2* dest, u32 idx) {
-        // Copy the source board to destination
         *dest = *src;
 
-        // Determine if we are operating on R3 to R5 based on idx
-        // 0b11111111111111111000000000000000
         bool is_R3_to_r5 = idx >= 15;
 
-        // Fetch the appropriate R_X_X_data
         R_X_X_data data = CUDA_RXX_DATA[idx - 15 * is_R3_to_r5];
 
-        // Compute the address based on is_R3_to_r5
         u64* addr = &dest->b1 + is_R3_to_r5;
 
-        // Apply the permutation on the destination board
         *addr = (*addr & CUDA_ROW_MASKS[data.rowNum])
                 | ((*addr & data.maskRB) >> data.shiftR)
                 | ((*addr & data.maskRS) << data.shiftL);
@@ -106,24 +99,18 @@ namespace my_cuda {
     }
 
 
-    // New C_X_X function that copies and modifies
     MU __device__ void C_X_X_copy(const B1B2* src, B1B2* dest, u32 idx) {
-        // Copy the source board to destination
         *dest = *src;
 
-        // Retrieve precomputed indices
         u8 mod5 = PRECOMPUTED_IDX[idx].mod5;
         u64 C_MASK_X = CUDA_COL_MASKS[PRECOMPUTED_IDX[idx].div5];
 
-        // Extract relevant parts of the board
         u64 vars[2] = {dest->b1 & C_MASK_X, dest->b2 & C_MASK_X};
 
-        // Determine indices based on mod5
         i32 idx1 = (mod5 <= 2) ? 1 : 0;
         u64* ptr1 = &vars[idx1];
         u64* ptr2 = &vars[1 - idx1];
 
-        // Perform the permutation on the destination board
         dest->b1 = ((*ptr1 << CUDA_COL_OFF1[mod5] | *ptr2 >>
                                                             CUDA_COL_OFF1[mod5 + 4]) & C_MASK_X) | (dest->b1 & ~C_MASK_X);
         dest->b2 = ((*ptr2 << CUDA_COL_OFF1[mod5] | *ptr1 >>

@@ -19,9 +19,9 @@
 class MU BoardSolverFrontier : public BoardSolverBase {
 public:
     // Recovery: per-middle halves of at least this many moves are streamed (every path
-    // generated and looked up in the shared half on the fly) instead of stored. An all-paths
-    // depth-5 frontier is 60^5 = 7.8e8 boards (~30 GB); left depth 10 (16-move <5,5,6>) needs
-    // one per middle on top of the shared depth-5 one, which ran 20-2's recovery out of memory.
+    // generated and looked up in the shared half on the fly) instead of stored: an all-paths
+    // depth-5 frontier is 60^5 = 7.8e8 boards (~30 GB), and left depth 10 (16-move <5,5,6>)
+    // has a depth-5 half per middle on top of the shared one.
     inline static u32 recoveryStreamMinDepth = 5;
 
     enum class SearchDirection : u8 {

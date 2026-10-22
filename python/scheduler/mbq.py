@@ -417,15 +417,11 @@ class Scheduler:
             raise ValueError("ssd engine supports 10-16 moves")
         if engine == "inram" and not 3 <= moves <= 12:
             raise ValueError("inram engine supports 3-12 moves")
-        # Depth-7 goal table for 15 moves, and for 14 on 2x2 boards (their depth-7
-        # set fits in a few RAM passes, so the left side shrinks ~30x).
-        # Splits <seed, stream, table>: 2x2 boards use the depth-7 goal table at
-        # 14+ moves (their depth-7 set fits a few RAM passes); normal boards
-        # keep the depth-6 table and, at 15 moves, take a 4-move left stream
-        # (<5,4,6>), which the colour-mix bound prunes at every level.
+        # Splits <seed, stream, table>: 2x2 boards use the depth-7 goal table from 14 moves (it
+        # fits a few RAM passes, and the bound prunes nothing there); normal boards keep the
+        # one-pass depth-6 table and lengthen the bound-pruned left stream instead: 4 moves at
+        # 15 (<5,4,6>), 5 at 16 (<5,5,6>; a normal board's depth-7 set is far beyond RAM).
         fat = puzzle_is_fat(puzzle)
-        # 16 moves: normal boards take a 5-move left stream against the one-pass depth-6 goal
-        # side (<5,5,6>; for 18-3 ~2x the node work of one <5,4,7> pass, which needed 86 passes).
         table_depth = int(spec.get("table_depth") or (7 if fat and moves >= 14 else 6))
         stream_depth = int(spec.get("stream_depth") or (5 if moves - table_depth >= 10
                                                           else 4 if moves - table_depth >= 9 else 3))
@@ -650,7 +646,6 @@ class Scheduler:
                 cmd += ["--shard", f"{k}/{n}", "--middles-out", str(out / f"s{k}.mid"), "--no-recover"]
             elif not job.get("merge"):
                 # keep the middles: if recovery fails, `--recover-from` redoes only that part
-                # (20-2's 18 h probe was lost to a recovery crash)
                 cmd += ["--middles-out", str(jdir / "middles.mid")]
             if job.get("merge"):
                 d = SHARD_ROOT / shard_group(job["puzzle"], job["moves"], int(job["merge"]))

@@ -159,8 +159,8 @@ namespace ssd {
                             boundModes.push_back(6);
                         }
                         if constexpr (STREAM_DEPTH >= 5) {
-                            // "off" and "leaf" generate the whole 5-move tree (16-2: ~47 s per seed
-                            // per thread, a timing block ~25 min): time only the per-level modes.
+                            // "off" and "leaf" generate the whole 5-move tree (a timing block would
+                            // take many minutes): time only the per-level modes.
                             std::erase_if(boundModes, [](const int m) { return m == 0 || m == 1 || m == 3 || m == 4; });
                             if (boundModes.size() < 2) {
                                 boundMode = boundModes.empty() ? 2 : boundModes[0];
@@ -189,9 +189,8 @@ namespace ssd {
         // large stride (a bijection on the chunks), so any stretch of the order,
         // in particular the first one that the calibrations time, is spread over
         // the whole seed list. The list is sorted, similar boards side by side,
-        // and how much the bounds prune differs a lot between its regions: on
-        // 16-4 the first 1% of seeds timed pdbparent at 1.11x vs off, full runs
-        // 1.45-1.5x. Every seed is still visited exactly once; the order does not
+        // and how much the bounds prune differs a lot between its regions.
+        // Every seed is still visited exactly once; the order does not
         // affect the results (candidates are sorted afterwards).
         constexpr std::size_t SEED_CHUNK = 4096;
         const std::size_t seedChunks = std::max<std::size_t>(1, (seeds.size() + SEED_CHUNK - 1) / SEED_CHUNK);

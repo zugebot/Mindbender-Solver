@@ -52,7 +52,6 @@ class MaskUI:
 
         self.display_mode = 'binary'  # Can be 'binary' or 'hex'
 
-        # Create a frame for the 6x6 grid of buttons
         self.grid_frame = tk.Frame(master)
         self.grid_frame.pack()
 
@@ -70,7 +69,6 @@ class MaskUI:
                 button_row.append(button)
             self.buttons.append(button_row)
 
-        # Create a frame for the toggle display mode button
         self.toggle_frame = tk.Frame(master)
         self.toggle_frame.pack(pady=10)
 
@@ -81,7 +79,6 @@ class MaskUI:
         )
         self.toggle_button.pack()
 
-        # Create frames for the b1 and b2 textboxes
         self.b1_frame = tk.Frame(master)
         self.b1_frame.pack(pady=5)
 
@@ -98,7 +95,6 @@ class MaskUI:
         self.b2_entry = tk.Entry(self.b2_frame, width=60)
         self.b2_entry.pack(side=tk.LEFT)
 
-        # Initialize masks
         self.b1 = 0
         self.b2 = 0
 

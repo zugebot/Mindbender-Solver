@@ -3,7 +3,6 @@ import itertools
 
 
 def get_permutations(s):
-    # Split the string into individual moves
     moves = s.split()
 
     # Find all contiguous blocks of R or C moves
@@ -17,7 +16,7 @@ def get_permutations(s):
             groups.append(current_group)
             current_group = [move]
 
-    groups.append(current_group)  # Append the last group
+    groups.append(current_group)
 
     # Generate all permutations for each group of repeating R's or C's
     all_combinations = []

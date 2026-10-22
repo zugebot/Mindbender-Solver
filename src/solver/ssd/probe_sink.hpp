@@ -180,8 +180,6 @@ namespace ssd {
     // machine when the run starts: free physical memory minus a reserve for
     // the OS and other programs (max(3 GB, 10% of RAM)) and minus `otherBytes`
     // this run will also allocate (seeds, candidate buffers). At least 2 GB.
-    // (Previously a flat 60% of free memory, which left ~8 GB idle and cost
-    // whole extra passes, e.g. 12-1's 13.1 GB index ran in 2 passes.)
     // --ram-gb overrides it.
     inline u64 defaultRamBudgetBytes(const u64 otherBytes = 0) {
         MEMORYSTATUSEX status{};

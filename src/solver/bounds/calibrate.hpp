@@ -6,8 +6,7 @@
 //
 // Each block runs ONE mode on every thread, the way the run will use it:
 // timing the modes seed by seed side by side let their cache and memory
-// traffic disturb each other (16-4: pdbparent timed at 1.0-1.1x vs 1.5x in
-// full runs). A round takes the next chunk of seed positions and gives each
+// traffic disturb each other. A round takes the next chunk of seed positions and gives each
 // mode every k-th of them (k = modes still timed), one mode after another in a
 // rotating order. Neighbouring positions cost about the same, so the modes are
 // compared round by round (log of the time ratio), which cancels both
@@ -17,8 +16,8 @@
 // a budget of 3% of the pass's estimated search time (20 s to maxSeconds).
 //
 // The positions should come from a visiting order spread over the whole seed
-// list (see the probe's seedAt): timing only the first 1% of a sorted list
-// rated 16-4's pdbparent 1.11x vs off where full runs show 1.45-1.5x.
+// list (see the probe's seedAt): the first stretch of a sorted list does not
+// represent the rest.
 
 #include "src/utils/parallel_for.hpp"
 #include "src/utils/timer.hpp"

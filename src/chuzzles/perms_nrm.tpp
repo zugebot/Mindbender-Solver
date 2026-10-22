@@ -44,7 +44,6 @@ namespace perms_detail {
 
         } else {
 
-            // Handle intersection checks if needed
             if constexpr (CHECK_CROSS && CUR_DEPTH > 0) {
                 if (state.checkRCSeq[CUR_DEPTH]) {
                     state.intersectSeq[CUR_DEPTH] = board_in.doActISColMatchBatched(

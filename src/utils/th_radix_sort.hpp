@@ -65,7 +65,6 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
 
     const count_t chunk_size = (data_out.size() + num_threads - 1) / num_threads;
 
-    // Precompute masks and shifts
     std::array<uint64_t, NUM_PASSES> masks{};
     std::array<count_t, NUM_PASSES> shifts{};
     for (count_t pass = 0; pass < NUM_PASSES; ++pass) {
@@ -79,7 +78,6 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
     vec2_count_t thread_counts(num_threads, vec1_count_t(num_buckets, 0));
     vec2_count_t thread_offsets(num_threads, vec1_count_t(num_buckets));
 
-    // These are global
     vec1_count_t count(num_buckets, 0);
     vec1_count_t bucket_offsets(num_buckets, 0);
 
@@ -116,7 +114,6 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
 
         RADIX_IF_DEBUG_COUT(" Counting Phase\n")
 
-        // Accumulate Counts
         std::fill(count.begin(), count.end(), 0);
         for (count_t b = 0; b < num_buckets; ++b) {
             for (count_t t = 0; t < num_threads; ++t) {
@@ -126,7 +123,6 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
 
         RADIX_IF_DEBUG_COUT(" Accumulate Counts Phase\n")
 
-        // Compute Offsets
         bucket_offsets[0] = 0;
         for (count_t b = 1; b < num_buckets; ++b) {
             bucket_offsets[b] = bucket_offsets[b - 1] + count[b - 1];
@@ -134,7 +130,6 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
 
         RADIX_IF_DEBUG_COUT(" Compute Offsets Phase\n")
 
-        // Compute Thread Offsets
         for (count_t b = 0; b < num_buckets; ++b) {
             count_t offset = bucket_offsets[b];
             for (count_t t = 0; t < num_threads; ++t) {
@@ -161,7 +156,6 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
 
         RADIX_IF_DEBUG_COUT(" Distribution Phase\n")
 
-        // Swap Data and Aux
         data_out.swap(aux_buffer);
     }
 }

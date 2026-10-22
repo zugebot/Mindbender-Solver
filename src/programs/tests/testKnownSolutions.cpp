@@ -11,7 +11,7 @@
 #include <regex>
 
 
-// Function to split the filename and extract X, Y, N, M
+// <X>-<Y>_c<N>_<M>.txt -> X, Y, N, M
 std::tuple<int, int, int, int> parseFileName(const fs::path&filepath) {
     std::regex pattern(R"((\d+)\-(\d+)\_c(\d+)\_(\d+)\.txt)");
     std::smatch match;
@@ -45,7 +45,6 @@ bool compareFiles(const fs::path& file1, const fs::path& file2) {
 std::vector<fs::path> getTxtFiles(const fs::path& directory) {
     std::vector<fs::path> txtFiles;
 
-    // Iterate through all files in the directory
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (entry.is_regular_file() && entry.path().extension() == ".txt") {
             txtFiles.push_back(entry.path());

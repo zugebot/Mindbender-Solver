@@ -9,11 +9,10 @@
 // Goal-side filter (normal boards, forward, bound on; --no-goal-filter turns it
 // off): a meeting point is within L = seed + stream depth moves of the start,
 // so depth-7 states whose rotation bound to the start exceeds L are dropped
-// everywhere (count, fill, verify) - exact, and the index shrinks (18-3 at 16
-// moves: to ~54%). The bucket counts (2 B per bucket, 17 GB for 18-3) go to a
-// temp file on the system drive after the count pass and each pass reads only
-// its partitions' slice, so they no longer come out of the index budget
-// (--d7-counts-ram keeps them in RAM). --d7-partitions/--d7-first-partition
+// everywhere (count, fill, verify); exact. The bucket counts (2 B per bucket)
+// go to a temp file on the system drive after the count pass and each pass
+// reads only its partitions' slice, so they do not come out of the index
+// budget (--d7-counts-ram keeps them in RAM). --d7-partitions/--d7-first-partition
 // restrict the whole run to some key partitions (exactness tests).
 
 #include "src/solver/ssd/no_table_d6.hpp"
