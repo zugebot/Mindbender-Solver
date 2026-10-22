@@ -285,7 +285,9 @@ namespace perm_stream_detail {
 
                 u32 pruneMask = 0;
                 if constexpr (PARENT_PRUNE::ENABLED && CUR_DEPTH + 2 <= MAX_DEPTH) {
-                    pruneMask = PARENT_PRUNE::template skipMask<MAX_DEPTH - CUR_DEPTH - 1>(shifted);
+                    pruneMask = PARENT_PRUNE::template skipMask<MAX_DEPTH - CUR_DEPTH - 1>(shifted, dir == 1);
+                } else if constexpr (PARENT_PRUNE::LEAVES && CUR_DEPTH + 1 == MAX_DEPTH) {
+                    pruneMask = PARENT_PRUNE::template skipMask<0>(shifted, dir == 1);
                 }
 
                 for (u32 k = 0; k < 5; ++k) {
@@ -298,6 +300,11 @@ namespace perm_stream_detail {
                         continue;
                     }
                     if constexpr (CUR_DEPTH + 1 == MAX_DEPTH) {
+                        if constexpr (PARENT_PRUNE::LEAVES) {
+                            if (pruneMask & (1u << k)) {
+                                continue;   // a leaf with h > limit: never in the table
+                            }
+                        }
                         emitStateB1B2(shifted[k], chunk, sink);
                     } else {
                         if constexpr (PARENT_PRUNE::ENABLED) {

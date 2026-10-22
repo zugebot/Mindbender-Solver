@@ -26,7 +26,7 @@
 //       and rotation) vs their reference on 20 M real left states: identical
 //       values, and ns/state on 1 and all threads.
 //   experimentBoundSample --deep <puzzle> [--seed-depth S] [--table-depth T] [--stream N]
-//                         [--samples N] [--threads N] [--kind mix|rotation]
+//                         [--samples N] [--threads N] [--kind mix|rotation] [--reverse 1]
 //       A left stream pruned at every level: states generated and lookups left,
 //       against no pruning.
 //   experimentBoundSample --goal-side <puzzle> [--table-depth T] [--left-depth L] [--samples N] [--threads N]
@@ -367,15 +367,17 @@ namespace {
     // (1-move streams, so a little more than the canonical stream) and
     // compares states generated and lookups left against no pruning.
     int runDeep(const std::string& puzzle, const u32 seedDepth, const u32 tableDepth, const u32 streamDepth,
-                const u32 samples, const u32 threads, const lane_bound::Kind kind) {
+                const u32 samples, const u32 threads, const lane_bound::Kind kind, const bool reverse = false) {
         const BoardPair* pair = BoardLookup::getBoardPair(puzzle);
         if (pair == nullptr) {
             tcout << "Unknown puzzle: " << puzzle << "\n";
             return 1;
         }
-        const Board start = pair->getStartState();
-        const Board goal = pair->getEndState();
+        // --reverse 1: search from the goal towards the start (the bound then measures to the start)
+        const Board start = reverse ? pair->getEndState() : pair->getStartState();
+        const Board goal = reverse ? pair->getStartState() : pair->getEndState();
         const int T = static_cast<int>(tableDepth);
+        if (reverse) tcout << "reversed: left side from the goal, bound to the start\n";
         LaneTables mix;
         buildLaneTables(goal.asB1B2(), mix, kind);
         tcout << puzzle << (start.getFatBool() ? " (2x2)" : "") << " <" << seedDepth << "," << streamDepth << ","
@@ -507,6 +509,7 @@ int main(const int argc, char** argv) {
     }
     if (argc >= 3 && std::string(argv[1]) == "--deep") {
         u32 seedDepth = 5, tableDepth = 6, streamDepth = 4, samples = 200, threads = 4;
+        bool reverse = false;
         lane_bound::Kind kind = lane_bound::Kind::Mix;
         for (int i = 3; i + 1 < argc; i += 2) {
             const std::string a = argv[i];
@@ -520,8 +523,9 @@ int main(const int argc, char** argv) {
             else if (a == "--stream") streamDepth = v;
             else if (a == "--samples") samples = v;
             else if (a == "--threads") threads = v;
+            else if (a == "--reverse") reverse = v != 0;
         }
-        return runDeep(argv[2], seedDepth, tableDepth, streamDepth, samples, threads, kind);
+        return runDeep(argv[2], seedDepth, tableDepth, streamDepth, samples, threads, kind, reverse);
     }
     if (argc >= 3 && std::string(argv[1]) == "--colors") {
         for (int i = 2; i < argc; ++i) {

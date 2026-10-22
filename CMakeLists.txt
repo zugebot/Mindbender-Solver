@@ -255,6 +255,7 @@ add_solver_program(testRotations          "${CMAKE_SOURCE_DIR}/src/programs/test
 add_solver_program(testPuzzlesValid       "${CMAKE_SOURCE_DIR}/src/programs/tests/testPuzzlesValid.cpp")
 add_solver_program(testJVec               "${CMAKE_SOURCE_DIR}/src/programs/tests/testJVec.cpp")
 add_solver_program(testWebSolver          "${CMAKE_SOURCE_DIR}/src/programs/tests/testWebSolver.cpp")
+add_solver_program(testLanePrune          "${CMAKE_SOURCE_DIR}/src/programs/tests/testLanePrune.cpp")
 if (BOOST_LIBRARY)   # boost::sort
     add_solver_program(testSorting        "${CMAKE_SOURCE_DIR}/src/programs/tests/testSorting.cpp")
 endif()

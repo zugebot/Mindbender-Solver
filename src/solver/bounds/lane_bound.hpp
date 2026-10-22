@@ -254,6 +254,27 @@ namespace lane_bound {
         t.bytes = sizeof(t.first) + sizeof(t.second) + t.dist.size();
     }
 
+    // One lane's table entry, 1 << d (rows 0-5 = lanes 0-5, columns 0-5 = lanes 6-11), read the
+    // same way as in bound().
+    FORCEINLINE u32 rowLaneBits(const B1B2& s, const LaneTables& t, const u32 y) {
+        const u64 w = y < 3 ? s.b1 : s.b2;
+        const u32 sh = (2 - y % 3) * 18;
+        return t.dist[static_cast<u64>(t.first[y][(w >> sh) & 511U]) + static_cast<u64>(t.second[y][(w >> (sh + 9)) & 511U])];
+    }
+
+    FORCEINLINE u32 colLaneBits(const B1B2& s, const LaneTables& t, const u32 x) {
+        return t.dist[static_cast<u64>(t.first[6 + x][my_pext_u64(s.b1, COL_MASK[x])])
+                      + static_cast<u64>(t.second[6 + x][my_pext_u64(s.b2, COL_MASK[x])])];
+    }
+
+    // Largest distance in an OR of lane entries (non-zero: one bit per lane).
+    FORCEINLINE int maxDistOf(const u32 bits) { return 31 - my_clz(static_cast<int>(bits)); }
+
+    // h from the row and column halves, as bound() combines them.
+    FORCEINLINE int combineHalves(const int r, const int c, const bool fat) {
+        return fat ? (r + 1) / 2 + (c + 1) / 2 : r + c;
+    }
+
     FORCEINLINE int bound(const B1B2& s, const LaneTables& t) {
         const u8* d = t.dist.data();
         // Unsigned 64-bit indices (no sign extension); each lane finished and

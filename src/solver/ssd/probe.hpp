@@ -269,7 +269,9 @@ namespace ssd {
                     PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, bounds::LaneAndPatternPrune>(
                             seedBoard, sink, 4096);
                 } else if (mode == 2) {
-                    PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, bounds::LanePrune>(
+                    // leaves over the limit are dropped in the stream, before their hash; the sink's
+                    // own leaf check then only sees survivors ("left states streamed" counts those)
+                    PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, bounds::LanePruneLeaves>(
                             seedBoard, sink, 4096);
                 } else {
                     PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, STREAM_DEPTH>(seedBoard, sink, 4096);
