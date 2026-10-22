@@ -32,7 +32,7 @@ nothing (see below).
 | `mb_solver.js` | the solver as WebAssembly, embedded in one JS file (built, but committed so the folder is deployable) |
 | `puzzles.js` | the game's 100 boards with their known optimum or lower bound (generated) |
 | `build_wasm.ps1` | rebuilds `mb_solver.js` with Emscripten (`emcc` on PATH) |
-| `assets/` | the Chuzzle sprites, eyes, rainbow board frame and backdrop tiles (generated) |
+| `assets/` | the Chuzzle sprites, eyes, rainbow board frame and backdrop tiles (generated; not in git: they are the game's copyrighted art, so run `gen_sprites.py` with the textures from a Chuzzle install in `python/deluxe_clone/textures/`) |
 | `font.js` | the game's Bauhaus 93 bitmap-font metrics (generated with `assets/bauhaus36.webp`) |
 | `serve.py` | local server with caching off |
 | `gen_sprites.py` | regenerates `assets/` from the game textures in `python/deluxe_clone/textures/`, the way `python/deluxe_clone/engine/textures.py` builds them: grey body x colour + 60 x highlight, cut by the alpha mask (yellow has its own sheet), then eyes and pupils |

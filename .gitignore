@@ -10,3 +10,24 @@ cmake-build-*/
 /python/scheduler/state/
 /build_portable/
 /workunits/
+
+# Chuzzle's own textures, sounds and the sprite sheets built from them: copyrighted game
+# assets, kept on this PC only (copy them from a Chuzzle install; web/gen_sprites.py rebuilds
+# web/assets from python/deluxe_clone/textures)
+/python/deluxe_clone/textures/
+/python/deluxe_clone/sounds/
+/web/assets/
+/python/automation/legacy/match_finder/*.png
+/python/automation/legacy/match_finder/*.jpg
+
+# local builds, scratch output and tool folders
+/build/*.exe
+/build/models/
+/build/train/
+/build_test/
+/levels/
+/decomp/
+/.idea/
+/.claude/
+/python/viewer/profiles/
+
