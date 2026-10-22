@@ -9,18 +9,23 @@ exists.
 
 ## Project history
 
-- **January 2024 to July 2026, without AI assistance** (84 commits; tag `pre-ai`, commit
-  `2ff1fb8`): the board stored as two 64-bit integers, row and column shifts with BMI2
-  `pext`/`pdep`, the meet-in-the-middle solver, support for the 2x2 piece, parallel and radix
-  sorts and memory work for the frontiers, and a CUDA experiment (branch `gpu-impl`).
-  64/100 puzzles solved, up to 13 moves.
-- **October 2026, AI-assisted** (with Claude; every such commit is marked `Co-Authored-By`): an
-  exact-verification pass over every result, lower-bound pruning, the 14-16-move search design,
-  a job scheduler, and a browser (WebAssembly) version. 87/100 solved, with proven lower bounds
-  for the other 13.
+- **January 2024 to July 2025** (64 commits; tag `pre-ai`, commit `cc10f0c`): written by me: the
+  board stored as two 64-bit integers, row and column shifts with BMI2 `pext`/`pdep`, the
+  meet-in-the-middle solver, support for the 2x2 piece, and parallel sorting for the frontiers.
+  A few side files from September 2024 may have had ChatGPT help: the thread-sort helpers
+  (`th_parallel_sort.hpp`, `th_radix_sort.hpp`), `testHeuristics.cpp`, and the scripts
+  `append_size.py`, `remove_end.py` and `mask_maker.py`.
+- **March to July 2026** (20 commits): my work, with ChatGPT help in some files: an experimental
+  heuristic (`src/idk/`), the rotation tests (`testRotations.cpp`), the ML experiment
+  (`src/ml_torch/`) and a mouse-path script (`archive/chuzzle_mouse_dp.py`); also a CUDA
+  prototype. 64/100 puzzles solved by July 2026, up to 13 moves.
+- **October 2026 on, AI-assisted** (with Claude; every such commit is marked `Co-Authored-By`):
+  an exact-verification pass over every result, lower-bound pruning, the 14-16-move search
+  design, a job scheduler, and a browser (WebAssembly) version. 87/100 solved, with proven lower
+  bounds for the other 13.
 
-The code as it was before any AI involvement: `git checkout pre-ai`, or the `pre-ai` tag on
-GitHub.
+The code as of July 2025, before the clearly AI-assisted files above: `git checkout pre-ai`, or
+the `pre-ai` tag on GitHub.
 
 ## More
 
