@@ -376,8 +376,11 @@ bool testFatDfsStreamWithinSlotTableStream() {
 }
 
 bool testDfsStreamMatchesMaterializedPerms() {
-    // The depth-first B1B2 stream must emit exactly the same multiset of states
-    // as the independent materialized generator with the same rules.
+    // The depth-first B1B2 stream must emit the same set of states as the
+    // independent materialized generator with the same rules, and nothing the
+    // generator does not: a sub-multiset of it. (Not the same multiset: the DFS
+    // stops a lane at its period, so it repeats fewer states on lanes whose
+    // pattern repeats; the materialized list still visits those amounts.)
     std::vector<Board> roots;
     for (const char* name : {"1-1", "9-3", "10-3", "7-4"}) {
         const BoardPair* pair = BoardLookup::getBoardPair(name);
@@ -408,8 +411,14 @@ bool testDfsStreamMatchesMaterializedPerms() {
         std::vector<B1B2> expected(boards.begin(), boards.end());
         std::sort(sink.states.begin(), sink.states.end());
         std::sort(expected.begin(), expected.end());
-        if (sink.states != expected) {
-            return false;
+        if (!std::includes(expected.begin(), expected.end(), sink.states.begin(), sink.states.end())) {
+            return false;   // the stream emitted a state (or a repeat) the generator does not
+        }
+        std::vector<B1B2> streamedSet(sink.states);
+        streamedSet.erase(std::unique(streamedSet.begin(), streamedSet.end()), streamedSet.end());
+        expected.erase(std::unique(expected.begin(), expected.end()), expected.end());
+        if (streamedSet != expected) {
+            return false;   // a state the generator reaches is missing from the stream
         }
     }
     return true;

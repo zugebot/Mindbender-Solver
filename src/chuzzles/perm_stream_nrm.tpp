@@ -296,7 +296,9 @@ namespace perm_stream_detail {
                 for (u32 k = 0; k < 5; ++k) {
                     if constexpr (CHECK_SIM) {
                         if (shifted[k] == board) {
-                            continue;
+                            // the first amount that gives the board back is the lane's period
+                            // (1, 2 or 3); every larger amount repeats a smaller one
+                            break;
                         }
                     }
                     if (crossSkip & (1u << k)) {

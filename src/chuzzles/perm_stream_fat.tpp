@@ -261,6 +261,8 @@ namespace perm_stream_detail {
 
                 const i32 normalCol = dir == 1 && !isFatLane ? lane : -1;
                 for (u32 k = 0; k < 5; ++k) {
+                    // `continue`, not the normal stream's `break` on a repeating lane: `skip` drops
+                    // one amount of a fat lane, and a larger amount that repeats it must still run
                     if ((skip & (1u << k)) || shifted[k] == board) {
                         continue;
                     }
