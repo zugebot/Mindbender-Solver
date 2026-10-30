@@ -36,6 +36,8 @@ namespace ssd {
             else if (a == "--no-goal-filter") cfg.goalFilter = false;
             else if (a == "--recover-stream-depth") cfg.recoverStreamDepth = static_cast<u32>(std::stoul(next()));
             else if (a == "--d7-counts-ram") cfg.d7CountsInRam = true;
+            else if (a == "--seed-last-move") cfg.seedLastMove = true;
+            else if (a == "--no-seed-last-move") cfg.seedLastMove = false;
             else if (a == "--d7-first-partition") cfg.d7FirstPartition = static_cast<u32>(std::stoul(next()));
             else if (a == "--progress-file") cfg.progressFile = next();
             else if (a == "--progress-interval") cfg.progressInterval = std::stod(next());

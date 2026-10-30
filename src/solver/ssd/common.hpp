@@ -6,6 +6,8 @@
 // left seeds and the run-wide globals. See src/solver/ssd/README.md.
 
 #include "src/chuzzles/include.hpp"
+#include "src/chuzzles/lane_rotations.hpp"
+#include "src/chuzzles/perm_stream.hpp"
 #include "src/utils/progress_reporter.hpp"
 #include "src/utils/parallel_for.hpp"
 #include "src/solver/bounds/lane_bound.hpp"
@@ -89,6 +91,7 @@ namespace ssd {
         bool goalFilter = true;       // --no-goal-filter: keep every depth-7 goal-side state
         u32 recoverStreamDepth = 5;   // --recover-stream-depth: per-middle recovery halves this deep are streamed
         bool d7CountsInRam = false;   // --d7-counts-ram: keep the depth-7 bucket counts in RAM
+        bool seedLastMove = true;     // first streamed move follows the canonical-order rules (--no-seed-last-move: off)
         lane_bound::Kind boundKind = lane_bound::Kind::Rotation;   // --bound-kind mix|rotation   // max; the run uses 3% of its search, >= 20 s
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }
@@ -156,6 +159,151 @@ namespace ssd {
             case 5: buildUniqueNoneDepthFrontierB1B2<5>(root, seeds, hashes, false); return;
             default: throw std::runtime_error("seed depth must be 1..5");
         }
+    }
+
+    // For every seed (normal boards), the last move of its lexicographically
+    // smallest path from the root, moves ordered as stream_lanes_dfs visits them
+    // (encoding: perm_stream_detail::decodePrevMove). Streaming a seed with that
+    // move as the previous one (ASCENDING) applies the canonical-order rules to
+    // its first streamed move too, and still reaches every board at depth
+    // S + T2: the smallest path to such a board starts with the smallest path
+    // to its seed, and none of its adjacent pairs is one the rules skip (each
+    // rule skips a pair whose swap, or merge, is a smaller path to the same
+    // board). Suggested by algorithm0r (GitHub issue 1): ~1.47x fewer left
+    // states, since the first move otherwise has all 60 choices instead of the
+    // ~41 the rules leave.
+    // Layers 1..S-1 are rebuilt and coded: a state's code is the smallest
+    // (predecessor's code, move) over its predecessors in the layer above, found
+    // by undoing each move and binary searching that layer. The seeds (up to
+    // 160 M at depth 5) are coded the other way round: every child of the coded
+    // layer S-1 is looked up in a hash table of the seeds and lowers that seed's
+    // code, so the work is 60 lookups per layer-(S-1) state, not per seed
+    // (18-3 at depth 5: 29 s instead of 209 s of binary searches).
+    // Returns how many seeds got no code (they keep NO_PREV_MOVE: every first
+    // move allowed, which is always safe).
+    inline u64 buildSeedLastMoves(const Board& root, const u32 depth, const JVec<B1B2>& seeds,
+                                  std::vector<u8>& out, const u32 threads) {
+        struct Coded {
+            B1B2 state;
+            u32 code;
+        };
+        constexpr u32 NO_CODE = 0xFFFFFFFFu;
+        auto lookup = [](const std::vector<Coded>& layer, const B1B2& s) -> u32 {
+            const auto it = std::lower_bound(layer.begin(), layer.end(), s,
+                                             [](const Coded& c, const B1B2& v) { return c.state < v; });
+            return it != layer.end() && it->state == s ? it->code : NO_CODE;
+        };
+        // smallest (code << 6 | move) over x's predecessors in `above`
+        auto smallest = [&](const std::vector<Coded>& above, const B1B2& x) -> u32 {
+            u32 best = NO_CODE;
+            B1B2 shifted[5];
+            for (u32 dir = 0; dir < 2; ++dir) {
+                for (u32 lane = 0; lane < 6; ++lane) {
+                    if (dir == 0) {
+                        lane_rotations::rowShifts(x, lane, shifted);
+                    } else {
+                        lane_rotations::colShifts(x, lane, shifted);
+                    }
+                    for (u32 k = 1; k <= 5; ++k) {
+                        const u32 c = lookup(above, shifted[5 - k]);   // x shifted by 6 - k: where amount k came from
+                        if (c != NO_CODE) {
+                            best = std::min(best, (c << 6) | (dir * 30 + lane * 5 + (k - 1)));
+                        }
+                    }
+                }
+            }
+            return best;
+        };
+
+        std::vector<Coded> above{{root.asB1B2(), 0}};
+        for (u32 d = 1; d < depth; ++d) {
+            JVec<B1B2> states;
+            buildSeeds(root, d, states);
+            std::vector<Coded> layer(states.size());
+            parallelFor(threads, states.size(), [&](u32, const std::size_t i) {
+                layer[i] = {states[i], smallest(above, states[i])};
+            });
+            std::sort(layer.begin(), layer.end(), [](const Coded& a, const Coded& b) { return a.state < b.state; });
+            above.swap(layer);
+        }
+
+        // Hash table of the seeds: slot = seed index + 1 (0 empty), linear probing, load <= 1/2.
+        const std::size_t n = seeds.size();
+        if (n + 1 > 0xFFFFFFFFull) {
+            throw std::runtime_error("buildSeedLastMoves: too many seeds");
+        }
+        std::size_t slots = 1;
+        while (slots < 2 * n) {
+            slots <<= 1;
+        }
+        const std::size_t slotMask = slots - 1;
+        auto slotOf = [&](const B1B2& s) -> std::size_t {
+            return mixKey(s.b1 ^ mixKey(s.b2 ^ 0x9E3779B97F4A7C15ULL)) & slotMask;
+        };
+        std::vector<u32> table(slots, 0);
+        parallelFor(threads, n, [&](u32, const std::size_t i) {
+            const u32 want = static_cast<u32>(i) + 1;
+            std::size_t h = slotOf(seeds[i]);
+            for (;;) {
+                u32 expected = 0;
+                if (std::atomic_ref<u32>(table[h]).compare_exchange_strong(expected, want, std::memory_order_relaxed)) {
+                    return;
+                }
+                h = (h + 1) & slotMask;
+            }
+        });
+        auto find = [&](const B1B2& x) -> u32 {   // seed index, or NO_CODE
+            std::size_t h = slotOf(x);
+            for (;;) {
+                const u32 v = table[h];
+                if (v == 0) {
+                    return NO_CODE;
+                }
+                if (seeds[v - 1] == x) {
+                    return v - 1;
+                }
+                h = (h + 1) & slotMask;
+            }
+        };
+
+        // every child of the coded layer S-1 lowers its seed's code
+        std::vector<u32> codes(n, NO_CODE);
+        parallelFor(threads, above.size(), [&](u32, const std::size_t i) {
+            const B1B2& parent = above[i].state;
+            const u32 base = above[i].code << 6;
+            B1B2 shifted[5];
+            for (u32 dir = 0; dir < 2; ++dir) {
+                for (u32 lane = 0; lane < 6; ++lane) {
+                    if (dir == 0) {
+                        lane_rotations::rowShifts(parent, lane, shifted);
+                    } else {
+                        lane_rotations::colShifts(parent, lane, shifted);
+                    }
+                    for (u32 k = 1; k <= 5; ++k) {
+                        const u32 idx = find(shifted[k - 1]);
+                        if (idx == NO_CODE) {
+                            continue;   // a state above the seed layer
+                        }
+                        const u32 c = base | (dir * 30 + lane * 5 + (k - 1));
+                        std::atomic_ref<u32> ref(codes[idx]);
+                        u32 cur = ref.load(std::memory_order_relaxed);
+                        while (c < cur && !ref.compare_exchange_weak(cur, c, std::memory_order_relaxed)) {
+                        }
+                    }
+                }
+            }
+        });
+
+        out.assign(n, perm_stream_detail::NO_PREV_MOVE);
+        u64 missing = 0;
+        for (std::size_t i = 0; i < n; ++i) {
+            if (codes[i] == NO_CODE) {
+                ++missing;
+            } else {
+                out[i] = static_cast<u8>(codes[i] & 63);
+            }
+        }
+        return missing;
     }
 
     // Large (2 MB) pages for the probe index when the process may lock memory

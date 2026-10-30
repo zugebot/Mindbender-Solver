@@ -254,22 +254,25 @@ namespace perm_stream_detail {
             const u32 prevAmount) {
         for (i32 dir = 0; dir < 2; ++dir) {
             i32 first = 0, last = 5, step = 1;
+            // prevDir < 0: no previous move. At CUR_DEPTH 0 the caller may pass the
+            // seed's own last move (see ssd::buildSeedLastMoves), so the first
+            // streamed move follows the same rules as the ones below it.
             if constexpr (SECT_DIR == eSequenceDir::ASCENDING) {
-                if (CUR_DEPTH > 0 && dir == prevDir) {
+                if (dir == prevDir) {
                     first = prevSect + 1;
                 }
             } else if constexpr (SECT_DIR == eSequenceDir::DESCENDING) {
                 first = 5;
                 last = 0;
                 step = -1;
-                if (CUR_DEPTH > 0 && dir == prevDir) {
+                if (dir == prevDir) {
                     first = prevSect - 1;
                 }
             }
 
             for (i32 sect = first; step > 0 ? sect <= last : sect >= last; sect += step) {
                 u8 crossSkip = 0;
-                if constexpr (CHECK_CROSS && CUR_DEPTH > 0) {
+                if constexpr (CHECK_CROSS) {
                     if (prevDir == 1 && dir == 0) {
                         crossSkip = makeBoardStateView(board).doActISColMatchBatched(
                                 static_cast<u8>(prevSect), static_cast<u8>(sect), static_cast<u8>(prevAmount));

@@ -185,6 +185,22 @@ namespace perm_stream_detail {
             i32 prevSect,
             u32 prevAmount);
 
+    // A normal-board move as one byte, in stream_lanes_dfs's own order:
+    // dir * 30 + lane * 5 + (amount - 1). NO_PREV_MOVE: the stream starts
+    // with no previous move (every first move allowed).
+    inline constexpr u8 NO_PREV_MOVE = 255;
+    struct PrevMove {
+        i32 dir;
+        i32 sect;
+        u32 amount;
+    };
+    FORCEINLINE PrevMove decodePrevMove(const u8 m) {
+        if (m == NO_PREV_MOVE) {
+            return {-1, -1, 0};
+        }
+        return {m / 30, (m % 30) / 5, static_cast<u32>(m % 5 + 1)};
+    }
+
 } // namespace perm_stream_detail
 
 
@@ -195,7 +211,8 @@ class PermStream {
     template<eSequenceDir SECT_DIR, i32 DEPTH, typename Sink>
     MU static void streamDepthImpl(const Board& board_in,
                                    Sink& sink,
-                                   const u32 chunkCapacity) {
+                                   const u32 chunkCapacity,
+                                   const u8 prevMove = perm_stream_detail::NO_PREV_MOVE) {
         if EXPECT_FALSE(chunkCapacity == 0) {
             return;
         }
@@ -241,8 +258,9 @@ class PermStream {
             if constexpr (DEPTH == 0) {
                 perm_stream_detail::emitStateB1B2(board_in.asB1B2(), chunk, sink);
             } else {
+                const perm_stream_detail::PrevMove pm = perm_stream_detail::decodePrevMove(prevMove);
                 perm_stream_detail::stream_lanes_dfs<0, DEPTH, true, true, SECT_DIR>(
-                        board_in.asB1B2(), chunk, sink, -1, -1, 0);
+                        board_in.asB1B2(), chunk, sink, pm.dir, pm.sect, pm.amount);
             }
             perm_stream_detail::flushChunk(chunk, sink);
             return;
@@ -264,14 +282,19 @@ class PermStream {
     }
 
 public:
+    // prevMove (normal boards, B1B2 output): the move that reached board_in,
+    // encoded as in perm_stream_detail::decodePrevMove, so the first streamed
+    // move follows the canonical-order rules too. Only valid with ASCENDING
+    // and the last move of board_in's lexicographically smallest path.
     template<eSequenceDir SECT_DIR, i32 DEPTH, typename Sink>
     MU static void streamDepth(const Board& board_in,
                                Sink& sink,
-                               const u32 chunkCapacity = 1u << 20) {
+                               const u32 chunkCapacity = 1u << 20,
+                               const u8 prevMove = perm_stream_detail::NO_PREV_MOVE) {
         // this assert is arbitrary only for template instantiation
         // and what is a reasonable amount of RAM a PC may have
         static_assert(DEPTH >= 0 && DEPTH <= 5, "DEPTH must be in range 0..5");
-        streamDepthImpl<SECT_DIR, DEPTH>(board_in, sink, chunkCapacity);
+        streamDepthImpl<SECT_DIR, DEPTH>(board_in, sink, chunkCapacity, prevMove);
     }
 
     // streamDepth with PARENT_PRUNE (see perm_stream_detail::NoParentPrune)
@@ -280,7 +303,8 @@ public:
     template<eSequenceDir SECT_DIR, i32 DEPTH, typename PARENT_PRUNE, typename Sink>
     MU static void streamDepthPruned(const Board& board_in,
                                      Sink& sink,
-                                     const u32 chunkCapacity = 1u << 20) {
+                                     const u32 chunkCapacity = 1u << 20,
+                                     const u8 prevMove = perm_stream_detail::NO_PREV_MOVE) {
         static_assert(DEPTH >= 0 && DEPTH <= 5, "DEPTH must be in range 0..5");
         if constexpr (std::is_same_v<T, B1B2> && DEPTH >= 2) {
             if (!board_in.getFatBool() && chunkCapacity != 0) {
@@ -290,13 +314,14 @@ public:
                 chunk.hashes.reserve(chunkCapacity);
                 chunk.hashes.resize(chunkCapacity);
                 chunk.count = 0;
+                const perm_stream_detail::PrevMove pm = perm_stream_detail::decodePrevMove(prevMove);
                 perm_stream_detail::stream_lanes_dfs<0, DEPTH, true, true, SECT_DIR, PARENT_PRUNE>(
-                        board_in.asB1B2(), chunk, sink, -1, -1, 0);
+                        board_in.asB1B2(), chunk, sink, pm.dir, pm.sect, pm.amount);
                 perm_stream_detail::flushChunk(chunk, sink);
                 return;
             }
         }
-        streamDepthImpl<SECT_DIR, DEPTH>(board_in, sink, chunkCapacity);
+        streamDepthImpl<SECT_DIR, DEPTH>(board_in, sink, chunkCapacity, prevMove);
     }
 
     template<eSequenceDir SECT_DIR, typename Sink>

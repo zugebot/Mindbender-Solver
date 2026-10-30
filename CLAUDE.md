@@ -103,6 +103,11 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes); 2
   run audits the bound on its own seeds (fast == reference, |dh| <= 1, identical wanted leaves)
   and times every eligible mode, keeping the fastest. On 2x2 boards the bound is halved and
   prunes nothing, so it is off.
+- The first streamed move from each seed follows the same canonical-order rules as the moves
+  below it (normal boards, default; `--no-seed-last-move` turns it off): the seed's own last
+  move, of its lexicographically smallest path, is passed in as the previous move
+  (`ssd::buildSeedLastMoves`). Exact; ~1.47x fewer left states (60 first moves -> ~41).
+  Suggested by the user's teacher (GitHub issue 1).
 - Seeds are visited in a strided order (4096-seed chunks), so the timed ones represent the list.
 - Work units: `--shard k/N`, `--middles-out`, `--recover-from` (exact; see the scheduler README).
 

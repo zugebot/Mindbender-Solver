@@ -86,6 +86,13 @@ namespace ssd {
             tcout << "shard " << cfg.shardIndex << "/" << cfg.shardCount << ": " << seeds.size() << " of " << all
                   << " seeds (index = " << cfg.shardIndex << " mod " << cfg.shardCount << ")\n";
         }
+        std::vector<u8> seedMoves;   // --seed-last-move: each seed's smallest-path last move (common.hpp)
+        if (cfg.seedLastMove && !leftRoot.getFatBool()) {
+            Timer moveTimer;
+            const u64 missing = buildSeedLastMoves(leftRoot, cfg.seedDepth, seeds, seedMoves, threads);
+            tcout << "seed last moves: " << seeds.size() - missing << " of " << seeds.size() << " found in "
+                  << moveTimer.getSeconds() << "s (first streamed move follows the order rules)\n";
+        }
 
         // Colour-mix bound: eligible modes after the audit (see header).
         // boundMode: 0 off, 1 leaf, 2 leaf + parent; -1 = decide by timing.
@@ -244,36 +251,37 @@ namespace ssd {
                     return 0;
                 }
                 const Board seedBoard = makeBoardFromState(seeds[s]);
+                const u8 prevMove = seedMoves.empty() ? perm_stream_detail::NO_PREV_MOVE : seedMoves[s];
                 if (mode == 0 || mode == 5 || mode == 6) {
                     ProbeSinkT<false> sink(index, variant);
                     if (mode == 5) {
                         PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, bounds::LanePrune>(
-                                seedBoard, sink, 4096);
+                                seedBoard, sink, 4096, prevMove);
                     } else if (mode == 6) {
                         PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, bounds::LaneAndPatternPrune>(
-                                seedBoard, sink, 4096);
+                                seedBoard, sink, 4096, prevMove);
                     } else {
-                        PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, STREAM_DEPTH>(seedBoard, sink, 4096);
+                        PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, STREAM_DEPTH>(seedBoard, sink, 4096, prevMove);
                     }
                     return finishSeed(t, sink);
                 }
                 if (mode == 4) {
                     ProbeSinkT<true, true> sink(index, variant, &boundTables, boundLimit);
                     PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, bounds::LaneAndPatternPrune>(
-                            seedBoard, sink, 4096);
+                            seedBoard, sink, 4096, prevMove);
                     return finishSeed(t, sink);
                 }
                 ProbeSinkT<true> sink(index, variant, &boundTables, boundLimit);
                 if (mode == 3) {
                     PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, bounds::LaneAndPatternPrune>(
-                            seedBoard, sink, 4096);
+                            seedBoard, sink, 4096, prevMove);
                 } else if (mode == 2) {
                     // leaves over the limit are dropped in the stream, before their hash; the sink's
                     // own leaf check then only sees survivors ("left states streamed" counts those)
                     PermStream<B1B2>::streamDepthPruned<eSequenceDir::ASCENDING, STREAM_DEPTH, bounds::LanePruneLeaves>(
-                            seedBoard, sink, 4096);
+                            seedBoard, sink, 4096, prevMove);
                 } else {
-                    PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, STREAM_DEPTH>(seedBoard, sink, 4096);
+                    PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, STREAM_DEPTH>(seedBoard, sink, 4096, prevMove);
                 }
                 return finishSeed(t, sink);
             };
