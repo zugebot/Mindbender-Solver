@@ -3,9 +3,11 @@
 #include "src/solver/frontier_builder.hpp"
 #include "src/solver/inram/right_frontier_table.hpp"
 #include "src/solver/inram/solver_frontier.hpp"
+#include "src/solver/ssd/common.hpp"
 
 #include <algorithm>
 #include <iostream>
+#include <map>
 #include <random>
 #include <set>
 #include <string>
@@ -424,6 +426,109 @@ bool testDfsStreamMatchesMaterializedPerms() {
     return true;
 }
 
+bool testLastMovesCoverNextLayer() {
+    // ssd::buildLastMoves (the first-move rule, GitHub issue 1), normal and 2x2
+    // boards, depths 1..3. The frontier builder's layer d holds every endpoint of
+    // a d-move sequence without no-op moves (deduplicated within the layer only),
+    // so it also holds shallower states; the rule is about states at distance
+    // exactly d, i.e. layer d minus layers d-1 and d-2. For those: (1) the coded
+    // last move equals a brute force over every parent and every move (the
+    // lexicographically smallest path's last move), and (2) streaming each state
+    // of layer d one move with its last move as the previous one reaches every
+    // state at distance exactly d+1.
+    for (const char* name : {"1-1", "9-3", "10-3", "6-2", "17-4"}) {
+        const BoardPair* pair = BoardLookup::getBoardPair(name);
+        if (pair == nullptr) {
+            return false;
+        }
+        const Board root = pair->getStartState();
+        std::vector<JVec<B1B2>> layers(5);
+        layers[0].resize(1);
+        layers[0][0] = root.asB1B2();
+        for (u32 d = 1; d <= 4; ++d) {
+            ssd::buildSeeds(root, d, layers[d]);
+        }
+        std::vector<std::vector<B1B2>> sorted(5);
+        for (u32 d = 0; d <= 4; ++d) {
+            sorted[d].assign(layers[d].begin(), layers[d].end());
+            std::sort(sorted[d].begin(), sorted[d].end());
+        }
+        auto shallower = [&](const u32 d, const B1B2& s) {   // in layer d-1 or d-2
+            for (u32 k = d >= 2 ? d - 2 : 0; k < d; ++k) {
+                if (std::binary_search(sorted[k].begin(), sorted[k].end(), s)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        std::map<B1B2, u32> above{{root.asB1B2(), 0}};   // brute-force codes of the layer above
+        for (u32 d = 1; d <= 3; ++d) {
+            const JVec<B1B2>& layer = layers[d];
+            std::vector<u8> moves;
+            ssd::buildLastMoves(root, d, layer, moves, 4);
+            if (moves.size() != layer.size()) {
+                return false;
+            }
+            std::map<B1B2, u32> codes;
+            for (std::size_t i = 0; i < layer.size(); ++i) {
+                codes.emplace(layer[i], 0xFFFFFFFFu);
+            }
+            for (const auto& [parent, code] : above) {
+                if (code == 0xFFFFFFFFu) {
+                    continue;
+                }
+                perm_stream_detail::forEachFirstMove(parent, perm_stream_detail::NO_PREV_MOVE,
+                                                     [&](const u8 move, const B1B2& child) {
+                    auto it = codes.find(child);
+                    if (it != codes.end()) {
+                        it->second = std::min(it->second, (code << 6) | move);
+                    }
+                });
+            }
+            for (std::size_t i = 0; i < layer.size(); ++i) {
+                if (shallower(d, layer[i])) {
+                    continue;
+                }
+                const u32 c = codes.at(layer[i]);
+                if (c == 0xFFFFFFFFu || static_cast<u8>(c & 63) != moves[i]) {
+                    std::cerr << "last moves: " << name << " depth " << d << " state " << i << ": brute force "
+                              << (c == 0xFFFFFFFFu ? -1 : static_cast<int>(c & 63)) << " vs " << static_cast<int>(moves[i]) << '\n';
+                    return false;
+                }
+            }
+
+            struct CollectSink {
+                std::vector<B1B2> states;
+                void operator()(JVec<B1B2>& chunk, JVec<u64>&, const u32 count) {
+                    states.insert(states.end(), chunk.begin(), chunk.begin() + count);
+                }
+            } sink;
+            for (std::size_t i = 0; i < layer.size(); ++i) {
+                PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, 1>(makeBoardFromState(layer[i]), sink, 64, moves[i]);
+            }
+            std::sort(sink.states.begin(), sink.states.end());
+            const JVec<B1B2>& next = layers[d + 1];
+            std::size_t exact = 0;
+            for (std::size_t i = 0; i < next.size(); ++i) {
+                if (shallower(d + 1, next[i])) {
+                    continue;
+                }
+                ++exact;
+                if (!std::binary_search(sink.states.begin(), sink.states.end(), next[i])) {
+                    std::cerr << "last moves: " << name << " depth " << d << ": distance-" << d + 1 << " state " << i
+                              << " not reached (" << sink.states.size() << " streamed)\n";
+                    return false;
+                }
+            }
+            if (exact == 0) {
+                return false;
+            }
+            above.swap(codes);
+        }
+    }
+    return true;
+}
+
 bool testGetColorMatchesPackedLayout() {
     // getShiftAmount used to read rows {2,1,0,5,4,3} and shift by >= 64 (UB);
     // at -O3 the unrolled loop below folded most reads to 0.
@@ -544,6 +649,7 @@ int main() {
     const bool fatDfsOk = testFatDfsStreamWithinSlotTableStream();
     const bool getColorOk = testGetColorMatchesPackedLayout();
     const bool solverOk = testSmallEndToEndExactSolver();
+    const bool lastMovesOk = testLastMovesCoverNextLayer();
 
     std::cout << "threaded intersection tail coverage: "
               << (intersectionOk ? "PASS" : "FAIL") << '\n';
@@ -571,8 +677,10 @@ int main() {
               << (getColorOk ? "PASS" : "FAIL") << '\n';
     std::cout << "small end-to-end exact solver: "
               << (solverOk ? "PASS" : "FAIL") << '\n';
+    std::cout << "seed last moves (brute force, next layer covered): "
+              << (lastMovesOk ? "PASS" : "FAIL") << '\n';
 
     return intersectionOk && indexOk && layerOk && fatGeneratorsOk
            && fatShellOk && normalShellOk && fatMaskOk && laneOk && dfsOk
-           && fatLaneOk && fatDfsOk && getColorOk && solverOk ? 0 : 1;
+           && fatLaneOk && fatDfsOk && getColorOk && solverOk && lastMovesOk ? 0 : 1;
 }

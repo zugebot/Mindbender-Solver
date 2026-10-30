@@ -12,22 +12,23 @@ namespace ssd {
     // ------------------------------------------------------------------
     // No-table depth-6 probe (default)
     // ------------------------------------------------------------------
-    // fn(thread, child, key) for every one-move child of `frontier`.
+    // fn(thread, child, key) for every one-move child of `frontier` that the
+    // canonical stream would visit first after the state's own last move
+    // (g_goalMoves, from buildLastMoves; empty: every child). Every exact depth-6
+    // state is produced either way; the first-move rule only drops children that
+    // another depth-5 state produces in the allowed order (~60 -> ~41 per state).
     template<typename Fn>
-    void expandFrontier(const JVec<B1B2>& frontier, const bool isFat, const u32 threads, Fn&& fn) {
+    void expandFrontier(const JVec<B1B2>& frontier, const u32 threads, Fn&& fn) {
         const std::size_t n = frontier.size();
         constexpr std::size_t CHUNK = 1U << 14;
+        const std::vector<u8>& moves = g_goalMoves;
         parallelFor(threads, (n + CHUNK - 1) / CHUNK, [&](const u32 t, const std::size_t c) {
-            B1B2 children[60];
-            u64 childHashes[60];
             const std::size_t end = std::min(n, (c + 1) * CHUNK);
             for (std::size_t i = c * CHUNK; i < end; ++i) {
-                const std::size_t m = isFat
-                        ? frontier_recovery_detail::emitNoneChildren<true>(frontier[i], children, childHashes)
-                        : frontier_recovery_detail::emitNoneChildren<false>(frontier[i], children, childHashes);
-                for (std::size_t k = 0; k < m; ++k) {
-                    fn(t, children[k], mixKey(childHashes[k]));
-                }
+                const u8 prev = moves.empty() ? perm_stream_detail::NO_PREV_MOVE : moves[i];
+                perm_stream_detail::forEachFirstMove(frontier[i], prev, [&](u8, const B1B2& child) {
+                    fn(t, child, mixKey(StateHash::computeHash(child)));
+                });
             }
         });
     }
@@ -44,10 +45,23 @@ namespace ssd {
         }
         tcout << "depth-5 exact unique: " << depth5.size() << " states in " << buildTimer.getSeconds()
               << "s (no table: depth 6 is regenerated in RAM, nothing is written)\n";
+        struct GoalMovesReset {
+            ~GoalMovesReset() { std::vector<u8>().swap(g_goalMoves); }
+        } goalMovesReset;
+        if (cfg.seedLastMove) {
+            Timer moveTimer;
+            const u64 missing = buildLastMoves(rightRoot, 5, depth5, g_goalMoves, threads);
+            tcout << "goal last moves: " << depth5.size() - missing << " of " << depth5.size() << " found in "
+                  << moveTimer.getSeconds() << "s (depth-6 children follow the order rules)\n";
+            if (missing != 0) {
+                tcout << "  dropped " << dropUncoded(depth5, g_goalMoves)
+                      << " goal states at depth < 5 (no child at exact depth 6)\n";
+            }
+        }
 
         // Exact raw child count per partition.
         std::vector<std::vector<u64>> rawPer(threads, std::vector<u64>(PARTITION_COUNT, 0));
-        expandFrontier(depth5, isFat, threads, [&](const u32 t, const B1B2&, const u64 key) {
+        expandFrontier(depth5, threads, [&](const u32 t, const B1B2&, const u64 key) {
             ++rawPer[t][key >> PARTITION_SHIFT];
         });
         std::vector<u64> raw(PARTITION_COUNT, 0);
@@ -67,7 +81,7 @@ namespace ssd {
             keys0.reserve(raw[0]);
             std::mutex m0;
             std::vector<std::vector<u64>> local(threads);
-            expandFrontier(depth5, isFat, threads, [&](const u32 t, const B1B2&, const u64 key) {
+            expandFrontier(depth5, threads, [&](const u32 t, const B1B2&, const u64 key) {
                 if ((key >> PARTITION_SHIFT) == 0) {
                     local[t].push_back(key);
                 }
@@ -157,7 +171,7 @@ namespace ssd {
                     std::memcpy(keys[i].get() + at, buf.data(), buf.size() * sizeof(u64));
                     buf.clear();
                 };
-                expandFrontier(depth5, isFat, threads, [&](const u32 t, const B1B2&, const u64 key) {
+                expandFrontier(depth5, threads, [&](const u32 t, const B1B2&, const u64 key) {
                     const u32 p = static_cast<u32>(key >> PARTITION_SHIFT);
                     if (p < s0 || p >= s1) {
                         return;
@@ -248,7 +262,7 @@ namespace ssd {
             c.store(0);
         }
         if (!cand.empty()) {
-            expandFrontier(depth5, isFat, threads, [&](u32, const B1B2& child, const u64 key) {
+            expandFrontier(depth5, threads, [&](u32, const B1B2& child, const u64 key) {
                 const u32 b = bitOf(key);
                 if ((bitmap[b >> 6] >> (b & 63) & 1) == 0) {
                     return;

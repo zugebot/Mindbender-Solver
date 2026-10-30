@@ -8,6 +8,7 @@
 #include "src/chuzzles/include.hpp"
 #include "src/chuzzles/lane_rotations.hpp"
 #include "src/chuzzles/perm_stream.hpp"
+#include "src/chuzzles/first_moves.hpp"
 #include "src/utils/progress_reporter.hpp"
 #include "src/utils/parallel_for.hpp"
 #include "src/solver/bounds/lane_bound.hpp"
@@ -161,150 +162,168 @@ namespace ssd {
         }
     }
 
-    // For every seed (normal boards), the last move of its lexicographically
-    // smallest path from the root, moves ordered as stream_lanes_dfs visits them
-    // (encoding: perm_stream_detail::decodePrevMove). Streaming a seed with that
-    // move as the previous one (ASCENDING) applies the canonical-order rules to
-    // its first streamed move too, and still reaches every board at depth
-    // S + T2: the smallest path to such a board starts with the smallest path
-    // to its seed, and none of its adjacent pairs is one the rules skip (each
-    // rule skips a pair whose swap, or merge, is a smaller path to the same
-    // board). Suggested by algorithm0r (GitHub issue 1): ~1.47x fewer left
-    // states, since the first move otherwise has all 60 choices instead of the
-    // ~41 the rules leave.
-    // Layers 1..S-1 are rebuilt and coded: a state's code is the smallest
-    // (predecessor's code, move) over its predecessors in the layer above, found
-    // by undoing each move and binary searching that layer. The seeds (up to
-    // 160 M at depth 5) are coded the other way round: every child of the coded
-    // layer S-1 is looked up in a hash table of the seeds and lowers that seed's
-    // code, so the work is 60 lookups per layer-(S-1) state, not per seed
-    // (18-3 at depth 5: 29 s instead of 209 s of binary searches).
-    // Returns how many seeds got no code (they keep NO_PREV_MOVE: every first
-    // move allowed, which is always safe).
-    inline u64 buildSeedLastMoves(const Board& root, const u32 depth, const JVec<B1B2>& seeds,
-                                  std::vector<u8>& out, const u32 threads) {
-        struct Coded {
-            B1B2 state;
-            u32 code;
-        };
-        constexpr u32 NO_CODE = 0xFFFFFFFFu;
-        auto lookup = [](const std::vector<Coded>& layer, const B1B2& s) -> u32 {
-            const auto it = std::lower_bound(layer.begin(), layer.end(), s,
-                                             [](const Coded& c, const B1B2& v) { return c.state < v; });
-            return it != layer.end() && it->state == s ? it->code : NO_CODE;
-        };
-        // smallest (code << 6 | move) over x's predecessors in `above`
-        auto smallest = [&](const std::vector<Coded>& above, const B1B2& x) -> u32 {
-            u32 best = NO_CODE;
-            B1B2 shifted[5];
-            for (u32 dir = 0; dir < 2; ++dir) {
-                for (u32 lane = 0; lane < 6; ++lane) {
-                    if (dir == 0) {
-                        lane_rotations::rowShifts(x, lane, shifted);
-                    } else {
-                        lane_rotations::colShifts(x, lane, shifted);
-                    }
-                    for (u32 k = 1; k <= 5; ++k) {
-                        const u32 c = lookup(above, shifted[5 - k]);   // x shifted by 6 - k: where amount k came from
-                        if (c != NO_CODE) {
-                            best = std::min(best, (c << 6) | (dir * 30 + lane * 5 + (k - 1)));
-                        }
-                    }
-                }
-            }
-            return best;
-        };
+    // Hash table over a layer of states: find(x) = its index in the layer, or NOT_FOUND.
+    struct StateIndex {
+        static constexpr u32 NOT_FOUND = 0xFFFFFFFFu;
+        const JVec<B1B2>* states = nullptr;
+        std::vector<u32> table;   // slot = index + 1 (0 empty), linear probing, load <= 1/2
+        std::size_t mask = 0;
 
-        std::vector<Coded> above{{root.asB1B2(), 0}};
-        for (u32 d = 1; d < depth; ++d) {
-            JVec<B1B2> states;
-            buildSeeds(root, d, states);
-            std::vector<Coded> layer(states.size());
-            parallelFor(threads, states.size(), [&](u32, const std::size_t i) {
-                layer[i] = {states[i], smallest(above, states[i])};
+        static std::size_t slotOf(const B1B2& s, const std::size_t mask) {
+            return mixKey(s.b1 ^ mixKey(s.b2 ^ 0x9E3779B97F4A7C15ULL)) & mask;
+        }
+        void build(const JVec<B1B2>& layer, const u32 threads) {
+            states = &layer;
+            const std::size_t n = layer.size();
+            if (n + 1 > 0xFFFFFFFFull) {
+                throw std::runtime_error("StateIndex: too many states");
+            }
+            std::size_t slots = 1;
+            while (slots < 2 * n) {
+                slots <<= 1;
+            }
+            mask = slots - 1;
+            table.assign(slots, 0);
+            parallelFor(threads, n, [&](u32, const std::size_t i) {
+                const u32 want = static_cast<u32>(i) + 1;
+                std::size_t h = slotOf(layer[i], mask);
+                for (;;) {
+                    u32 expected = 0;
+                    if (std::atomic_ref<u32>(table[h]).compare_exchange_strong(expected, want, std::memory_order_relaxed)) {
+                        return;
+                    }
+                    h = (h + 1) & mask;
+                }
             });
-            std::sort(layer.begin(), layer.end(), [](const Coded& a, const Coded& b) { return a.state < b.state; });
-            above.swap(layer);
         }
-
-        // Hash table of the seeds: slot = seed index + 1 (0 empty), linear probing, load <= 1/2.
-        const std::size_t n = seeds.size();
-        if (n + 1 > 0xFFFFFFFFull) {
-            throw std::runtime_error("buildSeedLastMoves: too many seeds");
-        }
-        std::size_t slots = 1;
-        while (slots < 2 * n) {
-            slots <<= 1;
-        }
-        const std::size_t slotMask = slots - 1;
-        auto slotOf = [&](const B1B2& s) -> std::size_t {
-            return mixKey(s.b1 ^ mixKey(s.b2 ^ 0x9E3779B97F4A7C15ULL)) & slotMask;
-        };
-        std::vector<u32> table(slots, 0);
-        parallelFor(threads, n, [&](u32, const std::size_t i) {
-            const u32 want = static_cast<u32>(i) + 1;
-            std::size_t h = slotOf(seeds[i]);
-            for (;;) {
-                u32 expected = 0;
-                if (std::atomic_ref<u32>(table[h]).compare_exchange_strong(expected, want, std::memory_order_relaxed)) {
-                    return;
-                }
-                h = (h + 1) & slotMask;
-            }
-        });
-        auto find = [&](const B1B2& x) -> u32 {   // seed index, or NO_CODE
-            std::size_t h = slotOf(x);
+        MUND u32 find(const B1B2& x) const {
+            std::size_t h = slotOf(x, mask);
             for (;;) {
                 const u32 v = table[h];
                 if (v == 0) {
-                    return NO_CODE;
+                    return NOT_FOUND;
                 }
-                if (seeds[v - 1] == x) {
+                if ((*states)[v - 1] == x) {
                     return v - 1;
                 }
-                h = (h + 1) & slotMask;
-            }
-        };
-
-        // every child of the coded layer S-1 lowers its seed's code
-        std::vector<u32> codes(n, NO_CODE);
-        parallelFor(threads, above.size(), [&](u32, const std::size_t i) {
-            const B1B2& parent = above[i].state;
-            const u32 base = above[i].code << 6;
-            B1B2 shifted[5];
-            for (u32 dir = 0; dir < 2; ++dir) {
-                for (u32 lane = 0; lane < 6; ++lane) {
-                    if (dir == 0) {
-                        lane_rotations::rowShifts(parent, lane, shifted);
-                    } else {
-                        lane_rotations::colShifts(parent, lane, shifted);
-                    }
-                    for (u32 k = 1; k <= 5; ++k) {
-                        const u32 idx = find(shifted[k - 1]);
-                        if (idx == NO_CODE) {
-                            continue;   // a state above the seed layer
-                        }
-                        const u32 c = base | (dir * 30 + lane * 5 + (k - 1));
-                        std::atomic_ref<u32> ref(codes[idx]);
-                        u32 cur = ref.load(std::memory_order_relaxed);
-                        while (c < cur && !ref.compare_exchange_weak(cur, c, std::memory_order_relaxed)) {
-                        }
-                    }
-                }
-            }
-        });
-
-        out.assign(n, perm_stream_detail::NO_PREV_MOVE);
-        u64 missing = 0;
-        for (std::size_t i = 0; i < n; ++i) {
-            if (codes[i] == NO_CODE) {
-                ++missing;
-            } else {
-                out[i] = static_cast<u8>(codes[i] & 63);
+                h = (h + 1) & mask;
             }
         }
-        return missing;
+    };
+
+    // For every state of `layer` (the exact depth-`depth` layer from `root`; normal
+    // or 2x2 board), the last move of its lexicographically smallest path, moves
+    // ordered as the canonical streams visit them (codes as in
+    // perm_stream_detail::forEachFirstMove). Streaming a state with that move as
+    // the previous one applies the order rules to its first streamed move too and
+    // still reaches every board at the full depth: the smallest path to such a
+    // board starts with the smallest path to the state at depth `depth` on it, and
+    // none of its adjacent pairs is one the rules skip (each rule skips a pair whose
+    // swap, or merge, is a smaller or shorter path to the same board). Suggested by
+    // algorithm0r (GitHub issue 1): ~1.47x fewer streamed states on normal boards
+    // (60 first moves -> ~41), ~1.45x on 2x2 boards (48 -> ~33).
+    // Layers 1..depth are rebuilt and coded forward: a state's code is the smallest
+    // (parent's code, move) over the rule-following moves of the coded layer above;
+    // each child is looked up in a hash table of its layer and lowers that state's
+    // code with an atomic min. 18-3's 160 M depth-5 seeds: ~30 s.
+    // The layers are the frontier builder's: every endpoint of a d-move sequence
+    // without no-op moves, deduplicated within the layer only, so a layer also holds
+    // states shallower than d. The argument above is about states at distance
+    // exactly d (the ones on a shortest solution path): along the smallest shortest
+    // path to such a state every prefix is rule-following and is the code computed
+    // here, by induction. A shallower state may have no rule-following d-move path
+    // (e.g. a lane shifted twice): it gets no code and is skipped as a parent, and
+    // if it is in `layer` it keeps NO_PREV_MOVE (every first move allowed, always
+    // safe). Returns how many states of `layer` that was.
+    inline u64 buildLastMoves(const Board& root, const u32 depth, const JVec<B1B2>& layer,
+                              std::vector<u8>& out, const u32 threads) {
+        constexpr u32 NO_CODE = 0xFFFFFFFFu;
+        if (depth < 1 || depth > 5) {
+            throw std::runtime_error("buildLastMoves: depth must be 1..5 (6 bits per move in a u32 code)");
+        }
+        JVec<B1B2> aboveStates;
+        aboveStates.resize(1);
+        aboveStates[0] = root.asB1B2();
+        std::vector<u32> aboveCodes{0};
+        std::vector<u8> aboveMoves{perm_stream_detail::NO_PREV_MOVE};
+
+        auto codeLayer = [&](const JVec<B1B2>& states, std::vector<u32>& codes, std::vector<u8>& moves) -> u64 {
+            StateIndex index;
+            index.build(states, threads);
+            codes.assign(states.size(), NO_CODE);
+            parallelFor(threads, aboveStates.size(), [&](u32, const std::size_t i) {
+                if (aboveCodes[i] == NO_CODE) {
+                    return;   // no rule-following path to this parent: not on any smallest shortest path
+                }
+                const u32 base = aboveCodes[i] << 6;
+                perm_stream_detail::forEachFirstMove(aboveStates[i], aboveMoves[i], [&](const u8 move, const B1B2& child) {
+                    const u32 idx = index.find(child);
+                    if (idx == StateIndex::NOT_FOUND) {
+                        return;   // a state above this layer
+                    }
+                    const u32 c = base | move;
+                    std::atomic_ref<u32> ref(codes[idx]);
+                    u32 cur = ref.load(std::memory_order_relaxed);
+                    while (c < cur && !ref.compare_exchange_weak(cur, c, std::memory_order_relaxed)) {
+                    }
+                });
+            });
+            moves.assign(states.size(), perm_stream_detail::NO_PREV_MOVE);
+            u64 missing = 0;
+            for (std::size_t i = 0; i < states.size(); ++i) {
+                if (codes[i] == NO_CODE) {
+                    ++missing;
+                } else {
+                    moves[i] = static_cast<u8>(codes[i] & 63);
+                }
+            }
+            return missing;
+        };
+
+        for (u32 d = 1; d < depth; ++d) {
+            JVec<B1B2> states;
+            buildSeeds(root, d, states);
+            std::vector<u32> codes;
+            std::vector<u8> moves;
+            codeLayer(states, codes, moves);
+            aboveStates.swap(states);
+            aboveCodes.swap(codes);
+            aboveMoves.swap(moves);
+        }
+        std::vector<u32> codes;
+        return codeLayer(layer, codes, out);
     }
+
+    // Removes the states of `layer` that buildLastMoves gave no code (NO_PREV_MOVE in
+    // `moves`), and their moves. Such a state is shallower than the layer's depth (a
+    // state at exactly that distance always has a code, see buildLastMoves), so it is
+    // never the state at that position on a shortest solution path: a seed like that
+    // cannot reach a middle, and a goal-side one has no descendant at the index's exact
+    // depth. Dropping them is exact for solutions of the searched length. Returns how
+    // many were dropped.
+    inline u64 dropUncoded(JVec<B1B2>& layer, std::vector<u8>& moves) {
+        if (moves.size() != layer.size()) {
+            throw std::runtime_error("dropUncoded: moves and layer differ in size");
+        }
+        std::size_t w = 0;
+        for (std::size_t i = 0; i < layer.size(); ++i) {
+            if (moves[i] == perm_stream_detail::NO_PREV_MOVE) {
+                continue;
+            }
+            layer[w] = layer[i];
+            moves[w] = moves[i];
+            ++w;
+        }
+        const u64 dropped = layer.size() - w;
+        layer.resize(w);
+        moves.resize(w);
+        return dropped;
+    }
+
+    // The goal side's depth-5 frontier, coded the same way (set by the no-table
+    // builders for the run): its depth-6 / depth-7 descendants are streamed with each
+    // state's last move as the previous move. Empty: every first move.
+    inline std::vector<u8> g_goalMoves;
 
     // Large (2 MB) pages for the probe index when the process may lock memory
     // ("Lock pages in memory" user right), otherwise normal pages. Random

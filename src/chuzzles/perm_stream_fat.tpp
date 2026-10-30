@@ -198,7 +198,9 @@ namespace perm_stream_detail {
     // only kept in R -> C order. Unlike the slot-table stream above it never
     // emits two consecutive moves on the fat lane (such pairs equal one shorter
     // move), so it emits a subset of that stream that still covers every
-    // exact-distance state (checked in testExactSolverRegression).
+    // exact-distance state (checked in testExactSolverRegression). prevDir < 0:
+    // no previous move; at CUR_DEPTH 0 the caller may pass the seed's own last
+    // move (ssd::buildLastMoves) so the first streamed move follows the rules too.
     template<i32 CUR_DEPTH, i32 MAX_DEPTH,
              eSequenceDir SECT_DIR,
              typename Sink>
@@ -218,14 +220,14 @@ namespace perm_stream_detail {
 
             i32 first = 0, last = 5, step = 1;
             if constexpr (SECT_DIR == eSequenceDir::ASCENDING) {
-                if (CUR_DEPTH > 0 && dir == prevDir) {
+                if (dir == prevDir) {
                     first = prevLane + 1;
                 }
             } else if constexpr (SECT_DIR == eSequenceDir::DESCENDING) {
                 first = 5;
                 last = 0;
                 step = -1;
-                if (CUR_DEPTH > 0 && dir == prevDir) {
+                if (dir == prevDir) {
                     first = prevLane - 1;
                 }
             }
@@ -244,7 +246,7 @@ namespace perm_stream_detail {
                         skip = 1u << (4 - fatX);   // amount 5 - fatX
                     } else {
                         lane_rotations::rowShifts(board, static_cast<u32>(lane), shifted);
-                        if (CUR_DEPTH > 0 && prevNormalCol >= 0) {
+                        if (prevNormalCol >= 0) {
                             skip = makeBoardStateView(board).doActISColMatchBatched(
                                     static_cast<u8>(prevNormalCol), static_cast<u8>(lane),
                                     static_cast<u8>(prevAmount));

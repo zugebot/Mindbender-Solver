@@ -86,12 +86,17 @@ namespace ssd {
             tcout << "shard " << cfg.shardIndex << "/" << cfg.shardCount << ": " << seeds.size() << " of " << all
                   << " seeds (index = " << cfg.shardIndex << " mod " << cfg.shardCount << ")\n";
         }
-        std::vector<u8> seedMoves;   // --seed-last-move: each seed's smallest-path last move (common.hpp)
-        if (cfg.seedLastMove && !leftRoot.getFatBool()) {
+        std::vector<u8> seedMoves;   // each seed's smallest-path last move (buildLastMoves, common.hpp)
+        if (cfg.seedLastMove) {
             Timer moveTimer;
-            const u64 missing = buildSeedLastMoves(leftRoot, cfg.seedDepth, seeds, seedMoves, threads);
+            const u64 missing = buildLastMoves(leftRoot, cfg.seedDepth, seeds, seedMoves, threads);
             tcout << "seed last moves: " << seeds.size() - missing << " of " << seeds.size() << " found in "
                   << moveTimer.getSeconds() << "s (first streamed move follows the order rules)\n";
+            if (missing != 0) {
+                // the uncoded seeds are shallower than the seed depth: not on any solution of this length
+                tcout << "  dropped " << dropUncoded(seeds, seedMoves) << " seeds at depth < " << cfg.seedDepth
+                      << " (never the depth-" << cfg.seedDepth << " state of a shortest solution)\n";
+            }
         }
 
         // Colour-mix bound: eligible modes after the audit (see header).

@@ -103,11 +103,13 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes); 2
   run audits the bound on its own seeds (fast == reference, |dh| <= 1, identical wanted leaves)
   and times every eligible mode, keeping the fastest. On 2x2 boards the bound is halved and
   prunes nothing, so it is off.
-- The first streamed move from each seed follows the same canonical-order rules as the moves
-  below it (normal boards, default; `--no-seed-last-move` turns it off): the seed's own last
-  move, of its lexicographically smallest path, is passed in as the previous move
-  (`ssd::buildSeedLastMoves`). Exact; ~1.47x fewer left states (60 first moves -> ~41).
-  Suggested by the user's teacher (GitHub issue 1).
+- The first streamed move from each seed, and the first move of the goal side's expansion
+  from its depth-5 frontier, follow the same canonical-order rules as the moves below them
+  (default; `--no-seed-last-move` turns it off): each state's own last move, of its
+  lexicographically smallest path, is passed in as the previous move (`ssd::buildLastMoves`,
+  children from `perm_stream_detail::forEachFirstMove`). Exact; ~1.47x fewer streamed states on
+  normal boards (60 first moves -> ~41), ~1.45x on 2x2 boards (48 -> ~33). Suggested by the
+  user's teacher (GitHub issue 1).
 - Seeds are visited in a strided order (4096-seed chunks), so the timed ones represent the list.
 - Work units: `--shard k/N`, `--middles-out`, `--recover-from` (exact; see the scheduler README).
 
@@ -151,6 +153,7 @@ its cache fills, recovers when idle). GPU: GTX 1660 SUPER now; an RTX 5060 Ti fr
 | 16 moves, normal board, `<5,5,6>` | 8.5 h (18-3, 4.9 ms/seed) to 36.5 h (20-5, 12.6 ms/seed, 1.0e13 left states); one pass; recovery ~5 min |
 | 15 moves, 6-4 (disk depth-7 index) | 13.4 h, 10 passes |
 | 13 moves, normal board, rotation bound | 10-3: 1 min 43 s; 9-3: ~6 min (colour mix: 5-25 min) |
+| First-move rule (2026-10-29/30, docs/changes-2026-10-16.md 13-14) | 18-3 at 15: stream 1103 s -> 759 s; 17-4 at 13 (2x2): 468 s -> 313 s; 17-2 at 14 (2x2, depth 7): 6010 s -> 3345 s |
 
 - Rotation bound, states generated vs colour mix: 16-3 68% -> 0.28%, 17-5 97% -> 3.9%, 14-5
   86% -> 5.8%, 17-3 at 15 moves 64% -> 0.72%. Timing tests: "both" 53x (9-3), 188-229x (10-3),

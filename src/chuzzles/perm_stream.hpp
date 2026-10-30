@@ -185,9 +185,9 @@ namespace perm_stream_detail {
             i32 prevSect,
             u32 prevAmount);
 
-    // A normal-board move as one byte, in stream_lanes_dfs's own order:
-    // dir * 30 + lane * 5 + (amount - 1). NO_PREV_MOVE: the stream starts
-    // with no previous move (every first move allowed).
+    // A move as one byte, in the streams' own order: dir * 30 + lane * 5 +
+    // (amount - 1), a fat lane at its first index. NO_PREV_MOVE: the stream
+    // starts with no previous move (every first move allowed).
     inline constexpr u8 NO_PREV_MOVE = 255;
     struct PrevMove {
         i32 dir;
@@ -231,8 +231,12 @@ class PermStream {
                 if constexpr (DEPTH == 0) {
                     perm_stream_detail::emitStateB1B2(board_in.asB1B2(), chunk, sink);
                 } else {
+                    const perm_stream_detail::PrevMove pm = perm_stream_detail::decodePrevMove(prevMove);
+                    // a column move on the fat pair keeps fatX, so the pair is still at pm.sect
+                    const i32 prevNormalCol =
+                            pm.dir == 1 && pm.sect != static_cast<i32>(board_in.asB1B2().getFatX()) ? pm.sect : -1;
                     perm_stream_detail::stream_fat_lanes_dfs<0, DEPTH, SECT_DIR>(
-                            board_in.asB1B2(), chunk, sink, -1, -1, -1, 0);
+                            board_in.asB1B2(), chunk, sink, pm.dir, pm.sect, prevNormalCol, pm.amount);
                 }
                 perm_stream_detail::flushChunk(chunk, sink);
                 return;
@@ -282,10 +286,11 @@ class PermStream {
     }
 
 public:
-    // prevMove (normal boards, B1B2 output): the move that reached board_in,
-    // encoded as in perm_stream_detail::decodePrevMove, so the first streamed
-    // move follows the canonical-order rules too. Only valid with ASCENDING
-    // and the last move of board_in's lexicographically smallest path.
+    // prevMove (B1B2 output, normal and 2x2 boards): the move that reached
+    // board_in, encoded as in perm_stream_detail::decodePrevMove, so the first
+    // streamed move follows the canonical-order rules too. Only valid with
+    // ASCENDING and the last move of board_in's lexicographically smallest path
+    // (ssd::buildLastMoves).
     template<eSequenceDir SECT_DIR, i32 DEPTH, typename Sink>
     MU static void streamDepth(const Board& board_in,
                                Sink& sink,

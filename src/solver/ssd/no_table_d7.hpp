@@ -49,10 +49,15 @@ namespace ssd {
         }
     };
 
+    // The 2-move descendants of frontier[i], the first move following the order
+    // rules after the state's own last move (g_goalMoves, from buildLastMoves;
+    // empty: every first move). Every exact depth-7 state is still produced.
     template<typename Fn>
-    FORCEINLINE void streamTwo(const B1B2& parent, Fn&& fn) {
+    FORCEINLINE void streamTwo(const JVec<B1B2>& frontier, const std::size_t i, Fn&& fn) {
         StreamCallbackSink<Fn> sink{fn};
-        PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, NT7_STREAM_DEPTH>(makeBoardFromState(parent), sink, 2048);
+        const u8 prev = g_goalMoves.empty() ? perm_stream_detail::NO_PREV_MOVE : g_goalMoves[i];
+        PermStream<B1B2>::streamDepth<eSequenceDir::ASCENDING, NT7_STREAM_DEPTH>(
+                makeBoardFromState(frontier[i]), sink, 2048, prev);
     }
 
     // fn(thread, descendant, key) for every streamed descendant of `frontier`.
@@ -63,7 +68,7 @@ namespace ssd {
         parallelFor(threads, (n + CHUNK - 1) / CHUNK, [&](const u32 t, const std::size_t c) {
             const std::size_t end = std::min(n, (c + 1) * CHUNK);
             for (std::size_t i = c * CHUNK; i < end; ++i) {
-                streamTwo(frontier[i], [&](const B1B2& s, const u64 key) { fn(t, s, key); });
+                streamTwo(frontier, i, [&](const B1B2& s, const u64 key) { fn(t, s, key); });
             }
         });
     }
@@ -111,7 +116,7 @@ namespace ssd {
                 const std::size_t lo = start + (bEnd - start) * task / producers;
                 const std::size_t hi = start + (bEnd - start) * (task + 1) / producers;
                 for (std::size_t i = lo; i < hi; ++i) {
-                    streamTwo(frontier[i], [&](const B1B2&, const u64 key) {
+                    streamTwo(frontier, i, [&](const B1B2&, const u64 key) {
                         const u32 p = static_cast<u32>(key >> PARTITION_SHIFT);
                         if (p >= p0 && p < p1) {
                             mine[static_cast<u64>(p - p0) * threads / span].push_back(key);
@@ -189,6 +194,19 @@ namespace ssd {
         }
         tcout << "depth-5 exact unique: " << depth5.size() << " states in " << buildTimer.getSeconds()
               << "s (no table: depth 7 is regenerated in RAM, nothing is written)\n";
+        struct GoalMovesReset {
+            ~GoalMovesReset() { std::vector<u8>().swap(g_goalMoves); }
+        } goalMovesReset;
+        if (cfg.seedLastMove) {
+            Timer moveTimer;
+            const u64 missing = buildLastMoves(rightRoot, 5, depth5, g_goalMoves, threads);
+            tcout << "goal last moves: " << depth5.size() - missing << " of " << depth5.size() << " found in "
+                  << moveTimer.getSeconds() << "s (the 2-move stream's first move follows the order rules)\n";
+            if (missing != 0) {
+                tcout << "  dropped " << dropUncoded(depth5, g_goalMoves)
+                      << " goal states at depth < 5 (no descendant at exact depth 7)\n";
+            }
+        }
 
         static lane_bound::LaneTables leftTables;
         struct FilterReset {
@@ -208,7 +226,7 @@ namespace ssd {
             const std::size_t step = std::max<std::size_t>(1, depth5.size() / 4096);
             u64 got = 0, parents = 0;
             for (std::size_t i = 0; i < depth5.size(); i += step, ++parents) {
-                streamTwo(depth5[i], [&](const B1B2&, u64) { ++got; });
+                streamTwo(depth5, i, [&](const B1B2&, u64) { ++got; });
             }
             fanOut = static_cast<double>(got) / static_cast<double>(std::max<u64>(1, parents));
         }

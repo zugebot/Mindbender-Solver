@@ -92,11 +92,12 @@
 // leaves (a node with r moves below is dropped when h > depth + r).
 // --stream-depth 5: <5,5,6> = 16 moves with the one-pass depth-6 goal side
 // (normal boards; the bound audits sample fewer seeds at this depth).
-// --no-seed-last-move: by default (normal boards) the first streamed move from each seed
-// follows the same canonical-order rules as the moves below it, with the seed's own last
-// move (of its lexicographically smallest path, ssd::buildSeedLastMoves) as the previous
-// move: ~1.47x fewer left states, exact (GitHub issue 1). This flag streams every first
-// move, as before.
+// --no-seed-last-move: by default the first streamed move from each left seed, and the
+// first move of the goal side's depth-6 / depth-7 expansion from its depth-5 frontier,
+// follow the same canonical-order rules as the moves below them, with each state's own
+// last move (of its lexicographically smallest path, ssd::buildLastMoves) as the previous
+// move: ~1.47x fewer streamed states on normal boards, ~1.45x on 2x2 boards, exact (GitHub
+// issue 1). This flag streams every first move, as before.
 // --recover-stream-depth D (default 5): recovery streams every per-middle half of D+ moves
 // instead of storing all its paths (left depth 10 = two depth-5 halves; stored, the per-middle
 // one alone is ~30 GB). Lower it to test the streamed path against known solutions.
