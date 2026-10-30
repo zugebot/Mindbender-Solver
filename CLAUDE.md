@@ -6,7 +6,8 @@ solution and proves nothing shorter exists. C++ solver plus Python tools.
 
 Status (2026-10-21): **87/100 solved** (20-2 and 20-5 at 16 moves); every unsolved one needs >= 16 (14-3, 18-3 >= 17). `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
-History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-16.md`).
+History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-30.md`, the
+first-move rule; `changes-2026-10-16.md` before it).
 
 ## Build and test
 
