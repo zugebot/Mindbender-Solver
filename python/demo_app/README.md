@@ -42,6 +42,9 @@ bar, auto-play) as soon as its window opens.
 
 ## Solutions tab
 
+- **Refresh** (top right of the grid, or F5): reloads `build/levels_final` and the bounds in
+  `build/README.md` without restarting, e.g. after the solver queue solves a puzzle. The log
+  names newly solved puzzles; their solutions are ranked again.
 - **Grid**: 20 worlds x 5 puzzles. Green = solved, with its optimal move
   count; red = unsolved (no solution of 12 moves or fewer). A white dot marks
   the 2x2 piece.

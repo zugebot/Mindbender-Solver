@@ -78,6 +78,7 @@ class App:
         self.preview_step = 0
         self.animating = False
         self.anim_t = 0.0
+        self.refreshing = False
 
         # game
         self.window: gw.GameWindow | None = None
@@ -171,6 +172,9 @@ class App:
             Button(pg.Rect(W - 128, 8, 115, 30), "Saves", lambda: self.set_tab("saves"),
                    active=lambda: self.tab == "saves"),
         ]
+        b["solutions"].append(
+            Button(pg.Rect(12 + 410 - 10 - 96, 58, 96, 26), lambda: "Loading..." if self.refreshing else "Refresh",
+                   self.refresh_levels, lambda: not self.refreshing))
         # preview controls (middle column): rows span the panel's inner width
         has_sol = lambda: self.current_solution() is not None
         x0, inner, y = 444, 338, 452
@@ -278,6 +282,53 @@ class App:
     # levels / preview
     # ------------------------------------------------------------------
 
+    def refresh_levels(self) -> None:
+        """Reload the boards, build/levels_final and build/README.md's bounds (the solver queue
+        adds solutions while the app runs). Loads in the background; levels whose solutions
+        changed are ranked again."""
+        if self.refreshing:
+            return
+        self.refreshing = True
+
+        def work():
+            try:
+                new = lv.load_levels()
+            except Exception as e:  # noqa: BLE001 - shown to the user
+                self.post(lambda: (self.log(f"Refresh failed: {e}", BAD), setattr(self, "refreshing", False)))
+                return
+            self.post(lambda: self._apply_levels(new))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _apply_levels(self, new: dict[str, lv.Level]) -> None:
+        def sig(level: lv.Level | None):
+            if level is None:
+                return None
+            f = level.solution_file
+            stamp = (f.name, f.stat().st_size, int(f.stat().st_mtime)) if f is not None and f.exists() else None
+            return level.solved, level.optimum, len(level.solutions), level.lower_bound, stamp
+
+        old = self.levels
+        changed = [name for name in new if sig(old.get(name)) != sig(new[name])]
+        newly = [name for name in changed if new[name].solved and not (old.get(name) and old[name].solved)]
+        self.levels = new
+        for name in changed:
+            self.ranked.pop(name, None)
+            self.rank_progress.pop(name, None)
+        self.refreshing = False
+        if self.selected not in self.levels:
+            self.selected = "1-4"
+        if self.selected in changed or self.selected not in self.ranked:
+            self.select_level(self.selected)
+        if newly:
+            self.log("Refresh: newly solved " + ", ".join(
+                f"{n} ({new[n].optimum} moves, {len(new[n].solutions)} solutions)" for n in sorted(newly)), GOOD)
+        others = [n for n in changed if n not in newly]
+        if others:
+            self.log(f"Refresh: updated {', '.join(sorted(others))}")
+        if not changed:
+            self.log("Refresh: no changes")
+
     def select_level(self, name: str) -> None:
         self.selected = name
         self.solution_index = 0
@@ -301,8 +352,12 @@ class App:
             routes.store_ranking(level, ranked)
 
             def done():
-                self.ranked[name] = ranked
                 self.ranking.discard(name)
+                if self.levels.get(name) is not level:   # refreshed meanwhile: rank the new list
+                    if self.selected == name:
+                        self.select_level(name)
+                    return
+                self.ranked[name] = ranked
                 if self.selected == name:
                     self.solution_index = 0
                     self.preview_step = 0
@@ -1186,6 +1241,8 @@ class App:
                         self.set_step(self.preview_step - 1)
                     elif event.key == pg.K_SPACE:
                         self.toggle_animate()
+                    elif event.key == pg.K_F5:
+                        self.refresh_levels()
             if self.calib_step:
                 self._poll_calibration()
             if self.animating:
