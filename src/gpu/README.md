@@ -43,8 +43,14 @@ and the GPU's seconds, launches and retries on each pass line.
   and per group of partitions generates, sorts (CUB) and de-duplicates their keys and writes the
   fingerprints, bucket offsets and Bloom blocks straight into the index arrays, in the CPU's
   layout.
-- **Candidate check** (`mbgpu_match_children`): the GPU regenerates depth 6 and hands back the
-  children whose key is a candidate's; the CPU compares the full states.
+- **Goal-side depth-7 index** (`no_table_d7.hpp`, 2x2 boards): the same calls with depth 2 (two
+  moves below the depth-5 frontier): per-partition counts instead of the CPU's bucket counts
+  and spill file, and each pass's index built in the depth-6 layout (~24-30 regenerations of
+  depth 7 per pass).
+- **Candidate check** (`mbgpu_match_children`): the GPU regenerates depth 6 (or 7) and hands
+  back the children whose key is a candidate's; the CPU compares the full states.
+- **Pass planning** (`probe.hpp`): a pass's Bloom blocks must fit the GPU's free VRAM minus
+  256 MB (`mbgpu_vram_left`), besides the RAM budget.
 - Still on the CPU: the depth-5 frontiers and their last moves, recovery.
 
 ## The node kernel (`expandNodes`)
@@ -69,14 +75,25 @@ node with r moves below it is dropped when h > limit + r).
 - Separate builds for inner levels and leaves; 80 registers, 3 blocks per SM (4 is slower:
   the register cap spills and shared memory allows only 3).
 
-Not yet: 2x2 boards, reverse searches, stream depth 6 on the solver side, the colour-mix bound
-and pattern databases (the GPU always uses the rotation bound in "both" mode).
+## 2x2 boards (`expandFat`)
+
+The same one-thread-per-node layout with the rules of `perm_stream_detail::stream_fat_lanes_dfs`
+and `forEachFirstMove`: the piece's two rows (columns) move together and the second lane of the
+pair is skipped; the amount that would carry the piece across the edge is skipped
+(`1 << (4 - fatX)` for rows, `1 << (4 - fatY)` for columns); a lane does not stop at its period;
+the column-row skip applies only to a normal row after a normal column. No bound (the halved
+lane bound prunes nothing on 2x2 boards; `mbgpu_set_target` refuses a limit there). Both
+kernels write their children through `emitLane`.
+
+Not yet: reverse searches, stream depth 6 on the solver side, the colour-mix bound and pattern
+databases (the GPU always uses the rotation bound in "both" mode on normal boards).
 
 ## Safety
 
 - Only the CUDA device whose name contains NAME is used (`--gpu 5060`); it refuses others.
 - At most `--gpu-vram-gb` (default 12.5) of its memory: level buffers 1.3 GB, the pass's Bloom
-  blocks (10 bits per goal state, 3-8 GB on the unsolved normal boards), output 0.1 GB.
+  blocks (10 bits per goal state, 3-8 GB on the unsolved normal boards, up to ~10.9 GB per pass
+  on 2x2 depth-7 runs), output 0.1 GB.
 - Any CUDA error or buffer overflow that cannot be retried stops the run with an error; nothing
   is silently skipped.
 
@@ -90,7 +107,8 @@ build_gpu\test_gpu_stream.exe build_gpu\vectors.bin
 build_gpu\test_gpu_stream.exe build_gpu\bench_16-2.bin --bench [--seeds 200000] [--filter-gb 3]
 ```
 
-`exportGpuVectors` streams sample seeds of 1-1, 9-3, 10-3, 18-3 and 16-2 with the CPU code
+`exportGpuVectors` streams sample seeds of 1-1, 9-3, 10-3, 18-3, 16-2 and the 2x2 boards 17-4,
+17-2, 6-4 and 19-4 with the CPU code
 (one thread, a few seconds), unpruned and pruned, with and without last moves, and records per
 seed the leaf count and the sum and xor of the leaf keys; `test_gpu_stream` must match every
 seed. `--bench` (a file from `exportGpuVectors --bench`) times the stream; `--filter-gb` adds a
@@ -114,6 +132,19 @@ Developer > Manage GPU Performance Counters).
 | 10-3 at 13 `<4,3,6>`: whole run, IDENTICAL SET (1648) | 95 s | 23 s | 14.6 s |
 | 16-4 at 14 `<5,3,6>`: whole run, IDENTICAL SET (519) | 1 h 27 min | - | 2 min 18 s |
 | 18-3 at 16 `<5,5,6>`: stream, from a 1/64 shard | 8.5 h (whole run) | - | ~2.5 min (whole run ~4 min) |
+
+2x2 boards and recovery (2026-11-02, CPU parts on 6 threads; `docs/changes-2026-11-02.md`):
+
+| Run | CPU | GPU |
+|---|---|---|
+| 17-4 at 13 `<4,3,6>`, IDENTICAL SET (166) | 294 s | 36 s |
+| 17-2 at 14 `<4,3,7>`, 5 passes, IDENTICAL SET (1053) | 56 min | 5 min 50 s |
+| 18-4 at 15 `<5,3,7>`, 6 passes, IDENTICAL SET (32) | 10.0 h | 25 min (per pass: index ~60 s, stream ~205 s) |
+| 12-1 at 16: recovery, 119 middles, IDENTICAL SET (3848) | 2 h 02 min | 56 s (CPU; per-middle filter) |
+| 2x2 at 16 `<5,4,7>`, projected from 18-4 | 200-300 h | ~10 h (5-6 passes x ~6500 s) |
+
+On 2x2 depth-7 runs the Bloom lookups dominate the stream: 18-4's last pass (3.5 GB of blocks)
+streamed 2.5x faster per leaf than the full ones (10.6 GB).
 
 Where the stream's time went (16-2, 200 k seeds, 7.81 s -> 0.74 s): one thread per (node,
 lane) kept ~10 of 32 threads of a warp busy, every child's bound took 6 rotations x 6 lanes,

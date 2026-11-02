@@ -23,9 +23,9 @@ queue, and the queue is paused. Start it by hand when runs are wanted:
 `mbq.py daemon`, then `mbq.py resume`.
 
 GPU runs: `mbq add P --moves M --gpu 5060 --threads 8` passes `--gpu 5060` to the solver and
-copies `build_gpu/mbgpu.dll` next to its exe copy in `state/bin` (normal boards, depth-6 goal
-side; `src/gpu/README.md`). `build/experimentDiskDepth6.exe` must be a build with the GPU code
-(2026-11-01 or later). Re-queues after a reboot and `--until` escalations keep the setting.
+copies `build_gpu/mbgpu.dll` next to its exe copy in `state/bin` (a depth-6 goal side, or depth 7
+on 2x2 boards; `src/gpu/README.md`). `build/experimentDiskDepth6.exe` and the DLL must be built
+together (2026-11-02 or later for 2x2 boards). Re-queues after a reboot and `--until` escalations keep the setting.
 
 ## Dashboard
 

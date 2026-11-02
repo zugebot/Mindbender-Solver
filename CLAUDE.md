@@ -4,9 +4,12 @@ Optimal solver for Chuzzle's Mind Bender puzzles (100 puzzles, 6x6 boards,
 row/column cyclic shifts, some with a 2x2 piece). It finds every shortest
 solution and proves nothing shorter exists. C++ solver plus Python tools.
 
-Status (2026-10-21): **87/100 solved** (20-2 and 20-5 at 16 moves); every unsolved one needs >= 16 (14-3, 18-3 >= 17). `build/README.md` lists the unsolved ones with their
+Status (2026-11-02): **91/100 solved** (15-1, 19-3, 17-3, 12-1 at 16 moves on the GPU); the unsolved
+normal boards (14-3, 16-3, 18-3) need >= 17, the unsolved 2x2 boards (6-4, 15-3, 15-4, 16-1,
+19-2, 19-4) >= 16. `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
-History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-01.md`, the GPU
+History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-02.md`, 2x2 boards on
+the GPU and faster recovery; `changes-2026-11-01.md`, the GPU
 solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it).
 
 ## Build and test
@@ -126,12 +129,17 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes); 2
   user's teacher (GitHub issue 1).
 - Seeds are visited in a strided order (4096-seed chunks), so the timed ones represent the list.
 - Work units: `--shard k/N`, `--middles-out`, `--recover-from` (exact; see the scheduler README).
-- `--gpu 5060`: the RTX 5060 Ti (`src/gpu/`, loaded from `build_gpu/mbgpu.dll`; normal boards,
-  forward) streams the left side and Bloom-tests it (CPU threads finish the survivors meanwhile),
-  audits its own bound, builds the depth-6 index and confirms candidates by regenerating depth 6.
+- `--gpu 5060`: the RTX 5060 Ti (`src/gpu/`, loaded from `build_gpu/mbgpu.dll`; normal and 2x2
+  boards, forward) streams the left side and Bloom-tests it (CPU threads finish the survivors
+  meanwhile), audits its own bound (normal boards), builds the goal-side index (depth 6, or
+  depth 7 on 2x2 boards: counts and each pass's index on the GPU, no spill file) and confirms
+  candidates by regenerating it. A pass's Bloom blocks must also fit the VRAM (2x2 depth-7
+  runs: 5-6 passes).
   Large pages are off with --gpu. The GTX 1660 drives the desktop and is never used.
 - Recovery keeps only start-side paths that can still reach a middle (rotation lane bound to
-  each middle; normal boards, <= 64 middles): 16-2 at 15 moves 58 s -> 6.3 s, exact.
+  each middle; normal boards, <= 64 middles): 16-2 at 15 moves 58 s -> 6.3 s, exact. Each
+  middle's own start half keeps only states the start root can still reach (any number of
+  middles): 12-1 at 16 (119 middles) 2 h -> 56 s, exact.
 
 ## Conventions (from the user)
 
@@ -159,7 +167,8 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes); 2
 - The solver runs only when the user asks (no autostart, queue paused). Test runs on solved
   puzzles for exactness checks are fine.
 - GPU work only on the RTX 5060 Ti (`--gpu 5060`), at most 12.5 GB of its VRAM; the GTX 1660
-  drives the desktop. CPU parts of GPU runs use `--threads 8` (16 threads took the i7 to 100 C).
+  drives the desktop. CPU parts of GPU runs use `--threads 6` (the user's
+  choice, 4-6: 16 threads took the i7 to 100 C, 8 kept it at 85-90 C).
 
 ## Measured facts (2026-10)
 
@@ -178,6 +187,8 @@ for the solver; GTX 1660 SUPER 6 GB (bus 4, x4, CUDA device 1) for the desktop.
 | 15 moves, normal board, `<5,4,6>` | 0.4 h (18-3) to 8.5 h (17-1), one pass |
 | 16 moves, normal board, `<5,5,6>` | 8.5 h (18-3, 4.9 ms/seed) to 36.5 h (20-5, 12.6 ms/seed, 1.0e13 left states); one pass; recovery ~5 min (CPU, before the reach filter) |
 | `--gpu 5060` (2026-11-01, src/gpu/README.md) | 16-2 at 15: 42 min -> 54 s (stream 12.6 s); 16-4 at 14: 1 h 27 min -> 2 min 18 s; 18-3 at 16: stream ~2.5 min from a 1/64 shard (whole run ~4 min) |
+| `--gpu 5060`, 16 moves, normal boards (2026-11-02, 6 threads) | 15-1 19 min, 16-3 16 min, 17-3 38 min, 19-3 1 h 04 min, 12-1 2 h 13 min (2 h of it recovery; now 56 s) |
+| `--gpu 5060`, 2x2 boards (2026-11-02) | 17-4 at 13: 294 s -> 36 s; 17-2 at 14 (5 passes): 56 min -> 5 min 50 s; 18-4 at 15 `<5,3,7>` (6 passes): 10.0 h -> 25 min; 16 moves `<5,4,7>` projected ~10 h each |
 | 15 moves, 6-4 (disk depth-7 index) | 13.4 h, 10 passes |
 | 13 moves, normal board, rotation bound | 10-3: 1 min 43 s; 9-3: ~6 min (colour mix: 5-25 min) |
 | First-move rule (2026-10-29/30, docs/changes-2026-10-16.md 13-14) | 18-3 at 15: stream 1103 s -> 759 s; 17-4 at 13 (2x2): 468 s -> 313 s; 17-2 at 14 (2x2, depth 7): 6010 s -> 3345 s |
@@ -221,16 +232,17 @@ Next:
    lane bound tops out at 6 and pruning needs > 7, and no lane bound can do better (cover
    argument in docs/changes-2026-10-12.md section 7). It needs bounds over several lanes at once
    (pattern tables, e.g. split by move type), or the time has to come from fewer passes / the GPU.
-3. 16 moves on 2x2 boards: `<5,4,7>` (the depth-7 code's count spill and partition subsets are
-   not yet run end to end: test on 18-4 first). ~200-300 h each on this CPU; 6-4 with its disk
-   index ~150-160 h (~70-80 h with item 1). Normal boards run `<5,5,6>` (~8.5 h); the goal-side
+3. 16 moves on 2x2 boards: `<5,4,7>` with `--gpu 5060` (`mbq add ... --gpu 5060 --threads 6`),
+   projected ~10 h each (5-6 passes x ~6500 s of stream; CPU: ~200-300 h). Fewer passes need a
+   smaller Bloom filter per state (VRAM caps a pass at ~8.7 G goal states) and a smaller index
+   (item 1). Normal boards run `<5,5,6>` (~8.5 h); the goal-side
    filter by h(start) keeps 54% on 18-3, too little for a one-pass depth-7 goal side. 17 moves
    (18-3): `<5,5,7>` or a 6-move stream, not tried.
-4. GPU port: normal boards done (2026-11-01, `src/gpu/`, `--gpu 5060`): stream, bound audit,
-   depth-6 index build and candidate check on the GPU; 16-2 at 15 moves 42 min -> 54 s, exact.
-   Next: 17 moves on normal boards (14-3, 18-3) as `<5,6,6>`: the GPU streams depth 6 already
-   (MBGPU_MAX_DEPTH); the solver side and recovery (left depth 11) need it; est. ~1-2 h each.
-   Then 2x2 boards (fat moves, the depth-7 index in slices), the scheduler passing --gpu.
+4. GPU port: normal boards done (2026-11-01), 2x2 boards done (2026-11-02; stream, depth-6 and
+   depth-7 goal sides, candidate check; the scheduler passes --gpu). Next: 17 moves on normal
+   boards (14-3, 16-3, 18-3) as `<5,6,6>`: the GPU streams depth 6 already (MBGPU_MAX_DEPTH);
+   the solver side and recovery (left depth 11) need it; 16-3's 16-move stream took 14 min and
+   one more move multiplies it by ~30.
 5. Checkpoint/resume inside a run (pass, finished-seed watermark, candidates, chosen modes),
    once single runs take days.
 6. Smaller: AVX2 batched StateHash + mixKey for the left side; incremental bound evaluation

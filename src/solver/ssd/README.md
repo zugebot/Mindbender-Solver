@@ -26,10 +26,12 @@ Headers, in dependency order (each includes what it uses; all in `namespace ssd`
 | `recovery.hpp` | middles -> full solutions, known-solution checks (`--solutions`) |
 | `gpu_stream.hpp` | `--gpu`: loads `mbgpu.dll` (`src/gpu/`), the GPU bound audit (`gpuAuditBound`), the GPU probe pass with CPU probe threads fed by a bounded queue (`gpuProbePass`, `ProbeQueue`) |
 
-With `--gpu`, `probe.hpp` streams each pass on the GPU, and `no_table_d6.hpp` builds the depth-6
-index and confirms candidates on it (`src/gpu/README.md`). Recovery itself is
-`solver_frontier.hpp`'s `recoverSolutionsFromMiddles` (its shared start half keeps only paths
-that can still reach a middle, `RecoveryReach`).
+With `--gpu`, `probe.hpp` streams each pass on the GPU, and `no_table_d6.hpp` (and, on 2x2
+boards, `no_table_d7.hpp`) builds the goal-side index and confirms candidates on it
+(`src/gpu/README.md`). Recovery itself is `solver_frontier.hpp`'s `recoverSolutionsFromMiddles`
+(normal boards: its shared start half keeps only paths that can still reach a middle,
+`RecoveryReach`, up to 64 middles; each middle's own start half keeps only states the start root
+can still reach).
 
 The program is one translation unit: `main` includes these headers once.
 Docs: `CLAUDE.md` (roadmap, measured facts) and `docs/changes-*.md` (history).

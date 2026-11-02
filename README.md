@@ -21,11 +21,12 @@ exists.
   prototype. 64/100 puzzles solved by July 2026, up to 13 moves.
 - **October 2026 on, AI-assisted** (with Claude; every such commit is marked `Co-Authored-By`):
   an exact-verification pass over every result, lower-bound pruning, the 14-16-move search
-  design, a job scheduler, and a browser (WebAssembly) version. 87/100 solved, with proven lower
-  bounds for the other 13.
+  design, a job scheduler, and a browser (WebAssembly) version. 87/100 solved by late October,
+  with proven lower bounds for the other 13.
 - **November 2026** (with Claude): a CUDA version of the large solver's inner loop for the
-  RTX 5060 Ti (`src/gpu/`): a 15-move search on puzzle 16-2 went from 42 min to 54 s, and a
-  16-move search is projected at minutes instead of hours (`docs/changes-2026-11-01.md`).
+  RTX 5060 Ti (`src/gpu/`): a 15-move search on puzzle 16-2 went from 42 min to 54 s, and on a
+  board with the 2x2 piece (18-4) from 10 h to 25 min (`docs/changes-2026-11-01.md`, `-11-02.md`).
+  91/100 solved; the other 9 need at least 16 moves (the 2x2 ones) or 17.
 
 The code as of July 2025, before the clearly AI-assisted files above: `git checkout pre-ai`, or
 the `pre-ai` tag on GitHub.
