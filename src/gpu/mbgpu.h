@@ -72,6 +72,57 @@ MBGPU_API int mbgpu_stream(const uint64_t* states, const uint8_t* prevMove, uint
 MBGPU_API int mbgpu_stream_checksums(const uint64_t* states, const uint8_t* prevMove, uint64_t count, int depth,
                                      uint64_t* leafCount, uint64_t* keySum, uint64_t* keyXor, mbgpu_stats* stats);
 
+// ---- bound audit (the GPU's own bound, before a run trusts it) ----
+
+typedef struct mbgpu_audit_stats {
+    uint64_t nodes;          // every node of the full (unpruned) streams, leaves included
+    uint64_t edges;          // node -> child edges checked
+    uint64_t violations;     // edges where h changed by more than 1
+    uint64_t leaves;         // leaves of the full streams
+    uint64_t overLimit;      // of them, leaves with h > limit
+    double seconds;
+} mbgpu_audit_stats;
+
+// The full stream of each seed (no pruning) with h checked on every edge (|dh| <= 1), and
+// per seed the leaf count and key sum / xor of the "wanted" leaves (h <= limit), to compare
+// with mbgpu_stream_checksums of the same seeds (which prunes): they must be identical.
+MBGPU_API int mbgpu_audit_stream(const uint64_t* states, const uint8_t* prevMove, uint64_t count, int depth,
+                                 uint64_t* wantedCount, uint64_t* wantedSum, uint64_t* wantedXor,
+                                 mbgpu_audit_stats* stats);
+
+// h of each state as the GPU computes it (to compare with the CPU's reference definition).
+MBGPU_API int mbgpu_bounds(const uint64_t* states, uint64_t count, int32_t* h);
+
+// ---- goal-side index build ----
+
+// Number of one-move children (the canonical first moves after each state's last move, no
+// pruning) whose key falls in each of the 256 partitions (key >> 56).
+MBGPU_API int mbgpu_child_counts(const uint64_t* states, const uint8_t* prevMove, uint64_t count,
+                                 uint64_t partitionCounts[256]);
+
+// The children's keys in partitions [p0, p1), sorted and without duplicates, into `out`
+// (capacity `outCap`); `outCount` receives how many. Fails if the raw keys of the range do
+// not fit the device (mbgpu_child_key_capacity tells how many do).
+MBGPU_API int mbgpu_child_keys(const uint64_t* states, const uint8_t* prevMove, uint64_t count, uint32_t p0,
+                               uint32_t p1, uint64_t* out, uint64_t outCap, uint64_t* outCount);
+
+// How many raw keys one mbgpu_child_keys / mbgpu_build_index call can sort with the VRAM left now.
+MBGPU_API uint64_t mbgpu_child_key_capacity(void);
+
+// The fingerprint index of partitions [p0, p1) built from the children's sorted unique keys,
+// in ssd::FingerprintRange's layout (no_table_d6.hpp builds the same on the CPU):
+//   fpsOut:    u16 low key bits of every key, partition after partition (capacity fpsCap)
+//   startsOut: per partition 2^bucketBits + 1 u32 offsets (first key of each bucket, relative to
+//              the partition's first key; the last one = its key count); bucket = key bits below
+//              the top 8, `bucketBits` of them
+//   bloomOut:  per partition bloomBlocksPerPartition blocks of 8 u32 (split-block Bloom filter,
+//              10 bits per state), overwritten
+//   uniqueOut: per partition the number of unique keys
+MBGPU_API int mbgpu_build_index(const uint64_t* states, const uint8_t* prevMove, uint64_t count, uint32_t p0,
+                                uint32_t p1, uint32_t bucketBits, uint64_t bloomBlocksPerPartition,
+                                uint16_t* fpsOut, uint64_t fpsCap, uint32_t* startsOut, uint32_t* bloomOut,
+                                uint64_t* uniqueOut);
+
 // The last error as text ("" if none).
 MBGPU_API const char* mbgpu_last_error(void);
 

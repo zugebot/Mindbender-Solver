@@ -1,7 +1,8 @@
 // src/gpu/mbgpu.cu
 //
-// The GPU left stream (interface and contract: src/gpu/mbgpu.h). Normal boards
-// only so far.
+// The GPU module (interface and contract: src/gpu/mbgpu.h): the left stream, the
+// audit of its bound, and the goal side's child keys for the index build.
+// Normal boards only so far.
 //
 // Layout and rules are the CPU's, re-implemented without its headers (the
 // solver is built with MinGW, this file with nvcc + MSVC):
@@ -11,10 +12,10 @@
 //   right rotation by 3n.
 // - Moves are coded dir * 30 + lane * 5 + (amount - 1), dir 0 = rows, 1 = columns
 //   (perm_stream_detail::decodePrevMove).
-// - stream_lanes_dfs (ASCENDING, CHECK_CROSS, CHECK_SIM): after a move on
-//   (dir, lane), same-direction moves only on later lanes; a lane stops at the
-//   first amount that gives the board back (its period); after a column move,
-//   a row move that commutes with it (Board::doActISColMatchBatched) is skipped.
+// - stream_lanes_dfs (ASCENDING, CHECK_CROSS, CHECK_SIM) and forEachFirstMove: after a
+//   move on (dir, lane), same-direction moves only on later lanes; a lane stops at the
+//   first amount that gives the board back (its period); after a column move, a row
+//   move that commutes with it (Board::doActISColMatchBatched) is skipped.
 // - Rotation lane bound (lane_bound.hpp, Kind::Rotation): h = max over rows of
 //   d(row) + max over columns of d(column), d = fewest cells that differ from the
 //   target lane over its 6 rotations; a child with r moves still below it is
@@ -26,11 +27,15 @@
 // children always fit the next buffer, and every chunk's subtree is finished
 // before the next chunk starts, so each level needs one fixed buffer and every
 // kernel launch is short (WDDM resets a GPU whose kernel runs for ~2 s).
+// What happens to the leaves depends on the call: Bloom test + output (the
+// probe), per-seed checksums (tests and the audit), keys in a partition range
+// (index build) or per-partition counts.
 
 #define MBGPU_BUILD_DLL
 #include "src/gpu/mbgpu.h"
 
 #include <cuda_runtime.h>
+#include <cub/cub.cuh>
 
 #include <algorithm>
 #include <chrono>
@@ -50,7 +55,7 @@ namespace {
     constexpr u32 THREADS_PER_NODE = 12;   // 6 rows + 6 columns
     constexpr u64 MAX_CHILDREN = 60;
     constexpr u64 FAT_BOOL_BIT = 1ULL << 57;
-    constexpr u32 BLOCK = 256;
+    constexpr u32 BLOCK = 256;             // the per-partition histogram needs exactly 256 threads
 
     // ---------------- board helpers (host and device) ----------------
 
@@ -140,15 +145,13 @@ namespace {
     }
 
     __device__ __forceinline__ u32 colLane32(const u64 b1, const u64 b2, const u32 x) {
-        const u32 hi = static_cast<u32>(b1 >> (15 - 3 * x)), lo = static_cast<u32>(b2 >> (15 - 3 * x));
-        // rows 0-2 sit 18 bits apart in each half: bits 36, 18 and 0 above the column's base
         return ((static_cast<u32>(b1 >> (51 - 3 * x)) & 7u) << 15) | ((static_cast<u32>(b1 >> (33 - 3 * x)) & 7u) << 12) |
-               ((hi & 7u) << 9) | ((static_cast<u32>(b2 >> (51 - 3 * x)) & 7u) << 6) |
-               ((static_cast<u32>(b2 >> (33 - 3 * x)) & 7u) << 3) | (lo & 7u);
+               ((static_cast<u32>(b1 >> (15 - 3 * x)) & 7u) << 9) | ((static_cast<u32>(b2 >> (51 - 3 * x)) & 7u) << 6) |
+               ((static_cast<u32>(b2 >> (33 - 3 * x)) & 7u) << 3) | (static_cast<u32>(b2 >> (15 - 3 * x)) & 7u);
     }
 
     // The row (or column) half of h, stopping as soon as it exceeds `stopAbove`
-    // (the caller only needs to know that it does).
+    // (the caller then only needs to know that it does).
     __device__ __forceinline__ int rowHalf(const u64 b1, const u64 b2, const int stopAbove = 99) {
         int r = 0;
         for (u32 i = 0; i < 6 && r <= stopAbove; ++i) {
@@ -174,27 +177,44 @@ namespace {
         u32* seed;
     };
 
+    enum LeafMode : int { LEAF_FILTER = 0, LEAF_CHECKSUM = 1, LEAF_KEYS = 2, LEAF_COUNTS = 3 };
+
     struct LeafOut {
-        int checksums;                 // 1: per-seed checksums, 0: filter + output
-        unsigned long long* cnt;       // per seed (checksums)
+        int mode;
+        unsigned long long* cnt;         // LEAF_CHECKSUM: per seed
         unsigned long long* sum;
         unsigned long long* xr;
-        const u32* bloom;              // nullptr: every leaf in range passes
+        const u32* bloom;                // LEAF_FILTER; nullptr: every leaf in range passes
         u64 blocksPerPartition;
-        u32 pBegin, pEnd;
-        u64* ob1;                      // leaves that passed
+        u32 pBegin, pEnd;                // LEAF_FILTER, LEAF_KEYS: partition range
+        u64* ob1;                        // LEAF_FILTER output
         u64* ob2;
-        u64* okey;
+        u64* okey;                       // LEAF_FILTER and LEAF_KEYS output
         u32* oseed;
         u64 oCap;
+        unsigned long long* partCounts;  // LEAF_COUNTS: 256 counters
     };
 
     struct Counters {
-        unsigned long long next;       // nodes appended to the next level
+        unsigned long long next;         // nodes appended to the next level
         unsigned long long leaves;
         unsigned long long inRange;
-        unsigned long long passed;     // leaves written to the output buffer
+        unsigned long long passed;       // leaves (or keys) written to the output buffer
+        unsigned long long edges;        // audit
+        unsigned long long violations;
+        unsigned long long overLimit;
         int overflow;
+    };
+
+    struct Step {
+        Nodes in;
+        u64 n;
+        Nodes out;
+        u64 outCap;
+        int rem;      // moves still below a child
+        int leaf;     // the children are leaves
+        int prune;    // apply the bound (when c_limit >= 0)
+        int audit;    // check |dh| <= 1 on every edge; checksums count only leaves with h <= limit
     };
 
     __device__ __forceinline__ bool bloomPasses(const LeafOut& lo, const u64 key) {
@@ -226,25 +246,32 @@ namespace {
         return x - v;
     }
 
-    // One thread per (node, lane). rem: moves still below a child. leaf != 0: the
-    // children are leaves (handled by `lo`), else they are appended to `out`.
-    __global__ void expandKernel(const Nodes in, const u64 n, const Nodes out, const u64 outCap, const int rem,
-                                 const int leaf, const LeafOut lo, Counters* ctr) {
+    // Adds `v` of every lane of the warp to *counter (one atomic per warp).
+    __device__ __forceinline__ void warpAdd(unsigned long long* counter, const u32 v) {
+        u32 total = 0;
+        warpPrefix(v, total);
+        if ((threadIdx.x & 31) == 0 && total != 0) {
+            atomicAdd(counter, static_cast<unsigned long long>(total));
+        }
+    }
+
+    // One thread per (node, lane).
+    __global__ void expandKernel(const Step s, const LeafOut lo, Counters* ctr) {
         const u64 t = static_cast<u64>(blockIdx.x) * blockDim.x + threadIdx.x;
         const u64 i = t / THREADS_PER_NODE;
 
         u64 cb1[5], cb2[5];
         u32 amount[5];
-        u32 keep = 0;
-        u32 codeBase = 0;
-        u32 seed = 0;
+        int hChild[5];
+        u32 keep = 0, edges = 0, violations = 0;
+        u32 codeBase = 0, seed = 0;
 
-        if (i < n) {
+        if (i < s.n) {
             const u32 dl = static_cast<u32>(t % THREADS_PER_NODE);
             const u32 dir = dl / 6, lane = dl % 6;
-            const u64 b1 = in.b1[i], b2 = in.b2[i];
-            const u32 prev = in.prev[i];
-            seed = in.seed[i];
+            const u64 b1 = s.in.b1[i], b2 = s.in.b2[i];
+            const u32 prev = s.in.prev[i];
+            seed = s.in.seed[i];
             const int prevDir = prev == NO_PREV ? -1 : static_cast<int>(prev / 30);
             const u32 prevLane = (prev % 30) / 5, prevAmount = prev % 5 + 1;
             if (!(static_cast<int>(dir) == prevDir && lane <= prevLane)) {
@@ -264,11 +291,15 @@ namespace {
                 // The moved lane's half of h is the parent's: a lane's distance is the same
                 // for all its rotations, and the other lanes of its kind do not move.
                 const int limit = c_limit;
-                int fixedHalf = 0;
+                const bool pruneOn = s.prune && limit >= 0;
+                int fixedHalf = 0, hParent = 0;
                 bool allFar = false;
-                if (limit >= 0) {
+                if (pruneOn) {
                     fixedHalf = dir == 0 ? rowHalf(b1, b2) : colHalf(b1, b2);
-                    allFar = fixedHalf > limit + rem;
+                    allFar = fixedHalf > limit + s.rem;
+                }
+                if (s.audit) {
+                    hParent = rowHalf(b1, b2) + colHalf(b1, b2);
                 }
                 codeBase = dir * 30 + lane * 5;
                 if (!allFar) {
@@ -282,22 +313,33 @@ namespace {
                         if (crossSkip & (1U << k)) {
                             continue;
                         }
-                        if (limit >= 0) {
-                            const int room = limit + rem - fixedHalf;   // the other half may be at most this
+                        if (pruneOn) {
+                            const int room = limit + s.rem - fixedHalf;   // the other half may be at most this
                             if ((dir == 0 ? colHalf(o1, o2, room) : rowHalf(o1, o2, room)) > room) {
                                 continue;
                             }
                         }
+                        int hc = 0;
+                        if (s.audit) {
+                            hc = rowHalf(o1, o2) + colHalf(o1, o2);
+                            ++edges;
+                            violations += (hc > hParent + 1 || hc < hParent - 1) ? 1u : 0u;
+                        }
                         cb1[keep] = o1;
                         cb2[keep] = o2;
                         amount[keep] = k;
+                        hChild[keep] = hc;
                         ++keep;
                     }
                 }
             }
         }
+        if (s.audit) {
+            warpAdd(&ctr->edges, edges);
+            warpAdd(&ctr->violations, violations);
+        }
 
-        if (!leaf) {
+        if (!s.leaf) {
             u32 total = 0;
             const u32 offset = warpPrefix(keep, total);
             unsigned long long base = 0;
@@ -307,33 +349,91 @@ namespace {
             base = __shfl_sync(0xFFFFFFFFu, base, 0);
             for (u32 j = 0; j < keep; ++j) {
                 const u64 at = base + offset + j;
-                if (at >= outCap) {
+                if (at >= s.outCap) {
                     ctr->overflow = 1;
                     break;
                 }
-                out.b1[at] = cb1[j];
-                out.b2[at] = cb2[j];
-                out.prev[at] = static_cast<u8>(codeBase + amount[j]);
-                out.seed[at] = seed;
+                s.out.b1[at] = cb1[j];
+                s.out.b2[at] = cb2[j];
+                s.out.prev[at] = static_cast<u8>(codeBase + amount[j]);
+                s.out.seed[at] = seed;
             }
             return;
         }
 
+        warpAdd(&ctr->leaves, keep);
+        u64 key[5];
+        for (u32 j = 0; j < keep; ++j) {
+            key[j] = mixKey(stateHash(cb1[j], cb2[j]));
+        }
+
+        if (lo.mode == LEAF_COUNTS) {
+            __shared__ u32 hist[256];
+            hist[threadIdx.x] = 0;
+            __syncthreads();
+            for (u32 j = 0; j < keep; ++j) {
+                atomicAdd(&hist[key[j] >> 56], 1u);
+            }
+            __syncthreads();
+            if (hist[threadIdx.x] != 0) {
+                atomicAdd(&lo.partCounts[threadIdx.x], static_cast<unsigned long long>(hist[threadIdx.x]));
+            }
+            return;
+        }
+
+        if (lo.mode == LEAF_CHECKSUM) {
+            u32 over = 0;
+            for (u32 j = 0; j < keep; ++j) {
+                if (s.audit && hChild[j] > c_limit) {
+                    ++over;
+                    continue;   // the audit's checksums cover only the wanted leaves
+                }
+                atomicAdd(&lo.cnt[seed], 1ULL);
+                atomicAdd(&lo.sum[seed], static_cast<unsigned long long>(key[j]));
+                atomicXor(&lo.xr[seed], static_cast<unsigned long long>(key[j]));
+            }
+            if (s.audit) {
+                warpAdd(&ctr->overLimit, over);
+            }
+            return;
+        }
+
+        if (lo.mode == LEAF_KEYS) {
+            u64 mine[5];
+            u32 m = 0;
+            for (u32 j = 0; j < keep; ++j) {
+                const u32 p = static_cast<u32>(key[j] >> 56);
+                if (p >= lo.pBegin && p < lo.pEnd) {
+                    mine[m++] = key[j];
+                }
+            }
+            u32 total = 0;
+            const u32 offset = warpPrefix(m, total);
+            unsigned long long base = 0;
+            if ((threadIdx.x & 31) == 0 && total != 0) {
+                base = atomicAdd(&ctr->passed, static_cast<unsigned long long>(total));
+            }
+            base = __shfl_sync(0xFFFFFFFFu, base, 0);
+            for (u32 j = 0; j < m; ++j) {
+                const u64 at = base + offset + j;
+                if (at >= lo.oCap) {
+                    ctr->overflow = 1;
+                    break;
+                }
+                lo.okey[at] = mine[j];
+            }
+            return;
+        }
+
+        // LEAF_FILTER
         u32 inRange = 0;
         for (u32 j = 0; j < keep; ++j) {
-            const u64 key = mixKey(stateHash(cb1[j], cb2[j]));
-            if (lo.checksums) {
-                atomicAdd(&lo.cnt[seed], 1ULL);
-                atomicAdd(&lo.sum[seed], static_cast<unsigned long long>(key));
-                atomicXor(&lo.xr[seed], static_cast<unsigned long long>(key));
-                continue;
-            }
-            const u32 p = static_cast<u32>(key >> 56);
+            const u32 p = static_cast<u32>(key[j] >> 56);
             if (p < lo.pBegin || p >= lo.pEnd) {
                 continue;
             }
             ++inRange;
-            if (lo.bloom != nullptr && !bloomPasses(lo, key)) {
+            if (lo.bloom != nullptr && !bloomPasses(lo, key[j])) {
                 continue;
             }
             const unsigned long long at = atomicAdd(&ctr->passed, 1ULL);
@@ -343,19 +443,79 @@ namespace {
             }
             lo.ob1[at] = cb1[j];
             lo.ob2[at] = cb2[j];
-            lo.okey[at] = key;
+            lo.okey[at] = key[j];
             lo.oseed[at] = seed;
         }
-        u32 leavesTotal = 0, rangeTotal = 0;
-        warpPrefix(keep, leavesTotal);
-        warpPrefix(inRange, rangeTotal);
-        if ((threadIdx.x & 31) == 0) {
-            if (leavesTotal != 0) {
-                atomicAdd(&ctr->leaves, static_cast<unsigned long long>(leavesTotal));
+        warpAdd(&ctr->inRange, inRange);
+    }
+
+    // ---------------- index build ----------------
+
+    // first position in sorted keys[0, n) whose key is >= value
+    __device__ __forceinline__ u64 lowerBound(const u64* keys, u64 lo, u64 hi, const u64 value) {
+        while (lo < hi) {
+            const u64 mid = lo + (hi - lo) / 2;
+            if (keys[mid] < value) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
             }
-            if (rangeTotal != 0) {
-                atomicAdd(&ctr->inRange, static_cast<unsigned long long>(rangeTotal));
-            }
+        }
+        return lo;
+    }
+
+    // bounds[i] = first key of partition p0 + i (i = 0..parts); bounds[parts] = n
+    __global__ void partitionBoundsKernel(const u64* keys, const u64 n, const u32 p0, const u32 parts, u64* bounds) {
+        const u32 i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i <= parts) {
+            const u32 p = p0 + i;
+            bounds[i] = p >= 256 ? n : lowerBound(keys, 0, n, static_cast<u64>(p) << 56);
+        }
+    }
+
+    __global__ void fingerprintKernel(const u64* keys, const u64 n, unsigned short* fps) {
+        const u64 j = static_cast<u64>(blockIdx.x) * blockDim.x + threadIdx.x;
+        if (j < n) {
+            fps[j] = static_cast<unsigned short>(keys[j]);
+        }
+    }
+
+    // starts[b] = (first key in [lo, hi) whose bucket is >= b) - lo, b = 0..buckets
+    __global__ void bucketStartsKernel(const u64* keys, const u64 lo, const u64 hi, const u32 bucketBits, u32* starts) {
+        const u64 b = static_cast<u64>(blockIdx.x) * blockDim.x + threadIdx.x;
+        const u64 buckets = 1ULL << bucketBits;
+        if (b > buckets) {
+            return;
+        }
+        if (b == buckets) {
+            starts[b] = static_cast<u32>(hi - lo);
+            return;
+        }
+        // keys of one partition share the top 8 bits; the bucket is the next bucketBits bits
+        const u64 top = keys[lo] & (0xFFULL << 56);
+        const u64 value = top | (b << (56 - bucketBits));
+        starts[b] = static_cast<u32>(lowerBound(keys, lo, hi, value) - lo);
+    }
+
+    __global__ void bloomKernel(const u64* keys, const u64 lo, const u64 hi, const u64 blocksPerPartition, u32* bloom) {
+        const u64 j = lo + static_cast<u64>(blockIdx.x) * blockDim.x + threadIdx.x;
+        if (j >= hi) {
+            return;
+        }
+        const u64 h = mixKey(keys[j] ^ 0x5851f42d4c957f2dULL);
+        u32* w = bloom + (((h >> 32) * blocksPerPartition) >> 32) * 8;
+        const u32 low = static_cast<u32>(h);
+#pragma unroll
+        for (u32 i = 0; i < 8; ++i) {
+            atomicOr(&w[i], 1U << ((low * c_salt[i]) >> 27));
+        }
+    }
+
+    __global__ void boundKernel(const u64* states, const u64 n, int* h) {
+        const u64 i = static_cast<u64>(blockIdx.x) * blockDim.x + threadIdx.x;
+        if (i < n) {
+            const u64 b1 = states[2 * i], b2 = states[2 * i + 1];
+            h[i] = rowHalf(b1, b2) + colHalf(b1, b2);
         }
     }
 
@@ -416,8 +576,21 @@ namespace {
         }
     }
 
+    // Device memory freed when the scope ends.
+    struct Scratch {
+        void* p = nullptr;
+        u64 bytes = 0;
+        bool get(const u64 b) {
+            bytes = b;
+            return allocate(&p, b);
+        }
+        ~Scratch() { release(p, p != nullptr ? bytes : 0); }
+    };
+
     struct Run {
         int depth = 0;
+        int prune = 1;
+        int audit = 0;
         LeafOut lo{};
         mbgpu_sink_fn sink = nullptr;
         void* ctx = nullptr;
@@ -426,11 +599,18 @@ namespace {
         std::vector<u32> hseed;
     };
 
-    bool flushOutput(Run& run) {
-        Counters c{};
+    bool readCounters(Counters& c) {
         MB_CUDA(cudaMemcpy(&c, g_dev.ctr, sizeof(Counters), cudaMemcpyDeviceToHost));
         if (c.overflow) {
-            return fail("output buffer overflow");
+            return fail("buffer overflow on the device");
+        }
+        return true;
+    }
+
+    bool flushOutput(Run& run) {
+        Counters c{};
+        if (!readCounters(c)) {
+            return false;
         }
         const u64 n = c.passed;
         if (n == 0) {
@@ -461,14 +641,15 @@ namespace {
     bool processLevel(Run& run, const int d, const u64 n) {
         const u64 chunk = std::max<u64>(1, g_dev.levelCap / MAX_CHILDREN);
         const int childDepth = d + 1;
-        const int rem = run.depth - childDepth;
         const bool leaf = childDepth == run.depth;
         for (u64 off = 0; off < n; off += chunk) {
             const u64 m = std::min(chunk, n - off);
-            if (leaf && !run.lo.checksums) {
+            if (leaf && run.lo.mode == LEAF_FILTER) {
                 // room for every child of this chunk, else hand the buffer over first
                 Counters c{};
-                MB_CUDA(cudaMemcpy(&c, g_dev.ctr, sizeof(Counters), cudaMemcpyDeviceToHost));
+                if (!readCounters(c)) {
+                    return false;
+                }
                 if (c.passed + m * MAX_CHILDREN > g_dev.outCap && !flushOutput(run)) {
                     return false;
                 }
@@ -477,18 +658,24 @@ namespace {
                 const unsigned long long zero = 0;
                 MB_CUDA(cudaMemcpy(&g_dev.ctr->next, &zero, sizeof(zero), cudaMemcpyHostToDevice));
             }
+            Step s{};
+            s.in = offsetNodes(g_dev.level[d], off);
+            s.n = m;
+            s.out = leaf ? Nodes{} : g_dev.level[childDepth];
+            s.outCap = g_dev.levelCap;
+            s.rem = run.depth - childDepth;
+            s.leaf = leaf ? 1 : 0;
+            s.prune = run.prune;
+            s.audit = run.audit;
             const u64 threads = m * THREADS_PER_NODE;
             const u32 blocks = static_cast<u32>((threads + BLOCK - 1) / BLOCK);
-            expandKernel<<<blocks, BLOCK>>>(offsetNodes(g_dev.level[d], off), m,
-                                            leaf ? Nodes{} : g_dev.level[childDepth], g_dev.levelCap, rem,
-                                            leaf ? 1 : 0, run.lo, g_dev.ctr);
+            expandKernel<<<blocks, BLOCK>>>(s, run.lo, g_dev.ctr);
             MB_CUDA(cudaGetLastError());
             run.stats->launches++;
             if (!leaf) {
                 Counters c{};
-                MB_CUDA(cudaMemcpy(&c, g_dev.ctr, sizeof(Counters), cudaMemcpyDeviceToHost));
-                if (c.overflow) {
-                    return fail("level buffer overflow");
+                if (!readCounters(c)) {
+                    return false;
                 }
                 run.stats->nodes[childDepth] += c.next;
                 if (c.next != 0 && !processLevel(run, childDepth, c.next)) {
@@ -499,11 +686,11 @@ namespace {
         return true;
     }
 
-    bool streamAll(Run& run, const u64* states, const u8* prev, const u64 count) {
+    bool streamAll(Run& run, const u64* states, const u8* prev, const u64 count, Counters* totals = nullptr) {
         if (!g_dev.open) {
             return fail("mbgpu_open has not been called");
         }
-        if (!g_dev.targetSet) {
+        if ((run.prune || run.audit) && !g_dev.targetSet) {
             return fail("mbgpu_set_target has not been called");
         }
         if (run.depth < 1 || run.depth > MBGPU_MAX_DEPTH) {
@@ -543,17 +730,175 @@ namespace {
                 return false;
             }
         }
-        if (!run.lo.checksums && !flushOutput(run)) {
+        if (run.lo.mode == LEAF_FILTER && !flushOutput(run)) {
             return false;
         }
         Counters c{};
-        MB_CUDA(cudaMemcpy(&c, g_dev.ctr, sizeof(Counters), cudaMemcpyDeviceToHost));
-        if (c.overflow) {
-            return fail("buffer overflow");
+        if (!readCounters(c)) {
+            return false;
         }
         run.stats->leaves += c.leaves;
         run.stats->inRange += c.inRange;
         run.stats->seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        if (totals != nullptr) {
+            *totals = c;
+        }
+        return true;
+    }
+
+    // Per-seed checksum buffers on the device, copied out and freed at the end.
+    bool checksumRun(Run& run, const u64* states, const u8* prev, const u64 count, uint64_t* cntOut,
+                     uint64_t* sumOut, uint64_t* xrOut, Counters* totals) {
+        const u64 bytes = std::max<u64>(1, count) * 8;
+        Scratch cnt, sum, xr;
+        if (!cnt.get(bytes) || !sum.get(bytes) || !xr.get(bytes)) {
+            return false;
+        }
+        MB_CUDA(cudaMemset(cnt.p, 0, bytes));
+        MB_CUDA(cudaMemset(sum.p, 0, bytes));
+        MB_CUDA(cudaMemset(xr.p, 0, bytes));
+        run.lo.mode = LEAF_CHECKSUM;
+        run.lo.cnt = static_cast<unsigned long long*>(cnt.p);
+        run.lo.sum = static_cast<unsigned long long*>(sum.p);
+        run.lo.xr = static_cast<unsigned long long*>(xr.p);
+        if (!streamAll(run, states, prev, count, totals)) {
+            return false;
+        }
+        MB_CUDA(cudaMemcpy(cntOut, cnt.p, count * 8, cudaMemcpyDeviceToHost));
+        MB_CUDA(cudaMemcpy(sumOut, sum.p, count * 8, cudaMemcpyDeviceToHost));
+        MB_CUDA(cudaMemcpy(xrOut, xr.p, count * 8, cudaMemcpyDeviceToHost));
+        return true;
+    }
+
+    // Raw keys one sort can take: two key buffers + CUB's scratch (~ one more) in what is left.
+    u64 keyCapacity() {
+        const u64 left = g_dev.cap > g_dev.used ? g_dev.cap - g_dev.used : 0;
+        const u64 margin = 64ULL << 20;
+        return left > margin ? (left - margin) / 25 : 0;
+    }
+
+    // The children's keys in partitions [p0, p1), sorted and unique, left in a.p (count *unique);
+    // b is scratch of the same size. `reserve` bytes are kept free for the caller.
+    bool sortedChildKeys(const u64* states, const u8* prev, const u64 count, const u32 p0, const u32 p1,
+                         const u64 reserve, Scratch& a, Scratch& b, u64* unique) {
+        const u64 left = g_dev.cap > g_dev.used + reserve ? g_dev.cap - g_dev.used - reserve : 0;
+        const u64 cap = left > (64ULL << 20) ? (left - (64ULL << 20)) / 25 : 0;
+        if (cap < (1ULL << 20)) {
+            return fail("too little VRAM left to sort keys");
+        }
+        if (!a.get(cap * 8) || !b.get(cap * 8)) {
+            return false;
+        }
+        mbgpu_stats st{};
+        Run run;
+        run.depth = 1;
+        run.prune = 0;
+        run.stats = &st;
+        run.lo.mode = LEAF_KEYS;
+        run.lo.pBegin = p0;
+        run.lo.pEnd = p1;
+        run.lo.okey = static_cast<u64*>(a.p);
+        run.lo.oCap = cap;
+        Counters c{};
+        if (!streamAll(run, states, prev, count, &c)) {
+            return false;
+        }
+        const u64 n = c.passed;
+        if (n > cap) {
+            return fail("raw keys of partitions [" + std::to_string(p0) + "," + std::to_string(p1) +
+                        ") exceed the device buffer");
+        }
+        u64* keysA = static_cast<u64*>(a.p);
+        u64* keysB = static_cast<u64*>(b.p);
+        Scratch numOut;
+        if (!numOut.get(8)) {
+            return false;
+        }
+        size_t sortBytes = 0, uniqueBytes = 0;
+        MB_CUDA(cub::DeviceRadixSort::SortKeys(nullptr, sortBytes, keysA, keysB, static_cast<int64_t>(n)));
+        MB_CUDA(cub::DeviceSelect::Unique(nullptr, uniqueBytes, keysB, keysA, static_cast<u64*>(numOut.p),
+                                          static_cast<int64_t>(n)));
+        Scratch temp;
+        if (!temp.get(std::max<u64>(1, std::max<u64>(sortBytes, uniqueBytes)))) {
+            return false;
+        }
+        MB_CUDA(cub::DeviceRadixSort::SortKeys(temp.p, sortBytes, keysA, keysB, static_cast<int64_t>(n)));
+        MB_CUDA(cub::DeviceSelect::Unique(temp.p, uniqueBytes, keysB, keysA, static_cast<u64*>(numOut.p),
+                                          static_cast<int64_t>(n)));
+        MB_CUDA(cudaMemcpy(unique, numOut.p, 8, cudaMemcpyDeviceToHost));
+        return true;
+    }
+
+    bool childKeys(const u64* states, const u8* prev, const u64 count, const u32 p0, const u32 p1, u64* out,
+                   const u64 outCap, u64* outCount) {
+        Scratch a, b;
+        u64 unique = 0;
+        if (!sortedChildKeys(states, prev, count, p0, p1, 0, a, b, &unique)) {
+            return false;
+        }
+        if (unique > outCap) {
+            return fail("output buffer too small for the unique keys");
+        }
+        MB_CUDA(cudaMemcpy(out, a.p, unique * 8, cudaMemcpyDeviceToHost));
+        *outCount = unique;
+        return true;
+    }
+
+    // The per-partition device buffers of buildIndex: starts and Bloom blocks of one partition.
+    u64 indexPartitionBytes(const u32 bucketBits, const u64 blocksPerPartition) {
+        return ((1ULL << bucketBits) + 1) * 4 + blocksPerPartition * 32 + 257 * 8;
+    }
+
+    bool buildIndex(const u64* states, const u8* prev, const u64 count, const u32 p0, const u32 p1,
+                    const u32 bucketBits, const u64 bpp, unsigned short* fpsOut, const u64 fpsCap, u32* startsOut,
+                    u32* bloomOut, uint64_t* uniqueOut) {
+        const u64 partBytes = indexPartitionBytes(bucketBits, bpp);
+        Scratch a, b;
+        u64 unique = 0;
+        if (!sortedChildKeys(states, prev, count, p0, p1, partBytes, a, b, &unique)) {
+            return false;
+        }
+        if (unique > fpsCap) {
+            return fail("fingerprint buffer too small");
+        }
+        const u64* keys = static_cast<const u64*>(a.p);
+        const u32 parts = p1 - p0;
+        // partition boundaries
+        Scratch bnd, starts, bloom;
+        if (!bnd.get(257 * 8) || !starts.get(((1ULL << bucketBits) + 1) * 4) || !bloom.get(bpp * 32)) {
+            return false;
+        }
+        partitionBoundsKernel<<<2, 256>>>(keys, unique, p0, parts, static_cast<u64*>(bnd.p));
+        MB_CUDA(cudaGetLastError());
+        std::vector<u64> bounds(parts + 1);
+        MB_CUDA(cudaMemcpy(bounds.data(), bnd.p, (parts + 1) * 8, cudaMemcpyDeviceToHost));
+        // fingerprints of the whole group (in b, which is free now)
+        auto* fps = static_cast<unsigned short*>(b.p);
+        if (unique != 0) {
+            fingerprintKernel<<<static_cast<u32>((unique + BLOCK - 1) / BLOCK), BLOCK>>>(keys, unique, fps);
+            MB_CUDA(cudaGetLastError());
+            MB_CUDA(cudaMemcpy(fpsOut, fps, unique * 2, cudaMemcpyDeviceToHost));
+        }
+        const u64 dirPer = (1ULL << bucketBits) + 1;
+        for (u32 i = 0; i < parts; ++i) {
+            const u64 lo = bounds[i], hi = bounds[i + 1];
+            uniqueOut[i] = hi - lo;
+            u32* st = static_cast<u32*>(starts.p);
+            if (hi > lo) {
+                bucketStartsKernel<<<static_cast<u32>((dirPer + BLOCK - 1) / BLOCK), BLOCK>>>(keys, lo, hi, bucketBits, st);
+            } else {
+                MB_CUDA(cudaMemset(st, 0, dirPer * 4));
+            }
+            MB_CUDA(cudaGetLastError());
+            MB_CUDA(cudaMemset(bloom.p, 0, bpp * 32));
+            if (hi > lo) {
+                bloomKernel<<<static_cast<u32>((hi - lo + BLOCK - 1) / BLOCK), BLOCK>>>(keys, lo, hi, bpp,
+                                                                                       static_cast<u32*>(bloom.p));
+                MB_CUDA(cudaGetLastError());
+            }
+            MB_CUDA(cudaMemcpy(startsOut + i * dirPer, st, dirPer * 4, cudaMemcpyDeviceToHost));
+            MB_CUDA(cudaMemcpy(bloomOut + i * bpp * 8, bloom.p, bpp * 32, cudaMemcpyDeviceToHost));
+        }
         return true;
     }
 
@@ -699,7 +1044,7 @@ MBGPU_API int mbgpu_stream(const uint64_t* states, const uint8_t* prevMove, cons
     run.sink = sink;
     run.ctx = ctx;
     run.stats = stats != nullptr ? stats : &local;
-    run.lo.checksums = 0;
+    run.lo.mode = LEAF_FILTER;
     run.lo.bloom = g_dev.bloom;
     run.lo.blocksPerPartition = g_dev.blocksPerPartition;
     run.lo.pBegin = g_dev.pBegin;
@@ -720,31 +1065,129 @@ MBGPU_API int mbgpu_stream_checksums(const uint64_t* states, const uint8_t* prev
     Run run;
     run.depth = depth;
     run.stats = stats != nullptr ? stats : &local;
-    run.lo.checksums = 1;
-    run.lo.pBegin = 0;
-    run.lo.pEnd = 256;
-    const u64 bytes = count * 8;
-    unsigned long long *cnt = nullptr, *sum = nullptr, *xr = nullptr;
-    bool ok = allocate(reinterpret_cast<void**>(&cnt), bytes) && allocate(reinterpret_cast<void**>(&sum), bytes) &&
-              allocate(reinterpret_cast<void**>(&xr), bytes);
-    ok = ok && cudaMemset(cnt, 0, bytes) == cudaSuccess && cudaMemset(sum, 0, bytes) == cudaSuccess &&
-         cudaMemset(xr, 0, bytes) == cudaSuccess;
-    if (ok) {
-        run.lo.cnt = cnt;
-        run.lo.sum = sum;
-        run.lo.xr = xr;
-        ok = streamAll(run, states, prevMove, count);
+    return checksumRun(run, states, prevMove, count, leafCount, keySum, keyXor, nullptr) ? 0 : 1;
+}
+
+MBGPU_API int mbgpu_audit_stream(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
+                                 const int depth, uint64_t* wantedCount, uint64_t* wantedSum, uint64_t* wantedXor,
+                                 mbgpu_audit_stats* stats) {
+    g_error.clear();
+    if (g_dev.limit < 0) {
+        g_error = "the audit needs a limit (mbgpu_set_target)";
+        return 1;
     }
-    ok = ok && cudaMemcpy(leafCount, cnt, bytes, cudaMemcpyDeviceToHost) == cudaSuccess &&
-         cudaMemcpy(keySum, sum, bytes, cudaMemcpyDeviceToHost) == cudaSuccess &&
-         cudaMemcpy(keyXor, xr, bytes, cudaMemcpyDeviceToHost) == cudaSuccess;
-    release(cnt, cnt ? bytes : 0);
-    release(sum, sum ? bytes : 0);
-    release(xr, xr ? bytes : 0);
-    if (!ok && g_error.empty()) {
-        g_error = "checksum buffers failed";
+    mbgpu_stats st{};
+    Run run;
+    run.depth = depth;
+    run.prune = 0;
+    run.audit = 1;
+    run.stats = &st;
+    Counters c{};
+    if (!checksumRun(run, states, prevMove, count, wantedCount, wantedSum, wantedXor, &c)) {
+        return 1;
     }
-    return ok ? 0 : 1;
+    if (stats != nullptr) {
+        stats->nodes = 0;
+        for (int d = 1; d < depth; ++d) {
+            stats->nodes += st.nodes[d];
+        }
+        stats->nodes += c.leaves;
+        stats->edges = c.edges;
+        stats->violations = c.violations;
+        stats->leaves = c.leaves;
+        stats->overLimit = c.overLimit;
+        stats->seconds = st.seconds;
+    }
+    return 0;
+}
+
+MBGPU_API int mbgpu_bounds(const uint64_t* states, const uint64_t count, int32_t* h) {
+    g_error.clear();
+    if (!g_dev.targetSet) {
+        g_error = "mbgpu_set_target has not been called";
+        return 1;
+    }
+    if (count == 0) {
+        return 0;
+    }
+    Scratch s, out;
+    if (!s.get(count * 16) || !out.get(count * 4)) {
+        return 1;
+    }
+    if (cudaMemcpy(s.p, states, count * 16, cudaMemcpyHostToDevice) != cudaSuccess) {
+        g_error = "copying states failed";
+        return 1;
+    }
+    boundKernel<<<static_cast<u32>((count + BLOCK - 1) / BLOCK), BLOCK>>>(static_cast<const u64*>(s.p), count,
+                                                                         static_cast<int*>(out.p));
+    if (cudaGetLastError() != cudaSuccess ||
+        cudaMemcpy(h, out.p, count * 4, cudaMemcpyDeviceToHost) != cudaSuccess) {
+        g_error = "bound kernel failed";
+        return 1;
+    }
+    return 0;
+}
+
+MBGPU_API int mbgpu_child_counts(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
+                                 uint64_t partitionCounts[256]) {
+    g_error.clear();
+    Scratch counts;
+    if (!counts.get(256 * 8) || cudaMemset(counts.p, 0, 256 * 8) != cudaSuccess) {
+        return 1;
+    }
+    mbgpu_stats st{};
+    Run run;
+    run.depth = 1;
+    run.prune = 0;
+    run.stats = &st;
+    run.lo.mode = LEAF_COUNTS;
+    run.lo.partCounts = static_cast<unsigned long long*>(counts.p);
+    if (!streamAll(run, states, prevMove, count)) {
+        return 1;
+    }
+    if (cudaMemcpy(partitionCounts, counts.p, 256 * 8, cudaMemcpyDeviceToHost) != cudaSuccess) {
+        g_error = "copying partition counts failed";
+        return 1;
+    }
+    return 0;
+}
+
+MBGPU_API int mbgpu_child_keys(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
+                               const uint32_t p0, const uint32_t p1, uint64_t* out, const uint64_t outCap,
+                               uint64_t* outCount) {
+    g_error.clear();
+    if (!g_dev.open) {
+        g_error = "mbgpu_open has not been called";
+        return 1;
+    }
+    if (p0 >= p1 || p1 > 256) {
+        g_error = "bad partition range";
+        return 1;
+    }
+    return childKeys(states, prevMove, count, p0, p1, out, outCap, outCount) ? 0 : 1;
+}
+
+MBGPU_API uint64_t mbgpu_child_key_capacity(void) {
+    return g_dev.open ? keyCapacity() : 0;
+}
+
+MBGPU_API int mbgpu_build_index(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
+                                const uint32_t p0, const uint32_t p1, const uint32_t bucketBits,
+                                const uint64_t bloomBlocksPerPartition, uint16_t* fpsOut, const uint64_t fpsCap,
+                                uint32_t* startsOut, uint32_t* bloomOut, uint64_t* uniqueOut) {
+    g_error.clear();
+    if (!g_dev.open) {
+        g_error = "mbgpu_open has not been called";
+        return 1;
+    }
+    if (p0 >= p1 || p1 > 256 || bucketBits > 32 || bloomBlocksPerPartition == 0) {
+        g_error = "bad index layout";
+        return 1;
+    }
+    return buildIndex(states, prevMove, count, p0, p1, bucketBits, bloomBlocksPerPartition,
+                      reinterpret_cast<unsigned short*>(fpsOut), fpsCap, startsOut, bloomOut, uniqueOut)
+               ? 0
+               : 1;
 }
 
 MBGPU_API const char* mbgpu_last_error(void) {

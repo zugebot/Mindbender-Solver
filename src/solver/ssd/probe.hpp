@@ -100,6 +100,23 @@ namespace ssd {
             }
         }
 
+        // --gpu: every pass streams on the GPU (gpu_stream.hpp); its bound is audited on the
+        // GPU below, in place of the CPU audit, and used in "both" mode when the audit passes.
+        const bool useGpu = !cfg.gpuDevice.empty();
+        bool gpuBounded = false;
+        if (useGpu) {
+            if (leftRoot.getFatBool() || g_rightRoot.getFatBool()) {
+                throw std::runtime_error("--gpu: 2x2 boards are not supported yet");
+            }
+            if (cfg.reverse) {
+                throw std::runtime_error("--gpu: forward searches only");
+            }
+            if (STREAM_DEPTH > MBGPU_MAX_DEPTH) {
+                throw std::runtime_error("--gpu: stream depth above " + std::to_string(MBGPU_MAX_DEPTH));
+            }
+            ensureGpu(cfg);
+        }
+
         // Colour-mix bound: eligible modes after the audit (see header).
         // boundMode: 0 off, 1 leaf, 2 leaf + parent; -1 = decide by timing.
         static lane_bound::LaneTables boundTables;   // read by bounds::LanePrune
@@ -110,6 +127,16 @@ namespace ssd {
         if (cfg.boundMode != 0 && !cfg.reverse) {
             if (g_rightRoot.getFatBool()) {
                 tcout << "bound: off (2x2 board; the halved bound prunes nothing)\n";
+            } else if (useGpu) {
+                if (cfg.boundKind != lane_bound::Kind::Rotation) {
+                    throw std::runtime_error("--gpu: only the rotation bound is implemented on the GPU");
+                }
+                const GpuAudit ga = gpuAuditBound(g_gpu, seeds, seedMoves, STREAM_DEPTH, boundLimit, g_rightRoot);
+                gpuBounded = ga.ok;
+                tcout << "bound (rotation, GPU): audit " << (ga.ok ? "ok" : "FAILED (" + ga.why + "), bound off")
+                      << ": " << ga.seeds << " seeds streamed in full, " << ga.stats.nodes << " nodes, "
+                      << ga.stats.edges << " edges (|dh| <= 1), wanted leaves identical pruned vs full; "
+                      << ga.refStates << " states = reference definition; " << ga.seconds << "s\n";
             } else {
                 Timer auditTimer;
                 lane_bound::buildLaneTables(g_rightRoot, boundTables, cfg.boundKind);
@@ -187,38 +214,14 @@ namespace ssd {
             }
         }
 
-        // --gpu: every pass streams on the GPU (gpu_stream.hpp), with the rotation lane bound
-        // at every level ("both") when the audit above kept the bound, and no bound otherwise.
-        static GpuModule gpu;
-        const bool useGpu = !cfg.gpuDevice.empty();
+        GpuModule& gpu = g_gpu;
         if (useGpu) {
-            if (leftRoot.getFatBool() || g_rightRoot.getFatBool()) {
-                throw std::runtime_error("--gpu: 2x2 boards are not supported yet");
-            }
-            if (cfg.reverse) {
-                throw std::runtime_error("--gpu: forward searches only");
-            }
-            if (STREAM_DEPTH > MBGPU_MAX_DEPTH) {
-                throw std::runtime_error("--gpu: stream depth above " + std::to_string(MBGPU_MAX_DEPTH));
-            }
-            const bool bounded = bounds::g_laneTables != nullptr;
-            if (bounded && cfg.boundKind != lane_bound::Kind::Rotation) {
-                throw std::runtime_error("--gpu: only the rotation bound is implemented on the GPU");
-            }
-            std::string why;
-            if (!gpu.ready() && !gpu.load(cfg.gpuDll, why)) {
-                throw std::runtime_error("--gpu: " + why);
-            }
-            char info[512] = {};
-            if (gpu.open(cfg.gpuDevice.c_str(), static_cast<uint64_t>(cfg.gpuVramGb * 1e9), info, sizeof(info)) != 0) {
-                throw std::runtime_error("--gpu: " + gpu.error());
-            }
-            const int gpuLimit = bounded ? boundLimit : -1;
+            const int gpuLimit = gpuBounded ? boundLimit : -1;
             if (gpu.setTarget(g_rightRoot.b1, g_rightRoot.b2, gpuLimit) != 0) {
                 throw std::runtime_error("--gpu: " + gpu.error());
             }
-            tcout << "gpu: " << info << "; " << gpu.path << "; bound "
-                  << (bounded ? "both (rotation), limit " + std::to_string(gpuLimit) : std::string("off")) << "\n";
+            tcout << "gpu stream: bound "
+                  << (gpuBounded ? "both (rotation), limit " + std::to_string(gpuLimit) : std::string("off")) << "\n";
         }
 
         std::vector<KeyedState> candidates;
@@ -456,9 +459,6 @@ namespace ssd {
                   << "%" << (passBound != 0 ? ", bound skipped " + std::to_string(passBound) + " lookups" : "") << "\n";
         }
 
-        if (useGpu) {
-            gpu.close();
-        }
         std::sort(candidates.begin(), candidates.end());
         candidates.erase(std::unique(candidates.begin(), candidates.end(),
                                      [](const KeyedState& a, const KeyedState& b) {

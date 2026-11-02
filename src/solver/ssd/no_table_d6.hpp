@@ -4,6 +4,10 @@
 // No-table depth 6 (the default for --table-depth 6): the depth-5 frontier
 // stays in RAM, each pass builds its index slice from regenerated depth-6 keys,
 // and hits are confirmed by regenerating depth 6 once more. Nothing is written.
+// With --gpu (normal boards) the GPU counts the children per partition and, per
+// group of partitions, generates, sorts and de-duplicates the keys and writes the
+// group's fingerprints, bucket offsets and Bloom blocks straight into the index
+// arrays (mbgpu_build_index: the same layout as the CPU loop below).
 
 #include "src/solver/ssd/probe.hpp"
 
@@ -59,24 +63,44 @@ namespace ssd {
             }
         }
 
+        const bool gpuKeys = !cfg.gpuDevice.empty() && !isFat;
+        GpuModule* gpu = gpuKeys ? &ensureGpu(cfg) : nullptr;
+        const auto* d5States = reinterpret_cast<const uint64_t*>(depth5.data());
+        const u8* d5Moves = g_goalMoves.empty() ? nullptr : g_goalMoves.data();
+
         // Exact raw child count per partition.
-        std::vector<std::vector<u64>> rawPer(threads, std::vector<u64>(PARTITION_COUNT, 0));
-        expandFrontier(depth5, threads, [&](const u32 t, const B1B2&, const u64 key) {
-            ++rawPer[t][key >> PARTITION_SHIFT];
-        });
         std::vector<u64> raw(PARTITION_COUNT, 0);
+        if (gpuKeys) {
+            if (gpu->childCounts(d5States, d5Moves, depth5.size(), raw.data()) != 0) {
+                throw std::runtime_error("GPU: " + gpu->error());
+            }
+        } else {
+            std::vector<std::vector<u64>> rawPer(threads, std::vector<u64>(PARTITION_COUNT, 0));
+            expandFrontier(depth5, threads, [&](const u32 t, const B1B2&, const u64 key) {
+                ++rawPer[t][key >> PARTITION_SHIFT];
+            });
+            for (u32 p = 0; p < PARTITION_COUNT; ++p) {
+                for (u32 th = 0; th < threads; ++th) {
+                    raw[p] += rawPer[th][p];
+                }
+            }
+        }
         u64 rawTotal = 0, rawMax = 0;
         for (u32 p = 0; p < PARTITION_COUNT; ++p) {
-            for (u32 th = 0; th < threads; ++th) {
-                raw[p] += rawPer[th][p];
-            }
             rawTotal += raw[p];
             rawMax = std::max(rawMax, raw[p]);
         }
 
         // De-dupe ratio from partition 0 (partitions are near-uniform).
         double ratio = 1.0;
-        {
+        if (gpuKeys) {
+            std::vector<u64> keys0(std::max<u64>(1, raw[0]));
+            u64 u0 = 0;
+            if (gpu->childKeys(d5States, d5Moves, depth5.size(), 0, 1, keys0.data(), keys0.size(), &u0) != 0) {
+                throw std::runtime_error("GPU: " + gpu->error());
+            }
+            ratio = static_cast<double>(u0) / static_cast<double>(std::max<u64>(1, raw[0]));
+        } else {
             std::vector<u64> keys0;
             keys0.reserve(raw[0]);
             std::mutex m0;
@@ -141,9 +165,11 @@ namespace ssd {
             // untouched normal pages are not yet, so count those as used.
             const u64 indexBytes = (idx.fingerprints.largePages() ? 0 : cap * sizeof(u16))
                                    + (idx.starts.largePages() ? 0 : parts * dirPer * sizeof(u32));
-            const u64 avail = cfg.ramBytes != 0 ? keyReserve
+            const u64 avail = gpuKeys ? gpu->childKeyCapacity() * sizeof(u64) * 9 / 10
+                            : cfg.ramBytes != 0 ? keyReserve
                                                 : std::max(keyReserve, defaultRamBudgetBytes(indexBytes));
             u64 fill = 0;   // fingerprints written so far in this range
+            double keySeconds = 0.0;   // generating + sorting keys (GPU or CPU); the rest writes the index
             for (u32 s0 = p0; s0 < p1;) {
                 u32 s1 = s0;
                 u64 bytes = 0;
@@ -152,10 +178,23 @@ namespace ssd {
                 }
                 const u32 gN = s1 - s0;
                 if (s0 == p0) {
-                    tcout << "  index build: " << avail / 1e9 << " GB for keys -> about "
-                          << (parts + gN - 1) / gN << " regeneration(s) of depth 6\n";
+                    tcout << "  index build" << (gpuKeys ? " (GPU)" : "") << ": " << avail / 1e9
+                          << " GB for keys -> about " << (parts + gN - 1) / gN << " regeneration(s) of depth 6\n";
                 }
+                // sorted unique keys of each partition of the group: sortedKeys[i], uniq[i]
+                std::vector<const u64*> sortedKeys(gN, nullptr);
+                std::vector<u64> uniq(gN, 0);
                 std::vector<std::unique_ptr<u64[]>> keys(gN);
+                Timer keyTimer;
+                if (gpuKeys) {
+                    const u64 part = s0 - p0;
+                    if (gpu->buildIndex(d5States, d5Moves, depth5.size(), s0, s1, meta.bucketBits,
+                                        meta.bloomBlocksPerPartition, idx.fingerprints.data() + fill, cap - fill,
+                                        idx.starts.data() + part * dirPer, idx.bloom.data() + part * bloomPer,
+                                        uniq.data()) != 0) {
+                        throw std::runtime_error("GPU: " + gpu->error());
+                    }
+                } else {
                 std::vector<std::atomic<u64>> got(gN);
                 for (u32 i = 0; i < gN; ++i) {
                     keys[i].reset(new u64[std::max<u64>(1, raw[s0 + i])]);
@@ -193,13 +232,15 @@ namespace ssd {
                     }
                 }
                 stage.clear();
-                std::vector<u64> uniq(gN, 0);
                 parallelFor(threads, gN, [&](u32, const std::size_t i) {
                     u64* a = keys[i].get();
                     const u64 n = got[i].load();
                     std::sort(a, a + n);
                     uniq[i] = static_cast<u64>(std::unique(a, a + n) - a);
+                    sortedKeys[i] = a;
                 });
+                }
+                keySeconds += keyTimer.getSeconds();
                 std::vector<u64> offset(gN, 0);
                 for (u32 i = 0; i < gN; ++i) {
                     offset[i] = fill;
@@ -209,8 +250,8 @@ namespace ssd {
                     }
                     idx.partitionFirst.push_back(fill);
                 }
-                parallelFor(threads, gN, [&](u32, const std::size_t i) {
-                    const u64* a = keys[i].get();
+                parallelFor(threads, gpuKeys ? 0 : gN, [&](u32, const std::size_t i) {   // GPU: already written
+                    const u64* a = sortedKeys[i];
                     const u64 n = uniq[i];
                     const u64 part = (s0 + i) - p0;
                     u16* fps = idx.fingerprints.data() + offset[i];
@@ -235,7 +276,9 @@ namespace ssd {
             uniqueTotal += fill;
             indexBuildSeconds += timer.getSeconds();
             tcout << "  index for partitions [" << p0 << "," << p1 << ") built in RAM: " << fill
-                  << " unique states in " << timer.getSeconds() << "s\n";
+                  << " unique states in " << timer.getSeconds() << "s (keys " << keySeconds << "s"
+                  << (gpuKeys ? " on the GPU, with the index" : "") << ", index writing "
+                  << timer.getSeconds() - keySeconds << "s)\n";
         };
 
         FingerprintMeta probeMeta = meta;

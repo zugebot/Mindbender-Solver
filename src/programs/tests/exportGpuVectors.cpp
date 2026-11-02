@@ -17,11 +17,15 @@
 // File: "MBGV0001", u32 cases, then per case: char name[16], u64 goalB1, goalB2,
 // i32 limit (-1 = unpruned), i32 depth, i32 seedDepth, i32 lastMoves, u64 n, then
 // n x u64 b1, n x u64 b2, n x u8 prev, n x u64 count, n x u64 sum, n x u64 xor,
-// and f64 CPU seconds.
+// and f64 CPU seconds. Then (not with --bench) the goal-side child check: "CHLD", u64 n,
+// n x u64 b1, n x u64 b2, n x u8 prev (10-3's goal frontier at depth 4 with last moves),
+// 256 x u64 raw child counts per partition, u32 p0, u32 p1, u64 m, m x u64 sorted unique
+// child keys in partitions [p0, p1) (perm_stream_detail::forEachFirstMove, as no_table_d6).
 
 #include "src/solver/ssd/common.hpp"
 #include "src/solver/bounds/parent_prune.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <string>
@@ -189,6 +193,43 @@ int main(const int argc, char** argv) {
         std::fwrite(sum.data(), 8, sum.size(), f);
         std::fwrite(xr.data(), 8, xr.size(), f);
         put(f, secs);
+    }
+    if (!bench) {
+        const BoardPair* pair = BoardLookup::getBoardPair("10-3");
+        const Board goal = pair->getEndState();
+        JVec<B1B2> layer;
+        ssd::buildSeeds(goal, 4, layer);
+        std::vector<u8> moves;
+        ssd::buildLastMoves(goal, 4, layer, moves, 1);
+        ssd::dropUncoded(layer, moves);
+        std::vector<u64> counts(256, 0), keys;
+        constexpr u32 P0 = 40, P1 = 72;
+        for (std::size_t i = 0; i < layer.size(); ++i) {
+            perm_stream_detail::forEachFirstMove(layer[i], moves[i], [&](u8, const B1B2& child) {
+                const u64 key = ssd::mixKey(StateHash::computeHash(child));
+                ++counts[key >> 56];
+                if ((key >> 56) >= P0 && (key >> 56) < P1) {
+                    keys.push_back(key);
+                }
+            });
+        }
+        std::sort(keys.begin(), keys.end());
+        keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+        std::fwrite("CHLD", 1, 4, f);
+        put(f, static_cast<u64>(layer.size()));
+        for (std::size_t i = 0; i < layer.size(); ++i) put(f, layer[i].b1);
+        for (std::size_t i = 0; i < layer.size(); ++i) put(f, layer[i].b2);
+        std::fwrite(moves.data(), 1, moves.size(), f);
+        std::fwrite(counts.data(), 8, 256, f);
+        put(f, P0);
+        put(f, P1);
+        put(f, static_cast<u64>(keys.size()));
+        std::fwrite(keys.data(), 8, keys.size(), f);
+        u64 raw = 0;
+        for (const u64 c : counts) raw += c;
+        std::printf("goal side: 10-3 depth-4 frontier %llu states, %llu children, %llu unique keys in [%u,%u)\n",
+                    static_cast<unsigned long long>(layer.size()), static_cast<unsigned long long>(raw),
+                    static_cast<unsigned long long>(keys.size()), P0, P1);
     }
     std::fclose(f);
     return 0;

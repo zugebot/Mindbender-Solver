@@ -39,7 +39,14 @@ namespace {
         return n == 0 || std::fread(v.data(), sizeof(T), n, f) == n;
     }
 
-    bool readCases(const char* path, std::vector<Case>& cases) {
+    struct ChildCheck {
+        bool present = false;
+        std::vector<uint64_t> states, counts, keys;
+        std::vector<uint8_t> prev;
+        uint32_t p0 = 0, p1 = 0;
+    };
+
+    bool readCases(const char* path, std::vector<Case>& cases, ChildCheck& child) {
         std::FILE* f = std::fopen(path, "rb");
         if (f == nullptr) {
             return false;
@@ -60,6 +67,19 @@ namespace {
                 c.states[2 * s + 1] = c.b2[s];
             }
             cases.push_back(std::move(c));
+        }
+        char tag[4];
+        if (ok && std::fread(tag, 1, 4, f) == 4 && std::memcmp(tag, "CHLD", 4) == 0) {
+            uint64_t n = 0, m = 0;
+            std::vector<uint64_t> b1, b2;
+            ok = get(f, n) && getN(f, b1, n) && getN(f, b2, n) && getN(f, child.prev, n) && getN(f, child.counts, 256) &&
+                 get(f, child.p0) && get(f, child.p1) && get(f, m) && getN(f, child.keys, m);
+            child.states.resize(2 * n);
+            for (uint64_t s = 0; s < n && ok; ++s) {
+                child.states[2 * s] = b1[s];
+                child.states[2 * s + 1] = b2[s];
+            }
+            child.present = ok;
         }
         std::fclose(f);
         return ok;
@@ -88,7 +108,8 @@ int main(const int argc, char** argv) {
         if (i + 1 < argc && std::string(argv[i]) == "--vram-gb") vramGb = std::stod(argv[i + 1]);
     }
     std::vector<Case> cases;
-    if (!readCases(argv[1], cases)) {
+    ChildCheck child;
+    if (!readCases(argv[1], cases, child)) {
         std::fprintf(stderr, "cannot read %s\n", argv[1]);
         return 2;
     }
@@ -158,6 +179,55 @@ int main(const int argc, char** argv) {
                         static_cast<unsigned long long>(bad), static_cast<unsigned long long>(s), c.prev[s],
                         static_cast<unsigned long long>(c.cnt[s]), static_cast<unsigned long long>(cnt[s]));
         }
+    }
+
+    // Audit: per seed, the wanted leaves (h <= limit) of the full stream equal the pruned
+    // stream's leaves, and no edge changes h by more than 1.
+    for (const Case& c : cases) {
+        if (c.limit < 0) {
+            continue;
+        }
+        const uint64_t n = c.b1.size();
+        std::vector<uint64_t> fc(n), fs(n), fx(n), pc(n), ps(n), px(n);
+        mbgpu_audit_stats as{};
+        const bool ok = mbgpu_set_target(c.goalB1, c.goalB2, c.limit) == 0 &&
+                        mbgpu_audit_stream(c.states.data(), c.prev.data(), n, c.depth, fc.data(), fs.data(), fx.data(),
+                                           &as) == 0 &&
+                        mbgpu_stream_checksums(c.states.data(), c.prev.data(), n, c.depth, pc.data(), ps.data(),
+                                               px.data(), nullptr) == 0;
+        uint64_t bad = 0;
+        for (uint64_t s = 0; ok && s < n; ++s) {
+            bad += (fc[s] != pc[s] || fs[s] != ps[s] || fx[s] != px[s]) ? 1 : 0;
+        }
+        const bool pass = ok && bad == 0 && as.violations == 0 && as.edges > 0;
+        std::printf("audit %-5s stream %d limit %d: %llu nodes, %llu edges, %llu |dh|>1, %llu of %llu leaves over the "
+                    "limit, %llu seeds differ  %s (%.3f s)\n",
+                    c.name, c.depth, c.limit, static_cast<unsigned long long>(as.nodes),
+                    static_cast<unsigned long long>(as.edges), static_cast<unsigned long long>(as.violations),
+                    static_cast<unsigned long long>(as.overLimit), static_cast<unsigned long long>(as.leaves),
+                    static_cast<unsigned long long>(bad), pass ? "OK" : (ok ? "WRONG" : mbgpu_last_error()), as.seconds);
+        failures += pass ? 0 : 1;
+    }
+
+    // Goal side: per-partition child counts and the sorted unique child keys of a range.
+    if (child.present) {
+        const uint64_t n = child.prev.size();
+        uint64_t counts[256] = {};
+        std::vector<uint64_t> keys(child.keys.size() + 1024);
+        uint64_t got = 0;
+        bool ok = mbgpu_child_counts(child.states.data(), child.prev.data(), n, counts) == 0;
+        bool countsOk = ok;
+        for (int p = 0; ok && p < 256; ++p) {
+            countsOk = countsOk && counts[p] == child.counts[p];
+        }
+        ok = ok && mbgpu_child_keys(child.states.data(), child.prev.data(), n, child.p0, child.p1, keys.data(),
+                                    keys.size(), &got) == 0;
+        const bool keysOk = ok && got == child.keys.size() &&
+                            std::memcmp(keys.data(), child.keys.data(), got * sizeof(uint64_t)) == 0;
+        std::printf("goal side: %llu states, counts %s, %llu unique keys in [%u,%u) %s\n",
+                    static_cast<unsigned long long>(n), countsOk ? "OK" : "WRONG", static_cast<unsigned long long>(got),
+                    child.p0, child.p1, keysOk ? "OK" : (ok ? "WRONG" : mbgpu_last_error()));
+        failures += countsOk && keysOk ? 0 : 1;
     }
 
     // Filter: an all-zero Bloom filter passes nothing, an all-ones one passes every leaf.

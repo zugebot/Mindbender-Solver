@@ -14,10 +14,19 @@ The solver loads `mbgpu.dll` at run time (`src/solver/ssd/gpu_stream.hpp`): next
 
 ## What runs where
 
-Per probe pass, the GPU gets the pass's Bloom blocks, streams every left seed `T2` moves and
-hands back the leaves that pass the Bloom filter (~1%); the CPU finishes those with the same index
-code as the CPU probe (`FingerprintRange::probeGroup`). The goal-side index is still built on the
-CPU, and recovery is unchanged.
+- **Probe:** per pass, the GPU gets the pass's Bloom blocks, streams every left seed `T2` moves
+  and hands back the leaves that pass the Bloom filter (~1%); the CPU finishes those with the
+  same index code as the CPU probe (`FingerprintRange::probeGroup`).
+- **Bound audit** (`gpuAuditBound`, in place of `bounds::auditLaneBound`): the GPU computes h
+  from its definition, so it is audited on its own: h equals `lane_bound::referenceBound` on
+  ~160 k sampled states; on every edge of the full streams of 256 seeds (2048 below stream
+  depth 5) h changes by at most 1; per seed the pruned stream keeps exactly the full stream's
+  leaves with h <= limit. A failure turns the bound off, as on the CPU.
+- **Goal-side depth-6 index** (`no_table_d6.hpp`): the GPU counts the children per partition,
+  and per group of partitions generates, sorts (CUB) and de-duplicates their keys and writes the
+  fingerprints, bucket offsets and Bloom blocks straight into the index arrays, in the CPU's
+  layout.
+- Still on the CPU: the depth-5 frontiers, the candidate check by regeneration, recovery.
 
 The stream re-implements the CPU's rules exactly (`perm_stream_detail::stream_lanes_dfs` with
 the seed's last move, `bounds::LanePruneLeaves`): same-direction lanes ascending, a lane stops at
@@ -56,7 +65,12 @@ IDENTICAL SET), as for any solver change.
 
 ## Measured (2026-11-01, RTX 5060 Ti, i7-10700F)
 
-| Run | CPU (16 threads) | GPU |
+| Run | CPU | GPU |
 |---|---|---|
-| 16-2 at 15 `<4,5,6>`, stream of 3.29 M seeds, 17.7 G nodes, 273 M leaves | ~1500 s (2196 s before the first-move rule) | 123 s |
-| 10-3 at 13 `<4,3,6>`, stream + probe, 13.9 M left states | 10.0 s | 0.87 s, EXACT MATCH, IDENTICAL SET |
+| 16-2 at 15 `<4,5,6>`: bound audit | 156 s (2 seeds in full) | 5.9 s (256 seeds in full, 21.9 G edges) |
+| 16-2 at 15: depth-6 index build (2.31 G states) | 100 s | 11.2 s |
+| 16-2 at 15: stream + probe (17.7 G nodes, 273 M leaves) | 2196 s (before the first-move rule; ~1500 s after) | 122 s |
+| 16-2 at 15: whole run, EXACT MATCH, IDENTICAL SET (366) | 42 min | 3 min 45 s |
+| 10-3 at 13 `<4,3,6>`: whole run, EXACT MATCH, IDENTICAL SET (1648) | 95 s | 23 s (index 47.5 s -> 4.3 s) |
+
+CPU runs used 16 threads, the GPU runs 8 (the CPU's own parts; the i7 reached 100 C at 16).
