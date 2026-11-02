@@ -611,6 +611,8 @@ namespace {
 
     // Children beyond s.outCap (non-leaf) or leaves beyond lo.oCap (LEAF_FILTER) are counted
     // but not written; the host sees the count and runs the chunk again smaller.
+    // LEAF: the children are leaves (s.leaf); a separate build of each keeps the inner levels' kernel small.
+    template<int LEAF>
     __global__ void __launch_bounds__(BLOCK, 3) expandNodes(const Step s, const LeafOut lo, Counters* ctr) {
         __shared__ u32 sMc[288], sMr[288];
         __shared__ u32 hist[256];
@@ -621,7 +623,7 @@ namespace {
             sMc[j] = c_mc[j];
             sMr[j] = c_mr[j];
         }
-        const bool counts = s.leaf && lo.mode == LEAF_COUNTS;
+        const bool counts = LEAF && lo.mode == LEAF_COUNTS;
         if (counts) {
             hist[threadIdx.x] = 0;
         }
@@ -710,7 +712,7 @@ namespace {
             }
             const u32 code = dir * 30 + lane * 5;
 
-            if (!s.leaf) {
+            if (!LEAF) {
                 u32 total = 0;
                 const u32 offset = warpPrefix(__popc(mask), total);
                 if (staged + total > STAGE) {
@@ -799,7 +801,7 @@ namespace {
                 }
             }
         }
-        if (s.leaf) {
+        if (LEAF) {
             warpAdd(&ctr->leaves, leaves);
             warpAdd(&ctr->inRange, inRange);
         } else if (staged != 0) {
@@ -1018,7 +1020,11 @@ namespace {
             const u64 threads = m * THREADS_PER_NODE;
             expandKernel<<<static_cast<u32>((threads + BLOCK - 1) / BLOCK), BLOCK>>>(s, run.lo, g_dev.ctr);
         } else {
-            expandNodes<<<static_cast<u32>((m + BLOCK - 1) / BLOCK), BLOCK>>>(s, run.lo, g_dev.ctr);
+            if (leaf) {
+                expandNodes<1><<<static_cast<u32>((m + BLOCK - 1) / BLOCK), BLOCK>>>(s, run.lo, g_dev.ctr);
+            } else {
+                expandNodes<0><<<static_cast<u32>((m + BLOCK - 1) / BLOCK), BLOCK>>>(s, run.lo, g_dev.ctr);
+            }
         }
         MB_CUDA(cudaGetLastError());
         run.stats->launches++;
