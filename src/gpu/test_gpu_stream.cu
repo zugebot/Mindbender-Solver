@@ -242,12 +242,12 @@ int main(const int argc, char** argv) {
         uint64_t counts[256] = {};
         std::vector<uint64_t> keys(child.keys.size() + 1024);
         uint64_t got = 0;
-        bool ok = mbgpu_child_counts(child.states.data(), child.prev.data(), n, counts) == 0;
+        bool ok = mbgpu_child_counts(child.states.data(), child.prev.data(), n, 1, counts) == 0;
         bool countsOk = ok;
         for (int p = 0; ok && p < 256; ++p) {
             countsOk = countsOk && counts[p] == child.counts[p];
         }
-        ok = ok && mbgpu_child_keys(child.states.data(), child.prev.data(), n, child.p0, child.p1, keys.data(),
+        ok = ok && mbgpu_child_keys(child.states.data(), child.prev.data(), n, 1, child.p0, child.p1, keys.data(),
                                     keys.size(), &got) == 0;
         const bool keysOk = ok && got == child.keys.size() &&
                             std::memcmp(keys.data(), child.keys.data(), got * sizeof(uint64_t)) == 0;

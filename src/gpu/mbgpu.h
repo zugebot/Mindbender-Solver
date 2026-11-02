@@ -95,24 +95,28 @@ MBGPU_API int mbgpu_audit_stream(const uint64_t* states, const uint8_t* prevMove
 MBGPU_API int mbgpu_bounds(const uint64_t* states, uint64_t count, int32_t* h);
 
 // ---- goal-side index build ----
+// "Children" below are the descendants `depth` moves down (1 for the depth-6 goal side from its
+// depth-5 frontier, 2 for depth 7): the canonical stream after each state's last move, no bound.
 
-// Number of one-move children (the canonical first moves after each state's last move, no
-// pruning) whose key falls in each of the 256 partitions (key >> 56).
-MBGPU_API int mbgpu_child_counts(const uint64_t* states, const uint8_t* prevMove, uint64_t count,
+// Number of children whose key falls in each of the 256 partitions (key >> 56).
+MBGPU_API int mbgpu_child_counts(const uint64_t* states, const uint8_t* prevMove, uint64_t count, int depth,
                                  uint64_t partitionCounts[256]);
 
 // The children's keys in partitions [p0, p1), sorted and without duplicates, into `out`
 // (capacity `outCap`); `outCount` receives how many. Fails if the raw keys of the range do
 // not fit the device (mbgpu_child_key_capacity tells how many do).
-MBGPU_API int mbgpu_child_keys(const uint64_t* states, const uint8_t* prevMove, uint64_t count, uint32_t p0,
-                               uint32_t p1, uint64_t* out, uint64_t outCap, uint64_t* outCount);
+MBGPU_API int mbgpu_child_keys(const uint64_t* states, const uint8_t* prevMove, uint64_t count, int depth,
+                               uint32_t p0, uint32_t p1, uint64_t* out, uint64_t outCap, uint64_t* outCount);
 
-// The children (one move, no bound) of states [0, count) whose key is in sortedKeys[0, keyCount)
-// (ascending), handed to `sink` (seedIndex = the parent's index); the caller compares the states.
-// Confirms probe candidates against the regenerated goal side.
-MBGPU_API int mbgpu_match_children(const uint64_t* states, const uint8_t* prevMove, uint64_t count,
+// The children of states [0, count) whose key is in sortedKeys[0, keyCount) (ascending), handed
+// to `sink` (seedIndex = the parent's index); the caller compares the states. Confirms probe
+// candidates against the regenerated goal side.
+MBGPU_API int mbgpu_match_children(const uint64_t* states, const uint8_t* prevMove, uint64_t count, int depth,
                                    const uint64_t* sortedKeys, uint64_t keyCount, mbgpu_sink_fn sink, void* ctx,
                                    mbgpu_stats* stats);
+
+// VRAM this module may still allocate (its cap minus what it holds), e.g. for a pass's Bloom blocks.
+MBGPU_API uint64_t mbgpu_vram_left(void);
 
 // How many raw keys one mbgpu_child_keys / mbgpu_build_index call can sort with the VRAM left now.
 MBGPU_API uint64_t mbgpu_child_key_capacity(void);
@@ -126,8 +130,8 @@ MBGPU_API uint64_t mbgpu_child_key_capacity(void);
 //   bloomOut:  per partition bloomBlocksPerPartition blocks of 8 u32 (split-block Bloom filter,
 //              10 bits per state), overwritten
 //   uniqueOut: per partition the number of unique keys
-MBGPU_API int mbgpu_build_index(const uint64_t* states, const uint8_t* prevMove, uint64_t count, uint32_t p0,
-                                uint32_t p1, uint32_t bucketBits, uint64_t bloomBlocksPerPartition,
+MBGPU_API int mbgpu_build_index(const uint64_t* states, const uint8_t* prevMove, uint64_t count, int depth,
+                                uint32_t p0, uint32_t p1, uint32_t bucketBits, uint64_t bloomBlocksPerPartition,
                                 uint16_t* fpsOut, uint64_t fpsCap, uint32_t* startsOut, uint32_t* bloomOut,
                                 uint64_t* uniqueOut);
 

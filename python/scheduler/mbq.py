@@ -430,8 +430,8 @@ class Scheduler:
         if engine == "ssd" and (table_depth not in (6, 7) or stream_depth not in (3, 4, 5) or not 2 <= seed_depth <= 5):
             raise ValueError(f"no <S,{stream_depth},{table_depth}> split for {moves} moves")
         gpu = spec.get("gpu") or None
-        if gpu and (engine != "ssd" or fat or table_depth != 6):
-            raise ValueError("--gpu: ssd engine, normal boards, depth-6 goal side only (src/gpu/README.md)")
+        if gpu and (engine != "ssd" or table_depth != 6 and not (fat and table_depth == 7)):
+            raise ValueError("--gpu: ssd engine; a depth-6 goal side, or depth 7 on 2x2 boards (src/gpu/README.md)")
         with self.lock:
             job = {
                 "id": self.next_id, "puzzle": puzzle, "moves": moves, "until": spec.get("until"),
@@ -1224,7 +1224,7 @@ def main() -> None:
     a.add_argument("--engine", choices=["auto", "ssd", "inram"], default="auto")
     a.add_argument("--ram-gb", type=float)
     a.add_argument("--threads", type=int, help="solver threads (default: all)")
-    a.add_argument("--gpu", help="run on the CUDA device whose name contains this (e.g. 5060); normal boards")
+    a.add_argument("--gpu", help="run on the CUDA device whose name contains this (e.g. 5060)")
     a.add_argument("--no-promote", action="store_true", help="don't update levels_final / README / config")
     a.add_argument("--keep-table", action="store_true", help="keep the depth-6/7 table afterwards")
     a.add_argument("--front", action="store_true", help="put ahead of the other queued jobs")

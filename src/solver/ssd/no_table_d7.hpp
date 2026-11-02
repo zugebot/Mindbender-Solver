@@ -14,6 +14,11 @@
 // reads only its partitions' slice, so they do not come out of the index
 // budget (--d7-counts-ram keeps them in RAM). --d7-partitions/--d7-first-partition
 // restrict the whole run to some key partitions (exactness tests).
+//
+// --gpu on 2x2 boards: the GPU counts the depth-7 keys per partition, builds each pass's
+// index (sorted unique keys, the depth-6 layout: contiguous per partition, so no bucket counts
+// are kept or spilled) and confirms the candidates, all from depth-2 streams of the depth-5
+// frontier with the same rules as streamTwo (src/gpu/README.md).
 
 #include "src/solver/ssd/no_table_d6.hpp"
 
@@ -219,6 +224,10 @@ namespace ssd {
                   << " dropped (no meeting point among them)\n";
         }
         const u32 P0 = cfg.d7FirstPartition, P1 = cfg.d7End();
+        const bool gpuD7 = !cfg.gpuDevice.empty() && isFat;
+        GpuModule* gpu = gpuD7 ? &ensureGpu(cfg) : nullptr;
+        const auto* d5States = reinterpret_cast<const uint64_t*>(depth5.data());
+        const u8* d5Moves = g_goalMoves.empty() ? nullptr : g_goalMoves.data();
 
         // Size the buckets from a sample of the stream's fan-out.
         double fanOut = 0.0;
@@ -239,44 +248,56 @@ namespace ssd {
         const u64 bucketsPer = meta.bucketsPerPartition();
         const u32 shift = meta.bucketShift();
 
-        // Count pass: exact raw fingerprints per bucket (u16: ~32-64 each), plus
-        // a 1/4096 key sample whose de-dupe ratio sizes the Bloom filters.
+        // Count pass. CPU: exact raw fingerprints per bucket (u16: ~32-64 each), plus a 1/4096 key
+        // sample whose de-dupe ratio sizes the Bloom filters. GPU: raw keys per partition, and the
+        // ratio from the first partition's sorted keys.
         g_progress.detail("counting depth-7 descendants per bucket");
         Timer countTimer;
-        BigArray<u16> bucketCounts;   // partitions [P0, P1), bucketsPer each
-        bucketCounts.allocate(static_cast<u64>(P1 - P0) * bucketsPer);   // zero-filled
-        tcout << "bucket counts: " << bucketCounts.size() * 2 / 1e9 << " GB, large pages "
-              << (bucketCounts.largePages() ? "yes" : "no") << "\n";
-        std::vector<std::vector<u64>> sample(threads);
-        expandTwiceRouted(depth5, threads, P0, P1, fanOut, NT7_COUNT_BLOCK_KEYS, 6, [&](const u32 owner, const u64 key) {
-            ++bucketCounts[((key >> PARTITION_SHIFT) - P0) * bucketsPer + ((key >> shift) & (bucketsPer - 1))];
-            // 1/4096 of the keys (the top bits: partition 0's; mid bits when partition 0 is not probed)
-            if (P0 == 0 ? (key >> (64 - 12)) == 0 : ((key >> 20) & 4095) == 0) {
-                sample[owner].push_back(key);
-            }
-        });
+        BigArray<u16> bucketCounts;   // partitions [P0, P1), bucketsPer each (CPU builder only)
         std::vector<u64> raw(PARTITION_COUNT, 0);
         u64 maxBucket = 0;
-        parallelFor(threads, P1 - P0, [&](u32, const std::size_t i) {
-            u64 sum = 0;
-            for (u64 b = 0; b < bucketsPer; ++b) {
-                sum += bucketCounts[i * bucketsPer + b];
-            }
-            raw[P0 + i] = sum;
-        });
-        u64 rawTotal = 0, rawMax = 0;
-        for (u32 p = P0; p < P1; ++p) {
-            rawTotal += raw[p];
-            rawMax = std::max(rawMax, raw[p]);
-        }
-        for (u64 i = 0; i < bucketCounts.size(); ++i) {
-            maxBucket = std::max<u64>(maxBucket, bucketCounts[i]);
-        }
-        if (maxBucket >= 65000) {
-            throw std::runtime_error("depth-7 bucket count overflow");
-        }
         double ratio = 0.5;
-        {
+        if (gpuD7) {
+            std::vector<u64> all(PARTITION_COUNT, 0);
+            if (gpu->childCounts(d5States, d5Moves, depth5.size(), 2, all.data()) != 0) {
+                throw std::runtime_error("GPU: " + gpu->error());
+            }
+            for (u32 p = P0; p < P1; ++p) {
+                raw[p] = all[p];
+            }
+            std::vector<u64> keys(std::max<u64>(1, raw[P0]));
+            u64 u = 0;
+            if (gpu->childKeys(d5States, d5Moves, depth5.size(), 2, P0, P0 + 1, keys.data(), keys.size(), &u) != 0) {
+                throw std::runtime_error("GPU: " + gpu->error());
+            }
+            if (raw[P0] != 0) {
+                ratio = static_cast<double>(u) / static_cast<double>(raw[P0]);
+            }
+        } else {
+            bucketCounts.allocate(static_cast<u64>(P1 - P0) * bucketsPer);   // zero-filled
+            tcout << "bucket counts: " << bucketCounts.size() * 2 / 1e9 << " GB, large pages "
+                  << (bucketCounts.largePages() ? "yes" : "no") << "\n";
+            std::vector<std::vector<u64>> sample(threads);
+            expandTwiceRouted(depth5, threads, P0, P1, fanOut, NT7_COUNT_BLOCK_KEYS, 6, [&](const u32 owner, const u64 key) {
+                ++bucketCounts[((key >> PARTITION_SHIFT) - P0) * bucketsPer + ((key >> shift) & (bucketsPer - 1))];
+                // 1/4096 of the keys (the top bits: partition 0's; mid bits when partition 0 is not probed)
+                if (P0 == 0 ? (key >> (64 - 12)) == 0 : ((key >> 20) & 4095) == 0) {
+                    sample[owner].push_back(key);
+                }
+            });
+            parallelFor(threads, P1 - P0, [&](u32, const std::size_t i) {
+                u64 sum = 0;
+                for (u64 b = 0; b < bucketsPer; ++b) {
+                    sum += bucketCounts[i * bucketsPer + b];
+                }
+                raw[P0 + i] = sum;
+            });
+            for (u64 i = 0; i < bucketCounts.size(); ++i) {
+                maxBucket = std::max<u64>(maxBucket, bucketCounts[i]);
+            }
+            if (maxBucket >= 65000) {
+                throw std::runtime_error("depth-7 bucket count overflow");
+            }
             std::vector<u64> keys;
             for (auto& v : sample) {
                 keys.insert(keys.end(), v.begin(), v.end());
@@ -288,13 +309,19 @@ namespace ssd {
                 ratio = static_cast<double>(u) / static_cast<double>(keys.size());
             }
         }
+        u64 rawTotal = 0, rawMax = 0;
+        for (u32 p = P0; p < P1; ++p) {
+            rawTotal += raw[p];
+            rawMax = std::max(rawMax, raw[p]);
+        }
         meta.bloomBlocksPerPartition = std::max<u64>(
                 1, (static_cast<u64>(static_cast<double>(rawMax) * ratio * 1.02) * BLOOM_BITS_PER_STATE + 255) / 256);
         meta.stateCount = rawTotal;
         tcout << "depth-7 raw descendants: " << rawTotal << " (" << fanOut << " per depth-5 state), de-dupe ratio " << ratio
               << " -> ~" << static_cast<u64>(static_cast<double>(rawTotal) * ratio) << " unique; 2^" << meta.bucketBits
-              << " buckets/partition, largest bucket " << maxBucket << " (counted in " << countTimer.getSeconds()
-              << "s)\n";
+              << " buckets/partition"
+              << (gpuD7 ? std::string(" (GPU count") : ", largest bucket " + std::to_string(maxBucket) + " (counted")
+              << " in " << countTimer.getSeconds() << "s)\n";
         meta.partitionBegin = P0;
         meta.partitionLimit = P1;
 
@@ -307,7 +334,7 @@ namespace ssd {
             }
         } countsFile;
         const u64 countsBytesPerPartition = bucketsPer * sizeof(u16);
-        if (!cfg.d7CountsInRam) {
+        if (!cfg.d7CountsInRam && !gpuD7) {
             Timer spillTimer;
             countsFile.path = fs::temp_directory_path()
                               / ("mb_d7counts_" + cfg.puzzle + "_" + std::to_string(GetCurrentProcessId()) + ".bin");
@@ -359,7 +386,55 @@ namespace ssd {
 
         double indexBuildSeconds = 0.0;
         u64 uniqueTotal = 0;
-        const IndexBuilder builder = [&](FingerprintRange& idx, const u32 p0, const u32 p1) {
+        // GPU: per group of partitions whose raw keys fit the device, the depth-2 stream is
+        // regenerated, sorted, de-duplicated and written as the index (depth-6 layout).
+        const IndexBuilder gpuBuilder = [&](FingerprintRange& idx, const u32 p0, const u32 p1) {
+            Timer timer;
+            const u64 dirPer = bucketsPer + 1;
+            const u64 bloomPer = meta.bloomBlocksPerPartition * 8;
+            const u64 parts = p1 - p0;
+            u64 cap = 0, passRaw = 0;
+            for (u32 p = p0; p < p1; ++p) {
+                cap += raw[p];
+            }
+            passRaw = cap;
+            idx.meta = meta;
+            idx.pBegin = p0;
+            idx.pEnd = p1;
+            idx.fingerprints.ensure(cap);
+            idx.starts.ensure(parts * dirPer);
+            idx.bloom.ensure(parts * bloomPer);
+            idx.partitionFirst.assign(1, 0);
+            const u64 avail = gpu->childKeyCapacity() * 9 / 10;
+            u64 fill = 0;
+            u32 groups = 0;
+            for (u32 s0 = p0; s0 < p1;) {
+                u32 s1 = s0;
+                u64 keys = 0;
+                while (s1 < p1 && (s1 == s0 || keys + raw[s1] <= avail)) {
+                    keys += raw[s1++];
+                }
+                std::vector<u64> uniq(s1 - s0, 0);
+                if (gpu->buildIndex(d5States, d5Moves, depth5.size(), 2, s0, s1, meta.bucketBits,
+                                    meta.bloomBlocksPerPartition, idx.fingerprints.data() + fill, cap - fill,
+                                    idx.starts.data() + (s0 - p0) * dirPer, idx.bloom.data() + (s0 - p0) * bloomPer,
+                                    uniq.data()) != 0) {
+                    throw std::runtime_error("GPU: " + gpu->error());
+                }
+                for (const u64 u : uniq) {
+                    fill += u;
+                    idx.partitionFirst.push_back(fill);
+                }
+                ++groups;
+                s0 = s1;
+            }
+            uniqueTotal += fill;
+            indexBuildSeconds += timer.getSeconds();
+            tcout << "  index for partitions [" << p0 << "," << p1 << ") built on the GPU: raw " << passRaw << " -> "
+                  << fill << " unique in " << timer.getSeconds() << "s (" << groups << " regeneration(s) of depth 7)\n";
+        };
+
+        const IndexBuilder cpuBuilder = [&](FingerprintRange& idx, const u32 p0, const u32 p1) {
             Timer timer;
             const u64 dirPer = bucketsPer + 1;
             const u64 bloomPer = meta.bloomBlocksPerPartition * 8;
@@ -442,8 +517,9 @@ namespace ssd {
 
         // Keep back the fill's key blocks and, with spilled counts, the largest pass's count slice
         // (estimated from the budget: counts are ~2% of a partition's index).
-        u64 reserve = 5'000'000'000ULL;
-        if (!cfg.d7CountsInRam) {
+        const IndexBuilder& builder = gpuD7 ? gpuBuilder : cpuBuilder;
+        u64 reserve = gpuD7 ? 1'000'000'000ULL : 5'000'000'000ULL;
+        if (!cfg.d7CountsInRam && !gpuD7) {
             const u64 perPart = std::max<u64>(1, meta.indexBytes(rawTotal / std::max<u32>(1, P1 - P0), 1));
             const u64 guess = cfg.ramBytes != 0 ? cfg.ramBytes : defaultRamBudgetBytes(0);
             const u64 parts = std::min<u64>(P1 - P0, guess / perPart + 2);
@@ -469,7 +545,28 @@ namespace ssd {
         for (auto& c : confirmed) {
             c.store(0);
         }
-        if (!candidates.empty()) {
+        if (!candidates.empty() && gpuD7) {
+            // the GPU regenerates depth 7 and hands back the descendants whose key is a candidate's
+            std::vector<u64> candKeys(candidates.size());
+            for (std::size_t i = 0; i < candidates.size(); ++i) {
+                candKeys[i] = candidates[i].key;
+            }
+            candKeys.erase(std::unique(candKeys.begin(), candKeys.end()), candKeys.end());
+            GpuLeaves hits;
+            if (gpu->matchChildren(d5States, d5Moves, depth5.size(), 2, candKeys.data(), candKeys.size(),
+                                   &GpuLeaves::sink, &hits, nullptr) != 0) {
+                throw std::runtime_error("GPU: " + gpu->error());
+            }
+            for (std::size_t j = 0; j < hits.states.size(); ++j) {
+                auto it = std::lower_bound(candidates.begin(), candidates.end(), hits.keys[j],
+                                           [](const KeyedState& c, const u64 k) { return c.key < k; });
+                for (; it != candidates.end() && it->key == hits.keys[j]; ++it) {
+                    if (it->state == hits.states[j]) {
+                        confirmed[static_cast<std::size_t>(it - candidates.begin())].store(1, std::memory_order_relaxed);
+                    }
+                }
+            }
+        } else if (!candidates.empty()) {
             expandFrontierTwice(depth5, isFat, threads, [&](u32, const B1B2& state, const u64 key) {
                 const u32 b = bitOf(key);
                 if ((bitmap[b >> 6] >> (b & 63) & 1) == 0) {
@@ -494,7 +591,8 @@ namespace ssd {
         middles.erase(std::unique(middles.begin(), middles.end()), middles.end());
         g_progress.add();
         tcout << "verify: " << middles.size() << " confirmed, " << (candidates.size() - middles.size())
-              << " fingerprint false matches, " << verifyTimer.getSeconds() << "s (by regeneration)\n";
+              << " fingerprint false matches, " << verifyTimer.getSeconds() << "s (by regeneration"
+              << (gpuD7 ? " on the GPU" : "") << ")\n";
         tcout << "depth-7 confirmed middles: " << middles.size() << " of " << candidates.size()
               << " fingerprint hits\n";
         return middles;

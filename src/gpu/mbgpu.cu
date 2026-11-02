@@ -2,7 +2,7 @@
 //
 // The GPU module (interface and contract: src/gpu/mbgpu.h): the left stream, the
 // audit of its bound, and the goal side's child keys for the index build.
-// Normal boards only so far.
+// Normal boards and 2x2 boards (expandFat, no bound).
 //
 // Layout and rules are the CPU's, re-implemented without its headers (the
 // solver is built with MinGW, this file with nvcc + MSVC):
@@ -609,6 +609,103 @@ namespace {
         __syncwarp();
     }
 
+    // Hands one lane's children (mask bit k = amount k + 1, boards in cb1[k], cb2[k], move code
+    // code + k) on: inner levels stage them for the next level, leaves go to the leaf mode.
+    // Every lane of the warp calls it (warp prefixes inside).
+    template<int LEAF>
+    __device__ __forceinline__ void emitLane(const u32 mask, const u64 (&cb1)[5], const u64 (&cb2)[5], const u32 code,
+                                             const u32 seed, const Step& s, const LeafOut& lo, Counters* ctr,
+                                             Stage& stage, const u32 warp, u32& staged, u32* hist, u32& leaves,
+                                             u32& inRange) {
+        if (!LEAF) {
+            u32 total = 0;
+            const u32 offset = warpPrefix(__popc(mask), total);
+            if (staged + total > STAGE) {
+                flushStage(stage, warp, staged, s, ctr);
+                staged = 0;
+            }
+            u32 at = staged + offset;
+#pragma unroll
+            for (u32 k = 0; k < 5; ++k) {
+                if (mask & (1u << k)) {
+                    stage.b1[warp][at] = cb1[k];
+                    stage.b2[warp][at] = cb2[k];
+                    stage.prev[warp][at] = static_cast<u8>(code + k);
+                    stage.seed[warp][at] = seed;
+                    ++at;
+                }
+            }
+            staged += total;
+            return;
+        }
+
+        u64 key[5];
+        u32 inMask = 0;
+#pragma unroll
+        for (u32 k = 0; k < 5; ++k) {
+            key[k] = 0;
+            if (mask & (1u << k)) {
+                key[k] = mixKey(stateHash(cb1[k], cb2[k]));
+                const u32 p = static_cast<u32>(key[k] >> 56);
+                if (p >= lo.pBegin && p < lo.pEnd) {
+                    inMask |= 1u << k;
+                }
+            }
+        }
+        leaves += __popc(mask);
+        if (lo.mode == LEAF_COUNTS) {
+#pragma unroll
+            for (u32 k = 0; k < 5; ++k) {
+                if (mask & (1u << k)) {
+                    atomicAdd(&hist[key[k] >> 56], 1u);
+                }
+            }
+        } else if (lo.mode == LEAF_CHECKSUM) {
+#pragma unroll
+            for (u32 k = 0; k < 5; ++k) {
+                if (mask & (1u << k)) {
+                    atomicAdd(&lo.cnt[seed], 1ULL);
+                    atomicAdd(&lo.sum[seed], static_cast<unsigned long long>(key[k]));
+                    atomicXor(&lo.xr[seed], static_cast<unsigned long long>(key[k]));
+                }
+            }
+        } else if (lo.mode == LEAF_KEYS) {
+            u32 total = 0;
+            const u32 offset = warpPrefix(__popc(inMask), total);
+            unsigned long long base = 0;
+            if ((threadIdx.x & 31) == 0 && total != 0) {
+                base = atomicAdd(&ctr->passed, static_cast<unsigned long long>(total));
+            }
+            base = __shfl_sync(0xFFFFFFFFu, base, 0);
+            u64 at = base + offset;
+#pragma unroll
+            for (u32 k = 0; k < 5; ++k) {
+                if (inMask & (1u << k)) {
+                    if (at < lo.oCap) {
+                        lo.okey[at] = key[k];
+                    } else {
+                        ctr->overflow = 1;
+                    }
+                    ++at;
+                }
+            }
+        } else {   // LEAF_FILTER
+            inRange += __popc(inMask);
+#pragma unroll
+            for (u32 k = 0; k < 5; ++k) {
+                if ((inMask & (1u << k)) && leafPasses(lo, key[k])) {
+                    const unsigned long long at = atomicAdd(&ctr->passed, 1ULL);
+                    if (at < lo.oCap) {
+                        lo.ob1[at] = cb1[k];
+                        lo.ob2[at] = cb2[k];
+                        lo.okey[at] = key[k];
+                        lo.oseed[at] = seed;
+                    }
+                }
+            }
+        }
+    }
+
     // Children beyond s.outCap (non-leaf) or leaves beyond lo.oCap (LEAF_FILTER) are counted
     // but not written; the host sees the count and runs the chunk again smaller.
     // LEAF: the children are leaves (s.leaf); a separate build of each keeps the inner levels' kernel small.
@@ -710,96 +807,149 @@ namespace {
                     }
                 }
             }
-            const u32 code = dir * 30 + lane * 5;
+            emitLane<LEAF>(mask, cb1, cb2, dir * 30 + lane * 5, seed, s, lo, ctr, stage, warp, staged, hist, leaves,
+                           inRange);
+        }
+        if (LEAF) {
+            warpAdd(&ctr->leaves, leaves);
+            warpAdd(&ctr->inRange, inRange);
+        } else if (staged != 0) {
+            flushStage(stage, warp, staged, s, ctr);
+        }
+        if (counts) {
+            __syncthreads();
+            if (hist[threadIdx.x] != 0) {
+                atomicAdd(&lo.partCounts[threadIdx.x], static_cast<unsigned long long>(hist[threadIdx.x]));
+            }
+        }
+    }
 
-            if (!LEAF) {
-                u32 total = 0;
-                const u32 offset = warpPrefix(__popc(mask), total);
-                if (staged + total > STAGE) {
-                    flushStage(stage, warp, staged, s, ctr);
-                    staged = 0;
-                }
-                u32 at = staged + offset;
+    // ---------------- 2x2 boards ----------------
+    //
+    // perm_stream_detail::stream_fat_lanes_dfs: the two rows (columns) under the 2x2 piece move
+    // together as one lane, counted at their first index (the second is skipped) and carrying
+    // the piece (FAT_X bits 61-63, FAT_Y bits 58-60 of b1); the amount that would put the piece
+    // across the edge, 5 - fatX (5 - fatY), is skipped; same-direction lanes ascend; a lane does
+    // not stop at its period (a no-op amount is just dropped); after a normal column move the
+    // normal row moves that commute with it are skipped. No bound: on 2x2 boards it prunes
+    // nothing, so the solver turns it off.
+
+    constexpr u64 FAT_X_FIELD = 7ULL << 61;
+    constexpr u64 FAT_Y_FIELD = 7ULL << 58;
+
+    __device__ __forceinline__ void writeRow(u64& b1, u64& b2, const u32 row, const u64 lane) {
+        const u32 sh = 36 - 18 * (row % 3);
+        if (row < 3) {
+            b1 = (b1 & ~(LANE_BITS << sh)) | (lane << sh);
+        } else {
+            b2 = (b2 & ~(LANE_BITS << sh)) | (lane << sh);
+        }
+    }
+
+    __device__ __forceinline__ void writeCol(u64& b1, u64& b2, const u32 col, const u64 lane) {
+        const u64 m = columnMask(col);
+        b1 &= ~m;
+        b2 &= ~m;
 #pragma unroll
-                for (u32 k = 0; k < 5; ++k) {
-                    if (mask & (1u << k)) {
-                        stage.b1[warp][at] = cb1[k];
-                        stage.b2[warp][at] = cb2[k];
-                        stage.prev[warp][at] = static_cast<u8>(code + k);
-                        stage.seed[warp][at] = seed;
-                        ++at;
-                    }
+        for (u32 r = 0; r < 3; ++r) {
+            b1 |= ((lane >> (15 - 3 * r)) & 7ULL) << (51 - 18 * r - 3 * col);
+            b2 |= ((lane >> (6 - 3 * r)) & 7ULL) << (51 - 18 * r - 3 * col);
+        }
+    }
+
+    template<u32 DIR>
+    __device__ __forceinline__ u32 fatLaneChildren(const u64 b1, const u64 b2, const u32 lane, const bool isFat,
+                                                   const u32 fatX, const u32 fatY, const u32 crossSkip,
+                                                   u64 (&cb1)[5], u64 (&cb2)[5]) {
+        const u64 la = DIR == 0 ? rowLane(b1, b2, lane) : colLane(b1, b2, lane);
+        const u64 lb = isFat ? (DIR == 0 ? rowLane(b1, b2, lane + 1) : colLane(b1, b2, lane + 1)) : 0;
+        const u32 skip = isFat ? 1u << (4 - (DIR == 0 ? fatX : fatY)) : crossSkip;
+        u32 mask = 0;
+#pragma unroll
+        for (u32 k = 0; k < 5; ++k) {
+            const u32 n = k + 1;
+            u64 o1 = b1, o2 = b2;
+            if (DIR == 0) {
+                writeRow(o1, o2, lane, rotateLane(la, n));
+                if (isFat) {
+                    writeRow(o1, o2, lane + 1, rotateLane(lb, n));
+                    o1 = (o1 & ~FAT_X_FIELD) | (static_cast<u64>((fatX + n) % 6) << 61);
                 }
-                staged += total;
+            } else {
+                writeCol(o1, o2, lane, rotateLane(la, n));
+                if (isFat) {
+                    writeCol(o1, o2, lane + 1, rotateLane(lb, n));
+                    o1 = (o1 & ~FAT_Y_FIELD) | (static_cast<u64>((fatY + n) % 6) << 58);
+                }
+            }
+            if ((skip & (1u << k)) || (o1 == b1 && o2 == b2)) {
                 continue;
             }
+            cb1[k] = o1;
+            cb2[k] = o2;
+            mask |= 1u << k;
+        }
+        return mask;
+    }
 
-            // leaves
-            u64 key[5];
-            u32 inMask = 0;
-#pragma unroll
-            for (u32 k = 0; k < 5; ++k) {
-                key[k] = 0;
-                if (mask & (1u << k)) {
-                    key[k] = mixKey(stateHash(cb1[k], cb2[k]));
-                    const u32 p = static_cast<u32>(key[k] >> 56);
-                    if (p >= lo.pBegin && p < lo.pEnd) {
-                        inMask |= 1u << k;
-                    }
-                }
-            }
-            leaves += __popc(mask);
-            if (lo.mode == LEAF_COUNTS) {
-#pragma unroll
-                for (u32 k = 0; k < 5; ++k) {
-                    if (mask & (1u << k)) {
-                        atomicAdd(&hist[key[k] >> 56], 1u);
-                    }
-                }
-            } else if (lo.mode == LEAF_CHECKSUM) {
-#pragma unroll
-                for (u32 k = 0; k < 5; ++k) {
-                    if (mask & (1u << k)) {
-                        atomicAdd(&lo.cnt[seed], 1ULL);
-                        atomicAdd(&lo.sum[seed], static_cast<unsigned long long>(key[k]));
-                        atomicXor(&lo.xr[seed], static_cast<unsigned long long>(key[k]));
-                    }
-                }
-            } else if (lo.mode == LEAF_KEYS) {
-                u32 total = 0;
-                const u32 offset = warpPrefix(__popc(inMask), total);
-                unsigned long long base = 0;
-                if ((threadIdx.x & 31) == 0 && total != 0) {
-                    base = atomicAdd(&ctr->passed, static_cast<unsigned long long>(total));
-                }
-                base = __shfl_sync(0xFFFFFFFFu, base, 0);
-                u64 at = base + offset;
-#pragma unroll
-                for (u32 k = 0; k < 5; ++k) {
-                    if (inMask & (1u << k)) {
-                        if (at < lo.oCap) {
-                            lo.okey[at] = key[k];
-                        } else {
-                            ctr->overflow = 1;
-                        }
-                        ++at;
-                    }
-                }
-            } else {   // LEAF_FILTER
-                inRange += __popc(inMask);
-#pragma unroll
-                for (u32 k = 0; k < 5; ++k) {
-                    if ((inMask & (1u << k)) && leafPasses(lo, key[k])) {
-                        const unsigned long long at = atomicAdd(&ctr->passed, 1ULL);
-                        if (at < lo.oCap) {
-                            lo.ob1[at] = cb1[k];
-                            lo.ob2[at] = cb2[k];
-                            lo.okey[at] = key[k];
-                            lo.oseed[at] = seed;
+    template<int LEAF>
+    __global__ void __launch_bounds__(BLOCK, 3) expandFat(const Step s, const LeafOut lo, Counters* ctr) {
+        __shared__ u32 hist[256];
+        __shared__ Stage stage;
+        const u32 warp = threadIdx.x >> 5;
+        u32 staged = 0;
+        const bool counts = LEAF && lo.mode == LEAF_COUNTS;
+        if (counts) {
+            hist[threadIdx.x] = 0;
+        }
+        __syncthreads();
+
+        const u64 i = static_cast<u64>(blockIdx.x) * blockDim.x + threadIdx.x;
+        const bool active = i < s.n;
+        u64 b1 = 0, b2 = 0;
+        u32 prev = NO_PREV, seed = 0;
+        if (active) {
+            b1 = s.in.b1[i];
+            b2 = s.in.b2[i];
+            prev = s.in.prev[i];
+            seed = s.in.seed[i];
+        }
+        const u32 fatX = static_cast<u32>(b1 >> 61) & 7u, fatY = static_cast<u32>(b1 >> 58) & 7u;
+        const int prevDir = prev == NO_PREV ? -1 : static_cast<int>(prev / 30);
+        const u32 prevLane = (prev % 30) / 5, prevAmount = prev % 5 + 1;
+        // a column move on the pair keeps fatX, so the pair is still at prevLane
+        const int prevNormalCol = prevDir == 1 && prevLane != fatX ? static_cast<int>(prevLane) : -1;
+
+        u32 leaves = 0, inRange = 0;
+#pragma unroll 1
+        for (u32 dl = 0; dl < THREADS_PER_NODE; ++dl) {
+            const u32 dir = dl < 6 ? 0u : 1u;
+            const u32 lane = dl - 6 * dir;
+            const u32 fatLane = dir == 0 ? fatY : fatX;
+            u64 cb1[5], cb2[5];
+            u32 mask = 0;
+            if (active && !(static_cast<int>(dir) == prevDir && lane <= prevLane) && lane != fatLane + 1) {
+                const bool isFat = lane == fatLane;
+                if (dir == 0) {
+                    u32 crossSkip = 0;
+                    if (!isFat && prevNormalCol >= 0) {
+                        const u32 x1 = static_cast<u32>(prevNormalCol), y1 = lane;
+                        const u32 pivot = colorAt(b1, b2, x1, y1);
+                        if (colorAt(b1, b2, x1, (y1 + prevAmount) % 6) == pivot) {
+                            for (u32 k = 0; k < 5; ++k) {
+                                if (colorAt(b1, b2, (x1 + 5 - k) % 6, y1) == pivot) {
+                                    crossSkip |= 1U << k;
+                                }
+                            }
                         }
                     }
+                    mask = fatLaneChildren<0>(b1, b2, lane, isFat, fatX, fatY, crossSkip, cb1, cb2);
+                } else {
+                    mask = fatLaneChildren<1>(b1, b2, lane, isFat, fatX, fatY, 0, cb1, cb2);
                 }
             }
+            emitLane<LEAF>(mask, cb1, cb2, dir * 30 + lane * 5, seed, s, lo, ctr, stage, warp, staged, hist, leaves,
+                           inRange);
         }
         if (LEAF) {
             warpAdd(&ctr->leaves, leaves);
@@ -964,6 +1114,7 @@ namespace {
         std::vector<u64> hb1, hb2, hkey;
         std::vector<u32> hseed;
         double ratio[MBGPU_MAX_DEPTH] = {60, 60, 60, 60, 60, 60};   // children per node, as measured
+        bool fat = false;   // 2x2 boards (expandFat)
         Counters snap{};   // the device counters after the last launch
     };
 
@@ -1019,6 +1170,12 @@ namespace {
         if (run.audit) {
             const u64 threads = m * THREADS_PER_NODE;
             expandKernel<<<static_cast<u32>((threads + BLOCK - 1) / BLOCK), BLOCK>>>(s, run.lo, g_dev.ctr);
+        } else if (run.fat) {
+            if (leaf) {
+                expandFat<1><<<static_cast<u32>((m + BLOCK - 1) / BLOCK), BLOCK>>>(s, run.lo, g_dev.ctr);
+            } else {
+                expandFat<0><<<static_cast<u32>((m + BLOCK - 1) / BLOCK), BLOCK>>>(s, run.lo, g_dev.ctr);
+            }
         } else {
             if (leaf) {
                 expandNodes<1><<<static_cast<u32>((m + BLOCK - 1) / BLOCK), BLOCK>>>(s, run.lo, g_dev.ctr);
@@ -1113,8 +1270,9 @@ namespace {
         if (count > 0xFFFFFFFFULL) {
             return fail("too many seeds for 32-bit seed indices");
         }
-        if (count != 0 && (states[0] & FAT_BOOL_BIT)) {
-            return fail("2x2 boards are not supported yet");
+        run.fat = count != 0 && (states[0] & FAT_BOOL_BIT) != 0;
+        if (run.fat && (run.audit || (run.prune && g_dev.limit >= 0))) {
+            return fail("2x2 boards: no bound on the GPU (the halved bound prunes nothing; the solver turns it off)");
         }
         const auto start = std::chrono::steady_clock::now();
         Counters zero{};
@@ -1194,8 +1352,8 @@ namespace {
 
     // The children's keys in partitions [p0, p1), sorted and unique, left in a.p (count *unique);
     // b is scratch of the same size. `reserve` bytes are kept free for the caller.
-    bool sortedChildKeys(const u64* states, const u8* prev, const u64 count, const u32 p0, const u32 p1,
-                         const u64 reserve, Scratch& a, Scratch& b, u64* unique) {
+    bool sortedChildKeys(const u64* states, const u8* prev, const u64 count, const int depth, const u32 p0,
+                         const u32 p1, const u64 reserve, Scratch& a, Scratch& b, u64* unique) {
         const u64 left = g_dev.cap > g_dev.used + reserve ? g_dev.cap - g_dev.used - reserve : 0;
         const u64 cap = left > (64ULL << 20) ? (left - (64ULL << 20)) / 25 : 0;
         if (cap < (1ULL << 20)) {
@@ -1206,7 +1364,7 @@ namespace {
         }
         mbgpu_stats st{};
         Run run;
-        run.depth = 1;
+        run.depth = depth;
         run.prune = 0;
         run.stats = &st;
         run.lo.mode = LEAF_KEYS;
@@ -1244,11 +1402,11 @@ namespace {
         return true;
     }
 
-    bool childKeys(const u64* states, const u8* prev, const u64 count, const u32 p0, const u32 p1, u64* out,
-                   const u64 outCap, u64* outCount) {
+    bool childKeys(const u64* states, const u8* prev, const u64 count, const int depth, const u32 p0, const u32 p1,
+                   u64* out, const u64 outCap, u64* outCount) {
         Scratch a, b;
         u64 unique = 0;
-        if (!sortedChildKeys(states, prev, count, p0, p1, 0, a, b, &unique)) {
+        if (!sortedChildKeys(states, prev, count, depth, p0, p1, 0, a, b, &unique)) {
             return false;
         }
         if (unique > outCap) {
@@ -1264,13 +1422,13 @@ namespace {
         return ((1ULL << bucketBits) + 1) * 4 + blocksPerPartition * 32 + 257 * 8;
     }
 
-    bool buildIndex(const u64* states, const u8* prev, const u64 count, const u32 p0, const u32 p1,
+    bool buildIndex(const u64* states, const u8* prev, const u64 count, const int depth, const u32 p0, const u32 p1,
                     const u32 bucketBits, const u64 bpp, unsigned short* fpsOut, const u64 fpsCap, u32* startsOut,
                     u32* bloomOut, uint64_t* uniqueOut) {
         const u64 partBytes = indexPartitionBytes(bucketBits, bpp);
         Scratch a, b;
         u64 unique = 0;
-        if (!sortedChildKeys(states, prev, count, p0, p1, partBytes, a, b, &unique)) {
+        if (!sortedChildKeys(states, prev, count, depth, p0, p1, partBytes, a, b, &unique)) {
             return false;
         }
         if (unique > fpsCap) {
@@ -1398,8 +1556,8 @@ MBGPU_API int mbgpu_set_target(const uint64_t goalB1, const uint64_t goalB2, con
         g_error = "mbgpu_open has not been called";
         return 1;
     }
-    if (goalB1 & FAT_BOOL_BIT) {
-        g_error = "2x2 boards are not supported yet";
+    if ((goalB1 & FAT_BOOL_BIT) && limit >= 0) {
+        g_error = "2x2 boards: no bound on the GPU (pass limit -1)";
         return 1;
     }
     u64 rows[6], cols[6];
@@ -1565,7 +1723,7 @@ MBGPU_API int mbgpu_bounds(const uint64_t* states, const uint64_t count, int32_t
 }
 
 MBGPU_API int mbgpu_child_counts(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
-                                 uint64_t partitionCounts[256]) {
+                                 const int depth, uint64_t partitionCounts[256]) {
     g_error.clear();
     Scratch counts;
     if (!counts.get(256 * 8) || cudaMemset(counts.p, 0, 256 * 8) != cudaSuccess) {
@@ -1573,7 +1731,7 @@ MBGPU_API int mbgpu_child_counts(const uint64_t* states, const uint8_t* prevMove
     }
     mbgpu_stats st{};
     Run run;
-    run.depth = 1;
+    run.depth = depth;
     run.prune = 0;
     run.stats = &st;
     run.lo.mode = LEAF_COUNTS;
@@ -1589,8 +1747,8 @@ MBGPU_API int mbgpu_child_counts(const uint64_t* states, const uint8_t* prevMove
 }
 
 MBGPU_API int mbgpu_child_keys(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
-                               const uint32_t p0, const uint32_t p1, uint64_t* out, const uint64_t outCap,
-                               uint64_t* outCount) {
+                               const int depth, const uint32_t p0, const uint32_t p1, uint64_t* out,
+                               const uint64_t outCap, uint64_t* outCount) {
     g_error.clear();
     if (!g_dev.open) {
         g_error = "mbgpu_open has not been called";
@@ -1600,12 +1758,12 @@ MBGPU_API int mbgpu_child_keys(const uint64_t* states, const uint8_t* prevMove, 
         g_error = "bad partition range";
         return 1;
     }
-    return childKeys(states, prevMove, count, p0, p1, out, outCap, outCount) ? 0 : 1;
+    return childKeys(states, prevMove, count, depth, p0, p1, out, outCap, outCount) ? 0 : 1;
 }
 
 MBGPU_API int mbgpu_match_children(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
-                                   const uint64_t* sortedKeys, const uint64_t keyCount, const mbgpu_sink_fn sink,
-                                   void* ctx, mbgpu_stats* stats) {
+                                   const int depth, const uint64_t* sortedKeys, const uint64_t keyCount,
+                                   const mbgpu_sink_fn sink, void* ctx, mbgpu_stats* stats) {
     g_error.clear();
     if (!g_dev.open) {
         g_error = "mbgpu_open has not been called";
@@ -1624,7 +1782,7 @@ MBGPU_API int mbgpu_match_children(const uint64_t* states, const uint8_t* prevMo
     }
     mbgpu_stats local{};
     Run run;
-    run.depth = 1;
+    run.depth = depth;
     run.prune = 0;
     run.sink = sink;
     run.ctx = ctx;
@@ -1642,12 +1800,16 @@ MBGPU_API int mbgpu_match_children(const uint64_t* states, const uint8_t* prevMo
     return streamAll(run, states, prevMove, count) ? 0 : 1;
 }
 
+MBGPU_API uint64_t mbgpu_vram_left(void) {
+    return g_dev.open && g_dev.cap > g_dev.used ? g_dev.cap - g_dev.used : 0;
+}
+
 MBGPU_API uint64_t mbgpu_child_key_capacity(void) {
     return g_dev.open ? keyCapacity() : 0;
 }
 
 MBGPU_API int mbgpu_build_index(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
-                                const uint32_t p0, const uint32_t p1, const uint32_t bucketBits,
+                                const int depth, const uint32_t p0, const uint32_t p1, const uint32_t bucketBits,
                                 const uint64_t bloomBlocksPerPartition, uint16_t* fpsOut, const uint64_t fpsCap,
                                 uint32_t* startsOut, uint32_t* bloomOut, uint64_t* uniqueOut) {
     g_error.clear();
@@ -1659,7 +1821,7 @@ MBGPU_API int mbgpu_build_index(const uint64_t* states, const uint8_t* prevMove,
         g_error = "bad index layout";
         return 1;
     }
-    return buildIndex(states, prevMove, count, p0, p1, bucketBits, bloomBlocksPerPartition,
+    return buildIndex(states, prevMove, count, depth, p0, p1, bucketBits, bloomBlocksPerPartition,
                       reinterpret_cast<unsigned short*>(fpsOut), fpsCap, startsOut, bloomOut, uniqueOut)
                ? 0
                : 1;

@@ -36,13 +36,21 @@ namespace ssd {
         const u64 fullBudget = cfg.ramBytes != 0 ? cfg.ramBytes : defaultRamBudgetBytes(seedBytes);
         const u64 budget = fullBudget > builderReserveBytes + 2'000'000'000ULL ? fullBudget - builderReserveBytes
                                                                                 : 2'000'000'000ULL;
+        // --gpu: a pass's Bloom blocks must also fit the GPU's VRAM (kept 256 MB clear).
+        u64 bloomCap = ~0ULL;
+        if (!cfg.gpuDevice.empty()) {
+            const u64 left = ensureGpu(cfg).vramLeft();
+            bloomCap = left > (256ULL << 20) ? left - (256ULL << 20) : 0;
+        }
+        const u64 bloomPerPartition = meta.bloomBlocksPerPartition * 32;
         std::vector<std::pair<u32, u32>> passes;
         u64 coveredStates = 0;
         for (u32 p = pFirst; p < pLimit;) {
             u32 q = p;
             u64 states = 0;
             while (q < pLimit
-                   && (q == p || meta.indexBytes(states + counts[q], q + 1 - p) <= budget)) {
+                   && (q == p || (meta.indexBytes(states + counts[q], q + 1 - p) <= budget
+                                  && (q + 1 - p) * bloomPerPartition <= bloomCap))) {
                 states += counts[q++];
             }
             coveredStates += states;
@@ -50,7 +58,9 @@ namespace ssd {
             p = q;
         }
         tcout << "fingerprint index: " << meta.indexBytes(coveredStates, pLimit - pFirst) / 1e9
-              << " GB over partitions [" << pFirst << "," << pLimit << "), RAM budget " << budget / 1e9 << " GB -> "
+              << " GB over partitions [" << pFirst << "," << pLimit << "), RAM budget " << budget / 1e9 << " GB"
+              << (bloomCap != ~0ULL ? ", GPU room for Bloom blocks " + std::to_string(bloomCap / 1000000000.0).substr(0, 5) + " GB"
+                                    : std::string()) << " -> "
               << passes.size() << " pass(es)\n";
 
         // One index buffer for every pass, sized for the largest pass and
@@ -105,9 +115,6 @@ namespace ssd {
         const bool useGpu = !cfg.gpuDevice.empty();
         bool gpuBounded = false;
         if (useGpu) {
-            if (leftRoot.getFatBool() || g_rightRoot.getFatBool()) {
-                throw std::runtime_error("--gpu: 2x2 boards are not supported yet");
-            }
             if (cfg.reverse) {
                 throw std::runtime_error("--gpu: forward searches only");
             }

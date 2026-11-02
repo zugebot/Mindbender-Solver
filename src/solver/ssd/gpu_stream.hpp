@@ -39,6 +39,7 @@ namespace ssd {
         decltype(&mbgpu_child_key_capacity) childKeyCapacity = nullptr;
         decltype(&mbgpu_build_index) buildIndex = nullptr;
         decltype(&mbgpu_match_children) matchChildren = nullptr;
+        decltype(&mbgpu_vram_left) vramLeft = nullptr;
         decltype(&mbgpu_last_error) lastError = nullptr;
         decltype(&mbgpu_close) close = nullptr;
         std::string path;
@@ -80,7 +81,7 @@ namespace ssd {
                   get(auditStream, "mbgpu_audit_stream") && get(bounds, "mbgpu_bounds") &&
                   get(childCounts, "mbgpu_child_counts") && get(childKeys, "mbgpu_child_keys") &&
                   get(childKeyCapacity, "mbgpu_child_key_capacity") && get(buildIndex, "mbgpu_build_index") &&
-                  get(matchChildren, "mbgpu_match_children") &&
+                  get(matchChildren, "mbgpu_match_children") && get(vramLeft, "mbgpu_vram_left") &&
                   get(lastError, "mbgpu_last_error") &&
                   get(close, "mbgpu_close"))) {
                 why = path + " lacks an mbgpu_* export";

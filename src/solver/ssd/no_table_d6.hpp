@@ -63,7 +63,7 @@ namespace ssd {
             }
         }
 
-        const bool gpuKeys = !cfg.gpuDevice.empty() && !isFat;
+        const bool gpuKeys = !cfg.gpuDevice.empty();   // normal and 2x2 boards
         GpuModule* gpu = gpuKeys ? &ensureGpu(cfg) : nullptr;
         const auto* d5States = reinterpret_cast<const uint64_t*>(depth5.data());
         const u8* d5Moves = g_goalMoves.empty() ? nullptr : g_goalMoves.data();
@@ -71,7 +71,7 @@ namespace ssd {
         // Exact raw child count per partition.
         std::vector<u64> raw(PARTITION_COUNT, 0);
         if (gpuKeys) {
-            if (gpu->childCounts(d5States, d5Moves, depth5.size(), raw.data()) != 0) {
+            if (gpu->childCounts(d5States, d5Moves, depth5.size(), 1, raw.data()) != 0) {
                 throw std::runtime_error("GPU: " + gpu->error());
             }
         } else {
@@ -96,7 +96,7 @@ namespace ssd {
         if (gpuKeys) {
             std::vector<u64> keys0(std::max<u64>(1, raw[0]));
             u64 u0 = 0;
-            if (gpu->childKeys(d5States, d5Moves, depth5.size(), 0, 1, keys0.data(), keys0.size(), &u0) != 0) {
+            if (gpu->childKeys(d5States, d5Moves, depth5.size(), 1, 0, 1, keys0.data(), keys0.size(), &u0) != 0) {
                 throw std::runtime_error("GPU: " + gpu->error());
             }
             ratio = static_cast<double>(u0) / static_cast<double>(std::max<u64>(1, raw[0]));
@@ -190,7 +190,7 @@ namespace ssd {
                 Timer keyTimer;
                 if (gpuKeys) {
                     const u64 part = s0 - p0;
-                    if (gpu->buildIndex(d5States, d5Moves, depth5.size(), s0, s1, meta.bucketBits,
+                    if (gpu->buildIndex(d5States, d5Moves, depth5.size(), 1, s0, s1, meta.bucketBits,
                                         meta.bloomBlocksPerPartition, idx.fingerprints.data() + fill, cap - fill,
                                         idx.starts.data() + part * dirPer, idx.bloom.data() + part * bloomPer,
                                         uniq.data()) != 0) {
@@ -314,7 +314,7 @@ namespace ssd {
             }
             candKeys.erase(std::unique(candKeys.begin(), candKeys.end()), candKeys.end());
             GpuLeaves hits;
-            if (gpu->matchChildren(d5States, d5Moves, depth5.size(), candKeys.data(), candKeys.size(),
+            if (gpu->matchChildren(d5States, d5Moves, depth5.size(), 1, candKeys.data(), candKeys.size(),
                                    &GpuLeaves::sink, &hits, nullptr) != 0) {
                 throw std::runtime_error("GPU: " + gpu->error());
             }
