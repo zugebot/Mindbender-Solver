@@ -7,8 +7,10 @@
 // the CPU's (single thread) for scale.
 //
 // Usage: test_gpu_stream <vectors.bin> [--device 5060] [--vram-gb 12.5]
-//        test_gpu_stream <bench.bin> --bench   (a file from exportGpuVectors --bench: times
-//        the full stream of every seed, no CPU comparison)
+//        test_gpu_stream <bench.bin> --bench [--seeds N] [--filter-gb G]  (a file from
+//        exportGpuVectors --bench: times the full stream of every seed (or the first N), no
+//        CPU comparison; --filter-gb installs a random Bloom filter of G GB at the density of
+//        a real one (~56% of the bits set, ~1% of the leaves pass) so the run resembles a probe)
 
 #include "src/gpu/mbgpu.h"
 
@@ -102,8 +104,12 @@ int main(const int argc, char** argv) {
     std::string device = "5060";
     double vramGb = 12.5;
     bool bench = false;
+    uint64_t seedCap = ~0ULL;
+    double filterGb = 0;
     for (int i = 2; i < argc; ++i) {
         if (std::string(argv[i]) == "--bench") bench = true;
+        if (i + 1 < argc && std::string(argv[i]) == "--seeds") seedCap = std::stoull(argv[i + 1]);
+        if (i + 1 < argc && std::string(argv[i]) == "--filter-gb") filterGb = std::stod(argv[i + 1]);
         if (i + 1 < argc && std::string(argv[i]) == "--device") device = argv[i + 1];
         if (i + 1 < argc && std::string(argv[i]) == "--vram-gb") vramGb = std::stod(argv[i + 1]);
     }
@@ -121,18 +127,39 @@ int main(const int argc, char** argv) {
     std::printf("%s\n", info);
 
     if (bench) {
-        for (const Case& c : cases) {
+        std::vector<uint32_t> bloom;
+        uint64_t blocks = 0;
+        if (filterGb > 0) {
+            blocks = static_cast<uint64_t>(filterGb * 1e9 / 32 / 256);
+            bloom.resize(256 * blocks * 8);
+            uint64_t x = 0x9E3779B97F4A7C15ULL;
+            for (uint32_t& w : bloom) {
+                x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+                const uint32_t a = static_cast<uint32_t>(x), b = static_cast<uint32_t>(x >> 32);
+                x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+                w = a | (b & static_cast<uint32_t>(x) & static_cast<uint32_t>(x >> 32));   // ~56% set
+            }
+            std::printf("random Bloom filter: %.2f GB, %llu blocks per partition\n", 256.0 * blocks * 32 / 1e9,
+                        static_cast<unsigned long long>(blocks));
+        }
+        for (Case& c : cases) {
+            if (seedCap < c.b1.size()) {
+                c.b1.resize(seedCap);
+                c.prev.resize(seedCap);
+                c.states.resize(2 * seedCap);
+            }
             CountSink sink;
             mbgpu_stats st{};
-            if (mbgpu_set_target(c.goalB1, c.goalB2, c.limit) != 0 || mbgpu_set_filter(nullptr, 0, 0, 256) != 0 ||
+            if (mbgpu_set_target(c.goalB1, c.goalB2, c.limit) != 0 ||
+                mbgpu_set_filter(bloom.empty() ? nullptr : bloom.data(), blocks, 0, 256) != 0 ||
                 mbgpu_stream(c.states.data(), c.prev.data(), c.b1.size(), c.depth, CountSink::fn, &sink, &st) != 0) {
                 std::printf("ERROR: %s\n", mbgpu_last_error());
                 return 1;
             }
             uint64_t nodes = 0;
-            std::printf("%s <%d,%d,%d>: %llu seeds, %.2f s, %llu launches\n", c.name, c.seedDepth, c.depth, c.limit,
-                        static_cast<unsigned long long>(c.b1.size()), st.seconds,
-                        static_cast<unsigned long long>(st.launches));
+            std::printf("%s <%d,%d,%d>: %llu seeds, %.2f s, %llu launches, %llu retries\n", c.name, c.seedDepth,
+                        c.depth, c.limit, static_cast<unsigned long long>(c.b1.size()), st.seconds,
+                        static_cast<unsigned long long>(st.launches), static_cast<unsigned long long>(st.retries));
             for (int d = 0; d <= c.depth; ++d) {
                 const uint64_t v = d < c.depth ? st.nodes[d] : st.leaves;
                 nodes += d > 0 ? v : 0;

@@ -37,8 +37,9 @@ typedef struct mbgpu_stats {
     uint64_t leaves;                        // leaves kept (after the bound)
     uint64_t inRange;                       // leaves whose key is in the filter's partition range
     uint64_t passed;                        // leaves that passed the Bloom filter (handed to the sink)
-    uint64_t launches;                      // kernel launches
+    uint64_t launches;                      // kernel launches (retries included)
     double seconds;                         // wall time of the call
+    uint64_t retries;                       // chunks run again smaller (their output overflowed)
 } mbgpu_stats;
 
 // Called with batches of leaves that passed the filter (any order).

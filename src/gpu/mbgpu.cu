@@ -21,12 +21,16 @@
 //   target lane over its 6 rotations; a child with r moves still below it is
 //   dropped when h > limit + r, the leaves included (bounds::LanePruneLeaves).
 //
-// Work is level by level: one thread per (node, lane) computes the lane's five
-// shifts and appends the children it keeps to the next level's buffer (one
-// atomic per warp). A level is processed in chunks small enough that their
-// children always fit the next buffer, and every chunk's subtree is finished
+// Work is level by level: one thread per node tries its 60 moves and appends the
+// children it keeps to the next level's buffer (one atomic per warp and lane). The
+// bound is evaluated incrementally from packed per-rotation mismatch counts (see
+// expandNodes). A level is processed in chunks sized from the measured children per
+// node, so their children fit the next buffer; a chunk that overflows it is run again
+// smaller (nothing is consumed before the check). Every chunk's subtree is finished
 // before the next chunk starts, so each level needs one fixed buffer and every
-// kernel launch is short (WDDM resets a GPU whose kernel runs for ~2 s).
+// kernel launch is short (WDDM resets a GPU whose kernel runs for ~2 s). The audit
+// keeps the first kernel (expandKernel: one thread per (node, lane), h from its
+// definition), so the audit also cross-checks the incremental bound.
 // What happens to the leaves depends on the call: Bloom test + output (the
 // probe), per-seed checksums (tests and the audit), keys in a partition range
 // (index build) or per-partition counts.
@@ -129,6 +133,11 @@ namespace {
     __constant__ u64 c_colTarget[6];
     __constant__ int c_limit;   // < 0: no pruning
     __constant__ u32 c_salt[8];
+    // Packed mismatch counts (expandNodes): c_mc[(column c * 6 + row r) * 8 + colour v] has
+    // nibble k = 1 when colour v at row r differs from column c's target cell at rotation k,
+    // i.e. from target cell (r + k) % 6; c_mr the same for rows (row y, column x).
+    __constant__ u32 c_mc[288];
+    __constant__ u32 c_mr[288];
 
     // A lane's distance, in 32-bit arithmetic (a lane is 18 bits; 64-bit integer ops cost
     // the GPU two instructions each).
@@ -449,6 +458,342 @@ namespace {
         warpAdd(&ctr->inRange, inRange);
     }
 
+    // ---------------- the node kernel ----------------
+    //
+    // One thread per node: it tries all 12 lanes x 5 amounts, so the threads of a warp run
+    // the same loop (the first kernel, one thread per (node, lane), kept ~10 of 32 threads
+    // busy). The bound is incremental: a lane's count word has, in nibble k, how many of its
+    // cells differ from its target lane at rotation k, and the lane's distance is its
+    // smallest nibble. A row move changes one cell of every column, so a child's column
+    // words are the parent's minus the old cell's mismatches plus the new cell's: one
+    // lookup per column in c_mc (copied to shared memory), where the first kernel rotated
+    // and compared every column six times. The moved row's own distance does not change.
+
+    __device__ __forceinline__ u32 cellOf(const u32 lane, const u32 p) {
+        return (lane >> (15 - 3 * p)) & 7u;
+    }
+
+    __device__ __forceinline__ u32 rot32(const u32 lane, const u32 cells) {
+        const u32 s = 3 * cells;
+        return ((lane >> s) | (lane << (18 - s))) & 0x3FFFFu;
+    }
+
+    // the smallest of the 6 nibbles of a count word
+    __device__ __forceinline__ int minNibble(const u32 p) {
+        const u32 a = (p & 0x0F0F0Fu) | 0xFF000000u;
+        const u32 b = ((p >> 4) & 0x0F0F0Fu) | 0xFF000000u;
+        u32 m = __vminu4(a, b);
+        m = __vminu4(m, m >> 8);
+        return static_cast<int>(min(m & 0xFFu, (m >> 8) & 0xFFu));
+    }
+
+    // The children of moving lane `lane` (DIR 0 = row, 1 = column; L = that lane), as a mask
+    // of amounts (bit k = amount k + 1) with the boards in cb1[k], cb2[k]. `cross` = the count
+    // words of the lanes the move crosses (columns for a row move), `tab` their table. A
+    // child is dropped when a crossed lane's distance exceeds `room` (room >= 6: no test).
+    template<u32 DIR>
+    __device__ __forceinline__ u32 laneChildren(const u64 b1, const u64 b2, const u32 lane, const u32 L,
+                                                const u32 (&cross)[6], const u32* tab, const int room,
+                                                const u32 crossSkip, u64 (&cb1)[5], u64 (&cb2)[5]) {
+        const bool test = room < 6;
+        const u32 addv = test ? static_cast<u32>(7 - room) * 0x111111u : 0u;   // nibble > room <=> bit 3 set
+        // per crossed lane c: its table row and its count word without the moving cell, plus addv
+        const u32* row[6];
+        u32 excl[6], v[6];
+#pragma unroll
+        for (u32 c = 0; c < 6; ++c) {
+            v[c] = cellOf(L, c);
+            row[c] = tab + (c * 6 + lane) * 8;
+            excl[c] = cross[c] - row[c][v[c]] + addv;
+        }
+        u32 mask = 0;
+        bool period = false;
+#pragma unroll
+        for (u32 k = 0; k < 5; ++k) {
+            const u32 moved = rot32(L, k + 1);
+            period = period || moved == L;   // the lane's period: larger amounts repeat smaller ones
+            if (period || (crossSkip & (1u << k))) {
+                continue;
+            }
+            if (test) {
+                // after the shift by k + 1, crossed lane c gets the cell from position c - k - 1
+                u32 tooFar = 0;
+#pragma unroll
+                for (u32 c = 0; c < 6; ++c) {
+                    const u32 cnt = excl[c] + row[c][v[(c + 5 - k) % 6]];
+                    tooFar |= (cnt & 0x888888u) == 0x888888u ? 1u : 0u;
+                }
+                if (tooFar) {
+                    continue;
+                }
+            }
+            u64 o1, o2;
+            if (DIR == 0) {
+                const u32 sh = 36 - 18 * (lane % 3);
+                const u64 m64 = static_cast<u64>(moved) << sh;
+                if (lane < 3) {
+                    o1 = (b1 & ~(LANE_BITS << sh)) | m64;
+                    o2 = b2;
+                } else {
+                    o1 = b1;
+                    o2 = (b2 & ~(LANE_BITS << sh)) | m64;
+                }
+            } else {
+                const u64 m = columnMask(lane);
+                u64 n1 = b1 & ~m, n2 = b2 & ~m;
+#pragma unroll
+                for (u32 r = 0; r < 3; ++r) {
+                    n1 |= static_cast<u64>((moved >> (15 - 3 * r)) & 7u) << (51 - 18 * r - 3 * lane);
+                    n2 |= static_cast<u64>((moved >> (6 - 3 * r)) & 7u) << (51 - 18 * r - 3 * lane);
+                }
+                o1 = n1;
+                o2 = n2;
+            }
+            cb1[k] = o1;
+            cb2[k] = o2;
+            mask |= 1u << k;
+        }
+        return mask;
+    }
+
+    // Children are staged per warp in shared memory and written out in contiguous runs
+    // (written straight from registers, each thread's children land scattered and a 32-byte
+    // sector carried ~7 useful bytes), with one atomic per flush.
+    constexpr u32 STAGE = 160;   // children per warp: one lane's children at most (32 threads x 5)
+    constexpr u32 WARPS = BLOCK / 32;
+
+    struct Stage {
+        u64 b1[WARPS][STAGE];
+        u64 b2[WARPS][STAGE];
+        u32 seed[WARPS][STAGE];
+        u8 prev[WARPS][STAGE];
+    };
+
+    // Writes the warp's `staged` children to the next level (every lane of the warp calls it).
+    __device__ __forceinline__ void flushStage(Stage& st, const u32 w, const u32 staged, const Step& s,
+                                               Counters* ctr) {
+        unsigned long long base = 0;
+        if ((threadIdx.x & 31) == 0) {
+            base = atomicAdd(&ctr->next, static_cast<unsigned long long>(staged));
+        }
+        base = __shfl_sync(0xFFFFFFFFu, base, 0);
+        __syncwarp();
+        for (u32 j = threadIdx.x & 31; j < staged; j += 32) {
+            const u64 at = base + j;
+            if (at < s.outCap) {
+                s.out.b1[at] = st.b1[w][j];
+                s.out.b2[at] = st.b2[w][j];
+                s.out.prev[at] = st.prev[w][j];
+                s.out.seed[at] = st.seed[w][j];
+            }
+        }
+        __syncwarp();
+    }
+
+    // Children beyond s.outCap (non-leaf) or leaves beyond lo.oCap (LEAF_FILTER) are counted
+    // but not written; the host sees the count and runs the chunk again smaller.
+    __global__ void __launch_bounds__(BLOCK, 3) expandNodes(const Step s, const LeafOut lo, Counters* ctr) {
+        __shared__ u32 sMc[288], sMr[288];
+        __shared__ u32 hist[256];
+        __shared__ Stage stage;
+        const u32 warp = threadIdx.x >> 5;
+        u32 staged = 0;   // the same in every lane of the warp
+        for (u32 j = threadIdx.x; j < 288; j += blockDim.x) {
+            sMc[j] = c_mc[j];
+            sMr[j] = c_mr[j];
+        }
+        const bool counts = s.leaf && lo.mode == LEAF_COUNTS;
+        if (counts) {
+            hist[threadIdx.x] = 0;
+        }
+        __syncthreads();
+
+        const u64 i = static_cast<u64>(blockIdx.x) * blockDim.x + threadIdx.x;
+        const bool active = i < s.n;
+        u64 b1 = 0, b2 = 0;
+        u32 prev = NO_PREV, seed = 0;
+        if (active) {
+            b1 = s.in.b1[i];
+            b2 = s.in.b2[i];
+            prev = s.in.prev[i];
+            seed = s.in.seed[i];
+        }
+        const int prevDir = prev == NO_PREV ? -1 : static_cast<int>(prev / 30);
+        const u32 prevLane = (prev % 30) / 5, prevAmount = prev % 5 + 1;
+
+        // the parent's count words
+        u32 fullRow[6], fullCol[6];
+#pragma unroll
+        for (u32 y = 0; y < 6; ++y) {
+            const u32 L = static_cast<u32>(rowLane(b1, b2, y));
+            u32 w = 0;
+#pragma unroll
+            for (u32 x = 0; x < 6; ++x) {
+                w += sMr[(y * 6 + x) * 8 + cellOf(L, x)];
+            }
+            fullRow[y] = w;
+        }
+#pragma unroll
+        for (u32 x = 0; x < 6; ++x) {
+            const u32 L = colLane32(b1, b2, x);
+            u32 w = 0;
+#pragma unroll
+            for (u32 y = 0; y < 6; ++y) {
+                w += sMc[(x * 6 + y) * 8 + cellOf(L, y)];
+            }
+            fullCol[x] = w;
+        }
+        const int limit = c_limit;
+        const bool pruneOn = s.prune && limit >= 0;
+        int rowH = 0, colH = 0;
+        if (pruneOn) {
+#pragma unroll
+            for (u32 j = 0; j < 6; ++j) {
+                rowH = max(rowH, minNibble(fullRow[j]));
+                colH = max(colH, minNibble(fullCol[j]));
+            }
+        }
+
+        u32 leaves = 0, inRange = 0;
+#pragma unroll 1
+        for (u32 dl = 0; dl < THREADS_PER_NODE; ++dl) {
+            const u32 dir = dl < 6 ? 0u : 1u;
+            const u32 lane = dl - 6 * dir;
+            u64 cb1[5], cb2[5];
+            u32 mask = 0;
+            if (active && !(static_cast<int>(dir) == prevDir && lane <= prevLane)) {
+                int room = 99;
+                if (pruneOn) {
+                    room = limit + s.rem - (dir == 0 ? rowH : colH);
+                }
+                if (room >= 0) {
+                    if (dir == 0) {
+                        // after a column move, the row moves that commute with it
+                        u32 crossSkip = 0;
+                        if (prevDir == 1) {
+                            const u32 x1 = prevLane, y1 = lane;
+                            const u32 pivot = colorAt(b1, b2, x1, y1);
+                            if (colorAt(b1, b2, x1, (y1 + prevAmount) % 6) == pivot) {
+                                for (u32 k = 0; k < 5; ++k) {
+                                    if (colorAt(b1, b2, (x1 + 5 - k) % 6, y1) == pivot) {
+                                        crossSkip |= 1U << k;
+                                    }
+                                }
+                            }
+                        }
+                        mask = laneChildren<0>(b1, b2, lane, static_cast<u32>(rowLane(b1, b2, lane)), fullCol, sMc,
+                                               room, crossSkip, cb1, cb2);
+                    } else {
+                        mask = laneChildren<1>(b1, b2, lane, colLane32(b1, b2, lane), fullRow, sMr, room, 0, cb1,
+                                               cb2);
+                    }
+                }
+            }
+            const u32 code = dir * 30 + lane * 5;
+
+            if (!s.leaf) {
+                u32 total = 0;
+                const u32 offset = warpPrefix(__popc(mask), total);
+                if (staged + total > STAGE) {
+                    flushStage(stage, warp, staged, s, ctr);
+                    staged = 0;
+                }
+                u32 at = staged + offset;
+#pragma unroll
+                for (u32 k = 0; k < 5; ++k) {
+                    if (mask & (1u << k)) {
+                        stage.b1[warp][at] = cb1[k];
+                        stage.b2[warp][at] = cb2[k];
+                        stage.prev[warp][at] = static_cast<u8>(code + k);
+                        stage.seed[warp][at] = seed;
+                        ++at;
+                    }
+                }
+                staged += total;
+                continue;
+            }
+
+            // leaves
+            u64 key[5];
+            u32 inMask = 0;
+#pragma unroll
+            for (u32 k = 0; k < 5; ++k) {
+                key[k] = 0;
+                if (mask & (1u << k)) {
+                    key[k] = mixKey(stateHash(cb1[k], cb2[k]));
+                    const u32 p = static_cast<u32>(key[k] >> 56);
+                    if (p >= lo.pBegin && p < lo.pEnd) {
+                        inMask |= 1u << k;
+                    }
+                }
+            }
+            leaves += __popc(mask);
+            if (lo.mode == LEAF_COUNTS) {
+#pragma unroll
+                for (u32 k = 0; k < 5; ++k) {
+                    if (mask & (1u << k)) {
+                        atomicAdd(&hist[key[k] >> 56], 1u);
+                    }
+                }
+            } else if (lo.mode == LEAF_CHECKSUM) {
+#pragma unroll
+                for (u32 k = 0; k < 5; ++k) {
+                    if (mask & (1u << k)) {
+                        atomicAdd(&lo.cnt[seed], 1ULL);
+                        atomicAdd(&lo.sum[seed], static_cast<unsigned long long>(key[k]));
+                        atomicXor(&lo.xr[seed], static_cast<unsigned long long>(key[k]));
+                    }
+                }
+            } else if (lo.mode == LEAF_KEYS) {
+                u32 total = 0;
+                const u32 offset = warpPrefix(__popc(inMask), total);
+                unsigned long long base = 0;
+                if ((threadIdx.x & 31) == 0 && total != 0) {
+                    base = atomicAdd(&ctr->passed, static_cast<unsigned long long>(total));
+                }
+                base = __shfl_sync(0xFFFFFFFFu, base, 0);
+                u64 at = base + offset;
+#pragma unroll
+                for (u32 k = 0; k < 5; ++k) {
+                    if (inMask & (1u << k)) {
+                        if (at < lo.oCap) {
+                            lo.okey[at] = key[k];
+                        } else {
+                            ctr->overflow = 1;
+                        }
+                        ++at;
+                    }
+                }
+            } else {   // LEAF_FILTER
+                inRange += __popc(inMask);
+#pragma unroll
+                for (u32 k = 0; k < 5; ++k) {
+                    if ((inMask & (1u << k)) && (lo.bloom == nullptr || bloomPasses(lo, key[k]))) {
+                        const unsigned long long at = atomicAdd(&ctr->passed, 1ULL);
+                        if (at < lo.oCap) {
+                            lo.ob1[at] = cb1[k];
+                            lo.ob2[at] = cb2[k];
+                            lo.okey[at] = key[k];
+                            lo.oseed[at] = seed;
+                        }
+                    }
+                }
+            }
+        }
+        if (s.leaf) {
+            warpAdd(&ctr->leaves, leaves);
+            warpAdd(&ctr->inRange, inRange);
+        } else if (staged != 0) {
+            flushStage(stage, warp, staged, s, ctr);
+        }
+        if (counts) {
+            __syncthreads();
+            if (hist[threadIdx.x] != 0) {
+                atomicAdd(&lo.partCounts[threadIdx.x], static_cast<unsigned long long>(hist[threadIdx.x]));
+            }
+        }
+    }
+
     // ---------------- index build ----------------
 
     // first position in sorted keys[0, n) whose key is >= value
@@ -597,6 +942,8 @@ namespace {
         mbgpu_stats* stats = nullptr;
         std::vector<u64> hb1, hb2, hkey;
         std::vector<u32> hseed;
+        double ratio[MBGPU_MAX_DEPTH] = {60, 60, 60, 60, 60, 60};   // children per node, as measured
+        Counters snap{};   // the device counters after the last launch
     };
 
     bool readCounters(Counters& c) {
@@ -630,6 +977,7 @@ namespace {
         run.stats->passed += n;
         const unsigned long long zero = 0;
         MB_CUDA(cudaMemcpy(&g_dev.ctr->passed, &zero, sizeof(zero), cudaMemcpyHostToDevice));
+        run.snap.passed = 0;
         return true;
     }
 
@@ -637,50 +985,91 @@ namespace {
         return Nodes{a.b1 + off, a.b2 + off, a.prev + off, a.seed + off};
     }
 
-    // Expands level `d` (n nodes in g_dev.level[d]) down to the leaves.
+    bool launch(Run& run, const int d, const u64 off, const u64 m, const bool leaf) {
+        Step s{};
+        s.in = offsetNodes(g_dev.level[d], off);
+        s.n = m;
+        s.out = leaf ? Nodes{} : g_dev.level[d + 1];
+        s.outCap = g_dev.levelCap;
+        s.rem = run.depth - (d + 1);
+        s.leaf = leaf ? 1 : 0;
+        s.prune = run.prune;
+        s.audit = run.audit;
+        if (run.audit) {
+            const u64 threads = m * THREADS_PER_NODE;
+            expandKernel<<<static_cast<u32>((threads + BLOCK - 1) / BLOCK), BLOCK>>>(s, run.lo, g_dev.ctr);
+        } else {
+            expandNodes<<<static_cast<u32>((m + BLOCK - 1) / BLOCK), BLOCK>>>(s, run.lo, g_dev.ctr);
+        }
+        MB_CUDA(cudaGetLastError());
+        run.stats->launches++;
+        return true;
+    }
+
+    // Expands level `d` (n nodes in g_dev.level[d]) down to the leaves. Chunks are sized from
+    // the children per node measured so far (80% of the next buffer); a chunk whose children
+    // overflow it is run again smaller (its partial output is never used). Leaf chunks take
+    // the whole level; with LEAF_FILTER, a chunk whose passing leaves overflow the output
+    // buffer is undone (counters restored, the leaves before it handed over) and run in
+    // halves. The audit's kernel keeps worst-case chunks (its edge counters cannot be undone).
     bool processLevel(Run& run, const int d, const u64 n) {
-        const u64 chunk = std::max<u64>(1, g_dev.levelCap / MAX_CHILDREN);
         const int childDepth = d + 1;
         const bool leaf = childDepth == run.depth;
-        for (u64 off = 0; off < n; off += chunk) {
-            const u64 m = std::min(chunk, n - off);
-            if (leaf && run.lo.mode == LEAF_FILTER) {
-                // room for every child of this chunk, else hand the buffer over first
-                Counters c{};
-                if (!readCounters(c)) {
-                    return false;
-                }
-                if (c.passed + m * MAX_CHILDREN > g_dev.outCap && !flushOutput(run)) {
-                    return false;
-                }
+        u64 mMax = n;
+        for (u64 off = 0; off < n;) {
+            u64 m = std::min(n - off, mMax);
+            if (run.audit) {
+                m = std::min(m, std::max<u64>(1, g_dev.levelCap / MAX_CHILDREN));
+            } else if (!leaf) {
+                const double r = std::max(run.ratio[d], 1e-3);
+                m = std::min(m, std::max<u64>(1, static_cast<u64>(0.8 * static_cast<double>(g_dev.levelCap) / r)));
             }
             if (!leaf) {
                 const unsigned long long zero = 0;
                 MB_CUDA(cudaMemcpy(&g_dev.ctr->next, &zero, sizeof(zero), cudaMemcpyHostToDevice));
             }
-            Step s{};
-            s.in = offsetNodes(g_dev.level[d], off);
-            s.n = m;
-            s.out = leaf ? Nodes{} : g_dev.level[childDepth];
-            s.outCap = g_dev.levelCap;
-            s.rem = run.depth - childDepth;
-            s.leaf = leaf ? 1 : 0;
-            s.prune = run.prune;
-            s.audit = run.audit;
-            const u64 threads = m * THREADS_PER_NODE;
-            const u32 blocks = static_cast<u32>((threads + BLOCK - 1) / BLOCK);
-            expandKernel<<<blocks, BLOCK>>>(s, run.lo, g_dev.ctr);
-            MB_CUDA(cudaGetLastError());
-            run.stats->launches++;
+            if (!launch(run, d, off, m, leaf)) {
+                return false;
+            }
+            Counters c{};
+            if (!readCounters(c)) {
+                return false;
+            }
             if (!leaf) {
-                Counters c{};
-                if (!readCounters(c)) {
-                    return false;
+                const double r = static_cast<double>(c.next) / static_cast<double>(m);
+                if (c.next > g_dev.levelCap) {
+                    if (run.audit || m == 1) {
+                        return fail("level buffer overflow");
+                    }
+                    run.ratio[d] = std::max(run.ratio[d], r);
+                    run.stats->retries++;
+                    continue;
                 }
+                run.ratio[d] = r;
+                run.snap = c;
                 run.stats->nodes[childDepth] += c.next;
+                off += m;
                 if (c.next != 0 && !processLevel(run, childDepth, c.next)) {
                     return false;
                 }
+                continue;
+            }
+            if (run.lo.mode == LEAF_FILTER && c.passed > g_dev.outCap) {
+                if (m == 1) {
+                    return fail("output buffer overflow");
+                }
+                MB_CUDA(cudaMemcpy(g_dev.ctr, &run.snap, sizeof(Counters), cudaMemcpyHostToDevice));
+                if (!flushOutput(run)) {
+                    return false;
+                }
+                mMax = m / 2;
+                run.stats->retries++;
+                continue;
+            }
+            run.snap = c;
+            off += m;
+            if (run.lo.mode == LEAF_FILTER && c.passed > g_dev.outCap / 2 && !flushOutput(run)) {
+                return false;
             }
         }
         return true;
@@ -705,6 +1094,7 @@ namespace {
         const auto start = std::chrono::steady_clock::now();
         Counters zero{};
         MB_CUDA(cudaMemcpy(g_dev.ctr, &zero, sizeof(Counters), cudaMemcpyHostToDevice));
+        run.snap = zero;
         std::vector<u32> seedIdx;
         std::vector<u64> hb1, hb2;
         std::vector<u8> hprev;
@@ -991,6 +1381,27 @@ MBGPU_API int mbgpu_set_target(const uint64_t goalB1, const uint64_t goalB2, con
     for (u32 i = 0; i < 6; ++i) {
         rows[i] = rowLane(goalB1, goalB2, i);
         cols[i] = colLane(goalB1, goalB2, i);
+    }
+    // the node kernel's mismatch tables (c_mc, c_mr)
+    u32 mc[288], mr[288];
+    for (u32 a = 0; a < 6; ++a) {
+        for (u32 p = 0; p < 6; ++p) {
+            for (u32 v = 0; v < 8; ++v) {
+                u32 ec = 0, er = 0;
+                for (u32 k = 0; k < 6; ++k) {
+                    const u32 q = (p + k) % 6;
+                    ec |= (v != ((cols[a] >> (15 - 3 * q)) & 7u) ? 1u : 0u) << (4 * k);
+                    er |= (v != ((rows[a] >> (15 - 3 * q)) & 7u) ? 1u : 0u) << (4 * k);
+                }
+                mc[(a * 6 + p) * 8 + v] = ec;
+                mr[(a * 6 + p) * 8 + v] = er;
+            }
+        }
+    }
+    if (cudaMemcpyToSymbol(c_mc, mc, sizeof(mc)) != cudaSuccess ||
+        cudaMemcpyToSymbol(c_mr, mr, sizeof(mr)) != cudaSuccess) {
+        g_error = "copying the mismatch tables to the device failed";
+        return 1;
     }
     if (cudaMemcpyToSymbol(c_rowTarget, rows, sizeof(rows)) != cudaSuccess ||
         cudaMemcpyToSymbol(c_colTarget, cols, sizeof(cols)) != cudaSuccess ||
