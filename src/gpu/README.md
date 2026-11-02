@@ -19,8 +19,8 @@ The solver build that has `--gpu` is `cmake-build-test` (output `build_test/`); 
 the DLL whenever `mbgpu.h` changes (the solver passes `mbgpu_stats` across).
 
 ```
-src\gpuuild.cmd
-build_test\experimentDiskDepth6.exe 16-2 --seed-depth 4 --stream-depth 5 --threads 8 --gpu 5060 --solutions build\levels_final-2_c15_366.txt
+src\gpu\build.cmd
+build_test\experimentDiskDepth6.exe 16-2 --seed-depth 4 --stream-depth 5 --threads 8 --gpu 5060 --solutions build\levels_final\16-2_c15_366.txt
 ```
 
 `--gpu-vram-gb G` caps the VRAM (default 12.5), `--gpu-dll PATH` picks the DLL. With `--gpu`,
