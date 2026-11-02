@@ -6,8 +6,8 @@ solution and proves nothing shorter exists. C++ solver plus Python tools.
 
 Status (2026-10-21): **87/100 solved** (20-2 and 20-5 at 16 moves); every unsolved one needs >= 16 (14-3, 18-3 >= 17). `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
-History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-10-30.md`, the
-first-move rule; `changes-2026-10-16.md` before it).
+History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-01.md`, the GPU
+solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it).
 
 ## Build and test
 
@@ -114,8 +114,11 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes); 2
 - Seeds are visited in a strided order (4096-seed chunks), so the timed ones represent the list.
 - Work units: `--shard k/N`, `--middles-out`, `--recover-from` (exact; see the scheduler README).
 - `--gpu 5060`: the RTX 5060 Ti (`src/gpu/`, loaded from `build_gpu/mbgpu.dll`; normal boards,
-  forward) streams the left side and Bloom-tests it (the CPU finishes the survivors), audits its own
-  bound, and builds the depth-6 index. The GTX 1660 drives the desktop and is never used.
+  forward) streams the left side and Bloom-tests it (CPU threads finish the survivors meanwhile),
+  audits its own bound, builds the depth-6 index and confirms candidates by regenerating depth 6.
+  Large pages are off with --gpu. The GTX 1660 drives the desktop and is never used.
+- Recovery keeps only start-side paths that can still reach a middle (rotation lane bound to
+  each middle; normal boards, <= 64 middles): 16-2 at 15 moves 58 s -> 6.3 s, exact.
 
 ## Conventions (from the user)
 
@@ -154,7 +157,8 @@ its cache fills, recovers when idle). GPU: GTX 1660 SUPER now; an RTX 5060 Ti fr
 | 14 moves, 2x2 board, `<4,3,7>` | 48-68 min |
 | 15 moves, 2x2 board, `<5,3,7>` | 7.8-10.5 h (6-7 passes, ~2.6-2.8 T left states each, ~560 M/s) |
 | 15 moves, normal board, `<5,4,6>` | 0.4 h (18-3) to 8.5 h (17-1), one pass |
-| 16 moves, normal board, `<5,5,6>` | 8.5 h (18-3, 4.9 ms/seed) to 36.5 h (20-5, 12.6 ms/seed, 1.0e13 left states); one pass; recovery ~5 min |
+| 16 moves, normal board, `<5,5,6>` | 8.5 h (18-3, 4.9 ms/seed) to 36.5 h (20-5, 12.6 ms/seed, 1.0e13 left states); one pass; recovery ~5 min (CPU, before the reach filter) |
+| `--gpu 5060` (2026-11-01, src/gpu/README.md) | 16-2 at 15: 42 min -> 54 s (stream 12.6 s); 16-4 at 14: 1 h 27 min -> 2 min 18 s; 18-3 at 16: stream ~2.5 min from a 1/64 shard (whole run ~4 min) |
 | 15 moves, 6-4 (disk depth-7 index) | 13.4 h, 10 passes |
 | 13 moves, normal board, rotation bound | 10-3: 1 min 43 s; 9-3: ~6 min (colour mix: 5-25 min) |
 | First-move rule (2026-10-29/30, docs/changes-2026-10-16.md 13-14) | 18-3 at 15: stream 1103 s -> 759 s; 17-4 at 13 (2x2): 468 s -> 313 s; 17-2 at 14 (2x2, depth 7): 6010 s -> 3345 s |
@@ -200,9 +204,11 @@ Next:
    index ~150-160 h (~70-80 h with item 1). Normal boards run `<5,5,6>` (~8.5 h); the goal-side
    filter by h(start) keeps 54% on 18-3, too little for a one-pass depth-7 goal side. 17 moves
    (18-3): `<5,5,7>` or a 6-move stream, not tried.
-4. GPU port: normal boards done (2026-11-01, `src/gpu/`, `--gpu 5060`): stream, bound audit and
-   depth-6 index build on the GPU; 16-2 at 15 moves 42 min -> 3 min 45 s, exact. Next: 2x2 boards
-   (their fat moves and the depth-7 index in slices), fewer launches, the scheduler passing --gpu.
+4. GPU port: normal boards done (2026-11-01, `src/gpu/`, `--gpu 5060`): stream, bound audit,
+   depth-6 index build and candidate check on the GPU; 16-2 at 15 moves 42 min -> 54 s, exact.
+   Next: 17 moves on normal boards (14-3, 18-3) as `<5,6,6>`: the GPU streams depth 6 already
+   (MBGPU_MAX_DEPTH); the solver side and recovery (left depth 11) need it; est. ~1-2 h each.
+   Then 2x2 boards (fat moves, the depth-7 index in slices), the scheduler passing --gpu.
 5. Checkpoint/resume inside a run (pass, finished-seed watermark, candidates, chosen modes),
    once single runs take days.
 6. Smaller: AVX2 batched StateHash + mixKey for the left side; incremental bound evaluation
