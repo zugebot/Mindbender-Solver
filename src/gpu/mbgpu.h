@@ -107,6 +107,13 @@ MBGPU_API int mbgpu_child_counts(const uint64_t* states, const uint8_t* prevMove
 MBGPU_API int mbgpu_child_keys(const uint64_t* states, const uint8_t* prevMove, uint64_t count, uint32_t p0,
                                uint32_t p1, uint64_t* out, uint64_t outCap, uint64_t* outCount);
 
+// The children (one move, no bound) of states [0, count) whose key is in sortedKeys[0, keyCount)
+// (ascending), handed to `sink` (seedIndex = the parent's index); the caller compares the states.
+// Confirms probe candidates against the regenerated goal side.
+MBGPU_API int mbgpu_match_children(const uint64_t* states, const uint8_t* prevMove, uint64_t count,
+                                   const uint64_t* sortedKeys, uint64_t keyCount, mbgpu_sink_fn sink, void* ctx,
+                                   mbgpu_stats* stats);
+
 // How many raw keys one mbgpu_child_keys / mbgpu_build_index call can sort with the VRAM left now.
 MBGPU_API uint64_t mbgpu_child_key_capacity(void);
 

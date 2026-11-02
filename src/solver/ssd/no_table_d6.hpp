@@ -304,7 +304,28 @@ namespace ssd {
         for (auto& c : confirmed) {
             c.store(0);
         }
-        if (!cand.empty()) {
+        if (!cand.empty() && gpuKeys) {
+            // the GPU regenerates depth 6 and hands back the children whose key is a candidate's
+            std::vector<u64> candKeys(cand.size());
+            for (std::size_t i = 0; i < cand.size(); ++i) {
+                candKeys[i] = cand[i].key;
+            }
+            candKeys.erase(std::unique(candKeys.begin(), candKeys.end()), candKeys.end());
+            GpuLeaves hits;
+            if (gpu->matchChildren(d5States, d5Moves, depth5.size(), candKeys.data(), candKeys.size(),
+                                   &GpuLeaves::sink, &hits, nullptr) != 0) {
+                throw std::runtime_error("GPU: " + gpu->error());
+            }
+            for (std::size_t j = 0; j < hits.states.size(); ++j) {
+                auto it = std::lower_bound(cand.begin(), cand.end(), hits.keys[j],
+                                           [](const KeyedState& c, const u64 k) { return c.key < k; });
+                for (; it != cand.end() && it->key == hits.keys[j]; ++it) {
+                    if (it->state == hits.states[j]) {
+                        confirmed[static_cast<std::size_t>(it - cand.begin())].store(1, std::memory_order_relaxed);
+                    }
+                }
+            }
+        } else if (!cand.empty()) {
             expandFrontier(depth5, threads, [&](u32, const B1B2& child, const u64 key) {
                 const u32 b = bitOf(key);
                 if ((bitmap[b >> 6] >> (b & 63) & 1) == 0) {
@@ -329,7 +350,8 @@ namespace ssd {
         middles.erase(std::unique(middles.begin(), middles.end()), middles.end());
         g_progress.add();
         tcout << "verify: " << middles.size() << " confirmed, " << (cand.size() - middles.size())
-              << " fingerprint false matches, " << verifyTimer.getSeconds() << "s (by regeneration)\n";
+              << " fingerprint false matches, " << verifyTimer.getSeconds() << "s (by regeneration"
+              << (gpuKeys ? " on the GPU" : "") << ")\n";
         return middles;
     }
 

@@ -194,6 +194,8 @@ namespace {
         unsigned long long* sum;
         unsigned long long* xr;
         const u32* bloom;                // LEAF_FILTER; nullptr: every leaf in range passes
+        const u64* match;                // LEAF_FILTER: if set, only leaves whose key is in this sorted list
+        u64 matchCount;
         u64 blocksPerPartition;
         u32 pBegin, pEnd;                // LEAF_FILTER, LEAF_KEYS: partition range
         u64* ob1;                        // LEAF_FILTER output
@@ -238,6 +240,23 @@ namespace {
             missing |= ~__ldg(&w[i]) & (1U << ((low * c_salt[i]) >> 27));
         }
         return missing == 0;
+    }
+
+    // LEAF_FILTER's test: an exact key list (mbgpu_match_children), else the Bloom filter, else all
+    __device__ __forceinline__ bool leafPasses(const LeafOut& lo, const u64 key) {
+        if (lo.match != nullptr) {
+            u64 a = 0, b = lo.matchCount;
+            while (a < b) {
+                const u64 mid = (a + b) / 2;
+                if (__ldg(&lo.match[mid]) < key) {
+                    a = mid + 1;
+                } else {
+                    b = mid;
+                }
+            }
+            return a < lo.matchCount && __ldg(&lo.match[a]) == key;
+        }
+        return lo.bloom == nullptr || bloomPasses(lo, key);
     }
 
     // Warp-wide exclusive prefix of `v` and the warp's total (every lane of the warp calls it).
@@ -768,7 +787,7 @@ namespace {
                 inRange += __popc(inMask);
 #pragma unroll
                 for (u32 k = 0; k < 5; ++k) {
-                    if ((inMask & (1u << k)) && (lo.bloom == nullptr || bloomPasses(lo, key[k]))) {
+                    if ((inMask & (1u << k)) && leafPasses(lo, key[k])) {
                         const unsigned long long at = atomicAdd(&ctr->passed, 1ULL);
                         if (at < lo.oCap) {
                             lo.ob1[at] = cb1[k];
@@ -1576,6 +1595,45 @@ MBGPU_API int mbgpu_child_keys(const uint64_t* states, const uint8_t* prevMove, 
         return 1;
     }
     return childKeys(states, prevMove, count, p0, p1, out, outCap, outCount) ? 0 : 1;
+}
+
+MBGPU_API int mbgpu_match_children(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
+                                   const uint64_t* sortedKeys, const uint64_t keyCount, const mbgpu_sink_fn sink,
+                                   void* ctx, mbgpu_stats* stats) {
+    g_error.clear();
+    if (!g_dev.open) {
+        g_error = "mbgpu_open has not been called";
+        return 1;
+    }
+    if (keyCount == 0 || count == 0) {
+        return 0;
+    }
+    Scratch keys;
+    if (!keys.get(keyCount * 8) ||
+        cudaMemcpy(keys.p, sortedKeys, keyCount * 8, cudaMemcpyHostToDevice) != cudaSuccess) {
+        if (g_error.empty()) {
+            g_error = "copying the keys to match failed";
+        }
+        return 1;
+    }
+    mbgpu_stats local{};
+    Run run;
+    run.depth = 1;
+    run.prune = 0;
+    run.sink = sink;
+    run.ctx = ctx;
+    run.stats = stats != nullptr ? stats : &local;
+    run.lo.mode = LEAF_FILTER;
+    run.lo.match = static_cast<const u64*>(keys.p);
+    run.lo.matchCount = keyCount;
+    run.lo.pBegin = 0;
+    run.lo.pEnd = 256;
+    run.lo.ob1 = g_dev.ob1;
+    run.lo.ob2 = g_dev.ob2;
+    run.lo.okey = g_dev.okey;
+    run.lo.oseed = g_dev.oseed;
+    run.lo.oCap = g_dev.outCap;
+    return streamAll(run, states, prevMove, count) ? 0 : 1;
 }
 
 MBGPU_API uint64_t mbgpu_child_key_capacity(void) {
