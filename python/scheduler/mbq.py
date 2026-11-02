@@ -66,6 +66,7 @@ DASHBOARD = Path(__file__).resolve().parent / "dashboard.html"
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 
 SSD_EXE = REPO / "build" / "experimentDiskDepth6.exe"
+GPU_DLL = REPO / "build_gpu" / "mbgpu.dll"   # src/gpu/build.cmd; copied next to the exe for --gpu jobs
 INRAM_EXE = REPO / "build" / "findSolutions.exe"
 TEST_KNOWN_EXE = REPO / "build" / "testKnownSolutions.exe"
 LEVELS_DIR = REPO / "levels"
@@ -400,7 +401,7 @@ class Scheduler:
                               "engine": job["engine"], "ram_gb": job.get("ram_gb"), "threads": job.get("threads"),
                               "promote": job["promote"], "keep_table": job["keep_table"], "front": True,
                               "table_depth": job.get("table_depth"), "stream_depth": job.get("stream_depth"),
-                              "parent": job["id"]})
+                              "gpu": job.get("gpu"), "parent": job["id"]})
             job["notes"].append(f"re-queued as #{again['id']}")
         self.save()
 
@@ -428,13 +429,16 @@ class Scheduler:
         seed_depth = moves - stream_depth - table_depth
         if engine == "ssd" and (table_depth not in (6, 7) or stream_depth not in (3, 4, 5) or not 2 <= seed_depth <= 5):
             raise ValueError(f"no <S,{stream_depth},{table_depth}> split for {moves} moves")
+        gpu = spec.get("gpu") or None
+        if gpu and (engine != "ssd" or fat or table_depth != 6):
+            raise ValueError("--gpu: ssd engine, normal boards, depth-6 goal side only (src/gpu/README.md)")
         with self.lock:
             job = {
                 "id": self.next_id, "puzzle": puzzle, "moves": moves, "until": spec.get("until"),
                 "engine": engine, "table_depth": table_depth if engine == "ssd" else None,
                 "seed_depth": seed_depth if engine == "ssd" else None,
                 "stream_depth": stream_depth if engine == "ssd" else None,
-                "ram_gb": spec.get("ram_gb"), "threads": spec.get("threads"),
+                "ram_gb": spec.get("ram_gb"), "threads": spec.get("threads"), "gpu": gpu,
                 "promote": spec.get("promote", True),
                 "keep_table": spec.get("keep_table", False), "fat": puzzle_is_fat(puzzle),
                 "status": "queued", "wait_reason": "", "created": now(), "started": None,
@@ -639,6 +643,9 @@ class Scheduler:
                 cmd += ["--ram-gb", str(job["ram_gb"])]
             if job.get("threads"):
                 cmd += ["--threads", str(job["threads"])]
+            if job.get("gpu"):
+                shutil.copy2(GPU_DLL, BIN_DIR / "mbgpu.dll")   # the solver loads it from next to the exe
+                cmd += ["--gpu", str(job["gpu"])]
             if job.get("shard"):
                 k, n = job["shard"]
                 out = SHARD_ROOT / shard_group(job["puzzle"], job["moves"], n)
@@ -758,6 +765,7 @@ class Scheduler:
             if job.get("until") and moves < int(job["until"]):
                 nxt = self.add({"puzzle": puzzle, "moves": moves + 1, "until": job["until"],
                                 "engine": "auto", "ram_gb": job.get("ram_gb"), "threads": job.get("threads"),
+                                "gpu": job.get("gpu"),
                                 "promote": job["promote"],
                                 "keep_table": job["keep_table"], "front": True, "parent": job["id"]})
                 notes.append(f"queued {puzzle} at {moves + 1} moves as job {nxt['id']}")
@@ -1021,6 +1029,8 @@ def describe(job: dict) -> str:
         kind += f" shard {job['shard'][0]}/{job['shard'][1]}"
     if job.get("merge"):
         kind += f" merge of {job['merge']} shards"
+    if job.get("gpu"):
+        kind += f" gpu {job['gpu']}"
     until = f" (until {job['until']})" if job.get("until") else ""
     return f"#{job['id']:<3} {job['puzzle']:>5} {job['moves']} moves{until}  {kind}  [{job['status']}]"
 
@@ -1086,6 +1096,7 @@ def cmd_add(args) -> None:
     for puzzle in args.puzzles:
         job = api("POST", "/jobs", {"puzzle": puzzle, "moves": args.moves, "until": args.until,
                                     "engine": args.engine, "ram_gb": args.ram_gb, "threads": args.threads,
+                                    "gpu": args.gpu,
                                     "promote": not args.no_promote,
                                     "keep_table": args.keep_table, "front": args.front,
                                     "table_depth": args.table_depth, "stream_depth": args.stream_depth})
@@ -1213,6 +1224,7 @@ def main() -> None:
     a.add_argument("--engine", choices=["auto", "ssd", "inram"], default="auto")
     a.add_argument("--ram-gb", type=float)
     a.add_argument("--threads", type=int, help="solver threads (default: all)")
+    a.add_argument("--gpu", help="run on the CUDA device whose name contains this (e.g. 5060); normal boards")
     a.add_argument("--no-promote", action="store_true", help="don't update levels_final / README / config")
     a.add_argument("--keep-table", action="store_true", help="keep the depth-6/7 table afterwards")
     a.add_argument("--front", action="store_true", help="put ahead of the other queued jobs")

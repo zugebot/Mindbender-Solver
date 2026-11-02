@@ -22,9 +22,10 @@ Not at logon (since 2026-10-30): the logon script no longer starts the server or
 queue, and the queue is paused. Start it by hand when runs are wanted:
 `mbq.py daemon`, then `mbq.py resume`.
 
-The scheduler does not pass `--gpu` yet, and runs `build/experimentDiskDepth6.exe`, which was
-built before the GPU module. GPU runs (`src/gpu/README.md`) are started by hand from
-`build_test/` for now.
+GPU runs: `mbq add P --moves M --gpu 5060 --threads 8` passes `--gpu 5060` to the solver and
+copies `build_gpu/mbgpu.dll` next to its exe copy in `state/bin` (normal boards, depth-6 goal
+side; `src/gpu/README.md`). `build/experimentDiskDepth6.exe` must be a build with the GPU code
+(2026-11-01 or later). Re-queues after a reboot and `--until` escalations keep the setting.
 
 ## Dashboard
 
@@ -45,7 +46,7 @@ same browser cannot send it commands.
 |---|---|
 | `daemon` / `serve` | start the server in the background / in this console |
 | `status` | running job (phase, percent, phase and whole-job ETA), queue, free disk |
-| `add P [P...] --moves M` | queue puzzles. `--until N`: if no solution, re-queue one move deeper up to N. `--engine auto/ssd/inram`, `--ram-gb`, `--threads`, `--front`, `--keep-table`, `--no-promote` |
+| `add P [P...] --moves M` | queue puzzles. `--until N`: if no solution, re-queue one move deeper up to N. `--engine auto/ssd/inram`, `--ram-gb`, `--threads`, `--gpu NAME`, `--front`, `--keep-table`, `--no-promote` |
 | `queue` / `history [-n N]` | queued and running jobs / finished jobs with their notes |
 | `log ID [--tail N]` | the solver's log for a job (written live) |
 | `cancel ID` | drop a queued job, or stop a running one |
