@@ -23,6 +23,9 @@ exists.
   an exact-verification pass over every result, lower-bound pruning, the 14-16-move search
   design, a job scheduler, and a browser (WebAssembly) version. 87/100 solved, with proven lower
   bounds for the other 13.
+- **November 2026** (with Claude): a CUDA version of the large solver's inner loop for the
+  RTX 5060 Ti (`src/gpu/`): a 15-move search on puzzle 16-2 went from 42 min to 54 s, and a
+  16-move search is projected at minutes instead of hours (`docs/changes-2026-11-01.md`).
 
 The code as of July 2025, before the clearly AI-assisted files above: `git checkout pre-ai`, or
 the `pre-ai` tag on GitHub.
@@ -33,3 +36,4 @@ the `pre-ai` tag on GitHub.
   https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 - `build/README.md`: the unsolved puzzles and their bounds.
 - `docs/changes-*.md`: what changed and why, from October 2026 on.
+- `src/gpu/README.md`: the GPU solver (design, checks, measurements).

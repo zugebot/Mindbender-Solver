@@ -12,6 +12,21 @@ The GPU module for `experimentDiskDepth6 --gpu NAME` (CUDA; RTX 5060 Ti here).
 The solver loads `mbgpu.dll` at run time (`src/solver/ssd/gpu_stream.hpp`): next to the exe, else
 `<exe dir>/../build_gpu`, or `--gpu-dll PATH`.
 
+## Requirements and running
+
+CUDA Toolkit 13.0 and Visual Studio 2022's C++ compiler (MSVC 14.44); `build.cmd` finds both.
+The solver build that has `--gpu` is `cmake-build-test` (output `build_test/`); rebuild it with
+the DLL whenever `mbgpu.h` changes (the solver passes `mbgpu_stats` across).
+
+```
+src\gpuuild.cmd
+build_test\experimentDiskDepth6.exe 16-2 --seed-depth 4 --stream-depth 5 --threads 8 --gpu 5060 --solutions build\levels_final-2_c15_366.txt
+```
+
+`--gpu-vram-gb G` caps the VRAM (default 12.5), `--gpu-dll PATH` picks the DLL. With `--gpu`,
+large pages are off and the run log shows "(GPU)" on the audit, index and candidate-check lines
+and the GPU's seconds, launches and retries on each pass line.
+
 ## What runs where
 
 - **Probe:** per pass, the GPU gets the pass's Bloom blocks, streams every left seed `T2` moves

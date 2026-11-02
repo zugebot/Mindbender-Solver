@@ -5,12 +5,13 @@
 // so it is loaded at run time and only plain C types cross (src/gpu/mbgpu.h).
 // - The probe: per pass the GPU gets the pass's Bloom blocks, streams every seed
 //   with the canonical rules and the rotation lane bound ("both"), and hands back
-//   the leaves that pass the Bloom filter; the CPU finishes those with the same
-//   index code as the CPU probe (FingerprintRange::probeGroup), so the candidates
-//   are exactly the CPU's.
+//   the leaves that pass the Bloom filter; CPU threads finish those with the same
+//   index code as the CPU probe (FingerprintRange::probeGroup) while the GPU
+//   streams on (ProbeQueue), so the candidates are exactly the CPU's.
 // - The bound audit (gpuAuditBound), in place of bounds::auditLaneBound.
-// - The no-table depth-6 index: child counts and sorted unique child keys per
-//   partition range (no_table_d6.hpp); the CPU writes the index from them.
+// - The no-table depth-6 index (no_table_d6.hpp): child counts per partition, then
+//   per group of partitions the index itself (fingerprints, bucket offsets, Bloom
+//   blocks) written by the GPU; and the candidate check (mbgpu_match_children).
 
 #include "src/solver/ssd/fingerprint_index.hpp"
 #include "src/gpu/mbgpu.h"

@@ -20,7 +20,7 @@ solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it
   exe the scheduler copies). Portable build for other PCs: `-DMB_MARCH=x86-64-v3
   -DMB_OUTPUT_DIR=<repo>/build_portable` (no AVX-512).
 - Every program compiles the shared sources itself, so building all targets takes ~20 min.
-- Tests: `testExactSolverRegression` (13 cases), `testRotations` (112), `testJVec`,
+- Tests: `testExactSolverRegression` (14 cases), `testRotations` (112), `testJVec`,
   `testKnownSolutions` (replays every file in `<repo>/levels`; run from `build/`),
   `testWebSolver` (the web solver vs `build/levels_final`, all puzzles up to 10 moves; run from
   the repo root),
@@ -30,6 +30,14 @@ solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it
   `--solutions build/levels_final/<file>` and look for `EXACT MATCH` and `IDENTICAL SET`
   (9-3 and 10-3 at 13 moves take minutes; 16-4 at 14 is the big one, 519 solutions).
 - A running exe is locked: copy it before long runs (the scheduler does).
+- GPU module (`src/gpu/`): `src\gpu\build.cmd` (CUDA 13.0 nvcc + VS 2022 MSVC 14.44, sm_120)
+  builds `build_gpu/mbgpu.dll` and `test_gpu_stream.exe`. Check: `exportGpuVectors` (CMake
+  target) writes `build_gpu/vectors.bin`, then `build_gpu\test_gpu_stream.exe
+  build_gpu\vectors.bin` must print PASS; `--bench` on `build_gpu/bench_16-2.bin` times the
+  stream (`--seeds 200000 --filter-gb 3`: 0.74 s). The solver build with --gpu is
+  `cmake-build-test` -> `build_test/` (the solver passes `mbgpu_stats` to the DLL: rebuild both
+  when `mbgpu.h` changes). Profilers: Nsight Systems 2025.3.2, Nsight Compute 2025.3.0 (GPU
+  counters allowed for all users).
 
 ## Everyday commands (cmd)
 
@@ -43,8 +51,9 @@ python python\scheduler\mbq.py status
 
 `status` is also a live page at http://127.0.0.1:8766/ (Hold solver / Pause queue buttons).
 At logon, `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\mindbender_startup.cmd`
-runs `mbq daemon` + `mbq resume`, the user's Discord bots (`E:\runner.bat`) and the demo app.
-A job cut off by a reboot is re-queued first.
+runs the Parsec watchdog, the user's Discord bots (`E:\runner.bat`) and the demo app. Since
+2026-10-30 it no longer starts `mbq daemon` / `mbq resume` (lines commented out), and the queue
+is paused: the solver runs only when the user asks. A job cut off by a reboot is re-queued first.
 
 ## Layout
 
@@ -65,9 +74,13 @@ A job cut off by a reboot is re-queued first.
   - `solvers/`: `findSolutions` (in-RAM, 3-12 moves, reads `config.json` from cwd) and
     `experimentDiskDepth6` (12-16 moves; `main` + every flag documented at its top). The name is
     historical: it no longer needs disk tables. Rename later (scheduler, exports, docs use it).
-  - `tests/`, `benchmarks/` (`benchmarkLeftStream`), `tools/` (`expandAllLevels`,
+  - `tests/` (incl. `exportGpuVectors`, the GPU's CPU reference data), `benchmarks/`
+    (`benchmarkLeftStream`), `tools/` (`expandAllLevels`,
     `generate_ml_training_data`, `analyzeLevelsFinalHeuristic`, `DecompMindbenderScramble`),
     `experiments/` (`experimentBoundSample`: `--check`, sampling, `--bench`, `--deep --kind`).
+- `src/gpu/`: the CUDA module (`mbgpu.h` C interface, `mbgpu.cu` kernels + host driver,
+  `test_gpu_stream.cu`, `build.cmd`, `README.md`); the solver side is `src/solver/ssd/gpu_stream.hpp`.
+  `build_gpu/` (ignored by git): the DLL, the test exe, `vectors.bin`, `bench_16-2.bin`, run logs.
 - `src/utils/`: `progress_reporter.hpp` (cheap progress JSON), `parallel_for.hpp`, `timer.hpp`,
   `intrinsics/` (`my_clz`, `my_ctz64`, `my_pext_u64`, `my_popcount`).
 - `old/`: code that no longer builds or is unreferenced, kept for history (not built; README).
@@ -143,12 +156,18 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes); 2
   compiled in: rebuild the solvers after any change to it.
 - Leave alone: the `mouse/` C library, Windows system/security settings (Windows Update, auto
   login are the user's), the MuMu emulator (it costs ~6% CPU; it stays on).
+- The solver runs only when the user asks (no autostart, queue paused). Test runs on solved
+  puzzles for exactness checks are fine.
+- GPU work only on the RTX 5060 Ti (`--gpu 5060`), at most 12.5 GB of its VRAM; the GTX 1660
+  drives the desktop. CPU parts of GPU runs use `--threads 8` (16 threads took the i7 to 100 C).
 
 ## Measured facts (2026-10)
 
-Machine: i7-10700F (8 cores / 16 threads), 64 GB DDR4 at JEDEC 2133 (the Lenovo BIOS has no
-XMP; don't flash a modded BIOS), X: = Team T253 1 TB SATA SSD (32-70 MB/s sustained writes once
-its cache fills, recovers when idle). GPU: GTX 1660 SUPER now; an RTX 5060 Ti from ~2026-10-23.
+Machine: i7-10700F (8 cores / 16 threads), 96 GB DDR4 (2 x 16 GB Crucial 3200 + 2 x 32 GB
+Corsair, all at JEDEC 2133; the Lenovo BIOS has no XMP; don't flash a modded BIOS), X: = Team
+T253 1 TB SATA SSD (32-70 MB/s sustained writes once its cache fills, recovers when idle).
+GPUs (driver 610.88 on both): RTX 5060 Ti 16 GB (PCIe bus 1, x8, CUDA device 0, sm_120, 36 SMs)
+for the solver; GTX 1660 SUPER 6 GB (bus 4, x4, CUDA device 1) for the desktop.
 
 | Run | Time |
 |---|---|
@@ -169,7 +188,10 @@ its cache fills, recovers when idle). GPU: GTX 1660 SUPER now; an RTX 5060 Ti fr
 - Index sizes: depth-6 fingerprint index ~4.6 B/state; depth-7 ~4.8 B/state (2x2 15-move runs:
   209-237 GB, 6-7 passes in a ~35 GB budget).
 - Large pages: often unavailable once memory is fragmented (a reboot restores them); they made
-  no measurable difference on 6-4 at 13 moves.
+  no measurable difference on 6-4 at 13 moves. Allocating 18.8 GB of them took 9.6 s on 16-4
+  (2026-11-01); they are off with --gpu.
+- GPU (2026-11-01): node kernel ~0.63 ns per parent node (16-2: 17.7 G nodes in 11.9 s); 66 C,
+  133 W at full load. Details: `src/gpu/README.md`, `docs/changes-2026-11-01.md`.
 - Progress reporting costs +0.03%; the probe-variant calibration picks 128/plain here (-1.1%).
 - Background CPU users and held/test runs slow jobs and their run-history timings (e.g. 16-4's
   colour-mix run streamed at 149 M/s instead of ~250-350).

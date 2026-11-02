@@ -18,6 +18,14 @@ python python/scheduler/mbq.py add 12-1 12-5 --moves 13 --until 14
   whole job: about 3h 45m left, done around 21:40
 ```
 
+Not at logon (since 2026-10-30): the logon script no longer starts the server or resumes the
+queue, and the queue is paused. Start it by hand when runs are wanted:
+`mbq.py daemon`, then `mbq.py resume`.
+
+The scheduler does not pass `--gpu` yet, and runs `build/experimentDiskDepth6.exe`, which was
+built before the GPU module. GPU runs (`src/gpu/README.md`) are started by hand from
+`build_test/` for now.
+
 ## Dashboard
 
 Open **http://127.0.0.1:8766/** while the server runs. It refreshes every 3
