@@ -4,9 +4,9 @@ Optimal solver for Chuzzle's Mind Bender puzzles (100 puzzles, 6x6 boards,
 row/column cyclic shifts, some with a 2x2 piece). It finds every shortest
 solution and proves nothing shorter exists. C++ solver plus Python tools.
 
-Status (2026-11-02): **91/100 solved** (15-1, 19-3, 17-3, 12-1 at 16 moves on the GPU); the unsolved
-normal boards (14-3, 16-3, 18-3) need >= 17, the unsolved 2x2 boards (6-4, 15-3, 15-4, 16-1,
-19-2, 19-4) >= 16. `build/README.md` lists the unsolved ones with their
+Status (2026-11-02): **92/100 solved** (15-1, 19-3, 17-3, 12-1 at 16 moves on the GPU; 6-4 at 16,
+68 solutions, `<5,4,7>` on the GPU in 6 h 45 min); the unsolved normal boards (14-3, 16-3, 18-3)
+need >= 17, the unsolved 2x2 boards (15-3, 15-4, 16-1, 19-2, 19-4) >= 16. `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
 History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-02.md`, 2x2 boards on
 the GPU and faster recovery; `changes-2026-11-01.md`, the GPU
@@ -190,7 +190,7 @@ for the solver; GTX 1660 SUPER 6 GB (bus 4, x4, CUDA device 1) for the desktop.
 | 16 moves, normal board, `<5,5,6>` | 8.5 h (18-3, 4.9 ms/seed) to 36.5 h (20-5, 12.6 ms/seed, 1.0e13 left states); one pass; recovery ~5 min (CPU, before the reach filter) |
 | `--gpu 5060` (2026-11-01, src/gpu/README.md) | 16-2 at 15: 42 min -> 54 s (stream 12.6 s); 16-4 at 14: 1 h 27 min -> 2 min 18 s; 18-3 at 16: stream ~2.5 min from a 1/64 shard (whole run ~4 min) |
 | `--gpu 5060`, 16 moves, normal boards (2026-11-02, 6 threads) | 15-1 19 min, 16-3 16 min, 17-3 38 min, 19-3 1 h 04 min, 12-1 2 h 13 min (2 h of it recovery; now 56 s) |
-| `--gpu 5060`, 2x2 boards (2026-11-02) | 17-4 at 13: 294 s -> 36 s; 17-2 at 14 (5 passes): 56 min -> 5 min 50 s; 18-4 at 15 `<5,3,7>` (6 passes): 10.0 h -> 25 min; 16 moves `<5,4,7>` projected ~10 h each |
+| `--gpu 5060`, 2x2 boards (2026-11-02) | 17-4 at 13: 294 s -> 36 s; 17-2 at 14 (5 passes): 56 min -> 5 min 50 s; 18-4 at 15 `<5,3,7>` (6 passes): 10.0 h -> 25 min; 6-4 at 16 `<5,4,7>` (disk depth-7 index, 6 passes x ~4000 s, 3.1e14 left states): 6 h 45 min |
 | 15 moves, 6-4 (disk depth-7 index) | 13.4 h, 10 passes |
 | 13 moves, normal board, rotation bound | 10-3: 1 min 43 s; 9-3: ~6 min (colour mix: 5-25 min) |
 | First-move rule (2026-10-29/30, docs/changes-2026-10-16.md 13-14) | 18-3 at 15: stream 1103 s -> 759 s; 17-4 at 13 (2x2): 468 s -> 313 s; 17-2 at 14 (2x2, depth 7): 6010 s -> 3345 s |
@@ -227,15 +227,16 @@ Done (2026-10-04 to 10-12; details in docs/changes-*.md):
 
 Next:
 1. Smaller index for multi-pass runs: a binary fuse filter at ~2 B/state instead of 4.8 would
-   halve the passes of 2x2 15-move runs (~10 h -> ~5 h) and 6-4 at 16. Generation dominates
+   halve the passes of 2x2 15-move runs (~10 h -> ~5 h) and 2x2 16-move runs. Generation dominates
    those runs (each pass re-streams the left side), so 3 reads per lookup instead of 1 hardly
    matters. Prototype and A/B.
-2. A bound that prunes on 2x2 boards (6-4, 15-3, 15-4, 19-2 need >= 16, all 2x2): the halved
+2. A bound that prunes on 2x2 boards (15-3, 15-4, 16-1, 19-2, 19-4 need >= 16, all 2x2): the halved
    lane bound tops out at 6 and pruning needs > 7, and no lane bound can do better (cover
    argument in docs/changes-2026-10-12.md section 7). It needs bounds over several lanes at once
    (pattern tables, e.g. split by move type), or the time has to come from fewer passes / the GPU.
 3. 16 moves on 2x2 boards: `<5,4,7>` with `--gpu 5060` (`mbq add ... --gpu 5060 --threads 6`),
-   projected ~10 h each (5-6 passes x ~6500 s of stream; CPU: ~200-300 h). Fewer passes need a
+   ~7-10 h each (6-4: 6 h 45 min, 6 passes x ~4000 s of stream, 3.1e14 left states; CPU:
+   ~200-300 h). Fewer passes need a
    smaller Bloom filter per state (VRAM caps a pass at ~8.7 G goal states) and a smaller index
    (item 1). Normal boards run `<5,5,6>` (~8.5 h); the goal-side
    filter by h(start) keeps 54% on 18-3, too little for a one-pass depth-7 goal side. 17 moves

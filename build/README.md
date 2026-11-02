@@ -15,10 +15,9 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 
 
 
-# 9 puzzles remain unsolved:
+# 8 puzzles remain unsolved:
 (each re-checked at 12 moves with the fixed solver on 2026-10-05: no solutions;
  6-4 also has none at 13, 14 or 15. Solved at 13 moves: 10-2 (32 solutions), 10-3 (1648).)
- 6-4: at least 16 moves
 14-3: at least 17 moves
 15-3: at least 16 moves
 15-4: at least 16 moves
