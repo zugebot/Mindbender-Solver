@@ -13,6 +13,7 @@
 
 #include "src/chuzzles/intersection.hpp"
 #include "src/chuzzles/perm_stream.hpp"
+#include "src/solver/bounds/lane_bound.hpp"
 #include "src/solver/inram/right_frontier_table.hpp"
 #include "src/solver/inram/solver_base.hpp"
 
@@ -23,6 +24,9 @@ public:
     // depth-5 frontier is 60^5 = 7.8e8 boards (~30 GB), and left depth 10 (16-move <5,5,6>)
     // has a depth-5 half per middle on top of the shared one.
     inline static u32 recoveryStreamMinDepth = 5;
+    // Recovery: the shared start-side frontier keeps only paths that can still reach a middle
+    // (normal boards, at most this many middles; each node is checked against every middle).
+    inline static u32 recoveryReachMaxMiddles = 64;
 
     enum class SearchDirection : u8 {
         Auto = 0,
@@ -176,13 +180,40 @@ private:
         return result;
     }
 
+    // Recovery's reachability filter: a path whose end is `depth` moves from the root is kept
+    // only if some target is within totalDepth - depth moves by the rotation lane bound. Exact:
+    // the bound is 0 at its target and changes by at most 1 per move, so it never exceeds the
+    // distance, and every path ending at a target passes the test at every depth.
+    struct RecoveryReach {
+        std::vector<lane_bound::LaneTables> targets;
+        u32 totalDepth = 0;
+
+        MUND bool reachable(const B1B2& s, const u32 depth) const {
+            const int rest = static_cast<int>(totalDepth) - static_cast<int>(depth);
+            for (const lane_bound::LaneTables& t : targets) {
+                if (lane_bound::bound(s, t) <= rest) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
+
+    // Every path of DEPTH moves (no order rules: recovery wants all of them); with `reach`, only
+    // those that pass it at every depth (normal boards). store = false only counts.
     template<u32 DEPTH, u32 CUR_DEPTH = 0>
     MU static void enumerateAllRecoveryPaths(const Board& board,
                                              const u64 packedMoves,
                                              JVec<Board>& states,
                                              JVec<u64>& hashes,
-                                             std::size_t& count) {
+                                             std::size_t& count,
+                                             const RecoveryReach* reach = nullptr,
+                                             const bool store = true) {
         if constexpr (CUR_DEPTH == DEPTH) {
+            if (!store) {
+                ++count;
+                return;
+            }
             Board stored = board;
             if constexpr (DEPTH > 0) {
                 stored.memory.template setNextNMove<DEPTH>(packedMoves);
@@ -203,7 +234,7 @@ private:
                     const u64 nextPacked = packedMoves |
                             (relativeIndex << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
                     enumerateAllRecoveryPaths<DEPTH, CUR_DEPTH + 1>(
-                            next, nextPacked, states, hashes, count);
+                            next, nextPacked, states, hashes, count, reach, store);
                 }
             } else {
                 for (u64 direction = 0; direction < 2ULL; ++direction) {
@@ -216,11 +247,14 @@ private:
                             if (next == board) {
                                 continue;
                             }
+                            if (reach != nullptr && !reach->reachable(next, CUR_DEPTH + 1)) {
+                                continue;
+                            }
 
                             const u64 nextPacked = packedMoves |
                                     (actionIndex << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
                             enumerateAllRecoveryPaths<DEPTH, CUR_DEPTH + 1>(
-                                    next, nextPacked, states, hashes, count);
+                                    next, nextPacked, states, hashes, count, reach, store);
                         }
                     }
                 }
@@ -274,20 +308,27 @@ private:
 
     template<u32 DEPTH>
     MU static void buildBoardAllPathFrontier(const Board& root,
-                                             RecoveryBoardFrontierCache& cache) {
+                                             RecoveryBoardFrontierCache& cache,
+                                             const RecoveryReach* reach = nullptr) {
         cache.states.clear();
         cache.hashes.clear();
 
-        const std::size_t upper = recoveryPathUpperBound(root.getFatBool(), DEPTH);
+        std::size_t upper = recoveryPathUpperBound(root.getFatBool(), DEPTH);
         if (upper == std::numeric_limits<std::size_t>::max()) {
             throw std::runtime_error("exact recovery frontier size overflow");
+        }
+        if (reach != nullptr && !root.getFatBool()) {
+            upper = 0;   // a counting pass first: the filtered frontier is a small part of 60^DEPTH
+            enumerateAllRecoveryPaths<DEPTH>(root, 0ULL, cache.states, cache.hashes, upper, reach, false);
+        } else {
+            reach = nullptr;
         }
 
         cache.states.resize(upper);
         cache.hashes.resize(upper);
         std::size_t count = 0;
         enumerateAllRecoveryPaths<DEPTH>(
-                root, 0ULL, cache.states, cache.hashes, count);
+                root, 0ULL, cache.states, cache.hashes, count, reach);
         cache.states.resize(count);
         cache.hashes.resize(count);
         cache.sorter.sortBoards(cache.states, cache.hashes, DEPTH, root.getColorCount());
@@ -295,14 +336,15 @@ private:
 
     MU static void buildBoardExactNoneFrontier(const Board& root,
                                                const u32 depth,
-                                               RecoveryBoardFrontierCache& cache) {
+                                               RecoveryBoardFrontierCache& cache,
+                                               const RecoveryReach* reach = nullptr) {
         switch (depth) {
-            case 0: buildBoardAllPathFrontier<0>(root, cache); return;
-            case 1: buildBoardAllPathFrontier<1>(root, cache); return;
-            case 2: buildBoardAllPathFrontier<2>(root, cache); return;
-            case 3: buildBoardAllPathFrontier<3>(root, cache); return;
-            case 4: buildBoardAllPathFrontier<4>(root, cache); return;
-            case 5: buildBoardAllPathFrontier<5>(root, cache); return;
+            case 0: buildBoardAllPathFrontier<0>(root, cache, reach); return;
+            case 1: buildBoardAllPathFrontier<1>(root, cache, reach); return;
+            case 2: buildBoardAllPathFrontier<2>(root, cache, reach); return;
+            case 3: buildBoardAllPathFrontier<3>(root, cache, reach); return;
+            case 4: buildBoardAllPathFrontier<4>(root, cache, reach); return;
+            case 5: buildBoardAllPathFrontier<5>(root, cache, reach); return;
             default:
                 throw std::runtime_error("exact recovery half-depth exceeds supported range 0..5");
         }
@@ -624,15 +666,38 @@ private:
         Board& searchStartRoot = getSearchStartBoard<REVERSE_SEARCH>();
         Board& searchGoalRoot = getSearchGoalBoard<REVERSE_SEARCH>();
 
+        Timer sharedTimer;
         RecoveryBoardFrontierCache startSharedCache;
-        ensureCache(startSharedCache, searchStartRoot, START_SHARED_DEPTH);
+        // Only start paths that can still reach one of the middles (see RecoveryReach).
+        RecoveryReach reach;
+        const bool useReach = !searchStartRoot.getFatBool() && middleMatches.size() <= recoveryReachMaxMiddles;
+        if (useReach) {
+            reach.totalDepth = TOTAL_LEFT_DEPTH;
+            reach.targets.resize(middleMatches.size());
+            for (std::size_t i = 0; i < middleMatches.size(); ++i) {
+                lane_bound::buildLaneTables(middleMatches[i], reach.targets[i], lane_bound::Kind::Rotation);
+            }
+        }
+        startSharedCache.root = searchStartRoot;
+        startSharedCache.depth = START_SHARED_DEPTH;
+        startSharedCache.valid = true;
+        buildBoardExactNoneFrontier(searchStartRoot, START_SHARED_DEPTH, startSharedCache,
+                                    useReach ? &reach : nullptr);
+        const double startSharedSeconds = sharedTimer.getSeconds();
         ensureCache(goalRightCache_, searchGoalRoot, GOAL_SHARED_DEPTH);
         const RecoveryBoardFrontierCache& goalSharedCache = goalRightCache_;
+        tcout << "recovery: shared frontiers start depth " << START_SHARED_DEPTH << " ("
+              << startSharedCache.states.size() << " paths" << (useReach ? " that can reach a middle" : "")
+              << ") " << startSharedSeconds << "s, goal depth "
+              << GOAL_SHARED_DEPTH << " (" << goalSharedCache.states.size() << ") "
+              << sharedTimer.getSeconds() - startSharedSeconds << "s\n";
+        Timer middleTimer;
 
         // Each worker holds two per-middle frontiers (states + hashes + sort
         // scratch); keep their combined worst case under ~6 GB.
         const bool fat = searchStartRoot.getFatBool();
-        const bool streamStart = START_PER_MIDDLE_DEPTH >= recoveryStreamMinDepth;
+        // a filtered shared side is small: stream the per-middle side against it instead of storing it
+        const bool streamStart = START_PER_MIDDLE_DEPTH >= recoveryStreamMinDepth || useReach;
         const bool streamGoal = GOAL_PER_MIDDLE_DEPTH >= recoveryStreamMinDepth;
         const double perWorkerBytes =
                 2.0 * static_cast<double>(sizeof(Board) + sizeof(u64))
@@ -724,6 +789,9 @@ private:
         }
 
         metrics.pathRecoverySeconds = pathRecoveryTimer.getSeconds();
+        tcout << "recovery: " << middleMatches.size() << " middles on " << workerCount << " workers, start side "
+              << START_PER_MIDDLE_DEPTH << (streamStart ? " (streamed)" : "") << " + goal side " << GOAL_PER_MIDDLE_DEPTH
+              << " moves per middle: " << middleTimer.getSeconds() << "s\n";
 
         if constexpr (debug) {
             tcout << "global exact recovery raw solutions: "
