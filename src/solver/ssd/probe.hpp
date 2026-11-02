@@ -281,7 +281,8 @@ namespace ssd {
                 tcout << "  pass " << (pass + 1) << "/" << passes.size() << " partitions [" << pBegin << "," << pEnd
                       << "): load " << index.bytes() / 1e9 << " GB in " << passLoad << "s, GPU stream+probe "
                       << r.stats.leaves << " left states in " << passProbe << "s (GPU " << r.stats.seconds << "s, "
-                      << r.stats.launches << " launches, " << r.stats.retries << " retried), Bloom pass "
+                      << r.stats.launches << " launches, " << r.stats.retries << " retried; CPU probe done "
+                      << r.probeWaitSeconds << "s after the GPU), Bloom pass "
                       << 100.0 * static_cast<double>(r.bloomPasses) / static_cast<double>(std::max<u64>(1, r.stats.inRange))
                       << "%; nodes per level:";
                 for (i32 d = 1; d < STREAM_DEPTH; ++d) {

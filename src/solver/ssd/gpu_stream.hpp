@@ -15,6 +15,11 @@
 #include "src/solver/ssd/fingerprint_index.hpp"
 #include "src/gpu/mbgpu.h"
 
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
+
 namespace ssd {
 
     static_assert(sizeof(B1B2) == 16, "mbgpu reads seeds as 2 x u64 per B1B2");
@@ -208,13 +213,76 @@ namespace ssd {
         }
     };
 
+    // Leaves that passed the GPU's Bloom test, waiting for the CPU probe. The sink (on the
+    // thread driving the GPU) copies each batch in, split into pieces, and waits while more
+    // than `capLeaves` are queued; probe threads take pieces while the GPU streams on.
+    class ProbeQueue {
+    public:
+        struct Piece {
+            std::vector<B1B2> states;
+            std::vector<u64> keys;
+        };
+
+        explicit ProbeQueue(const u64 capLeaves) : cap_(capLeaves) {}
+
+        static void sink(void* ctx, const uint64_t* b1, const uint64_t* b2, const uint64_t* keys, const uint32_t*,
+                         const uint64_t count) {
+            auto* self = static_cast<ProbeQueue*>(ctx);
+            constexpr uint64_t PIECE = 1ULL << 16;
+            for (uint64_t lo = 0; lo < count; lo += PIECE) {
+                const uint64_t n = std::min(PIECE, count - lo);
+                Piece p;
+                p.states.resize(n);
+                p.keys.assign(keys + lo, keys + lo + n);
+                for (uint64_t i = 0; i < n; ++i) {
+                    p.states[i] = B1B2(b1[lo + i], b2[lo + i]);
+                }
+                std::unique_lock<std::mutex> lock(self->m_);
+                self->space_.wait(lock, [&] { return self->queued_ < self->cap_; });
+                self->queued_ += n;
+                self->q_.push_back(std::move(p));
+                self->ready_.notify_one();
+            }
+        }
+
+        // false when the stream has finished and nothing is left
+        bool pop(Piece& out) {
+            std::unique_lock<std::mutex> lock(m_);
+            ready_.wait(lock, [&] { return !q_.empty() || done_; });
+            if (q_.empty()) {
+                return false;
+            }
+            out = std::move(q_.front());
+            q_.pop_front();
+            queued_ -= out.states.size();
+            space_.notify_one();
+            return true;
+        }
+
+        void finish() {
+            std::lock_guard<std::mutex> lock(m_);
+            done_ = true;
+            ready_.notify_all();
+        }
+
+    private:
+        std::mutex m_;
+        std::condition_variable ready_, space_;
+        std::deque<Piece> q_;
+        u64 queued_ = 0;
+        u64 cap_;
+        bool done_ = false;
+    };
+
     struct GpuPassResult {
         mbgpu_stats stats{};
         u64 bloomPasses = 0;
+        double probeWaitSeconds = 0;   // the probe threads still busy after the GPU finished
     };
 
     // One probe pass on the GPU: Bloom blocks of [pBegin, pEnd) to the device, every
-    // seed streamed, survivors finished on the CPU into `candidates`.
+    // seed streamed; the leaves that pass the Bloom test are finished on the CPU into
+    // `candidates` by `threads` probe threads while the GPU streams.
     inline GpuPassResult gpuProbePass(GpuModule& gpu, const FingerprintRange& index, const JVec<B1B2>& seeds,
                                       const std::vector<u8>& seedMoves, const i32 streamDepth, const u32 threads,
                                       std::vector<KeyedState>& candidates) {
@@ -222,22 +290,35 @@ namespace ssd {
         if (gpu.setFilter(index.bloom.data(), index.meta.bloomBlocksPerPartition, index.pBegin, index.pEnd) != 0) {
             throw std::runtime_error("GPU: " + gpu.error());
         }
-        GpuLeaves leaves;
+        ProbeQueue queue(64ULL << 20);   // ~2 GB of leaves at most
+        std::vector<std::vector<KeyedState>> found(threads);
+        std::vector<u64> passes(threads, 0);
+        std::vector<std::thread> workers;
+        for (u32 t = 0; t < threads; ++t) {
+            workers.emplace_back([&, t] {
+                ProbeQueue::Piece p;
+                while (queue.pop(p)) {
+                    const std::size_t n = p.states.size();
+                    for (std::size_t lo = 0; lo < n; lo += PROBE_GROUP) {
+                        const u32 cnt = static_cast<u32>(std::min<std::size_t>(PROBE_GROUP, n - lo));
+                        passes[t] += index.probeGroup(&p.states[lo], &p.keys[lo], cnt, found[t]);
+                    }
+                }
+            });
+        }
         const auto* states = reinterpret_cast<const uint64_t*>(seeds.data());
-        if (gpu.stream(states, seedMoves.empty() ? nullptr : seedMoves.data(), seeds.size(), streamDepth,
-                       &GpuLeaves::sink, &leaves, &r.stats) != 0) {
+        const int rc = gpu.stream(states, seedMoves.empty() ? nullptr : seedMoves.data(), seeds.size(), streamDepth,
+                                  &ProbeQueue::sink, &queue, &r.stats);
+        Timer wait;
+        queue.finish();
+        for (std::thread& w : workers) {
+            w.join();
+        }
+        r.probeWaitSeconds = wait.getSeconds();
+        if (rc != 0) {
             throw std::runtime_error("GPU: " + gpu.error());
         }
         gpu.setFilter(nullptr, 0, 0, PARTITION_COUNT);   // the Bloom blocks' VRAM back before the next pass
-        // Buckets and fingerprints on the CPU (the Bloom test is repeated there; it passes).
-        const std::size_t n = leaves.states.size();
-        constexpr std::size_t GROUP = PROBE_GROUP;
-        std::vector<std::vector<KeyedState>> found(threads);
-        std::vector<u64> passes(threads, 0);
-        parallelFor(threads, (n + GROUP - 1) / GROUP, [&](const u32 t, const std::size_t g) {
-            const std::size_t lo = g * GROUP, cnt = std::min(GROUP, n - lo);
-            passes[t] += index.probeGroup(&leaves.states[lo], &leaves.keys[lo], static_cast<u32>(cnt), found[t]);
-        });
         for (u32 t = 0; t < threads; ++t) {
             r.bloomPasses += passes[t];
             candidates.insert(candidates.end(), found[t].begin(), found[t].end());

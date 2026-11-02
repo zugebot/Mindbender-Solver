@@ -157,7 +157,9 @@ namespace ssd {
             idx.fingerprints.ensure(cap);
             idx.starts.ensure(parts * dirPer);
             idx.bloom.ensure(parts * bloomPer);
-            std::memset(idx.bloom.data(), 0, parts * bloomPer * sizeof(u32));
+            if (!gpuKeys) {   // the GPU writes every Bloom block of the range itself
+                std::memset(idx.bloom.data(), 0, parts * bloomPer * sizeof(u32));
+            }
             idx.partitionFirst.assign(1, 0);
 
             // Sub-groups of partitions whose raw keys fit the leftover RAM,

@@ -96,8 +96,10 @@
 // name contains NAME (e.g. 5060; no other device is used), at most G GB of its memory (default
 // 12.5). Normal boards, forward. The GPU applies the same canonical rules and the rotation lane
 // bound at every level as the CPU's "both" mode, tests the leaves against the pass's Bloom
-// blocks and hands the survivors back; the CPU finishes them with the same index code, so the
-// candidates are the CPU's. Needs build_gpu/mbgpu.dll (src/gpu/build.cmd; src/gpu/README.md).
+// blocks and hands the survivors back; CPU threads finish them with the same index code while
+// the GPU streams on, so the candidates are the CPU's. The GPU also audits its bound, builds
+// the depth-6 index and regenerates depth 6 to confirm candidates. Large pages are off with
+// --gpu. Needs build_gpu/mbgpu.dll (src/gpu/build.cmd; src/gpu/README.md).
 // --no-seed-last-move: by default the first streamed move from each left seed, and the
 // first move of the goal side's depth-6 / depth-7 expansion from its depth-5 frontier,
 // follow the same canonical-order rules as the moves below them, with each state's own
@@ -142,7 +144,9 @@ using namespace ssd;
 
 int main(const int argc, char** argv) {
     const Config cfg = parseArgs(argc, argv);
-    g_largePagesWanted = cfg.largePages;
+    // With --gpu the CPU probes only the ~1% of leaves that pass the GPU's Bloom test, so large
+    // pages gain nothing, and allocating them on fragmented RAM cost 16-4 at 14 moves 9.6 s.
+    g_largePagesWanted = cfg.largePages && cfg.gpuDevice.empty();
     tcout << std::unitbuf;   // flush every line: a redirected log can be followed live
     g_progress.start(cfg.progressFile, cfg.progressInterval);
     const BoardPair* pair = BoardLookup::getBoardPair(cfg.puzzle);
