@@ -263,9 +263,11 @@ private:
     }
 
     // fn(board) for every exact-length path from `board` (its moves in board.memory), the same
-    // paths in the same order as enumerateAllRecoveryPaths, without storing them.
+    // paths in the same order as enumerateAllRecoveryPaths, without storing them; with `reach`,
+    // only those that pass it at every depth (normal boards).
     template<u32 DEPTH, u32 CUR_DEPTH = 0, typename Fn>
-    MU static void forEachRecoveryPath(const Board& board, const u64 packedMoves, Fn& fn) {
+    MU static void forEachRecoveryPath(const Board& board, const u64 packedMoves, Fn& fn,
+                                       const RecoveryReach* reach = nullptr) {
         if constexpr (CUR_DEPTH == DEPTH) {
             Board stored = board;
             if constexpr (DEPTH > 0) {
@@ -283,7 +285,7 @@ private:
                     }
                     const u64 nextPacked = packedMoves |
                             (relativeIndex << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
-                    forEachRecoveryPath<DEPTH, CUR_DEPTH + 1>(next, nextPacked, fn);
+                    forEachRecoveryPath<DEPTH, CUR_DEPTH + 1>(next, nextPacked, fn, reach);
                 }
             } else {
                 for (u64 direction = 0; direction < 2ULL; ++direction) {
@@ -296,9 +298,12 @@ private:
                             if (next == board) {
                                 continue;
                             }
+                            if (reach != nullptr && !reach->reachable(next, CUR_DEPTH + 1)) {
+                                continue;
+                            }
                             const u64 nextPacked = packedMoves |
                                     (actionIndex << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
-                            forEachRecoveryPath<DEPTH, CUR_DEPTH + 1>(next, nextPacked, fn);
+                            forEachRecoveryPath<DEPTH, CUR_DEPTH + 1>(next, nextPacked, fn, reach);
                         }
                     }
                 }
@@ -414,12 +419,14 @@ private:
 
     // recoverSplitBySharedLookup with the small side streamed from `smallRoot` (DEPTH moves)
     // instead of read from a stored frontier: same matches, no memory for the small side.
+    // `reach` (optional) drops small-side paths that cannot meet the shared side's root in time.
     template<bool REVERSE_OUTPUT, bool SMALL_IS_LEFT, u32 DEPTH>
     MU static void recoverSplitBySharedLookupStreamed(const Board& leftRoot,
                                                       const Board& rightRoot,
                                                       const RecoveryBoardFrontierCache& shared,
                                                       const Board& smallRoot,
-                                                      std::set<std::string>& outPaths) {
+                                                      std::set<std::string>& outPaths,
+                                                      const RecoveryReach* reach = nullptr) {
         outPaths.clear();
 
         const bool leftIsFat = leftRoot.getFatBool();
@@ -455,7 +462,7 @@ private:
                 }
             }
         };
-        forEachRecoveryPath<DEPTH>(smallRoot, 0ULL, visit);
+        forEachRecoveryPath<DEPTH>(smallRoot, 0ULL, visit, reach);
     }
 
     MU static void appendStates(JVec<B1B2>& dstStates,
@@ -678,6 +685,17 @@ private:
                 lane_bound::buildLaneTables(middleMatches[i], reach.targets[i], lane_bound::Kind::Rotation);
             }
         }
+        // Per middle, the start side is streamed from the middle back toward the start root: a
+        // state j moves from the middle lies on a path only if the start root is within
+        // TOTAL_LEFT_DEPTH - j moves, so the rotation bound to the start root filters it (exact,
+        // as for `reach`; normal boards).
+        RecoveryReach towardStart;
+        const bool useTowardStart = !searchStartRoot.getFatBool();
+        if (useTowardStart) {
+            towardStart.totalDepth = TOTAL_LEFT_DEPTH;
+            towardStart.targets.resize(1);
+            lane_bound::buildLaneTables(searchStartRoot, towardStart.targets[0], lane_bound::Kind::Rotation);
+        }
         startSharedCache.root = searchStartRoot;
         startSharedCache.depth = START_SHARED_DEPTH;
         startSharedCache.valid = true;
@@ -697,7 +715,7 @@ private:
         // scratch); keep their combined worst case under ~6 GB.
         const bool fat = searchStartRoot.getFatBool();
         // a filtered shared side is small: stream the per-middle side against it instead of storing it
-        const bool streamStart = START_PER_MIDDLE_DEPTH >= recoveryStreamMinDepth || useReach;
+        const bool streamStart = START_PER_MIDDLE_DEPTH >= recoveryStreamMinDepth || useReach || useTowardStart;
         const bool streamGoal = GOAL_PER_MIDDLE_DEPTH >= recoveryStreamMinDepth;
         const double perWorkerBytes =
                 2.0 * static_cast<double>(sizeof(Board) + sizeof(u64))
@@ -728,7 +746,8 @@ private:
 
                 if (streamStart) {
                     recoverSplitBySharedLookupStreamed<REVERSE_SEARCH, false, START_PER_MIDDLE_DEPTH>(
-                            searchStartRoot, middleBoard, startSharedCache, middleBoard, rootToMiddlePaths);
+                            searchStartRoot, middleBoard, startSharedCache, middleBoard, rootToMiddlePaths,
+                            useTowardStart ? &towardStart : nullptr);
                 } else {
                     middleFromStartCache.valid = false;
                     ensureCache(middleFromStartCache, middleBoard, START_PER_MIDDLE_DEPTH);
