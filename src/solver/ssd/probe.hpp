@@ -7,6 +7,7 @@
 // the disk table (probeFingerprint) or hand them back (no-table modes).
 
 #include "src/solver/ssd/probe_sink.hpp"
+#include "src/solver/ssd/gpu_stream.hpp"
 #include "src/solver/bounds/audit.hpp"
 #include "src/solver/bounds/calibrate.hpp"
 #include "src/solver/bounds/parent_prune.hpp"
@@ -186,6 +187,40 @@ namespace ssd {
             }
         }
 
+        // --gpu: every pass streams on the GPU (gpu_stream.hpp), with the rotation lane bound
+        // at every level ("both") when the audit above kept the bound, and no bound otherwise.
+        static GpuModule gpu;
+        const bool useGpu = !cfg.gpuDevice.empty();
+        if (useGpu) {
+            if (leftRoot.getFatBool() || g_rightRoot.getFatBool()) {
+                throw std::runtime_error("--gpu: 2x2 boards are not supported yet");
+            }
+            if (cfg.reverse) {
+                throw std::runtime_error("--gpu: forward searches only");
+            }
+            if (STREAM_DEPTH > MBGPU_MAX_DEPTH) {
+                throw std::runtime_error("--gpu: stream depth above " + std::to_string(MBGPU_MAX_DEPTH));
+            }
+            const bool bounded = bounds::g_laneTables != nullptr;
+            if (bounded && cfg.boundKind != lane_bound::Kind::Rotation) {
+                throw std::runtime_error("--gpu: only the rotation bound is implemented on the GPU");
+            }
+            std::string why;
+            if (!gpu.ready() && !gpu.load(cfg.gpuDll, why)) {
+                throw std::runtime_error("--gpu: " + why);
+            }
+            char info[512] = {};
+            if (gpu.open(cfg.gpuDevice.c_str(), static_cast<uint64_t>(cfg.gpuVramGb * 1e9), info, sizeof(info)) != 0) {
+                throw std::runtime_error("--gpu: " + gpu.error());
+            }
+            const int gpuLimit = bounded ? boundLimit : -1;
+            if (gpu.setTarget(g_rightRoot.b1, g_rightRoot.b2, gpuLimit) != 0) {
+                throw std::runtime_error("--gpu: " + gpu.error());
+            }
+            tcout << "gpu: " << info << "; " << gpu.path << "; bound "
+                  << (bounded ? "both (rotation), limit " + std::to_string(gpuLimit) : std::string("off")) << "\n";
+        }
+
         std::vector<KeyedState> candidates;
         double loadSeconds = 0.0, probeSeconds = 0.0;
         u64 streamedTotal = 0, inRangeTotal = 0, bloomPassTotal = 0, boundSkippedTotal = 0;
@@ -230,6 +265,28 @@ namespace ssd {
             const double passLoad = loadTimer.getSeconds();
             loadSeconds += passLoad;
             g_progress.detail(passLabel + " streaming");
+
+            if (useGpu) {
+                Timer gpuTimer;
+                const GpuPassResult r = gpuProbePass(gpu, index, seeds, seedMoves, STREAM_DEPTH, threads, candidates);
+                const double passProbe = gpuTimer.getSeconds();
+                probeSeconds += passProbe;
+                streamedTotal += r.stats.leaves;
+                inRangeTotal += r.stats.inRange;
+                bloomPassTotal += r.bloomPasses;
+                g_progress.add(seeds.size());
+                tcout << "  pass " << (pass + 1) << "/" << passes.size() << " partitions [" << pBegin << "," << pEnd
+                      << "): load " << index.bytes() / 1e9 << " GB in " << passLoad << "s, GPU stream+probe "
+                      << r.stats.leaves << " left states in " << passProbe << "s (GPU " << r.stats.seconds << "s, "
+                      << r.stats.launches << " launches), Bloom pass "
+                      << 100.0 * static_cast<double>(r.bloomPasses) / static_cast<double>(std::max<u64>(1, r.stats.inRange))
+                      << "%; nodes per level:";
+                for (i32 d = 1; d < STREAM_DEPTH; ++d) {
+                    tcout << ' ' << r.stats.nodes[d];
+                }
+                tcout << "\n";
+                continue;
+            }
 
             Timer probeTimer;
             std::mutex candidateLock;
@@ -399,6 +456,9 @@ namespace ssd {
                   << "%" << (passBound != 0 ? ", bound skipped " + std::to_string(passBound) + " lookups" : "") << "\n";
         }
 
+        if (useGpu) {
+            gpu.close();
+        }
         std::sort(candidates.begin(), candidates.end());
         candidates.erase(std::unique(candidates.begin(), candidates.end(),
                                      [](const KeyedState& a, const KeyedState& b) {

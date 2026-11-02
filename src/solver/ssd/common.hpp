@@ -93,6 +93,9 @@ namespace ssd {
         u32 recoverStreamDepth = 5;   // --recover-stream-depth: per-middle recovery halves this deep are streamed
         bool d7CountsInRam = false;   // --d7-counts-ram: keep the depth-7 bucket counts in RAM
         bool seedLastMove = true;     // first streamed move follows the canonical-order rules (--no-seed-last-move: off)
+        std::string gpuDevice;        // --gpu NAME: stream on the CUDA device named like NAME (gpu_stream.hpp)
+        std::string gpuDll;           // --gpu-dll PATH (default: mbgpu.dll next to the exe, then ../build_gpu)
+        double gpuVramGb = 12.5;      // --gpu-vram-gb: VRAM the GPU module may use
         lane_bound::Kind boundKind = lane_bound::Kind::Rotation;   // --bound-kind mix|rotation   // max; the run uses 3% of its search, >= 20 s
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }

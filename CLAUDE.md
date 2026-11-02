@@ -113,6 +113,8 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes); 2
   user's teacher (GitHub issue 1).
 - Seeds are visited in a strided order (4096-seed chunks), so the timed ones represent the list.
 - Work units: `--shard k/N`, `--middles-out`, `--recover-from` (exact; see the scheduler README).
+- `--gpu 5060`: the left stream on the RTX 5060 Ti (`src/gpu/`, loaded from `build_gpu/mbgpu.dll`;
+  normal boards, forward). The GPU streams and Bloom-tests; the CPU finishes the survivors.
 
 ## Conventions (from the user)
 
@@ -197,9 +199,9 @@ Next:
    index ~150-160 h (~70-80 h with item 1). Normal boards run `<5,5,6>` (~8.5 h); the goal-side
    filter by h(start) keeps 54% on 18-3, too little for a one-pass depth-7 goal side. 17 moves
    (18-3): `<5,5,7>` or a 6-move stream, not tried.
-4. GPU port of the stream + lookup loop (est. 10-20x): CUDA on the RTX 5060 Ti first, kept
-   HIP-portable. Starting points: `src/chuzzles/rotations_cuda.cpp`, `docs/gpu_impl.md`,
-   `tests/testLayeredDFS.cpp` (CUDA-only target). Needs MSVC Build Tools + CUDA Toolkit.
+4. GPU port: normal boards done (2026-11-01, `src/gpu/`, `--gpu 5060`; 16-2 at 15 moves 42 min ->
+   8 min, stream 2196 s -> 128 s, exact). Next: 2x2 boards (their fat moves and the depth-7 index
+   in slices), the bound audit and index build on the GPU, fewer launches.
 5. Checkpoint/resume inside a run (pass, finished-seed watermark, candidates, chosen modes),
    once single runs take days.
 6. Smaller: AVX2 batched StateHash + mixKey for the left side; incremental bound evaluation

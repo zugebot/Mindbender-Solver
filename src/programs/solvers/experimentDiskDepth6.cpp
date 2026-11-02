@@ -92,6 +92,12 @@
 // leaves (a node with r moves below is dropped when h > depth + r).
 // --stream-depth 5: <5,5,6> = 16 moves with the one-pass depth-6 goal side
 // (normal boards; the bound audits sample fewer seeds at this depth).
+// --gpu NAME [--gpu-vram-gb G] [--gpu-dll PATH]: stream the left side on the CUDA device whose
+// name contains NAME (e.g. 5060; no other device is used), at most G GB of its memory (default
+// 12.5). Normal boards, forward. The GPU applies the same canonical rules and the rotation lane
+// bound at every level as the CPU's "both" mode, tests the leaves against the pass's Bloom
+// blocks and hands the survivors back; the CPU finishes them with the same index code, so the
+// candidates are the CPU's. Needs build_gpu/mbgpu.dll (src/gpu/build.cmd; src/gpu/README.md).
 // --no-seed-last-move: by default the first streamed move from each left seed, and the
 // first move of the goal side's depth-6 / depth-7 expansion from its depth-5 frontier,
 // follow the same canonical-order rules as the moves below them, with each state's own

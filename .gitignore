@@ -31,3 +31,4 @@ cmake-build-*/
 /.claude/
 /python/viewer/profiles/
 
+build_gpu/
