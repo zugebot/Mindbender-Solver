@@ -298,7 +298,7 @@ public:
                                const u8 prevMove = perm_stream_detail::NO_PREV_MOVE) {
         // this assert is arbitrary only for template instantiation
         // and what is a reasonable amount of RAM a PC may have
-        static_assert(DEPTH >= 0 && DEPTH <= 5, "DEPTH must be in range 0..5");
+        static_assert(DEPTH >= 0 && DEPTH <= 6, "DEPTH must be in range 0..6");
         streamDepthImpl<SECT_DIR, DEPTH>(board_in, sink, chunkCapacity, prevMove);
     }
 
@@ -310,7 +310,7 @@ public:
                                      Sink& sink,
                                      const u32 chunkCapacity = 1u << 20,
                                      const u8 prevMove = perm_stream_detail::NO_PREV_MOVE) {
-        static_assert(DEPTH >= 0 && DEPTH <= 5, "DEPTH must be in range 0..5");
+        static_assert(DEPTH >= 0 && DEPTH <= 6, "DEPTH must be in range 0..6");
         if constexpr (std::is_same_v<T, B1B2> && DEPTH >= 2) {
             if (!board_in.getFatBool() && chunkCapacity != 0) {
                 perm_stream_detail::StreamChunk<T> chunk;

@@ -92,13 +92,19 @@
 // leaves (a node with r moves below is dropped when h > depth + r).
 // --stream-depth 5: <5,5,6> = 16 moves with the one-pass depth-6 goal side
 // (normal boards; the bound audits sample fewer seeds at this depth).
+// --stream-depth 6: <5,6,6> = 17 moves (normal boards, with --gpu: ~30x a 16-move run; the CPU
+// streams it too, for small checks only). The GPU audit streams 16 seeds in full, the GPU pass
+// reports progress per 1/64 of the seeds, and recovery (left depth 11) shares a 5-move start
+// half and streams 6 moves per middle, filtered toward the start root.
 // --gpu NAME [--gpu-vram-gb G] [--gpu-dll PATH]: stream the left side on the CUDA device whose
 // name contains NAME (e.g. 5060; no other device is used), at most G GB of its memory (default
-// 12.5). Normal boards, forward. The GPU applies the same canonical rules and the rotation lane
-// bound at every level as the CPU's "both" mode, tests the leaves against the pass's Bloom
+// 12.5). Normal and 2x2 boards, forward. The GPU applies the same canonical rules and (normal
+// boards) the rotation lane bound at every level as the CPU's "both" mode, tests the leaves
+// against the pass's Bloom
 // blocks and hands the survivors back; CPU threads finish them with the same index code while
 // the GPU streams on, so the candidates are the CPU's. The GPU also audits its bound, builds
-// the depth-6 index and regenerates depth 6 to confirm candidates. Large pages are off with
+// the depth-6 index (or the depth-7 one on 2x2 boards) and regenerates it to confirm
+// candidates. Large pages are off with
 // --gpu. Needs build_gpu/mbgpu.dll (src/gpu/build.cmd; src/gpu/README.md).
 // --no-seed-last-move: by default the first streamed move from each left seed, and the
 // first move of the goal side's depth-6 / depth-7 expansion from its depth-5 frontier,

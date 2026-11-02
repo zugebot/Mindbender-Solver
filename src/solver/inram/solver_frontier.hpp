@@ -640,7 +640,7 @@ private:
             JVec<u64>& middleMatchHashes,
             GlobalRecoveryMetrics& metrics,
             const int worker_count) {
-        static_assert(TOTAL_LEFT_DEPTH >= 0 && TOTAL_LEFT_DEPTH <= 10);
+        static_assert(TOTAL_LEFT_DEPTH >= 0 && TOTAL_LEFT_DEPTH <= 11);
         // Recovery splits each side in two halves of at most 5 moves.
         static_assert(RIGHT_FRONTIER_DEPTH >= 0 && RIGHT_FRONTIER_DEPTH <= 10);
 
@@ -664,8 +664,11 @@ private:
         Timer pathRecoveryTimer;
 
         // The larger half of each split is built once and shared read-only by
-        // every middle; each middle only builds the smaller half.
-        static constexpr u32 START_SHARED_DEPTH = (TOTAL_LEFT_DEPTH + 1) / 2;
+        // every middle; each middle only builds the smaller half. The shared start half stays
+        // at most 5 moves (all 60^5 = 778 M paths, ~25 GB, when there are too many middles for
+        // `reach`): at left depth 11 (17-move runs) each middle streams the other 6, filtered
+        // toward the start root (`towardStart`, normal boards).
+        static constexpr u32 START_SHARED_DEPTH = std::min<u32>((TOTAL_LEFT_DEPTH + 1) / 2, 5);
         static constexpr u32 START_PER_MIDDLE_DEPTH = TOTAL_LEFT_DEPTH - START_SHARED_DEPTH;
         static constexpr u32 GOAL_PER_MIDDLE_DEPTH = RIGHT_FRONTIER_DEPTH / 2;
         static constexpr u32 GOAL_SHARED_DEPTH = RIGHT_FRONTIER_DEPTH - GOAL_PER_MIDDLE_DEPTH;
@@ -695,6 +698,9 @@ private:
             towardStart.totalDepth = TOTAL_LEFT_DEPTH;
             towardStart.targets.resize(1);
             lane_bound::buildLaneTables(searchStartRoot, towardStart.targets[0], lane_bound::Kind::Rotation);
+        }
+        if (searchStartRoot.getFatBool() && START_PER_MIDDLE_DEPTH > 5) {
+            throw std::runtime_error("recovery: a 6-move per-middle start half needs a normal board (2x2: 48^6 paths unfiltered)");
         }
         startSharedCache.root = searchStartRoot;
         startSharedCache.depth = START_SHARED_DEPTH;

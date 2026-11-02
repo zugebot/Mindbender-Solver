@@ -61,7 +61,8 @@ namespace {
             case 3: streamOne<3>(b, prev, pruned, sink); break;
             case 4: streamOne<4>(b, prev, pruned, sink); break;
             case 5: streamOne<5>(b, prev, pruned, sink); break;
-            default: throw std::runtime_error("depth 1..5");
+            case 6: streamOne<6>(b, prev, pruned, sink); break;
+            default: throw std::runtime_error("depth 1..6");
         }
     }
 
@@ -103,6 +104,7 @@ int main(const int argc, char** argv) {
     // 1-1: 2 colours, many repeating lanes; 9-3 / 10-3: 3 colours; 18-3: 8 colours;
     // 16-2 as at its 15-move split <4,5,6>. Limits make seed depth + stream + limit = the solved length.
     // 2x2 boards (no bound): 17-4, 17-2, 6-4, 19-4, the piece at different places and depths.
+    // 6-move streams: 16-2 at 15 as <3,6,6>; 18-3 as at its 17-move split <5,6,6>.
     std::vector<Case> cases = {
             {"1-1", 2, true, 3, -1, 0},
             {"10-3", 3, true, 3, -1, 300},
@@ -118,6 +120,8 @@ int main(const int argc, char** argv) {
             {"6-4", 3, true, 4, -1, 60},
             {"19-4", 2, true, 4, -1, 100},
             {"16-2", 4, true, 5, 6, 200},
+            {"16-2", 3, true, 6, 6, 40},
+            {"18-3", 5, true, 6, 6, 40},
     };
 
     if (bench) {

@@ -83,7 +83,7 @@ namespace ssd {
         int boundMode = -1;           // --bound: -1 auto, 0 off, 1 leaf, 2 both, 3 pdb, 4 pdbleaf,
                                       //          5 parent, 6 pdbparent (see header)
         int pdbMode = -1;             // --pdb: -1 auto, 0 off, 1 on
-        u32 streamDepth = 3;          // --stream-depth 3|4: left stream moves after the seeds
+        u32 streamDepth = 3;          // --stream-depth 3..6: left stream moves after the seeds
         u32 shardIndex = 0, shardCount = 1;     // --shard k/N
         std::string middlesOut;                 // --middles-out FILE
         std::vector<std::string> recoverFrom;   // --recover-from FILE (repeatable)

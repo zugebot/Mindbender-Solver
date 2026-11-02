@@ -65,10 +65,10 @@ localhost only.
 ## What it does with a job
 
 - **Engine**: `inram` (`build/findSolutions.exe`, exhaustive) for 3-12 moves,
-  `ssd` (`build/experimentDiskDepth6.exe`) for 10-16 moves, split as
-  `<seed, stream, table>`: normal boards `<S,3,6>` up to 14, `<5,4,6>` at 15 and
-  `<5,5,6>` at 16; 2x2 boards `<4,3,7>` at 14, `<5,3,7>` at 15 and `<5,4,7>` at 16
-  (`--table-depth`, `--stream-depth` 3-5 override). It runs a copy of the
+  `ssd` (`build/experimentDiskDepth6.exe`) for 10-17 moves, split as
+  `<seed, stream, table>`: normal boards `<S,3,6>` up to 14, `<5,4,6>` at 15,
+  `<5,5,6>` at 16 and `<5,6,6>` at 17 (`--gpu` required); 2x2 boards `<4,3,7>` at 14,
+  `<5,3,7>` at 15 and `<5,4,7>` at 16 (`--table-depth`, `--stream-depth` 3-6 override). It runs a copy of the
   exe from `state/bin`, so rebuilding `build/` never clashes with a run.
 - **One at a time, safely**: a job never starts while any other solver process
   is running (including one started by hand), and the queue is a single

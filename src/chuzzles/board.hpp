@@ -244,10 +244,11 @@ public:
 
 template<i32 COUNT>
 HD void Memory::setNextNMove(const u64 moveValue) {
-    static_assert(COUNT >= 1 && COUNT <= 5, "Template argument must be in range 1-5");
+    // a Memory holds 10 moves (4 count bits + 10 x 6 bits); 6 at once: recovery's per-middle
+    // start half at left depth 11 (17-move runs)
+    static_assert(COUNT >= 1 && COUNT <= 10, "Template argument must be in range 1-10");
 
-    constexpr u64 MOVE_SET_SHIFT = (5 - COUNT) * MEMORY_MOVE_TYPE_BITSIZE;
-    constexpr u64 MOVE_SET_MASK = 0'77'77'77'77'77 >> MOVE_SET_SHIFT;
+    constexpr u64 MOVE_SET_MASK = (1ULL << (COUNT * MEMORY_MOVE_TYPE_BITSIZE)) - 1;   // COUNT moves of 6 bits
 
     const u32 moveCount = mem & MEMORY_MOVE_DATA_MASK;
     const u8 shiftAmount = getShift(moveCount);

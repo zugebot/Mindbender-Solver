@@ -17,6 +17,7 @@
 #include "src/gpu/mbgpu.h"
 
 #include <condition_variable>
+#include <functional>
 #include <deque>
 #include <mutex>
 #include <thread>
@@ -142,7 +143,8 @@ namespace ssd {
         if (gpu.setTarget(target.b1, target.b2, limit) != 0) {
             throw std::runtime_error("GPU: " + gpu.error());
         }
-        const std::size_t want = std::min<std::size_t>(seeds.size(), depth >= 5 ? 256 : 2048);
+        // seeds streamed in full (unpruned): ~115 M nodes each at depth 5, ~30x that at depth 6
+        const std::size_t want = std::min<std::size_t>(seeds.size(), depth >= 6 ? 16 : depth >= 5 ? 256 : 2048);
         const std::size_t step = std::max<std::size_t>(1, seeds.size() / std::max<std::size_t>(1, want));
         std::vector<u64> states;
         std::vector<u8> prev;
@@ -284,10 +286,13 @@ namespace ssd {
 
     // One probe pass on the GPU: Bloom blocks of [pBegin, pEnd) to the device, every
     // seed streamed; the leaves that pass the Bloom test are finished on the CPU into
-    // `candidates` by `threads` probe threads while the GPU streams.
+    // `candidates` by `threads` probe threads while the GPU streams. `progress` gets the
+    // number of seeds done: once at the end, or per slice of seeds on 6-move streams
+    // (hours per pass), each slice one mbgpu_stream call.
     inline GpuPassResult gpuProbePass(GpuModule& gpu, const FingerprintRange& index, const JVec<B1B2>& seeds,
                                       const std::vector<u8>& seedMoves, const i32 streamDepth, const u32 threads,
-                                      std::vector<KeyedState>& candidates) {
+                                      std::vector<KeyedState>& candidates,
+                                      const std::function<void(u64)>& progress = {}) {
         GpuPassResult r;
         if (gpu.setFilter(index.bloom.data(), index.meta.bloomBlocksPerPartition, index.pBegin, index.pEnd) != 0) {
             throw std::runtime_error("GPU: " + gpu.error());
@@ -309,8 +314,28 @@ namespace ssd {
             });
         }
         const auto* states = reinterpret_cast<const uint64_t*>(seeds.data());
-        const int rc = gpu.stream(states, seedMoves.empty() ? nullptr : seedMoves.data(), seeds.size(), streamDepth,
-                                  &ProbeQueue::sink, &queue, &r.stats);
+        const u64 total = seeds.size();
+        // 6-move streams: 64 slices (minutes each on 17-move runs); shorter streams: one call
+        const u64 slice = streamDepth >= 6 ? std::max<u64>(1, (total + 63) / 64) : std::max<u64>(1, total);
+        int rc = 0;
+        for (u64 off = 0; off < total && rc == 0; off += slice) {
+            const u64 n = std::min(slice, total - off);
+            mbgpu_stats st{};
+            rc = gpu.stream(states + 2 * off, seedMoves.empty() ? nullptr : seedMoves.data() + off, n, streamDepth,
+                            &ProbeQueue::sink, &queue, &st);
+            for (int d = 0; d <= MBGPU_MAX_DEPTH; ++d) {
+                r.stats.nodes[d] += st.nodes[d];
+            }
+            r.stats.leaves += st.leaves;
+            r.stats.inRange += st.inRange;
+            r.stats.passed += st.passed;
+            r.stats.launches += st.launches;
+            r.stats.seconds += st.seconds;
+            r.stats.retries += st.retries;
+            if (rc == 0 && progress) {
+                progress(n);
+            }
+        }
         Timer wait;
         queue.finish();
         for (std::thread& w : workers) {

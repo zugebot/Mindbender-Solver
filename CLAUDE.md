@@ -23,7 +23,8 @@ solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it
   exe the scheduler copies). Portable build for other PCs: `-DMB_MARCH=x86-64-v3
   -DMB_OUTPUT_DIR=<repo>/build_portable` (no AVX-512).
 - Every program compiles the shared sources itself, so building all targets takes ~20 min.
-- Tests: `testExactSolverRegression` (14 cases), `testRotations` (112), `testJVec`,
+- Tests: `testExactSolverRegression` (14 cases; `--recovery11 build/levels_final/19-3_c16_202.txt`
+  checks recovery at left depth 11, as 17-move runs use it), `testRotations` (112), `testJVec`,
   `testKnownSolutions` (replays every file in `<repo>/levels`; run from `build/`),
   `testWebSolver` (the web solver vs `build/levels_final`, all puzzles up to 10 moves; run from
   the repo root),
@@ -104,10 +105,11 @@ is paused: the solver runs only when the user asks. A job cut off by a reboot is
 ## How the large solver works (experimentDiskDepth6)
 
 A search `<S, T2, T>` = S + T2 + T moves: exact depth-S left seeds, each streamed T2 more moves
-(`--stream-depth`, 3-5), every state looked up in the goal side's depth-T set. The scheduler
+(`--stream-depth`, 3-6), every state looked up in the goal side's depth-T set. The scheduler
 picks: normal boards `<5,3,6>` up to 14 moves, `<5,4,6>` at 15, `<5,5,6>` at 16 (one pass; a
-depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes); 2x2 boards
-`<4,3,7>` at 14, `<5,3,7>` at 15, `<5,4,7>` at 16.
+depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes), `<5,6,6>` at 17
+(--gpu only; built 2026-11-02, not yet run); 2x2 boards `<4,3,7>` at 14, `<5,3,7>` at 15,
+`<5,4,7>` at 16.
 - Goal side, no table written (default): depth 6 = the depth-5 frontier in RAM, index slices
   built per pass from regenerated keys; depth 7 = a count pass, then per pass the canonical
   2-move stream fills the pass's buckets (owner-routed keys, no atomics; the bucket counts
@@ -237,12 +239,16 @@ Next:
    smaller Bloom filter per state (VRAM caps a pass at ~8.7 G goal states) and a smaller index
    (item 1). Normal boards run `<5,5,6>` (~8.5 h); the goal-side
    filter by h(start) keeps 54% on 18-3, too little for a one-pass depth-7 goal side. 17 moves
-   (18-3): `<5,5,7>` or a 6-move stream, not tried.
+   on normal boards: the 6-move stream `<5,6,6>` (item 4).
 4. GPU port: normal boards done (2026-11-01), 2x2 boards done (2026-11-02; stream, depth-6 and
-   depth-7 goal sides, candidate check; the scheduler passes --gpu). Next: 17 moves on normal
-   boards (14-3, 16-3, 18-3) as `<5,6,6>`: the GPU streams depth 6 already (MBGPU_MAX_DEPTH);
-   the solver side and recovery (left depth 11) need it; 16-3's 16-move stream took 14 min and
-   one more move multiplies it by ~30.
+   depth-7 goal sides, candidate check; the scheduler passes --gpu). 17 moves on normal boards
+   (14-3, 16-3, 18-3) as `<5,6,6>`: built 2026-11-02 (docs/changes-2026-11-02.md section 5),
+   recovery checked on the CPU, not yet run end to end: first (machine idle) a CPU run of
+   10-3 at 13 as `<1,6,6>` with `--solutions`, then `build_gpu\test_gpu_stream.exe
+   build_gpu\vectors.bin` (now with two 6-move cases) and a 6-move GPU run on a solved puzzle
+   (16-2 at 15 as `<3,6,6>`), then deploy `build_test/experimentDiskDepth6.exe` to `build/` and
+   restart the scheduler daemon between jobs. Projected ~5-7 h each (16-3's 16-move stream
+   took 14 min; one more move costs ~25-30x).
 5. Checkpoint/resume inside a run (pass, finished-seed watermark, candidates, chosen modes),
    once single runs take days.
 6. Smaller: AVX2 batched StateHash + mixKey for the left side; incremental bound evaluation

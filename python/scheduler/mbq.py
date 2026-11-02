@@ -17,9 +17,10 @@ when the server restarts is re-adopted. The server only listens on
 solver itself only bumps an atomic counter per seed for --progress-file.
 
 Engines (chosen from --moves unless --engine is given):
-  ssd    build/experimentDiskDepth6.exe, 10-16 moves:
+  ssd    build/experimentDiskDepth6.exe, 10-17 moves:
          <S,3,6> up to 14 moves, <S,3,7> (index-only depth-7 table) for 15 on 2x2 boards,
-         <5,4,6> for 15 on normal boards; 16: <5,5,6> normal boards, <5,4,7> 2x2 boards.
+         <5,4,6> for 15 on normal boards; 16: <5,5,6> normal boards, <5,4,7> 2x2 boards;
+         17: <5,6,6> normal boards (--gpu only).
   inram  build/findSolutions.exe, 3-12 moves (exhaustive in-RAM search).
 
 After a job: solutions are copied to <repo>/levels and replayed (the demo
@@ -414,22 +415,26 @@ class Scheduler:
             engine = "inram" if moves <= 12 else "ssd"
         if not re.fullmatch(r"\d+-\d+", puzzle):
             raise ValueError(f"bad puzzle name {puzzle!r}")
-        if engine == "ssd" and not 10 <= moves <= 16:
-            raise ValueError("ssd engine supports 10-16 moves")
+        if engine == "ssd" and not 10 <= moves <= 17:
+            raise ValueError("ssd engine supports 10-17 moves")
         if engine == "inram" and not 3 <= moves <= 12:
             raise ValueError("inram engine supports 3-12 moves")
         # Splits <seed, stream, table>: 2x2 boards use the depth-7 goal table from 14 moves (it
         # fits a few RAM passes, and the bound prunes nothing there); normal boards keep the
         # one-pass depth-6 table and lengthen the bound-pruned left stream instead: 4 moves at
-        # 15 (<5,4,6>), 5 at 16 (<5,5,6>; a normal board's depth-7 set is far beyond RAM).
+        # 15 (<5,4,6>), 5 at 16 (<5,5,6>; a normal board's depth-7 set is far beyond RAM),
+        # 6 at 17 (<5,6,6>, on the GPU only).
         fat = puzzle_is_fat(puzzle)
         table_depth = int(spec.get("table_depth") or (7 if fat and moves >= 14 else 6))
-        stream_depth = int(spec.get("stream_depth") or (5 if moves - table_depth >= 10
+        stream_depth = int(spec.get("stream_depth") or (6 if moves - table_depth >= 11
+                                                          else 5 if moves - table_depth >= 10
                                                           else 4 if moves - table_depth >= 9 else 3))
         seed_depth = moves - stream_depth - table_depth
-        if engine == "ssd" and (table_depth not in (6, 7) or stream_depth not in (3, 4, 5) or not 2 <= seed_depth <= 5):
+        if engine == "ssd" and (table_depth not in (6, 7) or stream_depth not in (3, 4, 5, 6) or not 2 <= seed_depth <= 5):
             raise ValueError(f"no <S,{stream_depth},{table_depth}> split for {moves} moves")
         gpu = spec.get("gpu") or None
+        if engine == "ssd" and stream_depth == 6 and (not gpu or fat):
+            raise ValueError("a 6-move stream (17 moves, <5,6,6>) runs on the GPU and normal boards only: add --gpu 5060")
         if gpu and (engine != "ssd" or table_depth != 6 and not (fat and table_depth == 7)):
             raise ValueError("--gpu: ssd engine; a depth-6 goal side, or depth 7 on 2x2 boards (src/gpu/README.md)")
         with self.lock:
@@ -1112,6 +1117,8 @@ def cmd_export(args) -> None:
     table = args.table_depth or (7 if fat and args.moves >= 14 else 6)
     stream = args.stream_depth or (5 if args.moves - table >= 10 else 4 if args.moves - table >= 9 else 3)
     seed = args.moves - stream - table
+    if args.moves - table >= 11:
+        raise SystemExit(f"{args.moves} moves need a 6-move stream, which runs on the GPU only (export has no GPU)")
     if not 2 <= seed <= 5:
         raise SystemExit(f"no <S,{stream},{table}> split for {args.moves} moves")
     group = shard_group(args.puzzle, args.moves, args.shards)
@@ -1230,9 +1237,9 @@ def main() -> None:
     a.add_argument("--front", action="store_true", help="put ahead of the other queued jobs")
     a.add_argument("--shards", type=int, help="split the search into N work units (shard jobs + a merge job)")
     a.add_argument("--remote", help="with --shards: shard numbers run on other PCs (comma list); see export")
-    a.add_argument("--stream-depth", type=int, choices=[3, 4, 5],
-                   help="left stream moves after the seeds (default: 4 for 15-move and 5 for 16-move normal "
-                        "boards, 4 for 16-move 2x2 boards, else 3)")
+    a.add_argument("--stream-depth", type=int, choices=[3, 4, 5, 6],
+                   help="left stream moves after the seeds (default: 4 for 15-move, 5 for 16-move and 6 for "
+                        "17-move normal boards (--gpu only), 4 for 16-move 2x2 boards, else 3)")
     a.add_argument("--table-depth", type=int, choices=[6, 7],
                    help="goal-side table depth (default: 7 for 2x2 boards at 14+ moves, else 6)")
     ex = sub.add_parser("export", help="work units for another PC (portable solver + .bat per shard)")

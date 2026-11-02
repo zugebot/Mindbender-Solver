@@ -4,8 +4,10 @@
 #include "src/solver/inram/right_frontier_table.hpp"
 #include "src/solver/inram/solver_frontier.hpp"
 #include "src/solver/ssd/common.hpp"
+#include "src/solver/ssd/recovery.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <iostream>
 #include <map>
 #include <random>
@@ -633,9 +635,37 @@ bool testSmallEndToEndExactSolver() {
     return found == static_cast<int>(expected.size());
 }
 
+// Recovery at left depth 11, as 17-move runs (<5,6,6>) use it: a shared 5-move start half and
+// 6 moves per middle, streamed toward the start root. A solved 16-move puzzle's known solutions,
+// split 11 + 5, must come back exactly from their middles. Opt-in (needs a levels_final file):
+//   testExactSolverRegression --recovery11 build/levels_final/15-1_c16_16.txt
+bool testRecoveryAtLeftDepth11(const std::string& file) {
+    const std::string name = std::filesystem::path(file).filename().string();
+    const BoardPair* pair = BoardLookup::getBoardPair(name.substr(0, name.find('_')));
+    const std::vector<std::string> known = ssd::readSolutionLines(file);
+    if (pair == nullptr || known.empty() || pair->getStartState().getFatBool()) {
+        std::cout << "recovery at left depth 11: needs a normal board's solution file\n";
+        return false;
+    }
+    const std::vector<B1B2> middles = ssd::expectedMiddles(*pair, known, 11);
+    BoardSolverFrontier solver(pair);
+    solver.setWriteSolutionsToFile(false);
+    solver.recoverSolutionsFromMiddles<11, 5, false>(middles, 4);
+    const std::set<std::string> knownSet(known.begin(), known.end());
+    const bool same = knownSet == solver.getExpandedSolutions();
+    std::cout << "recovery at left depth 11 (" << name << "): " << middles.size() << " middles, known "
+              << knownSet.size() << ", recovered " << solver.getExpandedSolutions().size() << ": "
+              << (same ? "PASS" : "FAIL") << '\n';
+    return same;
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--recovery11") {
+        return testRecoveryAtLeftDepth11(argv[2]) ? 0 : 1;
+    }
+
     const bool intersectionOk = testThreadedIntersectionCoversTail();
     const bool indexOk = testExactIndexRejectsHashCollisions();
     const bool layerOk = testExactLayerRetainsLongerReachability();

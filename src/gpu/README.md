@@ -108,7 +108,8 @@ build_gpu\test_gpu_stream.exe build_gpu\bench_16-2.bin --bench [--seeds 200000] 
 ```
 
 `exportGpuVectors` streams sample seeds of 1-1, 9-3, 10-3, 18-3, 16-2 and the 2x2 boards 17-4,
-17-2, 6-4 and 19-4 with the CPU code
+17-2, 6-4 and 19-4 with the CPU code (6-move streams too: 16-2 `<3,6,6>`, 18-3 `<5,6,6>`, for
+17-move runs)
 (one thread, a few seconds), unpruned and pruned, with and without last moves, and records per
 seed the leaf count and the sum and xor of the leaf keys; `test_gpu_stream` must match every
 seed. `--bench` (a file from `exportGpuVectors --bench`) times the stream; `--filter-gb` adds a

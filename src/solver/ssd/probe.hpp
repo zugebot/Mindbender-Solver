@@ -278,13 +278,13 @@ namespace ssd {
 
             if (useGpu) {
                 Timer gpuTimer;
-                const GpuPassResult r = gpuProbePass(gpu, index, seeds, seedMoves, STREAM_DEPTH, threads, candidates);
+                const GpuPassResult r = gpuProbePass(gpu, index, seeds, seedMoves, STREAM_DEPTH, threads, candidates,
+                                                     [](const u64 done) { g_progress.add(done); });
                 const double passProbe = gpuTimer.getSeconds();
                 probeSeconds += passProbe;
                 streamedTotal += r.stats.leaves;
                 inRangeTotal += r.stats.inRange;
                 bloomPassTotal += r.bloomPasses;
-                g_progress.add(seeds.size());
                 tcout << "  pass " << (pass + 1) << "/" << passes.size() << " partitions [" << pBegin << "," << pEnd
                       << "): load " << index.bytes() / 1e9 << " GB in " << passLoad << "s, GPU stream+probe "
                       << r.stats.leaves << " left states in " << passProbe << "s (GPU " << r.stats.seconds << "s, "
@@ -490,7 +490,8 @@ namespace ssd {
             case 3: return streamAndProbeT<3>(leftRoot, files, meta, counts, cfg, threads, builder, builderReserveBytes);
             case 4: return streamAndProbeT<4>(leftRoot, files, meta, counts, cfg, threads, builder, builderReserveBytes);
             case 5: return streamAndProbeT<5>(leftRoot, files, meta, counts, cfg, threads, builder, builderReserveBytes);
-            default: throw std::runtime_error("--stream-depth must be 3, 4 or 5");
+            case 6: return streamAndProbeT<6>(leftRoot, files, meta, counts, cfg, threads, builder, builderReserveBytes);
+            default: throw std::runtime_error("--stream-depth must be 3, 4, 5 or 6");
         }
     }
 
