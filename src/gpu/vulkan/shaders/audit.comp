@@ -1,0 +1,116 @@
+#version 460
+// src/gpu/vulkan/shaders/audit.comp: the bound audit's kernel (mbgpu.cu: expandKernel with
+// audit on, as mbgpu_audit_stream runs it: no pruning, leaves to per-seed checksums). One
+// invocation per (node, lane); h from its definition on every edge, so the audit also
+// cross-checks the node kernel's incremental bound. Counts edges where |dh| > 1, and the
+// checksums cover only the "wanted" leaves (h <= limit).
+#extension GL_GOOGLE_include_directive : require
+#include "common.glsl"
+#include "expand_push.glsl"
+
+void main() {
+    Globals g = Globals(pc.globals);
+    Counters C = Counters(pc.counters);
+    uint t = threadLinear();
+    uint i = t / THREADS_PER_NODE;
+
+    uint64_t cb1[5], cb2[5];
+    uint amount[5];
+    int hChild[5];
+    for (uint k = 0u; k < 5u; ++k) {
+        cb1[k] = 0ul;
+        cb2[k] = 0ul;
+        amount[k] = 0u;
+        hChild[k] = 0;
+    }
+    uint keep = 0u, edges = 0u, violations = 0u;
+    uint codeBase = 0u, seed = 0u;
+    bool leaf = pc.rem == 0;
+
+    if (i < pc.n) {
+        uint dl = t % THREADS_PER_NODE;
+        uint dir = dl / 6u, lane = dl % 6u;
+        uint64_t b1 = U64Ref(pc.inB1).v[i], b2 = U64Ref(pc.inB2).v[i];
+        uint pk = U32Ref(pc.inPk).v[i];
+        uint prev = pk >> 24;
+        seed = pk & 0xFFFFFFu;
+        int prevDir = prev == NO_PREV ? -1 : int(prev / 30u);
+        uint prevLane = (prev % 30u) / 5u, prevAmount = prev % 5u + 1u;
+        if (!(int(dir) == prevDir && lane <= prevLane)) {
+            uint crossSkip = 0u;
+            if (prevDir == 1 && dir == 0u) {
+                uint x1 = prevLane, y1 = lane;
+                uint pivot = colorAt(b1, b2, x1, y1);
+                if (colorAt(b1, b2, x1, (y1 + prevAmount) % 6u) == pivot) {
+                    for (uint k = 0u; k < 5u; ++k) {
+                        if (colorAt(b1, b2, (x1 + 5u - k) % 6u, y1) == pivot) {
+                            crossSkip |= 1u << k;
+                        }
+                    }
+                }
+            }
+            int hParent = rowHalf(g, b1, b2) + colHalf(g, b1, b2);
+            codeBase = dir * 30u + lane * 5u;
+            uint64_t L = dir == 0u ? rowLane(b1, b2, lane) : colLane(b1, b2, lane);
+            for (uint k = 0u; k < 5u; ++k) {
+                uint64_t o1, o2;
+                shiftLane(b1, b2, dir, lane, L, k + 1u, o1, o2);
+                if (o1 == b1 && o2 == b2) {
+                    break;   // the lane's period
+                }
+                if ((crossSkip & (1u << k)) != 0u) {
+                    continue;
+                }
+                int hc = rowHalf(g, o1, o2) + colHalf(g, o1, o2);
+                ++edges;
+                violations += (hc > hParent + 1 || hc < hParent - 1) ? 1u : 0u;
+                cb1[keep] = o1;
+                cb2[keep] = o2;
+                amount[keep] = k;
+                hChild[keep] = hc;
+                ++keep;
+            }
+        }
+    }
+    SUBGROUP_ADD_TO(C.edges, edges)
+    SUBGROUP_ADD_TO(C.violations, violations)
+
+    if (!leaf) {
+        uint offset = subgroupExclusiveAdd(keep);
+        uint total = subgroupAdd(keep);
+        uint base = 0u;
+        if (subgroupElect() && total != 0u) {
+            base = atomicAdd(C.next, total);
+        }
+        base = subgroupBroadcastFirst(base);
+        U64Ref o1 = U64Ref(pc.outB1);
+        U64Ref o2 = U64Ref(pc.outB2);
+        U32Ref op = U32Ref(pc.outPk);
+        for (uint j = 0u; j < keep; ++j) {
+            uint at = base + offset + j;
+            if (at >= pc.outCap) {
+                C.overflow = 1u;
+                break;
+            }
+            o1.v[at] = cb1[j];
+            o2.v[at] = cb2[j];
+            op.v[at] = ((codeBase + amount[j]) << 24) | seed;
+        }
+        return;
+    }
+
+    SUBGROUP_ADD_TO(C.leaves, keep)
+    uint over = 0u;
+    uint s = pc.seedBase + seed;
+    for (uint j = 0u; j < keep; ++j) {
+        if (hChild[j] > g.limit) {
+            ++over;
+            continue;   // the audit's checksums cover only the wanted leaves
+        }
+        uint64_t key = mixKey(stateHash(cb1[j], cb2[j]));
+        atomicAdd64(g.cnt, s, 1ul);
+        atomicAdd64(g.sum, s, key);
+        atomicXor64(g.xr, s, key);
+    }
+    SUBGROUP_ADD_TO(C.overLimit, over)
+}

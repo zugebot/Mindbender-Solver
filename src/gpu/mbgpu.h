@@ -23,8 +23,10 @@
 extern "C" {
 #endif
 
-#if defined(MBGPU_BUILD_DLL)
+#if defined(MBGPU_BUILD_DLL) && defined(_WIN32)
 #define MBGPU_API __declspec(dllexport)
+#elif defined(MBGPU_BUILD_DLL)
+#define MBGPU_API __attribute__((visibility("default")))
 #else
 #define MBGPU_API
 #endif

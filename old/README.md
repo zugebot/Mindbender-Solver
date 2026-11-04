@@ -27,3 +27,9 @@ Moved here on 2026-10-12, when `src/` was reorganized:
 
 "No longer compiles" was checked with the Release build on 2026-10-12 before
 the move (MinGW g++, C++23).
+
+Moved here on 2026-11-02:
+
+| File | Why |
+|---|---|
+| `src/gpu/vulkan/shaders/emit.glsl` | the Vulkan node kernels' first child handling (5 child boards per lane in registers, 20-byte staged copies); replaced when `expand.comp` / `expand_fat.comp` were laid out for AMD GCN (masks rebuilt from the parent, 4-byte staging): 128 -> 64 / 40 VGPRs, 16-2 bench 8.04 s -> 4.43 s on a Radeon Pro WX 7100 |

@@ -40,6 +40,7 @@ namespace ssd {
             else if (a == "--no-seed-last-move") cfg.seedLastMove = false;
             else if (a == "--gpu") cfg.gpuDevice = next();
             else if (a == "--gpu-dll") cfg.gpuDll = next();
+            else if (a == "--gpu-list") cfg.gpuList = true;
             else if (a == "--gpu-vram-gb") cfg.gpuVramGb = std::stod(next());
             else if (a == "--d7-first-partition") cfg.d7FirstPartition = static_cast<u32>(std::stoul(next()));
             else if (a == "--progress-file") cfg.progressFile = next();

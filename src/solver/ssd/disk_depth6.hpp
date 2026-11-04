@@ -63,7 +63,7 @@ namespace ssd {
             u64 childHashes[60];
             auto& bufs = buffers[t];
             const std::size_t begin = c * chunk;
-            const std::size_t end = std::min(depth5.size(), begin + chunk);
+            const std::size_t end = std::min<std::size_t>(depth5.size(), begin + chunk);
             for (std::size_t i = begin; i < end; ++i) {
                 const std::size_t n = isFat
                         ? frontier_recovery_detail::emitNoneChildren<true>(depth5[i], children, childHashes)

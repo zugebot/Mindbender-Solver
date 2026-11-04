@@ -6,7 +6,7 @@
 // may pass, with a full one every in-range leaf must. Prints the GPU time next to
 // the CPU's (single thread) for scale.
 //
-// Usage: test_gpu_stream <vectors.bin> [--device 5060] [--vram-gb 12.5]
+// Usage: test_gpu_stream <vectors.bin> [--device 5060] [--vram-gb 12.5] [--no-audit]
 //        test_gpu_stream <bench.bin> --bench [--seeds N] [--filter-gb G]  (a file from
 //        exportGpuVectors --bench: times the full stream of every seed (or the first N), no
 //        CPU comparison; --filter-gb installs a random Bloom filter of G GB at the density of
@@ -104,10 +104,12 @@ int main(const int argc, char** argv) {
     std::string device = "5060";
     double vramGb = 12.5;
     bool bench = false;
+    bool audit = true;   // --no-audit: skip the (slow) full-stream audits
     uint64_t seedCap = ~0ULL;
     double filterGb = 0;
     for (int i = 2; i < argc; ++i) {
         if (std::string(argv[i]) == "--bench") bench = true;
+        if (std::string(argv[i]) == "--no-audit") audit = false;
         if (i + 1 < argc && std::string(argv[i]) == "--seeds") seedCap = std::stoull(argv[i + 1]);
         if (i + 1 < argc && std::string(argv[i]) == "--filter-gb") filterGb = std::stod(argv[i + 1]);
         if (i + 1 < argc && std::string(argv[i]) == "--device") device = argv[i + 1];
@@ -211,7 +213,7 @@ int main(const int argc, char** argv) {
     // Audit: per seed, the wanted leaves (h <= limit) of the full stream equal the pruned
     // stream's leaves, and no edge changes h by more than 1.
     for (const Case& c : cases) {
-        if (c.limit < 0) {
+        if (c.limit < 0 || !audit) {
             continue;
         }
         const uint64_t n = c.b1.size();

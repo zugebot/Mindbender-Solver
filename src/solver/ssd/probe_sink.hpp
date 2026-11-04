@@ -122,10 +122,7 @@ namespace ssd {
         }
         std::string cpu = brand;
         while (!cpu.empty() && cpu.front() == ' ') cpu.erase(cpu.begin());
-        MEMORYSTATUSEX status{};
-        status.dwLength = sizeof(status);
-        GlobalMemoryStatusEx(&status);
-        const u64 ramGb = (status.ullTotalPhys + 512ULL * 1024 * 1024) / (1024ULL * 1024 * 1024);
+        const u64 ramGb = (platform::memory().total + 512ULL * 1024 * 1024) / (1024ULL * 1024 * 1024);
         return cpu + "|" + std::to_string(ramGb) + "GB|" + std::to_string(threads) + "t";
     }
 
@@ -182,12 +179,10 @@ namespace ssd {
     // this run will also allocate (seeds, candidate buffers). At least 2 GB.
     // --ram-gb overrides it.
     inline u64 defaultRamBudgetBytes(const u64 otherBytes = 0) {
-        MEMORYSTATUSEX status{};
-        status.dwLength = sizeof(status);
-        GlobalMemoryStatusEx(&status);
-        const u64 reserve = std::max<u64>(3'000'000'000ULL, status.ullTotalPhys / 10);
+        const platform::MemoryInfo mem = platform::memory();
+        const u64 reserve = std::max<u64>(3'000'000'000ULL, mem.total / 10);
         const u64 used = reserve + otherBytes;
-        const u64 avail = status.ullAvailPhys > used ? status.ullAvailPhys - used : 0;
+        const u64 avail = mem.available > used ? mem.available - used : 0;
         return std::max<u64>(2'000'000'000ULL, avail);
     }
 

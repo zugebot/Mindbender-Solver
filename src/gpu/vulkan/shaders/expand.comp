@@ -1,0 +1,371 @@
+#version 460
+// src/gpu/vulkan/shaders/expand.comp: the node kernel for normal boards (mbgpu.cu:
+// expandNodes, laneChildren). One invocation per node tries its 12 lanes x 5 amounts; the
+// bound is incremental from packed per-rotation mismatch counts. Built twice: -DLEAF=0
+// (inner levels) and -DLEAF=1 (the children are leaves).
+//
+// Laid out for GCN-class GPUs (64-wide, 256 VGPRs per lane per SIMD, 64 KB LDS per CU), where
+// registers and shared memory decide how many waves a SIMD can switch between: a lane's
+// children are kept as a 5-bit mask and rebuilt from the parent when used (no arrays of child
+// boards), and inner levels stage 4 bytes per child (the parent's slot in the workgroup and
+// the move) with the parents' boards in shared memory, instead of 20-byte child copies.
+#extension GL_GOOGLE_include_directive : require
+#include "common.glsl"
+#include "expand_push.glsl"
+
+shared uint sMc[288];
+shared uint sMr[288];
+#if LEAF
+shared uint hist[256];
+#else
+shared uint64_t sB1[BLOCK];      // the workgroup's parent boards and seeds
+shared uint64_t sB2[BLOCK];
+shared uint sSeed[BLOCK];
+shared uint sCh[BLOCK * 5u];     // staged children: parent slot << 8 | move code
+#endif
+
+uint cellOf(uint lane, uint p) {
+    return (lane >> (15u - 3u * p)) & 7u;
+}
+
+uint rot32(uint lane, uint cells) {
+    uint s = 3u * cells;
+    return ((lane >> s) | (lane << (18u - s))) & 0x3FFFFu;
+}
+
+// the smallest of the 6 nibbles of a count word
+int minNibble(uint p) {
+    uint m = 15u;
+    for (uint k = 0u; k < 6u; ++k) {
+        m = min(m, (p >> (4u * k)) & 15u);
+    }
+    return int(m);
+}
+
+uint tab(uint dir, uint i) {
+    return dir == 0u ? sMc[i] : sMr[i];
+}
+
+// The board with lane `lane` of direction `dir` (0 row, 1 column) set to `moved` (18 bits).
+void placeLane(uint64_t b1, uint64_t b2, uint dir, uint lane, uint moved, out uint64_t o1, out uint64_t o2) {
+    if (dir == 0u) {
+        uint sh = 36u - 18u * (lane % 3u);
+        uint64_t m64 = uint64_t(moved) << sh;
+        if (lane < 3u) {
+            o1 = (b1 & ~(LANE_BITS << sh)) | m64;
+            o2 = b2;
+        } else {
+            o1 = b1;
+            o2 = (b2 & ~(LANE_BITS << sh)) | m64;
+        }
+    } else {
+        uint64_t m = columnMask(lane);
+        uint64_t n1 = b1 & ~m, n2 = b2 & ~m;
+        for (uint r = 0u; r < 3u; ++r) {
+            n1 |= uint64_t((moved >> (15u - 3u * r)) & 7u) << (51u - 18u * r - 3u * lane);
+            n2 |= uint64_t((moved >> (6u - 3u * r)) & 7u) << (51u - 18u * r - 3u * lane);
+        }
+        o1 = n1;
+        o2 = n2;
+    }
+}
+
+uint laneOf(uint64_t b1, uint64_t b2, uint dir, uint lane) {
+    return dir == 0u ? uint(rowLane(b1, b2, lane)) : colLane32(b1, b2, lane);
+}
+
+// The amounts of moving lane `lane` (dir 0 = row, 1 = column; L = that lane) that give a kept
+// child, as a mask (bit k = amount k + 1). `cross` = the count words of the lanes the move
+// crosses (columns for a row move; their table is sMc), `crossD` their distances (nibble c).
+// A child is dropped when a crossed lane's distance exceeds `room`. A move changes one cell
+// of every crossed lane, so a distance changes by at most 1: only crossed lanes already at
+// `room` or above can be pushed over it, and only those are tested (none: no test at all;
+// room >= 6: never a test).
+uint laneMask(uint dir, uint lane, uint L, uint cross[6], uint crossD, int room, uint crossSkip) {
+    uint need = 0u;
+    if (room < 6) {
+        for (uint c = 0u; c < 6u; ++c) {
+            need |= int((crossD >> (4u * c)) & 15u) >= room ? 1u << c : 0u;
+        }
+    }
+    uint addv = uint(7 - min(room, 6)) * 0x111111u;   // nibble > room <=> bit 3 set
+    uint excl[6];
+    for (uint c = 0u; c < 6u; ++c) {
+        excl[c] = 0u;
+        if ((need & (1u << c)) != 0u) {
+            excl[c] = cross[c] - tab(dir, (c * 6u + lane) * 8u + cellOf(L, c)) + addv;
+        }
+    }
+    uint mask = 0u;
+    bool period = false;
+    for (uint k = 0u; k < 5u; ++k) {
+        period = period || rot32(L, k + 1u) == L;   // the lane's period: larger amounts repeat smaller ones
+        if (period || (crossSkip & (1u << k)) != 0u) {
+            continue;
+        }
+        // after the shift by k + 1, crossed lane c gets the cell from position c - k - 1
+        uint tooFar = 0u;
+        for (uint c = 0u; c < 6u; ++c) {
+            if ((need & (1u << c)) != 0u) {
+                uint cnt = excl[c] + tab(dir, (c * 6u + lane) * 8u + cellOf(L, (c + 5u - k) % 6u));
+                tooFar |= (cnt & 0x888888u) == 0x888888u ? 1u : 0u;
+            }
+        }
+        if (tooFar == 0u) {
+            mask |= 1u << k;
+        }
+    }
+    return mask;
+}
+
+// a node's count words per row (rowWords) or column (colWords): nibble k = cells that differ
+// from the target lane at rotation k
+void rowWords(uint64_t b1, uint64_t b2, out uint w[6]) {
+    for (uint y = 0u; y < 6u; ++y) {
+        uint L = uint(rowLane(b1, b2, y));
+        uint s = 0u;
+        for (uint x = 0u; x < 6u; ++x) {
+            s += sMr[(y * 6u + x) * 8u + cellOf(L, x)];
+        }
+        w[y] = s;
+    }
+}
+
+void colWords(uint64_t b1, uint64_t b2, out uint w[6]) {
+    for (uint x = 0u; x < 6u; ++x) {
+        uint L = colLane32(b1, b2, x);
+        uint s = 0u;
+        for (uint y = 0u; y < 6u; ++y) {
+            s += sMc[(x * 6u + y) * 8u + cellOf(L, y)];
+        }
+        w[x] = s;
+    }
+}
+
+#if !LEAF
+uint stageBase() {
+    return gl_SubgroupID * gl_SubgroupSize * 5u;
+}
+
+// Writes the subgroup's `staged` children to the next level, rebuilding each from its parent
+// (every invocation of the subgroup calls it).
+void flushStage(Counters C, uint staged) {
+    uint base = 0u;
+    if (subgroupElect()) {
+        base = atomicAdd(C.next, staged);
+    }
+    base = subgroupBroadcastFirst(base);
+    subgroupMemoryBarrierShared();
+    subgroupBarrier();
+    U64Ref o1 = U64Ref(pc.outB1);
+    U64Ref o2 = U64Ref(pc.outB2);
+    U32Ref op = U32Ref(pc.outPk);
+    uint sb = stageBase();
+    for (uint j = gl_SubgroupInvocationID; j < staged; j += gl_SubgroupSize) {
+        uint at = base + j;
+        if (at < pc.outCap) {
+            uint e = sCh[sb + j];
+            uint t = e >> 8, code = e & 255u;
+            uint dir = code / 30u, lane = (code % 30u) / 5u, n = code % 5u + 1u;
+            uint64_t p1 = sB1[t], p2 = sB2[t];
+            uint64_t c1, c2;
+            placeLane(p1, p2, dir, lane, rot32(laneOf(p1, p2, dir, lane), n), c1, c2);
+            o1.v[at] = c1;
+            o2.v[at] = c2;
+            op.v[at] = (code << 24) | sSeed[t];
+        }
+    }
+    subgroupMemoryBarrierShared();
+    subgroupBarrier();
+}
+#endif
+
+void main() {
+    Globals g = Globals(pc.globals);
+    Counters C = Counters(pc.counters);
+    uint tid = gl_LocalInvocationID.x;
+    for (uint j = tid; j < 288u; j += BLOCK) {
+        sMc[j] = g.mc[j];
+        sMr[j] = g.mr[j];
+    }
+#if LEAF
+    if (g.mode == LEAF_COUNTS) {
+        hist[tid] = 0u;
+    }
+#endif
+
+    uint i = threadLinear();
+    bool live = i < pc.n;
+    uint64_t b1 = 0ul, b2 = 0ul;
+    uint prev = NO_PREV, seed = 0u;
+    if (live) {
+        b1 = U64Ref(pc.inB1).v[i];
+        b2 = U64Ref(pc.inB2).v[i];
+        uint pk = U32Ref(pc.inPk).v[i];
+        prev = pk >> 24;
+        seed = pk & 0xFFFFFFu;
+    }
+#if !LEAF
+    sB1[tid] = b1;
+    sB2[tid] = b2;
+    sSeed[tid] = seed;
+#endif
+    memoryBarrierShared();
+    barrier();
+
+    int prevDir = prev == NO_PREV ? -1 : int(prev / 30u);
+    uint prevLane = (prev % 30u) / 5u, prevAmount = prev % 5u + 1u;
+
+    // the parent's count words
+    uint fullRow[6], fullCol[6];
+    rowWords(b1, b2, fullRow);
+    colWords(b1, b2, fullCol);
+    int limit = g.limit;
+    bool pruneOn = pc.prune != 0u && limit >= 0;
+    int rowH = 0, colH = 0;
+    uint rowD = 0u, colD = 0u;   // each lane's distance, nibble j
+    if (pruneOn) {
+        for (uint j = 0u; j < 6u; ++j) {
+            int dr = minNibble(fullRow[j]), dc = minNibble(fullCol[j]);
+            rowD |= uint(dr) << (4u * j);
+            colD |= uint(dc) << (4u * j);
+            rowH = max(rowH, dr);
+            colH = max(colH, dc);
+        }
+    }
+
+    uint staged = 0u, leaves = 0u, inRange = 0u;
+    for (uint dl = 0u; dl < THREADS_PER_NODE; ++dl) {
+        uint dir = dl < 6u ? 0u : 1u;
+        uint lane = dl - 6u * dir;
+        uint mask = 0u;
+        uint L = 0u;
+        if (live && !(int(dir) == prevDir && lane <= prevLane)) {
+            int room = 99;
+            if (pruneOn) {
+                room = limit + pc.rem - (dir == 0u ? rowH : colH);
+            }
+            if (room >= 0) {
+                L = laneOf(b1, b2, dir, lane);
+                if (dir == 0u) {
+                    // after a column move, the row moves that commute with it
+                    uint crossSkip = 0u;
+                    if (prevDir == 1) {
+                        uint x1 = prevLane, y1 = lane;
+                        uint pivot = colorAt(b1, b2, x1, y1);
+                        if (colorAt(b1, b2, x1, (y1 + prevAmount) % 6u) == pivot) {
+                            for (uint k = 0u; k < 5u; ++k) {
+                                if (colorAt(b1, b2, (x1 + 5u - k) % 6u, y1) == pivot) {
+                                    crossSkip |= 1u << k;
+                                }
+                            }
+                        }
+                    }
+                    mask = laneMask(0u, lane, L, fullCol, colD, room, crossSkip);
+                } else {
+                    mask = laneMask(1u, lane, L, fullRow, rowD, room, 0u);
+                }
+            }
+        }
+        uint code = dir * 30u + lane * 5u;
+#if !LEAF
+        // stage the lane's children (4 bytes each); flush when the subgroup's slots would overflow
+        uint mine = bitCount(mask);
+        uint offset = subgroupExclusiveAdd(mine);
+        uint total = subgroupAdd(mine);
+        if (staged + total > gl_SubgroupSize * 5u) {
+            flushStage(C, staged);
+            staged = 0u;
+        }
+        uint at = stageBase() + staged + offset;
+        for (uint k = 0u; k < 5u; ++k) {
+            if ((mask & (1u << k)) != 0u) {
+                sCh[at++] = (tid << 8) | (code + k);
+            }
+        }
+        staged += total;
+#else
+        leaves += bitCount(mask);
+        if (g.mode == LEAF_KEYS) {
+            // one subgroup prefix for the lane's in-range keys, then the writes
+            uint inMask = 0u;
+            for (uint k = 0u; k < 5u; ++k) {
+                if ((mask & (1u << k)) != 0u) {
+                    uint64_t c1, c2;
+                    placeLane(b1, b2, dir, lane, rot32(L, k + 1u), c1, c2);
+                    uint p = uint(mixKey(stateHash(c1, c2)) >> 56);
+                    if (p >= g.pBegin && p < g.pEnd) {
+                        inMask |= 1u << k;
+                    }
+                }
+            }
+            uint mine = bitCount(inMask);
+            uint offset = subgroupExclusiveAdd(mine);
+            uint total = subgroupAdd(mine);
+            uint base = 0u;
+            if (subgroupElect() && total != 0u) {
+                base = atomicAdd(C.passed, total);
+            }
+            uint at = subgroupBroadcastFirst(base) + offset;
+            for (uint k = 0u; k < 5u; ++k) {
+                if ((inMask & (1u << k)) != 0u) {
+                    uint64_t c1, c2;
+                    placeLane(b1, b2, dir, lane, rot32(L, k + 1u), c1, c2);
+                    if (at < g.oCap) {
+                        U64Ref(g.okey).v[at] = mixKey(stateHash(c1, c2));
+                    } else {
+                        C.overflow = 1u;
+                    }
+                    ++at;
+                }
+            }
+        } else {
+            for (uint k = 0u; k < 5u; ++k) {
+                if ((mask & (1u << k)) == 0u) {
+                    continue;
+                }
+                uint64_t c1, c2;
+                placeLane(b1, b2, dir, lane, rot32(L, k + 1u), c1, c2);
+                uint64_t key = mixKey(stateHash(c1, c2));
+                if (g.mode == LEAF_COUNTS) {
+                    atomicAdd(hist[uint(key >> 56)], 1u);
+                } else if (g.mode == LEAF_CHECKSUM) {
+                    uint s = pc.seedBase + seed;
+                    atomicAdd64(g.cnt, s, 1ul);
+                    atomicAdd64(g.sum, s, key);
+                    atomicXor64(g.xr, s, key);
+                } else {   // LEAF_FILTER
+                    uint p = uint(key >> 56);
+                    if (p >= g.pBegin && p < g.pEnd) {
+                        ++inRange;
+                        if (leafPasses(g, key)) {
+                            uint at = atomicAdd(C.passed, 1u);
+                            if (at < g.oCap) {
+                                U64Ref(g.ob1).v[at] = c1;
+                                U64Ref(g.ob2).v[at] = c2;
+                                U64Ref(g.okey).v[at] = key;
+                                U32Ref(g.oseed).v[at] = pc.seedBase + seed;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+#endif
+    }
+#if LEAF
+    SUBGROUP_ADD_TO(C.leaves, leaves)
+    SUBGROUP_ADD_TO(C.inRange, inRange)
+    if (g.mode == LEAF_COUNTS) {
+        memoryBarrierShared();
+        barrier();
+        if (hist[tid] != 0u) {
+            atomicAdd64(g.partCounts, tid, uint64_t(hist[tid]));
+        }
+    }
+#else
+    if (staged != 0u) {
+        flushStage(C, staged);
+    }
+#endif
+}

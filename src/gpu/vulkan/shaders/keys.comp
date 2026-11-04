@@ -1,0 +1,277 @@
+#version 460
+// src/gpu/vulkan/shaders/keys.comp: sorting the goal side's keys and building its index, in
+// place of CUB (mbgpu.cu: sortedChildKeys, buildIndex). Built once per kernel, -DKERNEL=n:
+//   1 RADIX_HIST     per tile of 4096 keys, how many have each 4-bit digit (digit-major)
+//   2 RADIX_SCATTER  stable scatter by digit, from the scanned histogram
+//   3 SCAN_LOCAL     exclusive scan of 4096 u32 per workgroup, in place; block totals out
+//   4 SCAN_ADD       adds the scanned block totals back
+//   5 UNIQUE_FLAGS   1 where a sorted key differs from the one before
+//   6 UNIQUE_SCATTER keeps the first of each run of equal keys (flags scanned)
+//   7 PART_BOUNDS    first key of each partition (binary search)
+//   8 FINGERPRINTS   u16 low key bits, two per u32
+//   9 BUCKET_STARTS  per bucket, its first key relative to the partition's
+//  10 BLOOM          split-block Bloom filter, 8 bits per key (one 32-byte block)
+// LSD radix sort: 16 passes of 4 bits, each a histogram, a scan and a stable scatter. Within
+// a tile the scatter goes in rounds of 256 consecutive keys, ranked by a workgroup prefix
+// over 16 digit counters packed 2 per u32 (a round has at most 256 keys, so 16 bits hold any
+// count), so equal digits keep their order and the sort is stable.
+#extension GL_GOOGLE_include_directive : require
+#include "common.glsl"
+
+layout(push_constant) uniform KeysPush {
+    uint64_t a0;
+    uint64_t a1;
+    uint64_t a2;
+    uint64_t a3;
+    uint64_t u0;
+    uint64_t u1;
+    uint64_t u2;
+    uint w0;
+    uint w1;
+} pc;
+
+#define TILE 4096u
+#define ITEMS 16u
+
+#if KERNEL == 1   // RADIX_HIST: a0 keys, a1 hist (u32, digit * tiles + tile); u0 n; w0 shift, w1 tiles
+shared uint cnt[16];
+void main() {
+    uint t = gl_LocalInvocationID.x;
+    uint tile = groupLinear();
+    if (t < 16u) {
+        cnt[t] = 0u;
+    }
+    memoryBarrierShared();
+    barrier();
+    U64Ref keys = U64Ref(pc.a0);
+    if (tile < pc.w1) {
+        for (uint r = 0u; r < ITEMS; ++r) {
+            uint64_t idx = uint64_t(tile) * TILE + r * BLOCK + t;
+            if (idx < pc.u0) {
+                atomicAdd(cnt[uint(keys.v[uint(idx)] >> pc.w0) & 15u], 1u);
+            }
+        }
+    }
+    memoryBarrierShared();
+    barrier();
+    if (t < 16u && tile < pc.w1) {
+        U32Ref(pc.a1).v[t * pc.w1 + tile] = cnt[t];
+    }
+}
+#endif
+
+#if KERNEL == 2   // RADIX_SCATTER: a0 keys in, a1 keys out, a2 scanned hist; u0 n; w0 shift, w1 tiles
+shared uint tileOff[16];
+shared uint sgTot[64][8];
+void main() {
+    uint t = gl_LocalInvocationID.x;
+    uint tile = groupLinear();
+    if (tile >= pc.w1) {
+        return;   // the whole workgroup: no barrier is skipped by part of it
+    }
+    if (t < 16u) {
+        tileOff[t] = U32Ref(pc.a2).v[t * pc.w1 + tile];
+    }
+    memoryBarrierShared();
+    barrier();
+    U64Ref inK = U64Ref(pc.a0);
+    U64Ref outK = U64Ref(pc.a1);
+    for (uint r = 0u; r < ITEMS; ++r) {
+        uint64_t idx = uint64_t(tile) * TILE + r * BLOCK + t;
+        bool valid = idx < pc.u0;
+        uint64_t key = valid ? inK.v[uint(idx)] : 0ul;
+        uint d = valid ? uint(key >> pc.w0) & 15u : 16u;
+        // packed one-hot: digit d is the 16-bit field (d & 1) of word d >> 1
+        uint incl[8];
+        for (uint w = 0u; w < 8u; ++w) {
+            uint v = (valid && (d >> 1) == w) ? 1u << (16u * (d & 1u)) : 0u;
+            incl[w] = subgroupInclusiveAdd(v);
+        }
+        if (gl_SubgroupInvocationID == gl_SubgroupSize - 1u) {
+            for (uint w = 0u; w < 8u; ++w) {
+                sgTot[gl_SubgroupID][w] = incl[w];
+            }
+        }
+        memoryBarrierShared();
+        barrier();
+        uint pre[8], tot[8];
+        for (uint w = 0u; w < 8u; ++w) {
+            pre[w] = 0u;
+            tot[w] = 0u;
+        }
+        for (uint s = 0u; s < gl_NumSubgroups; ++s) {
+            for (uint w = 0u; w < 8u; ++w) {
+                uint x = sgTot[s][w];
+                if (s < gl_SubgroupID) {
+                    pre[w] += x;
+                }
+                tot[w] += x;
+            }
+        }
+        if (valid) {
+            uint w = d >> 1, f = 16u * (d & 1u);
+            uint rank = (((pre[w] + incl[w]) >> f) & 0xFFFFu) - 1u;   // equal digits before this key
+            outK.v[tileOff[d] + rank] = key;
+        }
+        memoryBarrierShared();
+        barrier();
+        if (t < 16u) {
+            tileOff[t] += (tot[t >> 1] >> (16u * (t & 1u))) & 0xFFFFu;
+        }
+        memoryBarrierShared();
+        barrier();
+    }
+}
+#endif
+
+#if KERNEL == 3   // SCAN_LOCAL: a0 data (u32, in place), a1 block totals; u0 n
+shared uint sgSum[64];
+void main() {
+    uint t = gl_LocalInvocationID.x;
+    uint blk = groupLinear();
+    if (uint64_t(blk) * TILE >= pc.u0) {
+        return;   // a spare workgroup of a 2D dispatch (the whole workgroup returns)
+    }
+    U32Ref data = U32Ref(pc.a0);
+    uint64_t first = uint64_t(blk) * TILE + uint64_t(t) * ITEMS;
+    uint vals[ITEMS];
+    uint mine = 0u;
+    for (uint k = 0u; k < ITEMS; ++k) {
+        uint64_t idx = first + k;
+        vals[k] = idx < pc.u0 ? data.v[uint(idx)] : 0u;
+        mine += vals[k];
+    }
+    uint incl = subgroupInclusiveAdd(mine);
+    if (gl_SubgroupInvocationID == gl_SubgroupSize - 1u) {
+        sgSum[gl_SubgroupID] = incl;
+    }
+    memoryBarrierShared();
+    barrier();
+    uint pre = 0u, tot = 0u;
+    for (uint s = 0u; s < gl_NumSubgroups; ++s) {
+        uint x = sgSum[s];
+        if (s < gl_SubgroupID) {
+            pre += x;
+        }
+        tot += x;
+    }
+    uint run = pre + incl - mine;
+    for (uint k = 0u; k < ITEMS; ++k) {
+        uint64_t idx = first + k;
+        if (idx < pc.u0) {
+            data.v[uint(idx)] = run;
+        }
+        run += vals[k];
+    }
+    if (t == 0u) {
+        U32Ref(pc.a1).v[blk] = tot;
+    }
+}
+#endif
+
+#if KERNEL == 4   // SCAN_ADD: a0 data, a1 scanned block totals; u0 n
+void main() {
+    uint64_t idx = uint64_t(threadLinear());
+    if (idx < pc.u0) {
+        uint blk = uint(idx / TILE);
+        U32Ref(pc.a0).v[uint(idx)] += U32Ref(pc.a1).v[blk];
+    }
+}
+#endif
+
+#if KERNEL == 5   // UNIQUE_FLAGS: a0 sorted keys, a1 flags; u0 n
+void main() {
+    uint i = threadLinear();
+    if (uint64_t(i) < pc.u0) {
+        U64Ref k = U64Ref(pc.a0);
+        U32Ref(pc.a1).v[i] = (i == 0u || k.v[i] != k.v[i - 1u]) ? 1u : 0u;
+    }
+}
+#endif
+
+#if KERNEL == 6   // UNIQUE_SCATTER: a0 sorted keys, a1 scanned flags, a2 out, a3 count (u32); u0 n
+void main() {
+    uint i = threadLinear();
+    if (uint64_t(i) < pc.u0) {
+        U64Ref k = U64Ref(pc.a0);
+        bool first = i == 0u || k.v[i] != k.v[i - 1u];
+        uint at = U32Ref(pc.a1).v[i];
+        if (first) {
+            U64Ref(pc.a2).v[at] = k.v[i];
+        }
+        if (uint64_t(i) + 1ul == pc.u0) {
+            U32Ref(pc.a3).v[0] = at + (first ? 1u : 0u);
+        }
+    }
+}
+#endif
+
+uint64_t lowerBound(U64Ref keys, uint64_t lo, uint64_t hi, uint64_t value) {
+    while (lo < hi) {
+        uint64_t mid = lo + (hi - lo) / 2ul;
+        if (keys.v[uint(mid)] < value) {
+            lo = mid + 1ul;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo;
+}
+
+#if KERNEL == 7   // PART_BOUNDS: a0 keys, a1 bounds (u64, parts + 1); u0 n; w0 p0, w1 parts
+void main() {
+    uint i = threadLinear();
+    if (i <= pc.w1) {
+        uint p = pc.w0 + i;
+        U64Ref(pc.a1).v[i] = p >= 256u ? pc.u0 : lowerBound(U64Ref(pc.a0), 0ul, pc.u0, uint64_t(p) << 56);
+    }
+}
+#endif
+
+#if KERNEL == 8   // FINGERPRINTS: a0 keys, a1 out (u32 words, 2 fingerprints each); u0 n
+void main() {
+    uint j = threadLinear();
+    uint64_t lo = 2ul * uint64_t(j);
+    if (lo < pc.u0) {
+        U64Ref k = U64Ref(pc.a0);
+        uint a = uint(k.v[uint(lo)]) & 0xFFFFu;
+        uint b = lo + 1ul < pc.u0 ? uint(k.v[uint(lo) + 1u]) & 0xFFFFu : 0u;
+        U32Ref(pc.a1).v[j] = a | (b << 16);
+    }
+}
+#endif
+
+#if KERNEL == 9   // BUCKET_STARTS: a0 keys, a1 starts (u32); u0 lo, u1 hi; w0 bucketBits
+void main() {
+    uint64_t b = uint64_t(threadLinear());
+    uint64_t buckets = 1ul << pc.w0;
+    if (b > buckets) {
+        return;
+    }
+    U32Ref st = U32Ref(pc.a1);
+    if (b == buckets) {
+        st.v[uint(b)] = uint(pc.u1 - pc.u0);
+        return;
+    }
+    U64Ref keys = U64Ref(pc.a0);
+    // keys of one partition share the top 8 bits; the bucket is the next bucketBits bits
+    uint64_t top = keys.v[uint(pc.u0)] & (0xFFul << 56);
+    uint64_t value = top | (b << (56u - pc.w0));
+    st.v[uint(b)] = uint(lowerBound(keys, pc.u0, pc.u1, value) - pc.u0);
+}
+#endif
+
+#if KERNEL == 10   // BLOOM: a0 keys, a1 bloom words; u0 lo, u1 hi, u2 blocks per partition
+void main() {
+    uint64_t j = pc.u0 + uint64_t(threadLinear());
+    if (j >= pc.u1) {
+        return;
+    }
+    uint64_t h = mixKey(U64Ref(pc.a0).v[uint(j)] ^ 0x5851f42d4c957f2dul);
+    U32Ref w = U32Ref(pc.a1 + (((h >> 32) * pc.u2) >> 32) * 32ul);
+    uint low = uint(h);
+    for (uint i = 0u; i < 8u; ++i) {
+        atomicOr(w.v[i], 1u << ((low * SALT[i]) >> 27));
+    }
+}
+#endif

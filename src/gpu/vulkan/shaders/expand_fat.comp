@@ -1,0 +1,278 @@
+#version 460
+// src/gpu/vulkan/shaders/expand_fat.comp: the node kernel for 2x2 boards (mbgpu.cu: expandFat,
+// fatLaneChildren). The two rows (columns) under the 2x2 piece move together as one lane,
+// counted at their first index and carrying the piece (FAT_X bits 61-63, FAT_Y bits 58-60 of
+// b1); the amount that would put the piece across the edge is skipped; no bound.
+// Built twice: -DLEAF=0 and -DLEAF=1.
+//
+// Laid out like expand.comp for GCN-class GPUs: a lane's children are a 5-bit mask, rebuilt
+// from the parent when used, and inner levels stage 4 bytes per child (parent slot and move)
+// with the parents' boards in shared memory.
+#extension GL_GOOGLE_include_directive : require
+#include "common.glsl"
+#include "expand_push.glsl"
+
+#if LEAF
+shared uint hist[256];
+#else
+shared uint64_t sB1[BLOCK];      // the workgroup's parent boards and seeds
+shared uint64_t sB2[BLOCK];
+shared uint sSeed[BLOCK];
+shared uint sCh[BLOCK * 5u];     // staged children: parent slot << 8 | move code
+#endif
+
+void writeRow(inout uint64_t b1, inout uint64_t b2, uint row, uint64_t lane) {
+    uint sh = 36u - 18u * (row % 3u);
+    if (row < 3u) {
+        b1 = (b1 & ~(LANE_BITS << sh)) | (lane << sh);
+    } else {
+        b2 = (b2 & ~(LANE_BITS << sh)) | (lane << sh);
+    }
+}
+
+void writeCol(inout uint64_t b1, inout uint64_t b2, uint col, uint64_t lane) {
+    uint64_t m = columnMask(col);
+    b1 &= ~m;
+    b2 &= ~m;
+    for (uint r = 0u; r < 3u; ++r) {
+        b1 |= ((lane >> (15u - 3u * r)) & 7ul) << (51u - 18u * r - 3u * col);
+        b2 |= ((lane >> (6u - 3u * r)) & 7ul) << (51u - 18u * r - 3u * col);
+    }
+}
+
+// The child of moving lane (dir, lane) by n (1..5); the pair under the 2x2 piece moves together
+// and carries the piece's coordinate.
+void fatChild(uint64_t b1, uint64_t b2, uint dir, uint lane, uint n, out uint64_t o1, out uint64_t o2) {
+    uint fatX = uint(b1 >> 61) & 7u, fatY = uint(b1 >> 58) & 7u;
+    bool isFat = lane == (dir == 0u ? fatY : fatX);
+    o1 = b1;
+    o2 = b2;
+    if (dir == 0u) {
+        writeRow(o1, o2, lane, rotateLane(rowLane(b1, b2, lane), n));
+        if (isFat) {
+            writeRow(o1, o2, lane + 1u, rotateLane(rowLane(b1, b2, lane + 1u), n));
+            o1 = (o1 & ~FAT_X_FIELD) | (uint64_t((fatX + n) % 6u) << 61);
+        }
+    } else {
+        writeCol(o1, o2, lane, rotateLane(colLane(b1, b2, lane), n));
+        if (isFat) {
+            writeCol(o1, o2, lane + 1u, rotateLane(colLane(b1, b2, lane + 1u), n));
+            o1 = (o1 & ~FAT_Y_FIELD) | (uint64_t((fatY + n) % 6u) << 58);
+        }
+    }
+}
+
+// The amounts of lane (dir, lane) that give a child: not the one that would put the piece
+// across the edge, not the ones `crossSkip` drops, not those that give the board back.
+uint fatMask(uint64_t b1, uint64_t b2, uint dir, uint lane, bool isFat, uint fatX, uint fatY, uint crossSkip) {
+    uint skip = isFat ? 1u << (4u - (dir == 0u ? fatX : fatY)) : crossSkip;
+    uint mask = 0u;
+    for (uint k = 0u; k < 5u; ++k) {
+        if ((skip & (1u << k)) != 0u) {
+            continue;
+        }
+        uint64_t o1, o2;
+        fatChild(b1, b2, dir, lane, k + 1u, o1, o2);
+        if (!(o1 == b1 && o2 == b2)) {
+            mask |= 1u << k;
+        }
+    }
+    return mask;
+}
+
+#if !LEAF
+uint stageBase() {
+    return gl_SubgroupID * gl_SubgroupSize * 5u;
+}
+
+// Writes the subgroup's `staged` children to the next level, rebuilding each from its parent
+// (every invocation of the subgroup calls it).
+void flushStage(Counters C, uint staged) {
+    uint base = 0u;
+    if (subgroupElect()) {
+        base = atomicAdd(C.next, staged);
+    }
+    base = subgroupBroadcastFirst(base);
+    subgroupMemoryBarrierShared();
+    subgroupBarrier();
+    U64Ref o1 = U64Ref(pc.outB1);
+    U64Ref o2 = U64Ref(pc.outB2);
+    U32Ref op = U32Ref(pc.outPk);
+    uint sb = stageBase();
+    for (uint j = gl_SubgroupInvocationID; j < staged; j += gl_SubgroupSize) {
+        uint at = base + j;
+        if (at < pc.outCap) {
+            uint e = sCh[sb + j];
+            uint t = e >> 8, code = e & 255u;
+            uint64_t c1, c2;
+            fatChild(sB1[t], sB2[t], code / 30u, (code % 30u) / 5u, code % 5u + 1u, c1, c2);
+            o1.v[at] = c1;
+            o2.v[at] = c2;
+            op.v[at] = (code << 24) | sSeed[t];
+        }
+    }
+    subgroupMemoryBarrierShared();
+    subgroupBarrier();
+}
+#endif
+
+void main() {
+    Globals g = Globals(pc.globals);
+    Counters C = Counters(pc.counters);
+    uint tid = gl_LocalInvocationID.x;
+#if LEAF
+    if (g.mode == LEAF_COUNTS) {
+        hist[tid] = 0u;
+    }
+#endif
+
+    uint i = threadLinear();
+    bool live = i < pc.n;
+    uint64_t b1 = 0ul, b2 = 0ul;
+    uint prev = NO_PREV, seed = 0u;
+    if (live) {
+        b1 = U64Ref(pc.inB1).v[i];
+        b2 = U64Ref(pc.inB2).v[i];
+        uint pk = U32Ref(pc.inPk).v[i];
+        prev = pk >> 24;
+        seed = pk & 0xFFFFFFu;
+    }
+#if !LEAF
+    sB1[tid] = b1;
+    sB2[tid] = b2;
+    sSeed[tid] = seed;
+#endif
+    memoryBarrierShared();
+    barrier();
+
+    uint fatX = uint(b1 >> 61) & 7u, fatY = uint(b1 >> 58) & 7u;
+    int prevDir = prev == NO_PREV ? -1 : int(prev / 30u);
+    uint prevLane = (prev % 30u) / 5u, prevAmount = prev % 5u + 1u;
+    // a column move on the pair keeps fatX, so the pair is still at prevLane
+    int prevNormalCol = prevDir == 1 && prevLane != fatX ? int(prevLane) : -1;
+
+    uint staged = 0u, leaves = 0u, inRange = 0u;
+    for (uint dl = 0u; dl < THREADS_PER_NODE; ++dl) {
+        uint dir = dl < 6u ? 0u : 1u;
+        uint lane = dl - 6u * dir;
+        uint fatLane = dir == 0u ? fatY : fatX;
+        uint mask = 0u;
+        if (live && !(int(dir) == prevDir && lane <= prevLane) && lane != fatLane + 1u) {
+            bool isFat = lane == fatLane;
+            uint crossSkip = 0u;
+            if (dir == 0u && !isFat && prevNormalCol >= 0) {
+                // after a normal column move, the normal row moves that commute with it
+                uint x1 = uint(prevNormalCol), y1 = lane;
+                uint pivot = colorAt(b1, b2, x1, y1);
+                if (colorAt(b1, b2, x1, (y1 + prevAmount) % 6u) == pivot) {
+                    for (uint k = 0u; k < 5u; ++k) {
+                        if (colorAt(b1, b2, (x1 + 5u - k) % 6u, y1) == pivot) {
+                            crossSkip |= 1u << k;
+                        }
+                    }
+                }
+            }
+            mask = fatMask(b1, b2, dir, lane, isFat, fatX, fatY, crossSkip);
+        }
+        uint code = dir * 30u + lane * 5u;
+#if !LEAF
+        // stage the lane's children (4 bytes each); flush when the subgroup's slots would overflow
+        uint mine = bitCount(mask);
+        uint offset = subgroupExclusiveAdd(mine);
+        uint total = subgroupAdd(mine);
+        if (staged + total > gl_SubgroupSize * 5u) {
+            flushStage(C, staged);
+            staged = 0u;
+        }
+        uint at = stageBase() + staged + offset;
+        for (uint k = 0u; k < 5u; ++k) {
+            if ((mask & (1u << k)) != 0u) {
+                sCh[at++] = (tid << 8) | (code + k);
+            }
+        }
+        staged += total;
+#else
+        leaves += bitCount(mask);
+        if (g.mode == LEAF_KEYS) {
+            // one subgroup prefix for the lane's in-range keys, then the writes
+            uint inMask = 0u;
+            for (uint k = 0u; k < 5u; ++k) {
+                if ((mask & (1u << k)) != 0u) {
+                    uint64_t c1, c2;
+                    fatChild(b1, b2, dir, lane, k + 1u, c1, c2);
+                    uint p = uint(mixKey(stateHash(c1, c2)) >> 56);
+                    if (p >= g.pBegin && p < g.pEnd) {
+                        inMask |= 1u << k;
+                    }
+                }
+            }
+            uint mine = bitCount(inMask);
+            uint offset = subgroupExclusiveAdd(mine);
+            uint total = subgroupAdd(mine);
+            uint base = 0u;
+            if (subgroupElect() && total != 0u) {
+                base = atomicAdd(C.passed, total);
+            }
+            uint at = subgroupBroadcastFirst(base) + offset;
+            for (uint k = 0u; k < 5u; ++k) {
+                if ((inMask & (1u << k)) != 0u) {
+                    uint64_t c1, c2;
+                    fatChild(b1, b2, dir, lane, k + 1u, c1, c2);
+                    if (at < g.oCap) {
+                        U64Ref(g.okey).v[at] = mixKey(stateHash(c1, c2));
+                    } else {
+                        C.overflow = 1u;
+                    }
+                    ++at;
+                }
+            }
+        } else {
+            for (uint k = 0u; k < 5u; ++k) {
+                if ((mask & (1u << k)) == 0u) {
+                    continue;
+                }
+                uint64_t c1, c2;
+                fatChild(b1, b2, dir, lane, k + 1u, c1, c2);
+                uint64_t key = mixKey(stateHash(c1, c2));
+                if (g.mode == LEAF_COUNTS) {
+                    atomicAdd(hist[uint(key >> 56)], 1u);
+                } else if (g.mode == LEAF_CHECKSUM) {
+                    uint s = pc.seedBase + seed;
+                    atomicAdd64(g.cnt, s, 1ul);
+                    atomicAdd64(g.sum, s, key);
+                    atomicXor64(g.xr, s, key);
+                } else {   // LEAF_FILTER
+                    uint p = uint(key >> 56);
+                    if (p >= g.pBegin && p < g.pEnd) {
+                        ++inRange;
+                        if (leafPasses(g, key)) {
+                            uint at = atomicAdd(C.passed, 1u);
+                            if (at < g.oCap) {
+                                U64Ref(g.ob1).v[at] = c1;
+                                U64Ref(g.ob2).v[at] = c2;
+                                U64Ref(g.okey).v[at] = key;
+                                U32Ref(g.oseed).v[at] = pc.seedBase + seed;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+#endif
+    }
+#if LEAF
+    SUBGROUP_ADD_TO(C.leaves, leaves)
+    SUBGROUP_ADD_TO(C.inRange, inRange)
+    if (g.mode == LEAF_COUNTS) {
+        memoryBarrierShared();
+        barrier();
+        if (hist[tid] != 0u) {
+            atomicAdd64(g.partCounts, tid, uint64_t(hist[tid]));
+        }
+    }
+#else
+    if (staged != 0u) {
+        flushStage(C, staged);
+    }
+#endif
+}

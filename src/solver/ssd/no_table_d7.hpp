@@ -337,7 +337,7 @@ namespace ssd {
         if (!cfg.d7CountsInRam && !gpuD7) {
             Timer spillTimer;
             countsFile.path = fs::temp_directory_path()
-                              / ("mb_d7counts_" + cfg.puzzle + "_" + std::to_string(GetCurrentProcessId()) + ".bin");
+                              / ("mb_d7counts_" + cfg.puzzle + "_" + std::to_string(platform::processId()) + ".bin");
             FILE* f = std::fopen(countsFile.path.string().c_str(), "wb");
             if (f == nullptr) {
                 throw std::runtime_error("cannot write " + countsFile.path.string());
@@ -365,7 +365,7 @@ namespace ssd {
             }
             passCounts.ensure(static_cast<u64>(p1 - p0) * bucketsPer);
             FILE* f = std::fopen(countsFile.path.string().c_str(), "rb");
-            if (f == nullptr || _fseeki64(f, static_cast<long long>(static_cast<u64>(p0 - P0) * countsBytesPerPartition), SEEK_SET) != 0) {
+            if (f == nullptr || platform::fseek64(f, static_cast<long long>(static_cast<u64>(p0 - P0) * countsBytesPerPartition), SEEK_SET) != 0) {
                 if (f) std::fclose(f);
                 throw std::runtime_error("cannot read " + countsFile.path.string());
             }

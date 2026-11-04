@@ -1,6 +1,8 @@
 # src/gpu/
 
-The GPU module for `experimentDiskDepth6 --gpu NAME` (CUDA; RTX 5060 Ti here).
+The GPU module for `experimentDiskDepth6 --gpu NAME` (CUDA; RTX 5060 Ti here). The Vulkan
+module in `vulkan/` (`mbvk.dll`, any vendor) implements the same interface; the solver tries
+CUDA first, then Vulkan (`vulkan/README.md`).
 
 | File | What |
 |---|---|
@@ -10,7 +12,8 @@ The GPU module for `experimentDiskDepth6 --gpu NAME` (CUDA; RTX 5060 Ti here).
 | `build.cmd` | builds `build_gpu/mbgpu.dll` and `build_gpu/test_gpu_stream.exe` |
 
 The solver loads `mbgpu.dll` at run time (`src/solver/ssd/gpu_stream.hpp`): next to the exe, else
-`<exe dir>/../build_gpu`, or `--gpu-dll PATH`.
+`<exe dir>/../build_gpu`, or `--gpu-dll PATH`. `--gpu cuda:NAME` / `--gpu vulkan:NAME` pick one
+module; `--gpu auto` lets it choose the device (CUDA: its first, the fastest).
 
 ## Requirements and running
 

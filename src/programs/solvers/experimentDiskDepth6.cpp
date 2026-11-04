@@ -96,16 +96,21 @@
 // streams it too, for small checks only). The GPU audit streams 16 seeds in full, the GPU pass
 // reports progress per 1/64 of the seeds, and recovery (left depth 11) shares a 5-move start
 // half and streams 6 moves per middle, filtered toward the start root.
-// --gpu NAME [--gpu-vram-gb G] [--gpu-dll PATH]: stream the left side on the CUDA device whose
-// name contains NAME (e.g. 5060; no other device is used), at most G GB of its memory (default
-// 12.5). Normal and 2x2 boards, forward. The GPU applies the same canonical rules and (normal
+// --gpu [cuda:|vulkan:]NAME [--gpu-vram-gb G] [--gpu-dll PATH]: stream the left side on the GPU
+// whose name contains NAME (e.g. 5060), at most G GB of its memory (default 12.5, and never more
+// than the driver reports free). Without a prefix the CUDA module (mbgpu.dll) is tried first,
+// then the Vulkan one (mbvk.dll: AMD, Intel and NVIDIA; every device whose name matches is used,
+// seeds shared out between them). NAME "auto": CUDA's first device, or for Vulkan every
+// discrete GPU that drives no display. --gpu-list: print the GPUs, then exit (opens none).
+// Normal and 2x2 boards, forward. The GPU applies the same canonical rules and (normal
 // boards) the rotation lane bound at every level as the CPU's "both" mode, tests the leaves
 // against the pass's Bloom
 // blocks and hands the survivors back; CPU threads finish them with the same index code while
 // the GPU streams on, so the candidates are the CPU's. The GPU also audits its bound, builds
 // the depth-6 index (or the depth-7 one on 2x2 boards) and regenerates it to confirm
 // candidates. Large pages are off with
-// --gpu. Needs build_gpu/mbgpu.dll (src/gpu/build.cmd; src/gpu/README.md).
+// --gpu. Needs build_gpu/mbgpu.dll (src/gpu/build.cmd; src/gpu/README.md) or build_gpu/mbvk.dll
+// (src/gpu/vulkan/build.cmd; src/gpu/vulkan/README.md).
 // --no-seed-last-move: by default the first streamed move from each left seed, and the
 // first move of the goal side's depth-6 / depth-7 expansion from its depth-5 frontier,
 // follow the same canonical-order rules as the moves below them, with each state's own
@@ -150,6 +155,10 @@ using namespace ssd;
 
 int main(const int argc, char** argv) {
     const Config cfg = parseArgs(argc, argv);
+    if (cfg.gpuList) {
+        listGpus();
+        return 0;
+    }
     // With --gpu the CPU probes only the ~1% of leaves that pass the GPU's Bloom test, so large
     // pages gain nothing, and allocating them on fragmented RAM cost 16-4 at 14 moves 9.6 s.
     g_largePagesWanted = cfg.largePages && cfg.gpuDevice.empty();

@@ -1,0 +1,21 @@
+#version 460
+// src/gpu/vulkan/shaders/bound.comp: h of each state from its definition (mbgpu_bounds).
+#extension GL_GOOGLE_include_directive : require
+#include "common.glsl"
+
+layout(push_constant) uniform BoundPush {
+    uint64_t globals;
+    uint64_t states;   // 2 x u64 per state
+    uint64_t h;        // int per state
+    uint n;
+} pc;
+
+void main() {
+    uint i = threadLinear();
+    if (i < pc.n) {
+        Globals g = Globals(pc.globals);
+        U64Ref s = U64Ref(pc.states);
+        uint64_t b1 = s.v[2u * i], b2 = s.v[2u * i + 1u];
+        U32Ref(pc.h).v[i] = uint(rowHalf(g, b1, b2) + colHalf(g, b1, b2));
+    }
+}

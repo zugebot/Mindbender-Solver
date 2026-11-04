@@ -12,6 +12,7 @@
 #include "src/utils/progress_reporter.hpp"
 #include "src/utils/parallel_for.hpp"
 #include "src/solver/bounds/lane_bound.hpp"
+#include "src/utils/platform.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -93,8 +94,9 @@ namespace ssd {
         u32 recoverStreamDepth = 5;   // --recover-stream-depth: per-middle recovery halves this deep are streamed
         bool d7CountsInRam = false;   // --d7-counts-ram: keep the depth-7 bucket counts in RAM
         bool seedLastMove = true;     // first streamed move follows the canonical-order rules (--no-seed-last-move: off)
-        std::string gpuDevice;        // --gpu NAME: stream on the CUDA device named like NAME (gpu_stream.hpp)
-        std::string gpuDll;           // --gpu-dll PATH (default: mbgpu.dll next to the exe, then ../build_gpu)
+        std::string gpuDevice;        // --gpu [cuda:|vulkan:]NAME|auto: stream on the GPU (gpu_stream.hpp)
+        std::string gpuDll;           // --gpu-dll PATH (default: mbgpu.dll, then mbvk.dll, next to the exe or in ../build_gpu)
+        bool gpuList = false;         // --gpu-list: print the GPUs the modules see, then exit
         double gpuVramGb = 12.5;      // --gpu-vram-gb: VRAM the GPU module may use
         lane_bound::Kind boundKind = lane_bound::Kind::Rotation;   // --bound-kind mix|rotation   // max; the run uses 3% of its search, >= 20 s
 

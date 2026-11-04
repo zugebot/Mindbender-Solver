@@ -1,8 +1,12 @@
 #pragma once
 // src/solver/ssd/gpu_stream.hpp
 //
-// --gpu: work on the GPU (src/gpu, mbgpu.dll). The DLL is built with nvcc + MSVC,
-// so it is loaded at run time and only plain C types cross (src/gpu/mbgpu.h).
+// --gpu: work on the GPU. Two modules with the same C interface (src/gpu/mbgpu.h), loaded at
+// run time so only plain C types cross: mbgpu.dll (CUDA, src/gpu, nvcc + MSVC) and mbvk.dll
+// (Vulkan, any vendor, src/gpu/vulkan). --gpu [cuda:|vulkan:]NAME: without a prefix CUDA is
+// tried first, then Vulkan, so NVIDIA cards keep the CUDA kernels. NAME "auto" lets the module
+// choose (CUDA: its first device, the fastest; Vulkan: every discrete GPU that drives no
+// display, see mbvk.cpp). --gpu-list prints the Vulkan devices without opening any.
 // - The probe: per pass the GPU gets the pass's Bloom blocks, streams every seed
 //   with the canonical rules and the rotation lane bound ("both"), and hands back
 //   the leaves that pass the Bloom filter; CPU threads finish those with the same
@@ -27,7 +31,7 @@ namespace ssd {
     static_assert(sizeof(B1B2) == 16, "mbgpu reads seeds as 2 x u64 per B1B2");
 
     struct GpuModule {
-        HMODULE dll = nullptr;
+        void* dll = nullptr;
         decltype(&mbgpu_open) open = nullptr;
         decltype(&mbgpu_set_target) setTarget = nullptr;
         decltype(&mbgpu_set_filter) setFilter = nullptr;
@@ -49,32 +53,32 @@ namespace ssd {
 
         MUND std::string error() const { return lastError != nullptr ? lastError() : "mbgpu.dll not loaded"; }
 
-        // mbgpu.dll from `explicitPath`, else next to the exe, else <exe dir>/../build_gpu.
-        bool load(const std::string& explicitPath, std::string& why) {
+        bool vulkan = false;   // mbvk.dll (it exports mbvk_list_devices)
+
+        // `file` as a path when it has a directory, else <exe dir>/file, then <exe dir>/../build_gpu/file.
+        bool load(const std::string& file, std::string& why) {
             std::vector<std::string> tries;
-            if (!explicitPath.empty()) {
-                tries.push_back(explicitPath);
+            if (file.find_first_of("/\\") != std::string::npos) {
+                tries.push_back(file);
             } else {
-                char exe[MAX_PATH] = {};
-                GetModuleFileNameA(nullptr, exe, MAX_PATH);
-                const fs::path dir = fs::path(exe).parent_path();
-                tries.push_back((dir / "mbgpu.dll").string());
-                tries.push_back((dir.parent_path() / "build_gpu" / "mbgpu.dll").string());
+                const fs::path dir = fs::path(platform::exePath()).parent_path();
+                tries.push_back((dir / file).string());
+                tries.push_back((dir.parent_path() / "build_gpu" / file).string());
             }
             for (const std::string& p : tries) {
-                dll = LoadLibraryA(p.c_str());
+                dll = platform::loadLibrary(p);
                 if (dll != nullptr) {
                     path = p;
                     break;
                 }
             }
             if (dll == nullptr) {
-                why = "mbgpu.dll not found (tried " + tries.front() + (tries.size() > 1 ? ", " + tries.back() : "") + ")";
+                why = file + " not found (tried " + tries.front() + (tries.size() > 1 ? ", " + tries.back() : "") + ")";
                 return false;
             }
+            vulkan = platform::librarySymbol(dll, "mbvk_list_devices") != nullptr;
             auto get = [&](auto& fn, const char* name) {
-                fn = reinterpret_cast<std::remove_reference_t<decltype(fn)>>(
-                        reinterpret_cast<void*>(GetProcAddress(dll, name)));
+                fn = reinterpret_cast<std::remove_reference_t<decltype(fn)>>(platform::librarySymbol(dll, name));
                 return fn != nullptr;
             };
             if (!(get(open, "mbgpu_open") && get(setTarget, "mbgpu_set_target") && get(setFilter, "mbgpu_set_filter") &&
@@ -86,13 +90,40 @@ namespace ssd {
                   get(lastError, "mbgpu_last_error") &&
                   get(close, "mbgpu_close"))) {
                 why = path + " lacks an mbgpu_* export";
-                FreeLibrary(dll);
-                dll = nullptr;
+                unload();
                 return false;
             }
             return true;
         }
+
+        void unload() {
+            if (dll != nullptr) {
+                platform::freeLibrary(dll);
+            }
+            *this = GpuModule{};
+        }
     };
+
+    // --gpu [cuda:|vulkan:]NAME -> (modules to try in order, NAME)
+    inline std::pair<std::vector<std::string>, std::string> gpuModules(const Config& cfg) {
+        std::string name = cfg.gpuDevice, backend;
+        const std::size_t colon = name.find(':');
+        if (colon != std::string::npos) {
+            const std::string prefix = name.substr(0, colon);
+            if (prefix == "cuda" || prefix == "vulkan" || prefix == "vk") {
+                backend = prefix == "cuda" ? "cuda" : "vulkan";
+                name = name.substr(colon + 1);
+            }
+        }
+        std::vector<std::string> files;
+        if (!cfg.gpuDll.empty()) {
+            files.push_back(cfg.gpuDll);
+        } else {
+            if (backend != "vulkan") files.emplace_back(platform::libraryFile("mbgpu"));
+            if (backend != "cuda") files.emplace_back(platform::libraryFile("mbvk"));
+        }
+        return {files, name};
+    }
 
     // One module per run, opened by the first part that needs it (--gpu NAME).
     inline GpuModule g_gpu;
@@ -102,17 +133,66 @@ namespace ssd {
         if (g_gpuOpen) {
             return g_gpu;
         }
+        const auto [files, name] = gpuModules(cfg);
+        std::string whys;
+        for (const std::string& file : files) {
+            GpuModule m;
+            std::string why;
+            if (!m.load(file, why)) {
+                whys += "; " + why;
+                continue;
+            }
+            // CUDA "auto": its first device (CUDA orders them fastest first); Vulkan picks itself
+            const std::string open = !m.vulkan && name == "auto" ? std::string() : name;
+            char info[2048] = {};
+            if (m.open(open.c_str(), static_cast<uint64_t>(cfg.gpuVramGb * 1e9), info, sizeof(info)) != 0) {
+                const std::string err = m.error();
+                whys += "; " + m.path + ": " + err;
+                m.unload();
+                // the next module only when this one has no such device: a CUDA device that
+                // fails to open is an error, not a reason to run the same card on Vulkan
+                if (err.rfind("no CUDA device", 0) == 0 || err.rfind("no Vulkan device", 0) == 0 ||
+                    err.rfind("no usable Vulkan device", 0) == 0 || err.rfind("vulkan-1.dll", 0) == 0 || err.rfind("libvulkan", 0) == 0) {
+                    continue;
+                }
+                throw std::runtime_error("--gpu " + cfg.gpuDevice + ": " + whys.substr(2));
+            }
+            g_gpu = m;
+            g_gpuOpen = true;
+            tcout << "gpu: " << info << "; " << g_gpu.path << "\n";
+            return g_gpu;
+        }
+        throw std::runtime_error("--gpu " + cfg.gpuDevice + ": no GPU module could open it (" +
+                                 (whys.empty() ? std::string("none tried") : whys.substr(2)) + ")");
+    }
+
+    // --gpu-list: the Vulkan devices (mbvk.dll asks the driver; nothing is opened) and whether
+    // the CUDA module is there (opening it would allocate VRAM, so it is not opened).
+    inline void listGpus() {
+        GpuModule cuda, vk;
         std::string why;
-        if (!g_gpu.ready() && !g_gpu.load(cfg.gpuDll, why)) {
-            throw std::runtime_error("--gpu: " + why);
+        if (cuda.load(platform::libraryFile("mbgpu"), why) && !cuda.vulkan) {
+            tcout << "CUDA module: " << cuda.path << " (NVIDIA GPUs; --gpu auto tries it first)\n";
+        } else {
+            tcout << "CUDA module: none (" << why << ")\n";
         }
-        char info[512] = {};
-        if (g_gpu.open(cfg.gpuDevice.c_str(), static_cast<uint64_t>(cfg.gpuVramGb * 1e9), info, sizeof(info)) != 0) {
-            throw std::runtime_error("--gpu: " + g_gpu.error());
+        cuda.unload();
+        why.clear();
+        if (!vk.load(platform::libraryFile("mbvk"), why) || !vk.vulkan) {
+            tcout << "Vulkan module: none (" << why << ")\n";
+            vk.unload();
+            return;
         }
-        g_gpuOpen = true;
-        tcout << "gpu: " << info << "; " << g_gpu.path << "\n";
-        return g_gpu;
+        using ListFn = int (*)(char*, int);
+        const auto list = reinterpret_cast<ListFn>(platform::librarySymbol(vk.dll, "mbvk_list_devices"));
+        std::vector<char> text(1 << 16);
+        tcout << "Vulkan module: " << vk.path << "\n";
+        if (list(text.data(), static_cast<int>(text.size())) != 0) {
+            tcout << "  " << vk.error() << "\n";
+        } else {
+            tcout << text.data();
+        }
+        vk.unload();
     }
 
     inline void closeGpu() {

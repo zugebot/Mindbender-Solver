@@ -80,6 +80,9 @@ namespace ssd {
     inline bool g_indexBuiltWithTable = false;   // set by the in-RAM depth-6 build
 
     inline bool enableLockMemoryPrivilege() {
+#ifndef _WIN32
+        return false;   // Linux: transparent huge pages instead (BigArray::allocate)
+#else
         static const bool enabled = [] {
             HANDLE token = nullptr;
             if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token)) {
@@ -95,6 +98,7 @@ namespace ssd {
             return ok;
         }();
         return enabled;
+#endif
     }
 
     template<typename T>
@@ -103,10 +107,15 @@ namespace ssd {
         u64 size_ = 0;
         u64 capacity_ = 0;
         bool large_ = false;
+        u64 mapped_ = 0;   // Linux: bytes mapped (munmap needs them)
 
         void release() {
             if (data_ != nullptr) {
+#ifdef _WIN32
                 VirtualFree(data_, 0, MEM_RELEASE);
+#else
+                munmap(data_, mapped_);
+#endif
             }
             data_ = nullptr;
             size_ = 0;
@@ -139,6 +148,18 @@ namespace ssd {
             size_ = count;
             capacity_ = count;
             const u64 bytes = std::max<u64>(1, count * sizeof(T));
+#ifndef _WIN32
+            // anonymous pages come zeroed and page-aligned; huge pages where the kernel can
+            void* p = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            if (p == MAP_FAILED) {
+                throw std::runtime_error("mmap failed for probe index");
+            }
+            mapped_ = bytes;
+            if (g_largePagesWanted) {
+                large_ = madvise(p, bytes, MADV_HUGEPAGE) == 0;
+            }
+            data_ = static_cast<T*>(p);
+#else
             if (g_largePagesWanted && enableLockMemoryPrivilege()) {
                 const u64 page = GetLargePageMinimum();
                 if (page != 0) {
@@ -154,6 +175,7 @@ namespace ssd {
             if (data_ == nullptr) {
                 throw std::runtime_error("VirtualAlloc failed for probe index");
             }
+#endif
         }
 
         void reset() { release(); }   // gives the memory back now
@@ -347,7 +369,7 @@ namespace ssd {
         // than 2 GB fails on MinGW/Windows.
         static void readRange(const fs::path& path, const u64 offset, void* dst, const u64 bytes) {
             std::FILE* f = std::fopen(path.string().c_str(), "rb");
-            if (f == nullptr || _fseeki64(f, static_cast<long long>(offset), SEEK_SET) != 0) {
+            if (f == nullptr || platform::fseek64(f, static_cast<long long>(offset), SEEK_SET) != 0) {
                 throw std::runtime_error("failed to open/seek " + path.string());
             }
             constexpr u64 CHUNK = 1ULL << 30;
