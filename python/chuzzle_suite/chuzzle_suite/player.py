@@ -1,4 +1,4 @@
-# python/demo_app/chuzzle_demo/player.py
+# python/chuzzle_suite/chuzzle_suite/player.py
 """Plays drags in the real game window on a worker thread.
 
 Two input modes:

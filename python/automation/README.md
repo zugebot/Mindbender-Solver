@@ -2,7 +2,7 @@
 
 Scripts that drive the real Chuzzle Deluxe / Christmas Edition window (or its
 save files), gathered from older standalone projects so they can be combined
-into one demo app. `legacy/` holds them **as they were** (copied, not
+into one app (Chuzzle Suite). `legacy/` holds them **as they were** (copied, not
 modified); the originals are still in `C:\Users\jerrin\PycharmProjects`.
 
 | Folder | Original project | What it does |
@@ -21,7 +21,7 @@ the source a unified "show the solution" demo should use instead of
 
 ## Combined app
 
-`python/demo_app/` is the combined app (solutions, real-game auto-play, Speed
+`python/chuzzle_suite/` (Chuzzle Suite) is the combined app (solutions, real-game auto-play, Speed
 reset, save tracking). See its README.
 
 ## Common pieces to unify

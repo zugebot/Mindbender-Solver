@@ -1,13 +1,28 @@
-# Chuzzle Demo app
+# Chuzzle Suite
 
 One pygame window that combines the old Chuzzle 1 tools: launch any Chuzzle
 exe on the PC, browse every
 mindbender and its optimal solutions, play a solution in the **real game**,
-reset Speed Chuzzle, and track every place the game keeps save files.
+reset Speed Chuzzle, track every place the game keeps save files, and watch
+the solver queue (with a small always-on-top view).
 
 ```bash
-python python/demo_app/run_demo.py
+python python/chuzzle_suite/run_suite.py
 ```
+
+As a Windows program (Start menu entry with the app's icon, no console window; output goes to
+`user_data/chuzzle_suite.log`):
+
+```bash
+python python/chuzzle_suite/install_shortcut.py
+```
+
+Then Start menu -> Chuzzle Suite -> right-click -> Pin to taskbar (Windows 10 lets no program pin
+itself). The shortcut and the app share one AppUserModelID (`paths.APP_ID`), so the pinned icon
+and the open window are a single taskbar button, also when the app was started from a console.
+Run the script again after moving the repo or changing Python (`--desktop` adds a desktop
+shortcut, `--remove` deletes them; it needs pywin32, the app itself does not). The icon is drawn
+by `assets/make_icon.py` (`assets/chuzzle_suite.ico`, `.png`).
 
 Needs Python 3.10+ and `pygame` (no pywin32/pyautogui; Windows calls go through
 ctypes). For the best mouse routes, build the mouse-path DLL once (the app
@@ -47,7 +62,14 @@ bar, auto-play) as soon as its window opens.
   names newly solved puzzles; their solutions are ranked again.
 - **Grid**: 20 worlds x 5 puzzles. Green = solved, with its optimal move
   count; red = unsolved (no solution of 12 moves or fewer). A white dot marks
-  the 2x2 piece.
+  the 2x2 piece; a yellow dot marks a puzzle whose goal the game also accepts
+  with the piece elsewhere.
+- **Goal switch** (*< Goal* / *Goal >*, bottom right of the preview, only on those
+  puzzles): the game counts a board as solved when every colour matches, so the
+  2x2 piece may also end on another 2x2 block of its colour. Each such placement
+  has its own solutions (`build/levels_final/game_accepts/`, e.g. `4-4@r2c3` =
+  piece at rows 2-3, columns 3-4) and is labelled "not the official goal" in
+  yellow. It plays in the game like any other solution.
 - **Preview**: the board from `src/chuzzles/levels.hpp`, stepped or animated
   through a solution from `build/levels_final` (arrow keys / space work too).
   Solutions are ranked by mouse travel with the `python/viewer` library and
@@ -114,19 +136,64 @@ Game folders are searched under `E:\Games\Chuzzle Editions`, PopCap Games in
 Program Files, and Steam's `common` folder (`saves.DEFAULT_GAME_SEARCH_ROOTS`).
 The running game's exe is always added.
 
+## Queue tab
+
+The solver scheduler (`python/scheduler/mbq.py`) inside the app. While the tab
+(or the mini view) is on screen, a background thread asks the daemon for
+`GET /status` every 2.5 s; the rest of the app never waits for it. The lines
+are `mbq status`'s: the running job (puzzle, moves, split such as `<5,4,7>`,
+gpu), its phase with a progress bar, elapsed time, time left and ETA, the
+job's notes, then the queued jobs, one line each. "SOLVER ON HOLD since ..."
+and "queue is PAUSED" show above them.
+
+- **Hold solver / Unhold solver**: `POST /hold` / `/unhold` (freeze the solver
+  in place, then let it carry on).
+- **Pause queue / Resume queue**: `POST /pause` / `/resume`. Pause asks for a
+  second click within 3 s: it stops the queue from starting the next job.
+- **Mini view**: the small window below. **Open dashboard**: the daemon's page.
+- When the daemon is not reachable (refused or timed out) the tab says
+  "scheduler not running" and the buttons are off.
+- The address is `queue_client.DEFAULT_URL` (`http://127.0.0.1:8766`); the
+  environment variable `CHUZZLE_SUITE_MBQ_URL` points the app at another server,
+  e.g. a fake one for tests (`tests/test_queue.py` has one).
+
+## Title bar and mini view
+
+The window is borderless (`pygame.NOFRAME`) with the app's own dark title bar:
+pin, minimize, maximize (greyed: the layout has a fixed size) and close. The
+content keeps its 1200x840 layout below the 32 px bar.
+
+- **Pin**: keeps the window on top of other windows (`SetWindowPos`
+  `HWND_TOPMOST`). A pinned pin is upright and blue; unpinned, it is a tilted
+  outline. Remembered in `user_data/settings.json`. It applies to whichever
+  view is showing.
+- Dragging the empty part of the bar moves the window (Windows does the drag).
+  The window has `WS_MINIMIZEBOX | WS_SYSMENU`, so its taskbar button minimizes
+  and restores it and Alt+Space opens the system menu. Close (the X, Alt+F4,
+  the taskbar) goes through the app's normal quit.
+- **Mini view** (440x150): the running job, phase, progress bar, time left and
+  ETA, the number queued, hold and pause state, and Hold / Pause buttons. Its
+  title bar has pin, expand (back to the full view) and close. Switching views
+  keeps the window's top-right corner in place (moved inside the screen if it
+  would stick out).
+
 ## Layout
 
 | File | Role |
 |---|---|
-| `chuzzle_demo/levels.py` | boards from `src/chuzzles`, solutions from `build/levels_final`, 1-indexed display |
-| `chuzzle_demo/board_sim.py` | applies moves (incl. the 2x2 piece); replays all ~100k stored solutions |
-| `chuzzle_demo/routes.py` | solution -> drags via the mouse library (or simple drags); ranking + cache |
-| `chuzzle_demo/game_window.py` | window lookup by process, DPI-aware client coords, calibration, mouse input |
-| `chuzzle_demo/player.py` | worker thread that performs drags with the safety stops |
-| `chuzzle_demo/cursor_overlay.py` | the cursor sprite: a click-through layered window that shows the posted pointer |
-| `chuzzle_demo/saves.py` | save-location discovery, watcher, backup / restore / stash |
-| `chuzzle_demo/launcher.py` | finds every Chuzzle exe (drive scan + cache), version / build date / DRM wrapper, launching |
-| `chuzzle_demo/ui.py` | the pygame window |
+| `chuzzle_suite/levels.py` | boards from `src/chuzzles`, solutions from `build/levels_final`, 1-indexed display |
+| `chuzzle_suite/board_sim.py` | applies moves (incl. the 2x2 piece); replays all ~100k stored solutions |
+| `chuzzle_suite/routes.py` | solution -> drags via the mouse library (or simple drags); ranking + cache |
+| `chuzzle_suite/game_window.py` | window lookup by process, DPI-aware client coords, calibration, mouse input |
+| `chuzzle_suite/player.py` | worker thread that performs drags with the safety stops |
+| `chuzzle_suite/cursor_overlay.py` | the cursor sprite: a click-through layered window that shows the posted pointer |
+| `chuzzle_suite/saves.py` | save-location discovery, watcher, backup / restore / stash |
+| `chuzzle_suite/launcher.py` | finds every Chuzzle exe (drive scan + cache), version / build date / DRM wrapper, launching |
+| `chuzzle_suite/queue_client.py` | the scheduler's HTTP API: status poller, commands, `mbq status` wording |
+| `chuzzle_suite/title_bar.py` | the app's own title bar (drawing, hit-testing, icons) |
+| `chuzzle_suite/window_frame.py` | Win32 for the borderless window: pin on top, dragging, taskbar styles, placement |
+| `chuzzle_suite/settings.py` | `user_data/settings.json` (the pin) |
+| `chuzzle_suite/ui.py` | the pygame window |
 
-Tests: `python -m unittest discover -s python/demo_app/tests`.
+Tests: `python -m unittest discover -s python/chuzzle_suite/tests`.
 `user_data/` is git-ignored.

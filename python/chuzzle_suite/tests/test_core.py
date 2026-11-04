@@ -1,5 +1,5 @@
-# python/demo_app/tests/test_core.py
-"""Run: python -m unittest discover -s python/demo_app/tests"""
+# python/chuzzle_suite/tests/test_core.py
+"""Run: python -m unittest discover -s python/chuzzle_suite/tests"""
 
 import sys
 import tempfile
@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from chuzzle_demo import board_sim, game_window as gw, launcher, levels as lv, routes, saves  # noqa: E402
+from chuzzle_suite import board_sim, game_window as gw, launcher, levels as lv, routes, saves  # noqa: E402
 
 
 class LevelsAndSimulator(unittest.TestCase):
@@ -33,13 +33,29 @@ class LevelsAndSimulator(unittest.TestCase):
                 checked += 1
         self.assertGreater(checked, 90000)
 
+    def test_game_accepted_placements(self):
+        # the goal's other 2x2 blocks in the piece's colour (the audit of 2026-11-03)
+        counts = {name: len(level.placements) for name, level in self.levels.items() if level.placements}
+        self.assertEqual(counts, {"4-4": 4, "9-1": 4, "13-5": 8, "15-3": 2, "17-2": 1, "19-2": 1, "19-4": 2})
+        p = lv.find_level(self.levels, "4-4@r2c3")
+        self.assertEqual((p.official, p.goal_fat, p.piece_text), ("4-4", (2, 1), "rows 2-3, columns 3-4"))
+        self.assertEqual(p.goal, self.levels["4-4"].goal)
+        self.assertIsNone(lv.find_level(self.levels, "4-4@r1c1"))
+        for level in lv.all_levels(self.levels):
+            if not level.is_placement:
+                continue
+            start = board_sim.BoardState(list(level.start), level.start_fat)
+            for sol in level.solutions:
+                end = board_sim.play(start, sol)[-1]
+                self.assertEqual((end.cells, end.fat), (level.goal, level.goal_fat), f"{level.name}: {sol}")
+
     def test_unsolved_bounds_come_from_build_readme(self):
         # the solver queue raises these over time, so compare with the file itself
         import re
         text = lv.paths.BUILD_README.read_text(errors="replace")
         bounds = {n: int(b) for n, b in re.findall(r"^\s*(\d+-\d+): at least (\d+) moves", text, re.M)}
-        self.assertIn("6-4", bounds)
-        self.assertGreaterEqual(bounds["6-4"], 16)                 # none up to 15
+        self.assertTrue(bounds)                                    # 8 unsolved on 2026-11-02 (6-4 was solved)
+        self.assertGreaterEqual(min(bounds.values()), 16)          # every puzzle up to 15 moves is settled
         for name, bound in bounds.items():
             self.assertEqual(self.levels[name].lower_bound, bound, name)
         self.assertIsNone(self.levels["10-2"].lower_bound)        # solved
@@ -217,7 +233,7 @@ class PlayerMotion(unittest.TestCase):
     """The glide between drags: a gentle arc to the exact press point, a hand-like speed profile."""
 
     def _player(self):
-        from chuzzle_demo.player import Player
+        from chuzzle_suite.player import Player
 
         class Win:
             def client_rect(self):
@@ -244,7 +260,7 @@ class PlayerMotion(unittest.TestCase):
         self.assertEqual(p._approach((110.0, 105.0)), [(110.0, 105.0)])   # short hops stay straight
 
     def test_reach_easing_is_monotonic_and_front_loaded(self):
-        from chuzzle_demo.player import Player
+        from chuzzle_suite.player import Player
         vals = [Player._ease_reach(i / 100) for i in range(101)]
         self.assertEqual(vals[0], 0.0)
         self.assertAlmostEqual(vals[-1], 1.0)
@@ -254,7 +270,7 @@ class PlayerMotion(unittest.TestCase):
     def test_sprite_has_alpha_and_a_pressed_variant(self):
         import os
         os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
-        from chuzzle_demo import cursor_overlay as co
+        from chuzzle_suite import cursor_overlay as co
         up, down = co.render_sprite(False), co.render_sprite(True)
         self.assertEqual(len(up), co.SIZE * co.SIZE * 4)
         self.assertNotEqual(up, down)

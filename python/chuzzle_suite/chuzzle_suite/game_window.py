@@ -1,4 +1,4 @@
-# python/demo_app/chuzzle_demo/game_window.py
+# python/chuzzle_suite/chuzzle_suite/game_window.py
 """Finds the real Chuzzle window and sends mouse input to it (Windows only,
 ctypes, no pywin32/pyautogui). Coordinates are physical screen pixels: call
 set_dpi_aware() first so scaled displays don't shift clicks."""
@@ -46,7 +46,7 @@ gdi32.GetDIBits.argtypes = [wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, winty
 
 # Window titles of the Chuzzle 1 builds (python/deluxe_clone uses the same list).
 KNOWN_TITLES = ("Chuzzle Deluxe 1.01", "Chuzzle Deluxe 1.0", "Chuzzle Christmas Edition 1.0")
-OWN_TITLE = "Chuzzle Demo"
+OWN_TITLE = "Chuzzle Suite"   # our window title: never taken for the game
 
 VK_ESCAPE = 0x1B
 VK_F9 = 0x78

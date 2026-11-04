@@ -1,6 +1,8 @@
-# python/demo_app/chuzzle_demo/ui.py
+# python/chuzzle_suite/chuzzle_suite/ui.py
 """pygame control panel: level grid, solution preview, real-game auto-play,
-save-file tracking and a launcher for every Chuzzle exe on the PC."""
+save-file tracking, a launcher for every Chuzzle exe on the PC and the solver
+queue. The window is borderless with the app's own title bar (title_bar.py,
+window_frame.py), and the queue has a small "mini view" that can stay on top."""
 
 from __future__ import annotations
 
@@ -13,9 +15,12 @@ from typing import Callable
 
 import pygame as pg
 
-from . import board_sim, game_window as gw, launcher, levels as lv, routes, saves
+from . import board_sim, game_window as gw, launcher, levels as lv, queue_client as qc, routes, saves, settings
+from . import paths, title_bar as tb, window_frame as wf
 
-W, H = 1200, 840
+W, H = 1200, 840                        # content; the window is W x (TB + H)
+TB = tb.HEIGHT                          # the app's own title bar above the content
+MINI_W, MINI_H = 440, 150               # the queue's mini view (title bar included)
 BAR = pg.Rect(12, 776, W - 24, 54)      # game status bar along the bottom
 BG = (24, 26, 32)
 PANEL = (34, 37, 46)
@@ -36,7 +41,8 @@ MOVES_HELP = ("Moves are 1-indexed. R = row (1 = top) shifted right, C = column 
               "lines, e.g. C453 = columns 4 and 5 down 3.")
 GRID_HELP = ("Number = optimal move count. Green = solved (darker = longer). Red = unsolved; "
              ">=N means no solution shorter than N moves exists (from build/README.md). "
-             "White dot = level has a 2x2 piece.")
+             "White dot = level has a 2x2 piece. Yellow dot = the game also accepts the piece "
+             "on another 2x2 block of its colour (switch goals below the level's moves).")
 
 
 @dataclass
@@ -46,6 +52,8 @@ class Button:
     action: Callable[[], None]
     enabled: Callable[[], bool] = lambda: True
     active: Callable[[], bool] = lambda: False
+    small: bool = False
+    visible: Callable[[], bool] = lambda: True
 
     def text(self) -> str:
         return self.label() if callable(self.label) else self.label
@@ -54,15 +62,33 @@ class Button:
 class App:
     def __init__(self):
         gw.set_dpi_aware()
+        wf.set_app_id(paths.APP_ID)
         pg.init()
         pg.display.set_caption(gw.OWN_TITLE)
-        self.screen = pg.display.set_mode((W, H))
+        if paths.ICON_PNG.is_file():
+            pg.display.set_icon(pg.image.load(str(paths.ICON_PNG)))
+        # borderless window with the app's own title bar; "mini" is the small queue view
+        self.view = "full"
+        self.pinned = bool(settings.get("pinned", False))
+        self.title_bars = {"full": tb.TitleBar(gw.OWN_TITLE, ("pin", "min", "max", "close")),
+                           "mini": tb.TitleBar("Solver queue", ("pin", "expand", "close"))}
+        self.title_bars["full"].disabled.add("max")     # fixed layout, like the old native window
+        self.hwnd = None
+        self._open_window()
         self.clock = pg.time.Clock()
         self.font = pg.font.SysFont("segoeui", 15)
         self.small = pg.font.SysFont("segoeui", 13)
         self.bold = pg.font.SysFont("segoeui", 17, bold=True)
         self.big = pg.font.SysFont("segoeui", 24, bold=True)
         self.mono = pg.font.SysFont("consolas", 15)
+        # the Queue tab's fonts, a step larger than the other tabs'
+        self.q_title = pg.font.SysFont("segoeui", 28, bold=True)
+        self.q_font = pg.font.SysFont("segoeui", 17)
+        self.q_bold = pg.font.SysFont("segoeui", 17, bold=True)
+        self.q_small = pg.font.SysFont("segoeui", 15)
+        self.q_stat = pg.font.SysFont("segoeui", 22, bold=True)
+        self.q_mono = pg.font.SysFont("consolas", 16)
+        self.q_log = pg.font.SysFont("consolas", 14)
 
         self.events: queue.Queue[Callable[[], None]] = queue.Queue()
         self.log_lines: list[tuple[float, str, tuple]] = []
@@ -117,8 +143,12 @@ class App:
         self.launcher_inner = pg.Rect(0, 0, 0, 0)
         self._running_cache: tuple[float, dict[str, gw.GameWindow]] = (0.0, {})
 
+        # solver queue (python/scheduler/mbq.py); polled only while the Queue tab or mini view shows
+        self.queue = qc.QueuePoller().start()
+        self.confirm_pause_until = 0.0
+
         self.buttons: dict[str, list[Button]] = {"solutions": [], "saves": [], "speed": [], "launcher": [],
-                                                 "all": []}
+                                                 "queue": [], "mini": [], "all": []}
         self._speed_cache: tuple[float, dict] | None = None
         self._build_buttons()
         self.select_level(self.selected)
@@ -141,10 +171,22 @@ class App:
 
     @property
     def level(self) -> lv.Level:
-        return self.levels[self.selected]
+        return lv.find_level(self.levels, self.selected) or self.levels["1-4"]
+
+    def goals(self) -> list[lv.Level]:
+        """The selected puzzle's official goal, then every placement the game also accepts."""
+        base = self.levels.get(self.selected.split("@")[0])
+        return [base] + base.placements if base else []
+
+    def cycle_goal(self, delta: int) -> None:
+        goals = self.goals()
+        names = [g.name for g in goals]
+        if len(names) > 1:
+            i = names.index(self.selected) if self.selected in names else 0
+            self.select_level(names[(i + delta) % len(names)])
 
     def current_solution(self) -> str | None:
-        ranked = self.ranked.get(self.selected)
+        ranked = self.ranked.get(self.level.name)
         if ranked:
             return ranked[min(self.solution_index, len(ranked) - 1)][1]
         sols = self.level.solutions
@@ -162,16 +204,11 @@ class App:
 
     def _build_buttons(self) -> None:
         b = self.buttons
-        b["all"] += [
-            Button(pg.Rect(W - 494, 8, 115, 30), "Launcher", lambda: self.set_tab("launcher"),
-                   active=lambda: self.tab == "launcher"),
-            Button(pg.Rect(W - 372, 8, 115, 30), "Solutions", lambda: self.set_tab("solutions"),
-                   active=lambda: self.tab == "solutions"),
-            Button(pg.Rect(W - 250, 8, 115, 30), "Speed Chuzzle", lambda: self.set_tab("speed"),
-                   active=lambda: self.tab == "speed"),
-            Button(pg.Rect(W - 128, 8, 115, 30), "Saves", lambda: self.set_tab("saves"),
-                   active=lambda: self.tab == "saves"),
-        ]
+        tabs = [("solutions", "Solutions"), ("queue", "Queue"), ("speed", "Speed Chuzzle"),
+                ("saves", "Saves"), ("launcher", "Launcher")]
+        for i, (tab, label) in enumerate(tabs):
+            b["all"].append(Button(pg.Rect(W - 128 - 122 * (len(tabs) - 1 - i), 8, 115, 30), label,
+                                   lambda tab=tab: self.set_tab(tab), active=lambda tab=tab: self.tab == tab))
         b["solutions"].append(
             Button(pg.Rect(12 + 410 - 10 - 96, 58, 96, 26), lambda: "Loading..." if self.refreshing else "Refresh",
                    self.refresh_levels, lambda: not self.refreshing))
@@ -196,6 +233,14 @@ class App:
                    lambda: self.solution_count() > 1),
             Button(pg.Rect(x0 + inner - 74, y + 34, 74, 28), "Sol >",
                    lambda: self.set_solution(self.solution_index + 1), lambda: self.solution_count() > 1),
+        ]
+        # goal switch (bottom right of the preview): official goal / placements the game accepts
+        has_goals = lambda: len(self.goals()) > 1
+        b["solutions"] += [
+            Button(pg.Rect(612, 734, 82, 26), "< Goal", lambda: self.cycle_goal(-1),
+                   lambda: not self.playing(), visible=has_goals),
+            Button(pg.Rect(700, 734, 82, 26), "Goal >", lambda: self.cycle_goal(1),
+                   lambda: not self.playing(), visible=has_goals),
         ]
         # game status bar (bottom, every tab)
         bx = BAR.right - 10 - 3 * 116
@@ -274,9 +319,148 @@ class App:
             Button(pg.Rect(bx, 100, 210, 30), "Re-check list", lambda: self.refresh_games(),
                    lambda: not self.games_scanning),
         ]
+        # queue tab and the mini view (Pause asks for a second click)
+        up = lambda: self.queue_status() is not None and not self.queue.busy
+        running = lambda: up() and bool(self.queue_status().get("running"))
+        confirming = lambda: time.time() < self.confirm_pause_until
+        b["queue"] += [
+            Button(pg.Rect(bx, 60, 210, 30), lambda: "Unhold solver" if self.queue_held() else "Hold solver",
+                   self.toggle_hold, running, self.queue_held),
+            Button(pg.Rect(bx, 100, 210, 30),
+                   lambda: "Resume queue" if self.queue_paused() else
+                   ("Click again to pause" if confirming() else "Pause queue"),
+                   self.toggle_pause, up, self.queue_paused),
+            Button(pg.Rect(bx, 140, 210, 30), "Mini view", lambda: self.set_view("mini")),
+            Button(pg.Rect(bx, 180, 210, 30), "Open dashboard", self.open_dashboard,
+                   lambda: self.queue_status() is not None),
+        ]
+        my = MINI_H - TB - 8 - 24
+        b["mini"] += [
+            Button(pg.Rect(MINI_W - 12 - 2 * 84 - 6, my, 84, 24), lambda: "Unhold" if self.queue_held() else "Hold",
+                   self.toggle_hold, running, self.queue_held, small=True),
+            Button(pg.Rect(MINI_W - 12 - 84, my, 84, 24),
+                   lambda: "Resume" if self.queue_paused() else ("Click again" if confirming() else "Pause"),
+                   self.toggle_pause, up, self.queue_paused, small=True),
+        ]
 
     def set_tab(self, tab: str) -> None:
         self.tab = tab
+
+    # ------------------------------------------------------------------
+    # window: own title bar, pin, mini view
+    # ------------------------------------------------------------------
+
+    def _open_window(self, keep: tuple[int, int, int, int] | None = None) -> None:
+        """(Re)open the borderless window for the current view. `keep` = the old window
+        rect: its top-right corner stays put (moved inside the screen if needed)."""
+        size = (W, TB + H) if self.view == "full" else (MINI_W, MINI_H)
+        self.window_surface = pg.display.set_mode(size, pg.NOFRAME)
+        self.screen = self.window_surface.subsurface(pg.Rect(0, TB, size[0], size[1] - TB))
+        self.hwnd = wf.window_handle()
+        wf.add_taskbar_styles(self.hwnd)
+        wf.set_relaunch(self.hwnd, paths.APP_ID, paths.relaunch_command(), gw.OWN_TITLE, f"{paths.ICON_ICO},0")
+        wf.set_topmost(self.hwnd, self.pinned)
+        work = wf.work_area(self.hwnd)
+        rect = wf.window_rect(self.hwnd)
+        if keep is not None:
+            wf.move_window(self.hwnd, *wf.keep_top_right(keep, size, work))
+        elif rect is not None:
+            wf.move_window(self.hwnd, *wf.clamp_into(rect[0], rect[1], size, work))
+
+    def set_view(self, view: str) -> None:
+        if view != self.view:
+            old = wf.window_rect(self.hwnd)
+            self.view = view
+            self._open_window(old)
+
+    def toggle_pin(self) -> None:
+        self.pinned = not self.pinned
+        wf.set_topmost(self.hwnd, self.pinned)
+        try:
+            settings.put("pinned", self.pinned)
+        except OSError as exc:
+            self.log(f"Could not save settings: {exc}", WARN)
+
+    def window_mouse(self):
+        """Mouse position in window pixels, None when the mouse is not over the window."""
+        return pg.mouse.get_pos() if pg.mouse.get_focused() else None
+
+    def content_mouse(self) -> tuple[int, int]:
+        pos = self.window_mouse()
+        return (pos[0], pos[1] - TB) if pos else (-1, -1)
+
+    def title_press(self, pos) -> None:
+        bar = self.title_bars[self.view]
+        hit = bar.hit(pos, self.window_surface.get_width())
+        if hit == "drag":
+            wf.start_drag(self.hwnd)        # Windows moves the window until the button is released
+        elif hit is not None and hit not in bar.disabled:
+            bar.pressed = hit               # acts on release over the same button, like Windows
+
+    def title_release(self, pos) -> None:
+        bar = self.title_bars[self.view]
+        pressed, bar.pressed = bar.pressed, None
+        if pressed is None or bar.hit(pos, self.window_surface.get_width()) != pressed:
+            return
+        if pressed == "pin":
+            self.toggle_pin()
+        elif pressed == "min":
+            pg.display.iconify()
+        elif pressed == "expand":
+            self.set_view("full")
+        elif pressed == "close":
+            pg.event.post(pg.event.Event(pg.QUIT))      # the normal quit path
+
+    def draw_frame(self) -> None:
+        """Title bar and a 1 px border (a borderless window has none)."""
+        surf = self.window_surface
+        self.title_bars[self.view].draw(surf, self.small, self.window_mouse(), self.pinned, pg.key.get_focused())
+        pg.draw.rect(surf, tb.LINE, surf.get_rect(), 1)
+
+    # ------------------------------------------------------------------
+    # solver queue
+    # ------------------------------------------------------------------
+
+    def queue_status(self) -> dict | None:
+        return self.queue.snapshot[0]
+
+    def queue_held(self) -> bool:
+        s = self.queue_status()
+        return bool(s and s.get("running") and s["running"].get("held_since"))
+
+    def queue_paused(self) -> bool:
+        s = self.queue_status()
+        return bool(s and s.get("paused"))
+
+    def toggle_hold(self) -> None:
+        self._queue_command("unhold" if self.queue_held() else "hold")
+
+    def toggle_pause(self) -> None:
+        if self.queue_paused():
+            self._queue_command("resume")
+        elif time.time() > self.confirm_pause_until:    # pausing stops the queue: ask first
+            self.confirm_pause_until = time.time() + 3.0
+        else:
+            self.confirm_pause_until = 0.0
+            self._queue_command("pause")
+
+    def _queue_command(self, command: str) -> None:
+        def done(result, error):
+            def show():
+                if error:
+                    self.log(f"Queue: {command} failed: {error}", BAD)
+                elif command == "pause":
+                    self.log("Queue paused: the running job finishes, no new one starts.", GOOD)
+                elif command == "resume":
+                    self.log("Queue resumed.", GOOD)
+                else:
+                    state = "ON HOLD" if result.get("held_since") else "running again"
+                    self.log(f"Queue: {qc.describe(result)}  {state}", GOOD)
+            self.post(show)
+        self.queue.send(command, done)
+
+    def open_dashboard(self) -> None:
+        os.startfile(self.queue.base_url + "/")
 
     # ------------------------------------------------------------------
     # levels / preview
@@ -309,20 +493,22 @@ class App:
             return level.solved, level.optimum, len(level.solutions), level.lower_bound, stamp
 
         old = self.levels
-        changed = [name for name in new if sig(old.get(name)) != sig(new[name])]
-        newly = [name for name in changed if new[name].solved and not (old.get(name) and old[name].solved)]
+        new_all = {level.name: level for level in lv.all_levels(new)}
+        changed = [name for name in new_all if sig(lv.find_level(old, name)) != sig(new_all[name])]
+        newly = [name for name in changed
+                 if new_all[name].solved and not ((o := lv.find_level(old, name)) and o.solved)]
         self.levels = new
         for name in changed:
             self.ranked.pop(name, None)
             self.rank_progress.pop(name, None)
         self.refreshing = False
-        if self.selected not in self.levels:
+        if lv.find_level(self.levels, self.selected) is None:
             self.selected = "1-4"
         if self.selected in changed or self.selected not in self.ranked:
             self.select_level(self.selected)
         if newly:
             self.log("Refresh: newly solved " + ", ".join(
-                f"{n} ({new[n].optimum} moves, {len(new[n].solutions)} solutions)" for n in sorted(newly)), GOOD)
+                f"{n} ({new_all[n].optimum} moves, {len(new_all[n].solutions)} solutions)" for n in sorted(newly)), GOOD)
         others = [n for n in changed if n not in newly]
         if others:
             self.log(f"Refresh: updated {', '.join(sorted(others))}")
@@ -353,7 +539,7 @@ class App:
 
             def done():
                 self.ranking.discard(name)
-                if self.levels.get(name) is not level:   # refreshed meanwhile: rank the new list
+                if lv.find_level(self.levels, name) is not level:   # refreshed meanwhile: rank the new list
                     if self.selected == name:
                         self.select_level(name)
                     return
@@ -446,7 +632,7 @@ class App:
                 return
             self.geometry = geometry
             gw.save_geometry(self.window, geometry)
-            self.log("Calibration saved (python/demo_app/user_data/calibration.json).", GOOD)
+            self.log("Calibration saved (python/chuzzle_suite/user_data/calibration.json).", GOOD)
 
     def reset_calibration(self) -> None:
         if self.window:
@@ -690,7 +876,16 @@ class App:
             fill = (40, 42, 50)
         pg.draw.rect(self.screen, fill, b.rect, border_radius=6)
         pg.draw.rect(self.screen, PANEL_LINE, b.rect, 1, border_radius=6)
-        self.text(b.text(), b.rect.center, self.font, TEXT if enabled else (100, 104, 116), center=True)
+        self.text(b.text(), b.rect.center, self.small if b.small else self.font,
+                  TEXT if enabled else (100, 104, 116), center=True)
+
+    def progress_bar(self, rect: pg.Rect, percent: float | None, color=ACCENT) -> None:
+        pg.draw.rect(self.screen, (16, 18, 24), rect, border_radius=4)
+        if percent:
+            fill = pg.Rect(rect.x, rect.y, max(rect.height, round(rect.width * min(100.0, percent) / 100)),
+                           rect.height)
+            pg.draw.rect(self.screen, color, fill, border_radius=4)
+        pg.draw.rect(self.screen, PANEL_LINE, rect, 1, border_radius=4)
 
     def panel(self, rect: pg.Rect, title: str | None = None) -> None:
         pg.draw.rect(self.screen, PANEL, rect, border_radius=8)
@@ -781,24 +976,35 @@ class App:
                 if r.collidepoint(mouse):
                     fill = tuple(min(255, c + 30) for c in fill)
                 pg.draw.rect(self.screen, fill, r, border_radius=5)
-                if name == self.selected:
+                if name == self.selected.split("@")[0]:
                     pg.draw.rect(self.screen, (255, 255, 255), r, 2, border_radius=5)
                 self.text(name, (r.x + 6, r.y + 7), self.font)
                 tag = str(level.optimum) if level.solved else f">={level.lower_bound}"
                 self.text(tag, (r.right - 6 - self.small.size(tag)[0], r.y + 9), self.small, (230, 230, 230))
                 if level.has_fat:
                     pg.draw.rect(self.screen, (235, 235, 235), (r.right - 10, r.y + 3, 6, 6))
+                if level.placements:
+                    pg.draw.rect(self.screen, WARN, (r.right - 18, r.y + 3, 6, 6))
 
     def draw_preview(self, mouse) -> None:
         rect = pg.Rect(432, 52, 362, 716)
         level = self.level
-        self.panel(rect, f"Level {level.name}")
+        self.panel(rect, f"Level {level.official}, game-accepted goal" if level.is_placement else f"Level {level.name}")
         y = rect.y + 34
-        if level.solved:
-            info = f"Optimal: {level.optimum} moves  |  {len(level.solutions)} solutions"
+        if level.is_placement:
+            if level.solved:
+                info = f"Not the official goal: {level.optimum} moves  |  {len(level.solutions)} solutions"
+            elif level.lower_bound is not None:
+                info = f"Not the official goal: needs at least {level.lower_bound} moves"
+            else:
+                info = "Not the official goal: not searched yet"
+            self.text(info, (rect.x + 12, y), self.font, WARN)
         else:
-            info = f"Unsolved: needs at least {level.lower_bound} moves"
-        self.text(info + ("  |  2x2 piece" if level.has_fat else ""), (rect.x + 12, y), self.font, DIM)
+            if level.solved:
+                info = f"Optimal: {level.optimum} moves  |  {len(level.solutions)} solutions"
+            else:
+                info = f"Unsolved: needs at least {level.lower_bound} moves"
+            self.text(info + ("  |  2x2 piece" if level.has_fat else ""), (rect.x + 12, y), self.font, DIM)
 
         states = self.preview_states()
         step = min(self.preview_step, len(states) - 1)
@@ -834,9 +1040,31 @@ class App:
             y += 30
         else:
             y = 530     # below the step and solution button rows (452-514)
-        self.text("Goal", (rect.x + 14, y), self.small, DIM)
+        self.text("Goal" + (" (game also accepts)" if level.is_placement else ""), (rect.x + 14, y), self.small,
+                  WARN if level.is_placement else DIM)
         cell = max(14, min(24, (rect.bottom - 14 - (y + 20)) // 6))
         self.draw_board(board_sim.BoardState(list(level.goal), level.goal_fat), (rect.x + 14, y + 20), cell)
+        self.draw_goal_switch(level)
+
+    def draw_goal_switch(self, level: lv.Level) -> None:
+        """Bottom right of the preview, above the < Goal / Goal > buttons: which goal is shown."""
+        goals = self.goals()
+        if len(goals) < 2:
+            return
+        i = next((k for k, g in enumerate(goals) if g.name == level.name), 0)
+        x, y = 612, 636
+        self.text(f"Goal {i + 1} of {len(goals)}", (x, y), self.bold, WARN if level.is_placement else TEXT)
+        lines = (["game also accepts", "(not the official goal)"] if level.is_placement
+                 else ["official goal", f"+{len(goals) - 1} the game also accepts"])
+        lines.append("piece at " + level.piece_text.replace("columns", "cols"))
+        if level.solved:
+            lines.append(f"{level.optimum} moves, {len(level.solutions)} sol.")
+        elif level.lower_bound is not None:
+            lines.append(f"unsolved, >= {level.lower_bound} moves")
+        else:
+            lines.append("not searched yet")
+        for k, s in enumerate(lines):
+            self.text(self._elide(s, self.small, 172), (x, y + 22 + 17 * k), self.small, DIM)
 
     def draw_game_panel(self) -> None:
         rect = pg.Rect(804, 52, 384, 716)
@@ -945,6 +1173,13 @@ class App:
             s = s[1:]
         return "..." + s
 
+    def _elide_end(self, s: str, font, width: int) -> str:
+        if font.size(s)[0] <= width:
+            return s
+        while len(s) > 4 and font.size(s + "...")[0] > width:
+            s = s[:-1]
+        return s.rstrip() + "..."
+
     def draw_game_bar(self) -> None:
         self.panel(BAR)
         x, y = BAR.x + 14, BAR.y + 8
@@ -1022,7 +1257,7 @@ class App:
         y = 270
         self.wrap("> = folder the running (or last played) game uses. * = CurrentProfile in "
                   "config.cfg. Click a profile or location, then back it up or restore it. "
-                  "Backups go to demo_app/user_data. Restoring first backs up what is there.",
+                  "Backups go to chuzzle_suite/user_data. Restoring first backs up what is there.",
                   side.x + 10, y, side.width - 20, self.small, DIM, 16)
         self.text("Recent save changes", (side.x + 10, 420), self.bold)
         ly = 446
@@ -1035,6 +1270,258 @@ class App:
                 break
         if not changes:
             self.text("(watching, none yet)", (side.x + 10, ly), self.small, DIM)
+
+    def rich(self, parts, pos, font, bold, color=TEXT) -> int:
+        """Text in runs, each (text, is_bold), one after the other; returns the x after the last."""
+        x, y = pos
+        for s, b in parts:
+            x = self.text(s, (x, y), bold if b else font, color).right
+        return x
+
+    def draw_queue(self, mouse) -> None:
+        """The Queue tab, laid out like the scheduler's dashboard (python/scheduler/dashboard.html):
+        the running job as a title, its progress and phases, the five-number strip, the queued jobs,
+        and the solver log filling the rest."""
+        status, error, when = self.queue.snapshot
+        self.draw_queue_side()
+        rect = pg.Rect(12, 52, W - 260, 716)
+        self.panel(rect)
+        pad = 20
+        x, y, width = rect.x + pad, rect.y + 16, rect.width - 2 * pad
+        where = self.queue.base_url + (f"   {'checked' if error else 'updated'} "
+                                       f"{time.strftime('%H:%M:%S', time.localtime(when))}" if when else "")
+        self.text(where, (rect.right - pad - self.small.size(where)[0], rect.y + 10), self.small, DIM)
+        if status is None:
+            if error is None:
+                self.text("Asking the scheduler...", (x, y + 8), self.q_font, DIM)
+            else:
+                self.text("Scheduler not running", (x, y + 8), self.q_title, WARN)
+                self.text(f"({error})   Start it with: python python\\scheduler\\mbq.py daemon",
+                          (x, y + 52), self.q_small, DIM)
+            return
+
+        job = status.get("running")
+        fin = status.get("finalizing")
+        alarm = (status.get("alarm") or {}).get("active")
+        warns = []
+        if alarm:
+            warns.append((f"Alarm: {alarm.get('message', '')}", BAD))
+        if status.get("paused"):
+            warns.append(("Queue is paused: the running job finishes, no new one starts", WARN))
+        if job and job.get("held_since"):
+            held_for = time.time() - job["held_since"]
+            warns.append((f"Solver on hold since {qc.fmt_clock(job['held_since'])} ({qc.fmt_dur(held_for)}); "
+                           "it carries on from the same point when released", WARN))
+        for n, p in status.get("external_solvers") or []:
+            warns.append((f"Another solver is running (not managed): {n} pid {p}", WARN))
+        for line, color in warns:
+            self.text(self._elide_end(line, self.q_bold, width), (x, y), self.q_bold, color)
+            y += 26
+        if warns:
+            y += 4
+
+        if job:
+            e = job.get("eta") or {}
+            title = f"{job['puzzle']} at {job['moves']} moves"
+            end = self.text(title, (x, y), self.q_title).right
+            kind = qc.split(job) or job.get("engine", "")
+            if job.get("gpu"):
+                kind += f" gpu {job['gpu']}"
+            sub = f"{job.get('engine', '')} {kind}".strip() + (" · 2x2 piece" if job.get("fat") else "") + \
+                  f" · job #{job['id']}"
+            self.text(self._elide_end(sub, self.q_font, rect.right - pad - end - 14), (end + 14, y + 11),
+                      self.q_font, DIM)
+            y += 44
+            self.text(self._elide_end(f"{e.get('phase') or 'starting'} {e.get('detail') or ''}", self.q_font, width),
+                      (x, y), self.q_font, DIM)
+            y += 28
+            held = bool(job.get("held_since"))
+            self.progress_bar(pg.Rect(x, y, width, 16), e.get("percent"), WARN if held else ACCENT)
+            y += 28
+            pct = e.get("percent")
+            pct_text = f"{pct:.1f}%" if isinstance(pct, (int, float)) else "-"
+            self.rich([(f"{pct_text} of this phase · elapsed {qc.fmt_dur(e.get('elapsed'))} · "
+                        "this phase ends in ", False), (qc.fmt_dur(e.get("phase_remaining")), True)],
+                      (x, y), self.q_font, self.q_bold)
+            y += 28
+            if e.get("total_remaining") is not None:
+                self.rich([("Whole job: about ", False), (qc.fmt_dur(e["total_remaining"]), True),
+                           (" left, done around ", False), (qc.fmt_clock(e.get("finish_at")), True)],
+                          (x, y), self.q_font, self.q_bold)
+            else:
+                self.text("Whole job: estimate appears once later phases have history", (x, y), self.q_font, DIM)
+            y += 36
+            # the phases as a row of pills
+            px = x
+            for name, state, spent in qc.phase_chips(job):
+                label = name + (f" {qc.fmt_dur(spent)}" if spent else "")
+                tw, th = self.q_small.size(label)
+                pill = pg.Rect(px, y, tw + 22, th + 10)
+                if pill.right > x + width:
+                    break
+                fill = ACCENT if state == "now" else (16, 18, 24)
+                pg.draw.rect(self.screen, fill, pill, border_radius=7)
+                color = (255, 255, 255) if state == "now" else GOOD if state == "done" else DIM
+                self.text(label, (pill.x + 11, pill.y + 4), self.q_small, color)
+                px = pill.right + 8
+            y += 40
+            for note in ([job["message"]] if job.get("message") else []) + (job.get("notes") or [])[-2:]:
+                self.text(self._elide_end(f"note: {note}", self.q_small, width), (x, y), self.q_small, DIM)
+                y += 21
+            y += 6
+        elif fin:
+            self.text(f"{fin['puzzle']} at {fin['moves']} moves", (x, y), self.q_title)
+            self.text("Search finished, validating results...", (x, y + 44), self.q_font, DIM)
+            y += 76
+        else:
+            pending = status.get("pending") or []
+            self.text("Nothing running", (x, y), self.q_title)
+            self.text(pending[0].get("wait_reason") or "Starting the next job..." if pending else "The queue is empty.",
+                      (x, y + 44), self.q_font, DIM)
+            y += 76
+
+        # the strip: solved | queued jobs | queue after this job | free on the table drive | finished today
+        y += 6
+        est = status.get("queue_estimate") or {}
+        after = "-"
+        if est.get("known_seconds") is not None:
+            after = qc.fmt_dur(est["known_seconds"]) + (f" + {est['unknown_jobs']}?" if est.get("unknown_jobs") else "")
+        free = status.get("table_root_free_gb")
+        stats = [(f"{status.get('solved', '?')}/100", "Solved"),
+                 (str(len(status.get("pending") or [])), "Queued jobs"),
+                 (after, "Queue after this job"),
+                 (f"{free} GB" if free is not None else "-", "Free on table drive"),
+                 (str(status.get("finished_today", 0)), "Finished today")]
+        gap = 10
+        box_w = (width - gap * (len(stats) - 1)) // len(stats)
+        for i, (value, key) in enumerate(stats):
+            box = pg.Rect(x + i * (box_w + gap), y, box_w, 64)
+            pg.draw.rect(self.screen, (28, 30, 38), box, border_radius=8)
+            pg.draw.rect(self.screen, PANEL_LINE, box, 1, border_radius=8)
+            self.text(self._elide_end(value, self.q_stat, box_w - 24), (box.x + 12, box.y + 7), self.q_stat)
+            self.text(key, (box.x + 12, box.y + 39), self.q_small, DIM)
+        y += 64 + 18
+
+        # the queued jobs, one line each
+        pending = status.get("pending") or []
+        self.text("Queued" if pending else "Nothing queued", (x, y), self.q_bold, TEXT if pending else DIM)
+        y += 26
+        for j in pending[:6]:
+            line = f"#{j['id']}  {j['puzzle']}  {j['moves']} moves  {qc.split(j)}" + \
+                   (f"  gpu {j['gpu']}" if j.get("gpu") else "") + (" · 2x2" if j.get("fat") else "") + \
+                   (f"   {j['wait_reason']}" if j.get("wait_reason") else "")
+            self.text(self._elide_end(line, self.q_mono, width), (x + 8, y), self.q_mono)
+            y += 22
+        if len(pending) > 6:
+            self.text(f"... and {len(pending) - 6} more", (x + 8, y), self.q_small, DIM)
+            y += 22
+
+        # the solver log, filling the rest of the panel
+        y += 10
+        self.text("Solver log", (x, y), self.q_bold)
+        y += 26
+        box = pg.Rect(x, y, width, rect.bottom - pad + 4 - y)
+        if box.height < 40:
+            return
+        pg.draw.rect(self.screen, (16, 18, 24), box, border_radius=8)
+        pg.draw.rect(self.screen, PANEL_LINE, box, 1, border_radius=8)
+        live = job or fin
+        log = self.queue.log
+        if not live:
+            self.text("(no job running)", (box.x + 12, box.y + 10), self.q_log, DIM)
+            return
+        if log is None or log[0] != live.get("id"):
+            self.text("(loading the log...)", (box.x + 12, box.y + 10), self.q_log, DIM)
+            return
+        lines = [(s, (200, 204, 214)) for s in log[1].rstrip("\n").splitlines()]
+        now = qc.live_line(status)
+        if now:
+            lines.append((now, ACCENT))
+        char_w = max(1, self.q_log.size("M")[0])
+        per_line = max(20, (box.width - 24) // char_w)
+        rows = []   # (text, colour, continues the line above)
+        for s, color in lines:
+            s = s.replace("\t", "    ")
+            first = True
+            while len(s) > per_line:
+                cut = s.rfind(" ", per_line // 2, per_line + 1)   # break at a space when there is one
+                cut = cut if cut > 0 else per_line
+                rows.append((s[:cut], color, not first))
+                s = "  " + s[cut:].lstrip(" ")
+                first = False
+            rows.append((s, color, not first))
+        line_h = 18
+        fit = max(1, (box.height - 20) // line_h)
+        shown = rows[-fit:]
+        while len(shown) > 1 and shown[0][2]:   # start at the beginning of a log line
+            shown = shown[1:]
+        ly = box.y + 10
+        for s, color, _ in shown:
+            self.text(s, (box.x + 12, ly), self.q_log, color)
+            ly += line_h
+
+    def draw_queue_side(self) -> None:
+        side = pg.Rect(W - 240, 52, 228, 716)
+        self.panel(side)
+        y = self.wrap("Hold freezes the running solver where it is (all cores free); Unhold lets it carry on "
+                      "from the same point. Pause lets the running job finish but starts no new one; it asks "
+                      "for a second click. Mini view: a small window for the queue that can stay on top "
+                      "(pin in the title bar).", side.x + 12, 232, side.width - 24, self.q_small, DIM, 20) + 14
+        self.text("Log", (side.x + 12, y), self.q_bold)
+        y += 26
+        for when_, msg, color in self.log_lines[-12:]:
+            y = self.wrap(f"{time.strftime('%H:%M:%S', time.localtime(when_))}  {msg}", side.x + 12, y,
+                          side.width - 24, self.q_small, color, 19)
+            if y > side.bottom - 20:
+                break
+
+    def draw_mini(self) -> None:
+        """The mini view: running job, phase, progress, time left, queued count, hold / pause."""
+        self.screen.fill(BG)
+        status, error, _ = self.queue.snapshot
+        x, width = 12, MINI_W - 24
+        bottom = MINI_H - TB - 8 - 24 + 4         # text row next to the buttons
+        if status is None:
+            if error is None:
+                self.text("Asking the scheduler...", (x, 8), self.bold, DIM)
+            else:
+                self.text("scheduler not running", (x, 8), self.bold, WARN)
+                self.text(f"({error}) at {self.queue.base_url}", (x, 32), self.small, DIM)
+                self.text("Start it with: python python\\scheduler\\mbq.py daemon", (x, 50), self.small, DIM)
+            return
+        job = status.get("running")
+        if job:
+            e = job.get("eta") or {}
+            held = bool(job.get("held_since"))
+            pct = f"{e['percent']}%" if e.get("percent") is not None else ""
+            pw = self.bold.size(pct)[0] if pct else 0
+            self.text(self._elide_end(qc.short_describe(job), self.bold, width - pw - 10), (x, 4), self.bold)
+            if pct:
+                self.text(pct, (x + width - pw, 4), self.bold, WARN if held else ACCENT)
+            phase = f"phase: {e.get('phase') or '-'} {e.get('detail') or ''}".rstrip()
+            self.text(self._elide_end(phase, self.small, width), (x, 27), self.small, DIM)
+            self.progress_bar(pg.Rect(x, 47, width, 8), e.get("percent"), WARN if held else ACCENT)
+        elif status.get("finalizing"):
+            self.text(qc.short_describe(status["finalizing"]) + "  validating...", (x, 4), self.bold, ACCENT)
+        else:
+            self.text("nothing running", (x, 4), self.bold, DIM)
+        queued = f"{len(status.get('pending') or [])} queued"
+        qw = self.small.size(queued)[0]
+        self.text(queued, (x + width - qw, 60), self.small, DIM)
+        if job:
+            self.text(self._elide_end(qc.left_line(job.get("eta") or {}), self.small, width - qw - 12), (x, 60),
+                      self.small, TEXT)
+        # hold / pause state, left of the buttons
+        parts = []
+        if job and job.get("held_since"):
+            parts.append((f"ON HOLD since {qc.fmt_clock(job['held_since'])}", WARN))
+        if status.get("paused"):
+            parts.append(("PAUSED", WARN))
+        if not parts:
+            parts.append(("queue running", DIM))
+        cx = x
+        for i, (text, color) in enumerate(parts):
+            cx = self.text(("   " if i else "") + text, (cx, bottom), self.small, color).right
 
     # ------------------------------------------------------------------
     # launcher
@@ -1167,13 +1654,25 @@ class App:
             if y > side.bottom - 20:
                 break
 
+    def active_buttons(self) -> list[Button]:
+        bs = self.buttons["mini"] if self.view == "mini" else self.buttons["all"] + self.buttons[self.tab]
+        return [b for b in bs if b.visible()]
+
     def draw(self) -> None:
-        mouse = pg.mouse.get_pos()
+        mouse = self.content_mouse()
         self.tooltip = None
+        if self.view == "mini":
+            self.draw_mini()
+            for b in self.active_buttons():
+                self.draw_button(b, mouse)
+            self.draw_frame()
+            pg.display.flip()
+            return
         self.screen.fill(BG)
-        self.text("Chuzzle Demo", (14, 10), self.big)
+        self.text("Chuzzle Solver", (14, 10), self.big)
         solved = sum(1 for l in self.levels.values() if l.solved and l.world <= 20)
-        self.text(f"{solved}/100 mindbenders solved optimally", (190, 18), self.font, DIM)
+        self.text(f"{solved}/100 mindbenders solved optimally", (14 + self.big.size("Chuzzle Solver")[0] + 16, 18),
+                  self.font, DIM)
         if self.tab == "solutions":
             self.draw_grid(mouse)
             self.draw_preview(mouse)
@@ -1182,12 +1681,15 @@ class App:
             self.draw_speed()
         elif self.tab == "launcher":
             self.draw_launcher(mouse)
+        elif self.tab == "queue":
+            self.draw_queue(mouse)
         else:
             self.draw_saves(mouse)
         self.draw_game_bar()
-        for b in self.buttons["all"] + self.buttons[self.tab]:
+        for b in self.active_buttons():
             self.draw_button(b, mouse)
         self.draw_tooltip()
+        self.draw_frame()
         pg.display.flip()
 
     # ------------------------------------------------------------------
@@ -1195,10 +1697,13 @@ class App:
     # ------------------------------------------------------------------
 
     def handle_click(self, pos) -> None:
-        for b in self.buttons["all"] + self.buttons[self.tab]:
+        """A click in the content area (pos relative to it, below the title bar)."""
+        for b in self.active_buttons():
             if b.rect.collidepoint(pos) and b.enabled():
                 b.action()
                 return
+        if self.view == "mini":
+            return
         if self.tab == "solutions":
             for name, r in getattr(self, "grid_rects", {}).items():
                 if r.collidepoint(pos) and name in self.levels:
@@ -1226,15 +1731,22 @@ class App:
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     self.stop_player()
+                    self.queue.stop()
                     pg.quit()
                     return
+                full = self.view == "full"
                 if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
-                    self.handle_click(event.pos)
-                elif event.type == pg.MOUSEWHEEL and self.tab == "saves":
+                    if event.pos[1] < TB:
+                        self.title_press(event.pos)
+                    else:
+                        self.handle_click((event.pos[0], event.pos[1] - TB))
+                elif event.type == pg.MOUSEBUTTONUP and event.button == 1:
+                    self.title_release(event.pos)
+                elif event.type == pg.MOUSEWHEEL and full and self.tab == "saves":
                     self.save_scroll = max(0, min(getattr(self, "max_scroll", 0), self.save_scroll - event.y * 40))
-                elif event.type == pg.MOUSEWHEEL and self.tab == "launcher":
+                elif event.type == pg.MOUSEWHEEL and full and self.tab == "launcher":
                     self.launcher_scroll = max(0, min(self.launcher_max_scroll, self.launcher_scroll - event.y * 40))
-                elif event.type == pg.KEYDOWN and self.tab == "solutions":
+                elif event.type == pg.KEYDOWN and full and self.tab == "solutions":
                     if event.key == pg.K_RIGHT:
                         self.set_step(self.preview_step + 1)
                     elif event.key == pg.K_LEFT:
@@ -1257,6 +1769,16 @@ class App:
             if self.window is not None and not self.window.alive() and not self.playing():
                 self.log("Game window closed.", WARN)
                 self.window = None
+            # poll the scheduler only while the queue is on screen
+            want = (self.view == "mini" or self.tab == "queue") and not wf.is_minimized(self.hwnd)
+            if want and not self.queue.active:
+                self.queue.active = True
+                self.queue.poke()
+            self.queue.active = want
+            want_log = self.view == "full" and self.tab == "queue"
+            if want_log and not self.queue.want_log:
+                self.queue.poke()
+            self.queue.want_log = want_log
             self.draw()
 
 

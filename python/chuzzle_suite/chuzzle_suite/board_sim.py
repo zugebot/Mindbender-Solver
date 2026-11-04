@@ -1,4 +1,4 @@
-# python/demo_app/chuzzle_demo/board_sim.py
+# python/chuzzle_suite/chuzzle_suite/board_sim.py
 """Applies solver move strings to a 6x6 board.
 
 Tokens (stored, 0-indexed): `R{y}{n}` shifts row y right by n, `C{x}{n}`

@@ -23,8 +23,8 @@ Engines (chosen from --moves unless --engine is given):
          17: <5,6,6> normal boards (--gpu only).
   inram  build/findSolutions.exe, 3-12 moves (exhaustive in-RAM search).
 
-After a job: solutions are copied to <repo>/levels and replayed (the demo
-app's simulator and testKnownSolutions). With promotion on (default),
+After a job: solutions are copied to <repo>/levels and replayed (Chuzzle
+Suite's simulator and testKnownSolutions). With promotion on (default),
 solved puzzles go to build/levels_final and leave build/README.md /
 build/config.json's unsolved lists; an empty search raises the README lower
 bound when every shorter length was already excluded. Nothing is committed.
@@ -68,10 +68,15 @@ ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 
 SSD_EXE = REPO / "build" / "experimentDiskDepth6.exe"
 GPU_DLL = REPO / "build_gpu" / "mbgpu.dll"   # src/gpu/build.cmd; copied next to the exe for --gpu jobs
+VK_DLL = REPO / "build_gpu" / "mbvk.dll"     # src/gpu/vulkan/build.cmd (any vendor); copied too when built
 INRAM_EXE = REPO / "build" / "findSolutions.exe"
 TEST_KNOWN_EXE = REPO / "build" / "testKnownSolutions.exe"
 LEVELS_DIR = REPO / "levels"
 LEVELS_FINAL = REPO / "build" / "levels_final"
+# Placements the game also accepts ("4-4@r2c3": the 2x2 piece on another 2x2 block of its colour,
+# top-left cell at row 2, column 3, 1-indexed). Kept apart from the official answers.
+GAME_ACCEPTS = LEVELS_FINAL / "game_accepts"
+PUZZLE_NAME_RE = r"\d+-\d+(?:@r\d+c\d+)?"
 BUILD_README = REPO / "build" / "README.md"
 BUILD_CONFIG = REPO / "build" / "config.json"
 
@@ -230,9 +235,14 @@ class ProcessHandle:
 # puzzle facts (fat or not, README bounds) and promotion
 # --------------------------------------------------------------------------
 
+def is_game_accepted(puzzle: str) -> bool:
+    """A placement the game also accepts ("4-4@r2c3"), not the official goal."""
+    return "@" in puzzle
+
+
 def puzzle_is_fat(puzzle: str) -> bool:
     text = (REPO / "src" / "chuzzles" / "levels.hpp").read_text(errors="replace")
-    m = re.search(r'\{"' + re.escape(puzzle) + r'"\s*,[^}]*\}\s*,\s*(\{[^}]*\})', text)
+    m = re.search(r'\{"' + re.escape(puzzle.split("@")[0]) + r'"\s*,[^}]*\}\s*,\s*(\{[^}]*\})', text)
     return bool(m and "true" in m.group(1))
 
 
@@ -258,12 +268,30 @@ def _edit_text_file(path: Path, edit) -> bool:
 
 def promote_solved(puzzle: str, solution_file: Path) -> list[str]:
     notes = []
+    if is_game_accepted(puzzle):
+        # not the official goal: its own folder and README section; the unsolved count and
+        # config.json stay as they are
+        GAME_ACCEPTS.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(solution_file, GAME_ACCEPTS / solution_file.name)
+        notes.append(f"copied {solution_file.name} to build/levels_final/game_accepts")
+
+        def readme_alt(text: str):
+            line_re = re.compile(r"^(\s*" + re.escape(puzzle) + r":\s*)at least\s+\d+\s+moves", re.M)
+            if not line_re.search(text):
+                return None
+            moves = re.search(r"_c(\d+)_(\d+)\.txt$", solution_file.name)
+            what = f"solved, {moves.group(1)} moves, {moves.group(2)} solutions" if moves else "solved"
+            return line_re.sub(lambda m: m.group(1) + what, text, count=1)
+
+        if _edit_text_file(BUILD_README, readme_alt):
+            notes.append("marked solved in build/README.md's game-accepted list")
+        return notes
     LEVELS_FINAL.mkdir(parents=True, exist_ok=True)
     shutil.copy2(solution_file, LEVELS_FINAL / solution_file.name)
     notes.append(f"copied {solution_file.name} to build/levels_final")
 
     def readme(text: str):
-        line_re = re.compile(r"^\s*" + re.escape(puzzle) + r":\s*at least\s+\d+\s+moves\s*\n", re.M)
+        line_re = re.compile(r"^\s*" + re.escape(puzzle) + r":\s*at least\s+\d+\s+moves[^\n]*\n", re.M)
         if not line_re.search(text):
             return None
         text = line_re.sub("", text, count=1)
@@ -310,11 +338,11 @@ def solved_count() -> int:
 
 
 def replay_check(puzzle: str, path: Path, moves: int) -> tuple[bool, str]:
-    """Replays every solution with the demo app's board simulator."""
-    sys.path.insert(0, str(REPO / "python" / "demo_app"))
+    """Replays every solution with Chuzzle Suite's board simulator."""
+    sys.path.insert(0, str(REPO / "python" / "chuzzle_suite"))
     try:
-        from chuzzle_demo import board_sim, levels as lv
-        level = lv.load_levels()[puzzle]
+        from chuzzle_suite import board_sim, levels as lv
+        level = lv.find_level(lv.load_levels(), puzzle)
         lines = [s.strip() for s in path.read_text().splitlines() if s.strip()]
         good = 0
         for s in lines:
@@ -413,7 +441,7 @@ class Scheduler:
         engine = spec.get("engine") or "auto"
         if engine == "auto":
             engine = "inram" if moves <= 12 else "ssd"
-        if not re.fullmatch(r"\d+-\d+", puzzle):
+        if not re.fullmatch(PUZZLE_NAME_RE, puzzle):
             raise ValueError(f"bad puzzle name {puzzle!r}")
         if engine == "ssd" and not 10 <= moves <= 17:
             raise ValueError("ssd engine supports 10-17 moves")
@@ -649,7 +677,9 @@ class Scheduler:
             if job.get("threads"):
                 cmd += ["--threads", str(job["threads"])]
             if job.get("gpu"):
-                shutil.copy2(GPU_DLL, BIN_DIR / "mbgpu.dll")   # the solver loads it from next to the exe
+                for dll in (GPU_DLL, VK_DLL):   # the solver loads them from next to the exe
+                    if dll.exists():
+                        shutil.copy2(dll, BIN_DIR / dll.name)
                 cmd += ["--gpu", str(job["gpu"])]
             if job.get("shard"):
                 k, n = job["shard"]
@@ -1231,7 +1261,8 @@ def main() -> None:
     a.add_argument("--engine", choices=["auto", "ssd", "inram"], default="auto")
     a.add_argument("--ram-gb", type=float)
     a.add_argument("--threads", type=int, help="solver threads (default: all)")
-    a.add_argument("--gpu", help="run on the CUDA device whose name contains this (e.g. 5060)")
+    a.add_argument("--gpu", help="run on the GPU whose name contains this (e.g. 5060), or auto; CUDA first, "
+                                 "then Vulkan (cuda:NAME / vulkan:NAME force one)")
     a.add_argument("--no-promote", action="store_true", help="don't update levels_final / README / config")
     a.add_argument("--keep-table", action="store_true", help="keep the depth-6/7 table afterwards")
     a.add_argument("--front", action="store_true", help="put ahead of the other queued jobs")

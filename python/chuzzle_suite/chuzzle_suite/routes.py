@@ -1,4 +1,4 @@
-# python/demo_app/chuzzle_demo/routes.py
+# python/chuzzle_suite/chuzzle_suite/routes.py
 """Turns a solution into mouse drags.
 
 Uses the mouse-path library from python/viewer (mouse/src/chuzzle_mouse.c,

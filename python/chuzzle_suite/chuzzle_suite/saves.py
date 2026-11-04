@@ -1,4 +1,4 @@
-# python/demo_app/chuzzle_demo/saves.py
+# python/chuzzle_suite/chuzzle_suite/saves.py
 """Finds and tracks every place Chuzzle 1 keeps save data.
 
 Where the game writes depends on the build (see docs/changes-2026-10-04.md):

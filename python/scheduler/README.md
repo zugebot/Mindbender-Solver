@@ -79,12 +79,16 @@ localhost only.
   (`--progress-file`); its log is flushed line by line. The whole-job ETA
   adds the median duration of later phases from finished jobs of the same
   kind (engine, table depth, 2x2 piece, moves), so it gets better over time.
-- **Results**: solutions are copied to `levels/` and replayed twice (the demo
-  app's board simulator and `testKnownSolutions`). With promotion on (the
+- **Results**: solutions are copied to `levels/` and replayed twice (Chuzzle
+  Suite's board simulator and `testKnownSolutions`). With promotion on (the
   default), a validated solve is copied to `build/levels_final` and removed
   from `build/README.md` / `build/config.json`'s unsolved lists; an empty
   search raises the README's "at least N moves" bound, but only when every
   shorter length was already excluded. Nothing is committed.
+- **Game-accepted placements** (`mbq add 4-4@r2c3 ...`: the 2x2 piece on another 2x2 block of
+  its colour, which the game also counts as solved): solutions go to
+  `build/levels_final/game_accepts/` instead, and only that placement's own line in
+  `build/README.md` changes (the official unsolved list and `config.json` stay as they are).
 - **Cleanup**: a table the scheduler created is deleted when no queued job
   for that puzzle needs it (`--keep-table` keeps it). Tables it did not
   create are never deleted.

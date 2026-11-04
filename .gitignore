@@ -5,7 +5,7 @@ cmake-build-*/
 /python/__pycache__/
 *.pyc
 /project.zip
-/python/demo_app/user_data/
+/python/chuzzle_suite/user_data/
 /python/viewer/*.dll
 /python/scheduler/state/
 /build_portable/

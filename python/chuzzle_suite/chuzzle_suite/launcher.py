@@ -1,4 +1,4 @@
-# python/demo_app/chuzzle_demo/launcher.py
+# python/chuzzle_suite/chuzzle_suite/launcher.py
 """Every Chuzzle game exe on this PC, for the Launcher tab.
 
 A full scan walks every fixed drive once (minutes on big drives) and caches

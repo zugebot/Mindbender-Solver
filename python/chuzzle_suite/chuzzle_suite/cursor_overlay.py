@@ -1,4 +1,4 @@
-# python/demo_app/chuzzle_demo/cursor_overlay.py
+# python/chuzzle_suite/chuzzle_suite/cursor_overlay.py
 """A mouse-pointer sprite that shows where background playback "is", so
 recordings can follow it.
 
@@ -143,10 +143,10 @@ class CursorOverlay:
         hinst = kernel32.GetModuleHandleW(None)
         self._proc = WNDPROC(lambda h, m, w, l: user32.DefWindowProcW(h, m, w, l))   # keep a reference
         wc = WNDCLASSEXW(cbSize=ctypes.sizeof(WNDCLASSEXW), lpfnWndProc=self._proc, hInstance=hinst,
-                         lpszClassName="ChuzzleDemoCursorSprite")
+                         lpszClassName="ChuzzleSuiteCursorSprite")
         user32.RegisterClassExW(ctypes.byref(wc))
         hwnd = user32.CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW
-                                      | WS_EX_NOACTIVATE, "ChuzzleDemoCursorSprite", "Chuzzle Demo cursor",
+                                      | WS_EX_NOACTIVATE, "ChuzzleSuiteCursorSprite", "Chuzzle Suite cursor",
                                       WS_POPUP, 0, 0, SIZE, SIZE, None, None, hinst, None)
         screen = user32.GetDC(None)
         dcs = {}
