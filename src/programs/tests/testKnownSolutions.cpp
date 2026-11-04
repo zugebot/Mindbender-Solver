@@ -11,9 +11,10 @@
 #include <regex>
 
 
-// <X>-<Y>_c<N>_<M>.txt -> X, Y, N, M
+// <X>-<Y>[@r<R>c<C>]_c<N>_<M>.txt -> X, Y, N, M (the "@" part is a goal the game also
+// accepts, see BoardLookup::gameAcceptedFats; the puzzle name is the part before "_c")
 std::tuple<int, int, int, int> parseFileName(const fs::path&filepath) {
-    std::regex pattern(R"((\d+)\-(\d+)\_c(\d+)\_(\d+)\.txt)");
+    std::regex pattern(R"((\d+)\-(\d+)(?:@r\d+c\d+)?\_c(\d+)\_(\d+)\.txt)");
     std::smatch match;
     
     const std::string filename = filepath.filename().string();
@@ -78,8 +79,9 @@ int main() {
     std::sort(files.begin(), files.end(), compareFiles);
     for (const auto& file : files) {
         auto [X, Y, moveCount, expectedSolutionCount] = parseFileName(file);
-        std::string levelName = std::to_string(X) + "-" + std::to_string(Y);
-        if (levelName.size() >= 5) {
+        std::string levelName = file.filename().string();
+        levelName = levelName.substr(0, levelName.rfind("_c", levelName.rfind('_') - 1));
+        if (X == 0 || levelName.size() >= 16) {
             tcout << "[" << std::setw(4) << levelName
                       << ", " << std::setw(3) << "c" + std::to_string(moveCount)
                       << "] (invalid) skipping" << "...\n";

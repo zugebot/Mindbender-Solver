@@ -6,7 +6,10 @@
 
 #include <array>
 #include <cstring>
+#include <deque>
+#include <mutex>
 #include <string>
+#include <vector>
 #include <string_view>
 
 /*
@@ -37,7 +40,7 @@ struct LevelDef {
 class BoardPair {
     Board board{};
     Board solve{};
-    char name[5] = {};
+    char name[16] = {};   // "6-2", or a game-accepted goal such as "13-5@r2c3"
     MU Board::ColorArray_t trueColors{};
 
     static Board makeBoard(const u8* cells, const FatPos fat) {
@@ -57,8 +60,8 @@ public:
               const FatPos endFat = {})
         : board(makeBoard(startCells, startFat)),
           solve(makeBoard(endCells, endFat)) {
-        std::strncpy(name, nameIn, 4);
-        name[4] = '\0';
+        std::strncpy(name, nameIn, sizeof(name) - 1);
+        name[sizeof(name) - 1] = '\0';
 
         Board temp;
         trueColors = temp.setStateAndRetColors(const_cast<u8*>(endCells));
@@ -70,8 +73,8 @@ public:
         : board(startBoard),
           solve(endBoard),
           trueColors(Board::ColorsDefault) {
-        std::strncpy(name, nameIn.c_str(), 4);
-        name[4] = '\0';
+        std::strncpy(name, nameIn.c_str(), sizeof(name) - 1);
+        name[sizeof(name) - 1] = '\0';
     }
 
     MUND Board getStartState() const { return board; }
@@ -221,11 +224,68 @@ private:
         return out;
     }();
 
+    // game-accepted goals built so far (getBoardPair hands out pointers into it, so a deque)
+    inline static std::deque<BoardPair> ALT_PAIRS;
+    inline static std::mutex ALT_MUTEX;
+
 public:
+    // The game accepts a board as solved when every cell shows the goal's colour, so on puzzles
+    // whose goal has another 2x2 block in the piece's colour, the piece may end there too. Each
+    // such placement is a puzzle of its own, "<puzzle>@r<row>c<col>": the piece's top-left cell,
+    // 1-indexed ("4-4@r2c3": rows 2-3, columns 3-4). Its solutions are not the official goal's;
+    // they live in build/levels_final/game_accepts/.
+    MUND static std::vector<FatPos> gameAcceptedFats(const LevelDef& def) {
+        std::vector<FatPos> out;
+        if (!def.endFat.hasFat) {
+            return out;
+        }
+        const u8* g = def.endCells;
+        const u8 colour = g[6 * def.endFat.y + def.endFat.x];
+        for (u8 y = 0; y < 5; ++y) {
+            for (u8 x = 0; x < 5; ++x) {
+                if (x == def.endFat.x && y == def.endFat.y) {
+                    continue;
+                }
+                if (g[6 * y + x] == colour && g[6 * y + x + 1] == colour
+                    && g[6 * (y + 1) + x] == colour && g[6 * (y + 1) + x + 1] == colour) {
+                    out.push_back({true, x, y});
+                }
+            }
+        }
+        return out;
+    }
+
+    MUND static std::string gameAcceptedName(const std::string& puzzle, const FatPos fat) {
+        return puzzle + "@r" + std::to_string(fat.y + 1) + "c" + std::to_string(fat.x + 1);
+    }
+
     MUND static const BoardPair* getBoardPair(const std::string& name) {
         for (const auto& pair : BOARD_PAIRS) {
             if (pair.getNameView() == name) {
                 return &pair;
+            }
+        }
+        const auto at = name.find('@');
+        if (at == std::string::npos) {
+            return nullptr;
+        }
+        const std::string base = name.substr(0, at);
+        for (const auto& def : LEVEL_DEFS) {
+            if (base != def.name) {
+                continue;
+            }
+            for (const FatPos fat : gameAcceptedFats(def)) {
+                if (gameAcceptedName(base, fat) != name) {
+                    continue;
+                }
+                std::lock_guard<std::mutex> lock(ALT_MUTEX);
+                for (const auto& pair : ALT_PAIRS) {
+                    if (pair.getNameView() == name) {
+                        return &pair;
+                    }
+                }
+                ALT_PAIRS.emplace_back(name.c_str(), def.startCells, def.endCells, def.startFat, fat);
+                return &ALT_PAIRS.back();
             }
         }
         return nullptr;
