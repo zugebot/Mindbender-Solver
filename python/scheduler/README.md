@@ -68,7 +68,13 @@ localhost only.
   `ssd` (`build/experimentDiskDepth6.exe`) for 10-17 moves, split as
   `<seed, stream, table>`: normal boards `<S,3,6>` up to 14, `<5,4,6>` at 15,
   `<5,5,6>` at 16 and `<5,6,6>` at 17 (`--gpu` required); 2x2 boards `<4,3,7>` at 14,
-  `<5,3,7>` at 15 and `<5,4,7>` at 16 (`--table-depth`, `--stream-depth` 3-6 override). It runs a copy of the
+  `<5,3,7>` at 15, `<5,4,7>` at 16 and `<5,5,7>` at 17 (~1-2 weeks of GPU time: run it as
+  `--shards N --d7-groups G`, below) (`--table-depth`, `--stream-depth` 3-6 override).
+- **Depth-7 work units** (`--shards N --d7-groups G`, N a multiple of G): unit k searches goal
+  partition group k / (N/G) against seed shard k % (N/G). A plain seed shard rebuilds every
+  pass's index (5-6 per 2x2 run); a grouped unit builds one, so long runs split with little
+  overhead. G = the run's pass count (or more). The merge job recovers from all N files, and
+  the solver checks that every unit is there exactly once. It runs a copy of the
   exe from `state/bin`, so rebuilding `build/` never clashes with a run.
 - **One at a time, safely**: a job never starts while any other solver process
   is running (including one started by hand), and the queue is a single

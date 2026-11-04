@@ -12,6 +12,7 @@
 #include <map>
 #include <random>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -635,25 +636,50 @@ bool testSmallEndToEndExactSolver() {
     return found == static_cast<int>(expected.size());
 }
 
-// Recovery at left depth 11, as 17-move runs (<5,6,6>) use it: a shared 5-move start half and
-// 6 moves per middle, streamed toward the start root. A solved 16-move puzzle's known solutions,
-// split 11 + 5, must come back exactly from their middles. Opt-in (needs a levels_final file):
+// Recovery at a deep left depth, as the longest runs use it. Left depth 11 (<5,6,6>, normal
+// boards at 17): a shared 5-move start half and 6 moves per middle, streamed toward the start
+// root. Left depth 10 (<5,5,6> normal boards at 16, <5,5,7> 2x2 boards at 17): two 5-move halves,
+// the per-middle one streamed (unfiltered on 2x2 boards). A solved puzzle's known solutions, split
+// LEFT + the rest, must come back exactly from their middles. Opt-in (needs a levels_final file):
 //   testExactSolverRegression --recovery11 build/levels_final/15-1_c16_16.txt
-bool testRecoveryAtLeftDepth11(const std::string& file) {
+//   testExactSolverRegression --recovery 10 build/levels_final/16-1_c16_12.txt   (2x2, 10 + 6)
+template<int LEFT, int RIGHT>
+void recoverAt(BoardSolverFrontier& solver, const std::vector<B1B2>& middles) {
+    solver.recoverSolutionsFromMiddles<LEFT, RIGHT, false>(middles, 4);
+}
+
+bool testRecoveryAtLeftDepth(const int left, const std::string& file) {
     const std::string name = std::filesystem::path(file).filename().string();
     const BoardPair* pair = BoardLookup::getBoardPair(name.substr(0, name.find('_')));
     const std::vector<std::string> known = ssd::readSolutionLines(file);
-    if (pair == nullptr || known.empty() || pair->getStartState().getFatBool()) {
-        std::cout << "recovery at left depth 11: needs a normal board's solution file\n";
+    if (pair == nullptr || known.empty()) {
+        std::cout << "recovery at left depth " << left << ": needs a levels_final solution file\n";
         return false;
     }
-    const std::vector<B1B2> middles = ssd::expectedMiddles(*pair, known, 11);
+    std::istringstream first(known[0]);
+    int moves = 0;
+    for (std::string token; first >> token;) {
+        ++moves;
+    }
+    const int right = moves - left;
+    const bool fat = pair->getStartState().getFatBool();
+    const std::vector<B1B2> middles = ssd::expectedMiddles(*pair, known, static_cast<std::size_t>(left));
     BoardSolverFrontier solver(pair);
     solver.setWriteSolutionsToFile(false);
-    solver.recoverSolutionsFromMiddles<11, 5, false>(middles, 4);
+    if (left == 11 && right == 5 && !fat) recoverAt<11, 5>(solver, middles);
+    else if (left == 11 && right == 6 && !fat) recoverAt<11, 6>(solver, middles);
+    else if (left == 10 && right == 5) recoverAt<10, 5>(solver, middles);
+    else if (left == 10 && right == 6) recoverAt<10, 6>(solver, middles);
+    else if (left == 10 && right == 7) recoverAt<10, 7>(solver, middles);
+    else {
+        std::cout << "recovery at left depth " << left << ": " << moves << "-move " << (fat ? "2x2" : "normal")
+                  << " solutions are not supported (left 10 + 5-7, or 11 + 5-6 on normal boards)\n";
+        return false;
+    }
     const std::set<std::string> knownSet(known.begin(), known.end());
     const bool same = knownSet == solver.getExpandedSolutions();
-    std::cout << "recovery at left depth 11 (" << name << "): " << middles.size() << " middles, known "
+    std::cout << "recovery at left depth " << left << " + " << right << " (" << name << ", "
+              << (fat ? "2x2" : "normal") << "): " << middles.size() << " middles, known "
               << knownSet.size() << ", recovered " << solver.getExpandedSolutions().size() << ": "
               << (same ? "PASS" : "FAIL") << '\n';
     return same;
@@ -663,7 +689,10 @@ bool testRecoveryAtLeftDepth11(const std::string& file) {
 
 int main(int argc, char** argv) {
     if (argc == 3 && std::string(argv[1]) == "--recovery11") {
-        return testRecoveryAtLeftDepth11(argv[2]) ? 0 : 1;
+        return testRecoveryAtLeftDepth(11, argv[2]) ? 0 : 1;
+    }
+    if (argc == 4 && std::string(argv[1]) == "--recovery") {
+        return testRecoveryAtLeftDepth(std::stoi(argv[2]), argv[3]) ? 0 : 1;
     }
 
     const bool intersectionOk = testThreadedIntersectionCoversTail();

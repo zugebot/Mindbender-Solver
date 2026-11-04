@@ -765,7 +765,21 @@ namespace {
 
         // ---- commands (one command buffer, recorded and waited for per step) ----
 
+        // Submissions slower than this are reported on stderr with the shaders they ran: a driver
+        // ends a compute job that runs past its timeout (Linux amdgpu: lockup_timeout), which
+        // loses the device. MBVK_SLOW_MS overrides (0: off).
+        std::string cmdPipes;
+        double slowMs = [] {
+            const char* v = std::getenv("MBVK_SLOW_MS");
+            return v != nullptr ? std::atof(v) : 1000.0;
+        }();
+
+        double lastSubmitMs = 0.0;   // the last submission's wall time (sort chunk sizing)
+        u64 sortChunkTiles = 1024;   // radix tiles per submission, tuned at run time (sortedChildKeys)
+        u64 bloomChunkKeys = 16ULL << 20;   // Bloom inserts per submission, tuned at run time (buildIndex)
+
         bool begin() {
+            cmdPipes.clear();
             VKC(vkResetCommandBuffer(cmd, 0));
             VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
             bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -778,9 +792,16 @@ namespace {
             VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
             si.commandBufferCount = 1;
             si.pCommandBuffers = &cmd;
+            const auto t0 = std::chrono::steady_clock::now();
             VKC(vkQueueSubmit(queue, 1, &si, fence));
             VKC(vkWaitForFences(dev, 1, &fence, VK_TRUE, UINT64_MAX));
             VKC(vkResetFences(dev, 1, &fence));
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            lastSubmitMs = ms;
+            if (slowMs > 0 && ms > slowMs) {
+                std::fprintf(stderr, "mbvk: %s: one submission took %.0f ms (%s)\n", cand.name.c_str(), ms,
+                             cmdPipes.empty() ? "copies" : cmdPipes.c_str());
+            }
             return true;
         }
 
@@ -813,6 +834,11 @@ namespace {
             if (y > cand.maxGroupsY || groups * BLOCK > 0xFFFFFFFFULL) {
                 return fail("launch too large: " + std::to_string(threads) + " invocations");
             }
+            static const char* const kPipeNames[P_COUNT] = {
+                    "expand0", "expand1", "fat0", "fat1", "audit", "bound", "radix_hist", "radix_scatter",
+                    "scan_local", "scan_add", "unique_flags", "unique_scatter", "part_bounds", "fingerprints",
+                    "bucket_starts", "bloom"};
+            cmdPipes += (cmdPipes.empty() ? "" : " ") + std::string(kPipeNames[p]) + "x" + std::to_string(threads);
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipe[p]);
             vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, pushBytes, push);
             vkCmdDispatch(cmd, static_cast<u32>(x), static_cast<u32>(y), 1);
@@ -997,6 +1023,7 @@ namespace {
         bool checksumRun(Run& run, const u64* states, const u8* prev, u64 count, uint64_t* cntOut,
                          uint64_t* sumOut, uint64_t* xrOut);
         bool recordScan(u64 data, u64 len, u64 scratch);
+        bool radixTiles(Pipe p, KeysPush push, u64 tiles);
         bool sortedChildKeys(const u64* states, const u8* prev, u64 count, int depth, u32 p0, u32 p1, u64 reserve,
                              Buffer& a, Buffer& b, u64* unique);
         bool childKeys(const u64* states, const u8* prev, u64 count, int depth, u32 p0, u32 p1, u64* out,
@@ -1252,6 +1279,36 @@ namespace {
         return done;
     }
 
+    // One radix kernel (histogram or scatter) over `tiles` tiles, in chunks of sortChunkTiles
+    // tiles per submission (push.u1 = the chunk's first tile). The chunk size follows the
+    // device's measured time: halved above 250 ms, doubled below 60 ms.
+    bool Gpu::radixTiles(const Pipe p, KeysPush push, const u64 tiles) {
+        for (u64 t0 = 0; t0 < tiles;) {
+            const u64 m = std::min(sortChunkTiles, tiles - t0);
+            push.u1 = t0;
+            if (!begin()) {
+                return false;
+            }
+            if (!dispatch(p, &push, sizeof(push), m * BLOCK)) {
+                vkEndCommandBuffer(cmd);
+                return false;
+            }
+            barrier();
+            if (!submit()) {
+                return false;
+            }
+            t0 += m;
+            if (m == sortChunkTiles) {
+                if (lastSubmitMs > 250.0 && sortChunkTiles > 16) {
+                    sortChunkTiles /= 2;
+                } else if (lastSubmitMs < 60.0 && sortChunkTiles < (1ULL << 20)) {
+                    sortChunkTiles *= 2;
+                }
+            }
+        }
+        return true;
+    }
+
     // words of scan scratch for scanning len values (each level's block totals)
     u64 scanScratchWords(const u64 len) {
         const u64 blocks = (len + TILE - 1) / TILE;
@@ -1328,7 +1385,8 @@ namespace {
         Buffer flags, hist, scratch;
         bool ok = alloc(flags, n * 4) && alloc(hist, 16 * tiles * 4) &&
                   alloc(scratch, scanScratchWords(std::max<u64>(16 * tiles, n)) * 4);
-        // LSD radix sort, 16 passes of 4 bits: a -> b -> a ... ends in a
+        // LSD radix sort, 16 passes of 4 bits: a -> b -> a ... ends in a. Histogram, scan and
+        // scatter are separate submissions, and the histogram and scatter go in tile chunks.
         Buffer* src = &a;
         Buffer* dst = &b;
         for (u32 pass = 0; ok && pass < 16; ++pass) {
@@ -1345,16 +1403,17 @@ namespace {
             s.u0 = n;
             s.w0 = 4 * pass;
             s.w1 = static_cast<u32>(tiles);
-            ok = begin() && dispatch(P_RADIX_HIST, &h, sizeof(h), tiles * BLOCK);
+            ok = radixTiles(P_RADIX_HIST, h, tiles);
             if (ok) {
-                barrier();
-                ok = recordScan(hist.addr, 16 * tiles, scratch.addr) &&
-                     dispatch(P_RADIX_SCATTER, &s, sizeof(s), tiles * BLOCK);
+                ok = begin() && recordScan(hist.addr, 16 * tiles, scratch.addr);
+                if (ok) {
+                    barrier();
+                    ok = submit();
+                } else {
+                    vkEndCommandBuffer(cmd);
+                }
             }
-            if (ok) {
-                barrier();
-                ok = submit();
-            }
+            ok = ok && radixTiles(P_RADIX_SCATTER, s, tiles);
             std::swap(src, dst);
         }
         // unique: flags, their scan, the first key of each run into b; the count into ctr
@@ -1369,14 +1428,25 @@ namespace {
             u.a2 = b.addr;
             u.a3 = ctr.addr;
             u.u0 = n;
+            // three submissions (flags, their scan, the scatter): each stays short
             ok = begin() && dispatch(P_UNIQUE_FLAGS, &f, sizeof(f), n);
             if (ok) {
                 barrier();
-                ok = recordScan(flags.addr, n, scratch.addr) && dispatch(P_UNIQUE_SCATTER, &u, sizeof(u), n);
+                ok = submit();
             }
             if (ok) {
-                barrier();
-                ok = submit();
+                ok = begin() && recordScan(flags.addr, n, scratch.addr);
+                if (ok) {
+                    barrier();
+                    ok = submit();
+                }
+            }
+            if (ok) {
+                ok = begin() && dispatch(P_UNIQUE_SCATTER, &u, sizeof(u), n);
+                if (ok) {
+                    barrier();
+                    ok = submit();
+                }
             }
         }
         u32 count32 = 0;
@@ -1473,21 +1543,38 @@ namespace {
             }
             vkCmdFillBuffer(cmd, bl.buf, 0, bpp * 32, 0);
             barrier();
-            if (ok && hi > lo) {
-                KeysPush f{};
-                f.a0 = b.addr;
-                f.a1 = bl.addr;
-                f.u0 = lo;
-                f.u1 = hi;
-                f.u2 = bpp;
-                ok = dispatch(P_BLOOM, &f, sizeof(f), hi - lo);
-                barrier();
-            }
             if (!ok) {
                 vkEndCommandBuffer(cmd);
                 break;
             }
-            ok = submit() && download(startsOut + i * dirPer, starts, 0, dirPer * 4) &&
+            ok = submit();
+            // the Bloom inserts in chunks, each its own submission (halved above 250 ms, doubled
+            // below 60 ms), so none runs into a driver's job timeout
+            for (u64 j0 = lo; ok && j0 < hi;) {
+                const u64 m = std::min(bloomChunkKeys, hi - j0);
+                KeysPush f{};
+                f.a0 = b.addr;
+                f.a1 = bl.addr;
+                f.u0 = j0;
+                f.u1 = j0 + m;
+                f.u2 = bpp;
+                ok = begin() && dispatch(P_BLOOM, &f, sizeof(f), m);
+                if (!ok) {
+                    vkEndCommandBuffer(cmd);
+                    break;
+                }
+                barrier();
+                ok = submit();
+                j0 += m;
+                if (m == bloomChunkKeys) {
+                    if (lastSubmitMs > 250.0 && bloomChunkKeys > (1ULL << 16)) {
+                        bloomChunkKeys /= 2;
+                    } else if (lastSubmitMs < 60.0 && bloomChunkKeys < (1ULL << 30)) {
+                        bloomChunkKeys *= 2;
+                    }
+                }
+            }
+            ok = ok && download(startsOut + i * dirPer, starts, 0, dirPer * 4) &&
                  download(bloomOut + i * bpp * 8, bl, 0, bpp * 32);
         }
         for (Buffer* x : {&a, &b, &bnd, &starts, &bl}) {

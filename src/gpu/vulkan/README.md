@@ -104,6 +104,15 @@ Every chosen device is used.
   pass is a histogram per 4096-key tile, a scan, and a stable scatter that ranks each round of
   256 keys by a workgroup prefix over packed digit counters. Duplicates are then removed by
   flags and a scan.
+- **Short submissions:** drivers end a compute job that runs too long, and the device is lost
+  (`VkResult -4`). Linux amdgpu (kernel 7.0) allows about 2 s: on the friend's Polaris GPUs one
+  radix pass over 348 M keys (histogram, scan and scatter in one submission) took 2029 ms and
+  was ended (2026-11-04, a 2x2 depth-7 index build). Now the histogram, the scan and the scatter
+  are separate submissions, the histogram and the scatter go in chunks of tiles, and the Bloom
+  inserts in chunks of keys; each chunk size is halved above 250 ms and doubled below 60 ms, per
+  device, at run time. Any submission over 1 s is reported on stderr with the kernels it ran
+  (`mbvk: <device>: one submission took N ms (...)`; `MBVK_SLOW_MS` sets the threshold, 0 turns
+  it off). Windows has a similar limit (TDR, 2 s by default).
 - **Big buffers:** a buffer is one allocation. When a driver caps allocations
   (`maxMemoryAllocationSize`, `maxBufferSize`), `mbgpu_vram_left` and
   `mbgpu_child_key_capacity` shrink to fit, so the solver plans smaller passes instead of

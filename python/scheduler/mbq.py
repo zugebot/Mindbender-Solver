@@ -20,7 +20,7 @@ Engines (chosen from --moves unless --engine is given):
   ssd    build/experimentDiskDepth6.exe, 10-17 moves:
          <S,3,6> up to 14 moves, <S,3,7> (index-only depth-7 table) for 15 on 2x2 boards,
          <5,4,6> for 15 on normal boards; 16: <5,5,6> normal boards, <5,4,7> 2x2 boards;
-         17: <5,6,6> normal boards (--gpu only).
+         17: <5,6,6> normal boards (--gpu only), <5,5,7> 2x2 boards (weeks: use shards).
   inram  build/findSolutions.exe, 3-12 moves (exhaustive in-RAM search).
 
 After a job: solutions are copied to <repo>/levels and replayed (Chuzzle
@@ -99,11 +99,17 @@ def read_middles_header(path: Path) -> dict:
     lines = path.read_text(errors="replace").splitlines()
     if not lines or not lines[0].startswith("# mindbender middles v1") or lines[-1].strip() != "end":
         raise ValueError(f"{path.name}: not a complete middles file")
-    head = dict(line.split(" ", 1) for line in lines[1:8])
+    head = {}
+    for line in lines[1:]:
+        key, _, value = line.partition(" ")
+        head[key] = value
+        if key == "count":
+            break
     seed, stream, table = (int(x) for x in head["split"].split())
     k, n = (int(x) for x in head["shard"].split())
     return {"puzzle": head["puzzle"], "seed": seed, "stream": stream, "table": table,
-            "moves": seed + stream + table, "shard": k, "shards": n, "count": int(head["count"])}
+            "moves": seed + stream + table, "shard": k, "shards": n, "count": int(head["count"]),
+            "d7_groups": int(head.get("d7groups", "1"))}
 
 
 SSD_PHASES = ["d6-build", "d6-index", "d7-build", "d7-index", "probe", "d7-confirm", "verify", "recovery"]
@@ -451,7 +457,7 @@ class Scheduler:
         # fits a few RAM passes, and the bound prunes nothing there); normal boards keep the
         # one-pass depth-6 table and lengthen the bound-pruned left stream instead: 4 moves at
         # 15 (<5,4,6>), 5 at 16 (<5,5,6>; a normal board's depth-7 set is far beyond RAM),
-        # 6 at 17 (<5,6,6>, on the GPU only).
+        # 6 at 17 (<5,6,6>, on the GPU only). 2x2 boards at 17: <5,5,7>.
         fat = puzzle_is_fat(puzzle)
         table_depth = int(spec.get("table_depth") or (7 if fat and moves >= 14 else 6))
         stream_depth = int(spec.get("stream_depth") or (6 if moves - table_depth >= 11
@@ -478,6 +484,7 @@ class Scheduler:
                 "finished": None, "pid": None, "exit_code": None, "solutions": None,
                 "result": None, "message": "", "notes": [], "phases": {}, "parent": spec.get("parent"),
                 "shard": spec.get("shard"), "merge": spec.get("merge"),
+                "d7_groups": spec.get("d7_groups"),
             }
             self.next_id += 1
             if spec.get("front"):
@@ -496,6 +503,9 @@ class Scheduler:
         remote = set(int(x) for x in spec.get("remote") or [])
         if n < 2 or any(k < 0 or k >= n for k in remote):
             raise ValueError("--shards needs N >= 2 and remote shards in 0..N-1")
+        g = int(spec.get("d7_groups") or 1)
+        if g > 1 and n % g != 0:
+            raise ValueError("--d7-groups G needs --shards N with N a multiple of G")
         base = {k: v for k, v in spec.items() if k not in ("shards", "remote", "front")}
         specs = [{**base, "shard": [k, n], "promote": False, "until": None} for k in range(n) if k not in remote]
         specs.append({**base, "merge": n})
@@ -686,6 +696,8 @@ class Scheduler:
                 out = SHARD_ROOT / shard_group(job["puzzle"], job["moves"], n)
                 out.mkdir(parents=True, exist_ok=True)
                 cmd += ["--shard", f"{k}/{n}", "--middles-out", str(out / f"s{k}.mid"), "--no-recover"]
+                if job.get("d7_groups") and int(job["d7_groups"]) > 1:
+                    cmd += ["--d7-groups", str(job["d7_groups"])]
             elif not job.get("merge"):
                 # keep the middles: if recovery fails, `--recover-from` redoes only that part
                 cmd += ["--middles-out", str(jdir / "middles.mid")]
@@ -1120,7 +1132,8 @@ def cmd_add(args) -> None:
     if args.shards:
         for puzzle in args.puzzles:
             jobs = api("POST", "/jobs", {"puzzle": puzzle, "moves": args.moves, "engine": args.engine,
-                                         "ram_gb": args.ram_gb, "threads": args.threads,
+                                         "ram_gb": args.ram_gb, "threads": args.threads, "gpu": args.gpu,
+                                         "d7_groups": args.d7_groups,
                                          "promote": not args.no_promote, "keep_table": args.keep_table,
                                          "table_depth": args.table_depth, "stream_depth": args.stream_depth,
                                          "until": args.until, "shards": args.shards,
@@ -1158,7 +1171,8 @@ def cmd_export(args) -> None:
     which = [int(x) for x in args.which.split(",")]
     for k in which:
         name = f"{args.puzzle}_m{args.moves}_s{k}of{args.shards}"
-        extra = (" --table-depth 7" if table == 7 else "") + (f" --stream-depth {stream}" if stream != 3 else "")
+        extra = ((" --table-depth 7" if table == 7 else "") + (f" --stream-depth {stream}" if stream != 3 else "")
+                 + (f" --d7-groups {args.d7_groups}" if args.d7_groups and args.d7_groups > 1 else ""))
         bat = (f'@echo off\r\ncd /d "%~dp0"\r\n'
                f'echo Mindbender work unit {name}: started %date% %time%\r\n'
                f'echo Leave this window open. It writes {name}.mid when it is done.\r\n'
@@ -1268,6 +1282,9 @@ def main() -> None:
     a.add_argument("--front", action="store_true", help="put ahead of the other queued jobs")
     a.add_argument("--shards", type=int, help="split the search into N work units (shard jobs + a merge job)")
     a.add_argument("--remote", help="with --shards: shard numbers run on other PCs (comma list); see export")
+    a.add_argument("--d7-groups", type=int,
+                   help="with --shards N on a depth-7 goal side: split it into G partition groups (N a multiple "
+                        "of G); each unit then builds one pass's index and streams N/G of the seeds")
     a.add_argument("--stream-depth", type=int, choices=[3, 4, 5, 6],
                    help="left stream moves after the seeds (default: 4 for 15-move, 5 for 16-move and 6 for "
                         "17-move normal boards (--gpu only), 4 for 16-move 2x2 boards, else 3)")
@@ -1278,6 +1295,7 @@ def main() -> None:
     ex.add_argument("--moves", type=int, required=True)
     ex.add_argument("--shards", type=int, required=True)
     ex.add_argument("--which", required=True, help="shard numbers, comma list")
+    ex.add_argument("--d7-groups", type=int, help="as for add (must match the merge job's)")
     ex.add_argument("--table-depth", type=int, choices=[6, 7])
     ex.add_argument("--stream-depth", type=int, choices=[3, 4, 5])
     ex.add_argument("--out", default=str(REPO / "workunits"))

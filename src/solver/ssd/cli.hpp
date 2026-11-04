@@ -90,6 +90,7 @@ namespace ssd {
                 }
             }
             else if (a == "--middles-out") cfg.middlesOut = next();
+            else if (a == "--d7-groups") cfg.d7Groups = static_cast<u32>(std::stoul(next()));
             else if (a == "--recover-from") cfg.recoverFrom.push_back(next());
             else if (a == "--probe-variant") {
                 const std::string v = next();
@@ -107,6 +108,20 @@ namespace ssd {
         }
         if (cfg.tableDepth == 7 && (cfg.reverse || cfg.batched)) {
             throw std::runtime_error("--table-depth 7 supports forward fingerprint mode only");
+        }
+        if (cfg.d7Groups == 0) {
+            cfg.d7Groups = 1;
+        }
+        if (cfg.d7Groups > 1) {
+            // work unit k of N: goal partitions of group k / (N/G), seeds of shard k % (N/G)
+            if (cfg.tableDepth != 7 || cfg.d7Groups > PARTITION_COUNT || cfg.shardCount % cfg.d7Groups != 0
+                || cfg.d7Subset()) {
+                throw std::runtime_error("--d7-groups G needs --table-depth 7 and --shard k/N with N a multiple "
+                                         "of G (and no --d7-partitions / --d7-first-partition)");
+            }
+            const u32 group = cfg.shardIndex / cfg.seedShardCount();
+            cfg.d7FirstPartition = group * PARTITION_COUNT / cfg.d7Groups;
+            cfg.d7Partitions = (group + 1) * PARTITION_COUNT / cfg.d7Groups - cfg.d7FirstPartition;
         }
         cfg.d7FirstPartition = std::min<u32>(cfg.d7FirstPartition, PARTITION_COUNT - 1);
         cfg.d7Partitions = std::clamp<u32>(cfg.d7Partitions, 1, PARTITION_COUNT - cfg.d7FirstPartition);

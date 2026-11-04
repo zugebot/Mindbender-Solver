@@ -14,7 +14,9 @@
 // LSD radix sort: 16 passes of 4 bits, each a histogram, a scan and a stable scatter. Within
 // a tile the scatter goes in rounds of 256 consecutive keys, ranked by a workgroup prefix
 // over 16 digit counters packed 2 per u32 (a round has at most 256 keys, so 16 bits hold any
-// count), so equal digits keep their order and the sort is stable.
+// count), so equal digits keep their order and the sort is stable. The host runs the histogram
+// and the scatter in chunks of tiles (u1 = the chunk's first tile), each its own submission, so
+// none runs into a driver's job timeout (Linux amdgpu ends compute jobs after ~2 s).
 #extension GL_GOOGLE_include_directive : require
 #include "common.glsl"
 
@@ -33,11 +35,11 @@ layout(push_constant) uniform KeysPush {
 #define TILE 4096u
 #define ITEMS 16u
 
-#if KERNEL == 1   // RADIX_HIST: a0 keys, a1 hist (u32, digit * tiles + tile); u0 n; w0 shift, w1 tiles
+#if KERNEL == 1   // RADIX_HIST: a0 keys, a1 hist (u32, digit * tiles + tile); u0 n; u1 first tile; w0 shift, w1 tiles
 shared uint cnt[16];
 void main() {
     uint t = gl_LocalInvocationID.x;
-    uint tile = groupLinear();
+    uint tile = groupLinear() + uint(pc.u1);
     if (t < 16u) {
         cnt[t] = 0u;
     }
@@ -60,12 +62,12 @@ void main() {
 }
 #endif
 
-#if KERNEL == 2   // RADIX_SCATTER: a0 keys in, a1 keys out, a2 scanned hist; u0 n; w0 shift, w1 tiles
+#if KERNEL == 2   // RADIX_SCATTER: a0 keys in, a1 keys out, a2 scanned hist; u0 n; u1 first tile; w0 shift, w1 tiles
 shared uint tileOff[16];
 shared uint sgTot[64][8];
 void main() {
     uint t = gl_LocalInvocationID.x;
-    uint tile = groupLinear();
+    uint tile = groupLinear() + uint(pc.u1);
     if (tile >= pc.w1) {
         return;   // the whole workgroup: no barrier is skipped by part of it
     }

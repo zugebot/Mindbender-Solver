@@ -86,6 +86,8 @@ namespace ssd {
         int pdbMode = -1;             // --pdb: -1 auto, 0 off, 1 on
         u32 streamDepth = 3;          // --stream-depth 3..6: left stream moves after the seeds
         u32 shardIndex = 0, shardCount = 1;     // --shard k/N
+        u32 d7Groups = 1;                       // --d7-groups G: with --shard k/N (N a multiple of G), work
+                                                // unit k = goal partition group k / (N/G) x seed shard k % (N/G)
         std::string middlesOut;                 // --middles-out FILE
         std::vector<std::string> recoverFrom;   // --recover-from FILE (repeatable)
         u64 pdbMaxEntries = 300'000'000ULL;
@@ -102,6 +104,9 @@ namespace ssd {
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }
         MUND bool d7Subset() const { return tableDepth == 7 && (d7FirstPartition != 0 || d7End() != PARTITION_COUNT); }
+        // the seeds this run streams: every seed with index = seedShardIndex() mod seedShardCount()
+        MUND u32 seedShardCount() const { return shardCount / d7Groups; }
+        MUND u32 seedShardIndex() const { return shardIndex % seedShardCount(); }
     };
 
     struct KeyedState {

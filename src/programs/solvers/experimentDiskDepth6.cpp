@@ -91,7 +91,8 @@
 // <5,4,6> = 15 moves; the parent prune then runs at every level above the
 // leaves (a node with r moves below is dropped when h > depth + r).
 // --stream-depth 5: <5,5,6> = 16 moves with the one-pass depth-6 goal side
-// (normal boards; the bound audits sample fewer seeds at this depth).
+// (normal boards; the bound audits sample fewer seeds at this depth), or <5,5,7> = 17 moves
+// on 2x2 boards (depth-7 goal side, several passes; recovery = two 5-move start halves).
 // --stream-depth 6: <5,6,6> = 17 moves (normal boards, with --gpu: ~30x a 16-move run; the CPU
 // streams it too, for small checks only). The GPU audit streams 16 seeds in full, the GPU pass
 // reports progress per 1/64 of the seeds, and recovery (left depth 11) shares a 5-move start
@@ -127,6 +128,10 @@
 // the lookups it saves, while a parent check covers ~40 leaves.
 //
 // Work units (searches split across runs or machines):
+//   --d7-groups G       with --shard k/N and --table-depth 7 (N a multiple of G): unit k searches
+//                       goal partition group k / (N/G) (256/G of the key partitions, so usually one
+//                       pass: one index build) against seed shard k % (N/G). For long 2x2 runs
+//                       (<5,5,7> at 17), where a plain seed shard would rebuild every pass's index.
 //   --shard k/N         search only the left seeds with index = k (mod N); the
 //                       N shards together are exactly the full search
 //   --middles-out FILE  write the confirmed middles (text, with the puzzle,
@@ -227,7 +232,12 @@ int main(const int argc, char** argv) {
     }
 
     const Timer probeTimer;
-    if (cfg.d7Subset()) {
+    if (cfg.d7Groups > 1) {
+        tcout << "work unit " << cfg.shardIndex << "/" << cfg.shardCount << ": goal partitions ["
+              << cfg.d7FirstPartition << "," << cfg.d7End() << ") (group " << cfg.shardIndex / cfg.seedShardCount()
+              << " of " << cfg.d7Groups << "), seed shard " << cfg.seedShardIndex() << "/" << cfg.seedShardCount()
+              << "\n";
+    } else if (cfg.d7Subset()) {
         tcout << "depth-7 TEST SUBSET: only key partitions [" << cfg.d7FirstPartition << "," << cfg.d7End()
               << ") of " << PARTITION_COUNT << "\n";
     }

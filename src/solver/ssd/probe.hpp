@@ -86,16 +86,17 @@ namespace ssd {
         buildSeeds(leftRoot, cfg.seedDepth, seeds);
         tcout << "left seeds (exact depth " << cfg.seedDepth << "): " << seeds.size()
               << " in " << seedTimer.getSeconds() << "s\n";
-        if (cfg.shardCount > 1) {
+        if (cfg.seedShardCount() > 1) {
             // Interleaved, so every shard gets a similar mix of seeds.
+            const u32 k = cfg.seedShardIndex(), n = cfg.seedShardCount();
             const std::size_t all = seeds.size();
             std::size_t w = 0;
-            for (std::size_t s = cfg.shardIndex; s < all; s += cfg.shardCount) {
+            for (std::size_t s = k; s < all; s += n) {
                 seeds[w++] = seeds[s];
             }
             seeds.resize(w);
-            tcout << "shard " << cfg.shardIndex << "/" << cfg.shardCount << ": " << seeds.size() << " of " << all
-                  << " seeds (index = " << cfg.shardIndex << " mod " << cfg.shardCount << ")\n";
+            tcout << "seed shard " << k << "/" << n << ": " << seeds.size() << " of " << all
+                  << " seeds (index = " << k << " mod " << n << ")\n";
         }
         std::vector<u8> seedMoves;   // each seed's smallest-path last move (buildLastMoves, common.hpp)
         if (cfg.seedLastMove) {

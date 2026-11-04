@@ -16,7 +16,8 @@ the unsolved normal board 16-3 >= 18 (no 17-move solution: `<5,6,6>`, friend's P
 2026-11-03), the unsolved 2x2 boards 15-3 >= 17, 19-2 >= 17 (none at 16: 5060 Ti, 11 h 46 min),
 19-4 >= 16. `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
-History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-03.md`, the Linux port, Vulkan on
+History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-04.md`, 2x2 boards at
+17 moves: `<5,5,7>`, `--d7-groups` work units, the Vulkan 2-s job limit; `changes-2026-11-03.md`, the Linux port, Vulkan on
 AMD, several GPUs, the friend's-PC runs, game-accepted goals, Chuzzle Suite;
 `changes-2026-11-02.md`, 2x2 boards on
 the GPU and faster recovery; `changes-2026-11-01.md`, the GPU
@@ -34,7 +35,8 @@ solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it
   -DMB_OUTPUT_DIR=<repo>/build_portable` (no AVX-512).
 - Every program compiles the shared sources itself, so building all targets takes ~20 min.
 - Tests: `testExactSolverRegression` (14 cases; `--recovery11 build/levels_final/19-3_c16_202.txt`
-  checks recovery at left depth 11, as 17-move runs use it), `testRotations` (112), `testJVec`,
+  checks recovery at left depth 11, as 17-move runs use it; `--recovery 10 <2x2 16-move file>`
+  left depth 10 on 2x2 boards, as `<5,5,7>` uses it), `testRotations` (112), `testJVec`,
   `testKnownSolutions` (replays every file in `<repo>/levels`; run from `build/`),
   `testWebSolver` (the web solver vs `build/levels_final`, all puzzles up to 10 moves; run from
   the repo root),
@@ -135,7 +137,8 @@ A search `<S, T2, T>` = S + T2 + T moves: exact depth-S left seeds, each streame
 picks: normal boards `<5,3,6>` up to 14 moves, `<5,4,6>` at 15, `<5,5,6>` at 16 (one pass; a
 depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes), `<5,6,6>` at 17
 (--gpu only; 18-3 solved with it 2026-11-03); 2x2 boards `<4,3,7>` at 14, `<5,3,7>` at 15,
-`<5,4,7>` at 16.
+`<5,4,7>` at 16, `<5,5,7>` at 17 (2026-11-04: recovery at left depth 10 checked on 2x2 boards,
+`testExactSolverRegression --recovery 10 <file>`; ~32x a 16-move run, so seed shards).
 - Goal side, no table written (default): depth 6 = the depth-5 frontier in RAM, index slices
   built per pass from regenerated keys; depth 7 = a count pass, then per pass the canonical
   2-move stream fills the pass's buckets (owner-routed keys, no atomics; the bucket counts
@@ -157,6 +160,8 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes), `
   user's teacher (GitHub issue 1).
 - Seeds are visited in a strided order (4096-seed chunks), so the timed ones represent the list.
 - Work units: `--shard k/N`, `--middles-out`, `--recover-from` (exact; see the scheduler README).
+  Depth-7 runs: `--d7-groups G` makes unit k = goal partition group k / (N/G) x seed shard
+  k % (N/G), so each unit builds one pass's index (`mbq add ... --shards N --d7-groups G`).
 - `--gpu 5060`: the RTX 5060 Ti (`src/gpu/`, loaded from `build_gpu/mbgpu.dll`; normal and 2x2
   boards, forward) streams the left side and Bloom-tests it (CPU threads finish the survivors
   meanwhile), audits its own bound (normal boards), builds the goal-side index (depth 6, or
