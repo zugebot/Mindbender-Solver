@@ -4,11 +4,21 @@ Optimal solver for Chuzzle's Mind Bender puzzles (100 puzzles, 6x6 boards,
 row/column cyclic shifts, some with a 2x2 piece). It finds every shortest
 solution and proves nothing shorter exists. C++ solver plus Python tools.
 
-Status (2026-11-02): **92/100 solved** (15-1, 19-3, 17-3, 12-1 at 16 moves on the GPU; 6-4 at 16,
-68 solutions, `<5,4,7>` on the GPU in 6 h 45 min); the unsolved normal boards (14-3, 16-3, 18-3)
-need >= 17, the unsolved 2x2 boards (15-3, 15-4, 16-1, 19-2, 19-4) >= 16. `build/README.md` lists the unsolved ones with their
+Status (2026-11-04): **96/100 solved**, all on this PC (the i7; before its RAM and GPU upgrades for the early ones,
+on the RTX 5060 Ti since 2026-11-01) except 18-3 and 14-3, solved on the friend's PC (Ryzen 5
+5600X, three Polaris GPUs over Vulkan). `docs/run_history.csv` starts in 2026-10, so the 61
+earlier answers have no row there. Latest: 15-1, 19-3, 17-3, 12-1 at 16 moves on the 5060 Ti; 6-4 at 16, 68
+solutions, `<5,4,7>`, 5060 Ti, 6 h 45 min; 15-4 at 16, 356 solutions, `<5,4,7>`, 5060 Ti,
+9 h 15 min; 18-3 at 17, 896 solutions, `<5,6,6>`, friend's PC, 2 h 50 min; 16-1 at 16, 12
+solutions, `<5,4,7>`, 5060 Ti, 8 h 45 min; 14-3 at 17, 1790 solutions, `<5,6,6>`, friend's PC,
+3 h 39 min (each run's machine: column `machine` of the run history);
+the unsolved normal board 16-3 >= 18 (no 17-move solution: `<5,6,6>`, friend's PC, 16 h 22 min,
+2026-11-03), the unsolved 2x2 boards 15-3 >= 17, 19-2 >= 17 (none at 16: 5060 Ti, 11 h 46 min),
+19-4 >= 16. `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
-History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-02.md`, 2x2 boards on
+History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-03.md`, the Linux port, Vulkan on
+AMD, several GPUs, the friend's-PC runs, game-accepted goals, Chuzzle Suite;
+`changes-2026-11-02.md`, 2x2 boards on
 the GPU and faster recovery; `changes-2026-11-01.md`, the GPU
 solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it).
 
@@ -29,7 +39,7 @@ solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it
   `testWebSolver` (the web solver vs `build/levels_final`, all puzzles up to 10 moves; run from
   the repo root),
   `experimentBoundSample --check` (bounds admissible on all 1.9 M known-optimal-path states; run
-  from the repo root), `python -m unittest discover -s python/demo_app/tests`.
+  from the repo root), `python -m unittest discover -s python/chuzzle_suite/tests`.
 - Exactness check for solver changes: run the solver on a solved puzzle with
   `--solutions build/levels_final/<file>` and look for `EXACT MATCH` and `IDENTICAL SET`
   (9-3 and 10-3 at 13 moves take minutes; 16-4 at 14 is the big one, 519 solutions).
@@ -42,12 +52,18 @@ solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it
   `cmake-build-test` -> `build_test/` (the solver passes `mbgpu_stats` to the DLL: rebuild both
   when `mbgpu.h` changes). Profilers: Nsight Systems 2025.3.2, Nsight Compute 2025.3.0 (GPU
   counters allowed for all users).
+- Vulkan module (`src/gpu/vulkan/`, any vendor): `src\gpu\vulkan\build.cmd` (Vulkan SDK
+  1.4.341 glslc + VS 2022 MSVC) builds `build_gpu/mbvk.dll`, `test_vk_stream.exe` (the same
+  test, `--device 5060|auto`) and `vk_devices.exe`. Same C interface; `--gpu` tries CUDA, then
+  Vulkan (`cuda:` / `vulkan:` prefixes force one; `auto` picks devices; several Vulkan GPUs
+  share the seeds). `--gpu-list` prints the devices. Built 2026-11-02, not yet run on a GPU:
+  its README lists the checks.
 
 ## Everyday commands (cmd)
 
 ```bat
 cd /d C:\Users\jerrin\CLionProjects\Mindbender-Solver
-python python\demo_app\run_demo.py
+python python\chuzzle_suite\run_suite.py
 python python\scheduler\mbq.py daemon
 python python\scheduler\mbq.py resume
 python python\scheduler\mbq.py status
@@ -55,7 +71,7 @@ python python\scheduler\mbq.py status
 
 `status` is also a live page at http://127.0.0.1:8766/ (Hold solver / Pause queue buttons).
 At logon, `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\mindbender_startup.cmd`
-runs the Parsec watchdog, the user's Discord bots (`E:\runner.bat`) and the demo app. Since
+runs the Parsec watchdog, the user's Discord bots (`E:\runner.bat`) and Chuzzle Suite. Since
 2026-10-30 it no longer starts `mbq daemon` / `mbq resume` (lines commented out), and the queue
 is paused: the solver runs only when the user asks. A job cut off by a reboot is re-queued first.
 
@@ -84,11 +100,19 @@ is paused: the solver runs only when the user asks. A job cut off by a reboot is
     `experiments/` (`experimentBoundSample`: `--check`, sampling, `--bench`, `--deep --kind`).
 - `src/gpu/`: the CUDA module (`mbgpu.h` C interface, `mbgpu.cu` kernels + host driver,
   `test_gpu_stream.cu`, `build.cmd`, `README.md`); the solver side is `src/solver/ssd/gpu_stream.hpp`.
+  `src/gpu/vulkan/`: the Vulkan module (`mbvk.cpp` host, `shaders/*.comp` GLSL ports of the
+  kernels, `build.cmd`, `README.md`).
   `build_gpu/` (ignored by git): the DLL, the test exe, `vectors.bin`, `bench_16-2.bin`, run logs.
 - `src/utils/`: `progress_reporter.hpp` (cheap progress JSON), `parallel_for.hpp`, `timer.hpp`,
   `intrinsics/` (`my_clz`, `my_ctz64`, `my_pext_u64`, `my_popcount`).
 - `old/`: code that no longer builds or is unreferenced, kept for history (not built; README).
 - `build/levels_final/`: canonical answers `<p>_c<moves>_<count>.txt` (tracked, 0-indexed moves).
+  `build/levels_final/game_accepts/`: placements the game also accepts. The game counts a board
+  as solved when every colour matches, so the 2x2 piece may also end on another 2x2 block of its
+  colour (7 puzzles: 4-4, 9-1, 13-5, 15-3, 17-2, 19-2, 19-4; 22 placements). Each is its own
+  puzzle `<p>@r<row>c<col>` (the piece's top-left cell, 1-indexed: `4-4@r2c3`), solved
+  separately, never counted as the official answer (`BoardLookup::gameAcceptedFats`,
+  `getBoardPair("4-4@r2c3")`; their bounds are in their own section of `build/README.md`).
   `levels/` = scratch output.
 - `python/scheduler/mbq.py`: job queue + dashboard; `README.md` there documents every command
   (add/`--until`/`--front`, cancel, pause, hold, shards + export/import). Use it for long runs.
@@ -96,11 +120,13 @@ is paused: the solver runs only when the user asks. A job cut off by a reboot is
   the scheduler via `python/scheduler/run_history.py`). Use it for timings.
 - `web/`: static solver site (board editor, WebAssembly solver in Web Workers, replay). Serve with
   `python -m http.server 8770 --directory web`; rebuild the wasm with `web/build_wasm.ps1`.
-- `python/demo_app/`: pygame app (solutions, real-game playback via posted window messages, saves).
+- `python/chuzzle_suite/`: Chuzzle Suite, the pygame app (the demo app before 2026-11-03; Start menu
+  shortcut from `install_shortcut.py`, icon from `assets/make_icon.py`; solutions, real-game playback via posted window messages, saves).
 - `python/viewer/`: mouse-route studio; `mouse/`: C mouse-path library (`libchuzzle_mouse.dll`).
 - `python/deluxe_clone/`, `python/automation/legacy/`: older Chuzzle 1 projects merged in.
-- Tables: `X:/mindbender_d6/<puzzle>_goal_d6`, only for `--disk-table` and 6-4's kept depth-6
-  table + 166 GB depth-7 index (keep them). The default modes write nothing there.
+- Tables: `X:/mindbender_d6/<puzzle>_goal_d6`, only for `--disk-table`. The default modes write
+  nothing there. Emptied 2026-11-02 (6-4's 197.5 GB of tables, all for solved puzzles); keep the
+  folder itself (the scheduler's table root and free-space figure).
 
 ## How the large solver works (experimentDiskDepth6)
 
@@ -108,7 +134,7 @@ A search `<S, T2, T>` = S + T2 + T moves: exact depth-S left seeds, each streame
 (`--stream-depth`, 3-6), every state looked up in the goal side's depth-T set. The scheduler
 picks: normal boards `<5,3,6>` up to 14 moves, `<5,4,6>` at 15, `<5,5,6>` at 16 (one pass; a
 depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes), `<5,6,6>` at 17
-(--gpu only; built 2026-11-02, not yet run); 2x2 boards `<4,3,7>` at 14, `<5,3,7>` at 15,
+(--gpu only; 18-3 solved with it 2026-11-03); 2x2 boards `<4,3,7>` at 14, `<5,3,7>` at 15,
 `<5,4,7>` at 16.
 - Goal side, no table written (default): depth 6 = the depth-5 frontier in RAM, index slices
   built per pass from regenerated keys; depth 7 = a count pass, then per pass the canonical
@@ -240,8 +266,11 @@ Next:
    smaller Bloom filter per state (VRAM caps a pass at ~8.7 G goal states) and a smaller index
    (item 1). Normal boards run `<5,5,6>` (~8.5 h); the goal-side
    filter by h(start) keeps 54% on 18-3, too little for a one-pass depth-7 goal side. 17 moves
-   on normal boards: the 6-move stream `<5,6,6>` (item 4).
-4. GPU port: normal boards done (2026-11-01), 2x2 boards done (2026-11-02; stream, depth-6 and
+   on normal boards: the 6-move stream `<5,6,6>` (item 5).
+4. Vulkan module (2026-11-02, `src/gpu/vulkan/`): built, device discovery checked; first run
+   `test_vk_stream` and a solved puzzle with `--gpu vulkan:5060` (README checks), then on other
+   PCs (a friend's: 6 threads, 64 GB RAM, two Radeon Pro Duo = four 16 GB GPUs).
+5. GPU port: normal boards done (2026-11-01), 2x2 boards done (2026-11-02; stream, depth-6 and
    depth-7 goal sides, candidate check; the scheduler passes --gpu). 17 moves on normal boards
    (14-3, 16-3, 18-3) as `<5,6,6>`: built 2026-11-02 (docs/changes-2026-11-02.md section 5),
    recovery checked on the CPU, not yet run end to end: first (machine idle) a CPU run of
@@ -250,10 +279,10 @@ Next:
    (16-2 at 15 as `<3,6,6>`), then deploy `build_test/experimentDiskDepth6.exe` to `build/` and
    restart the scheduler daemon between jobs. Projected ~5-7 h each (16-3's 16-move stream
    took 14 min; one more move costs ~25-30x).
-5. Checkpoint/resume inside a run (pass, finished-seed watermark, candidates, chosen modes),
+6. Checkpoint/resume inside a run (pass, finished-seed watermark, candidates, chosen modes),
    once single runs take days.
-6. Smaller: AVX2 batched StateHash + mixKey for the left side; incremental bound evaluation
+7. Smaller: AVX2 batched StateHash + mixKey for the left side; incremental bound evaluation
    (a row move leaves the row half of h unchanged); goal symmetry (12-1's goal has 144
    symmetries) to shrink goal tables.
-7. Rename `experimentDiskDepth6` (after the 2026-10-15..22 trip; touches the scheduler,
+8. Rename `experimentDiskDepth6` (after the 2026-10-15..22 trip; touches the scheduler,
    exported packages and docs).

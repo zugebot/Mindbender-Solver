@@ -15,17 +15,45 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 
 
 
-# 8 puzzles remain unsolved:
+# 4 puzzles remain unsolved:
 (each re-checked at 12 moves with the fixed solver on 2026-10-05: no solutions;
- 6-4 also has none at 13, 14 or 15. Solved at 13 moves: 10-2 (32 solutions), 10-3 (1648).)
-14-3: at least 17 moves
-15-3: at least 16 moves
-15-4: at least 16 moves
-16-1: at least 16 moves (start board fixed 2026-10-12: one cell was wrong, so every earlier 16-1 result was on an unsolvable board; 3-15 moves re-checked on the fixed board 2026-10-12/13)
-16-3: at least 17 moves
-18-3: at least 17 moves
-19-2: at least 16 moves
+ 6-4 also has none at 13, 14 or 15. Solved at 13 moves: 10-2 (32 solutions), 10-3 (1648).
+ 18-3 solved at 17 moves on 2026-11-03 on a friend's PC: 896 solutions. 16-1 solved at 16 moves
+ on 2026-11-03 on this PC's RTX 5060 Ti: 12 solutions. 14-3 solved at 17 moves on 2026-11-03 on
+ the friend's PC: 1790 solutions. Every other puzzle was solved on this PC, the early ones
+ before its RAM and GPU upgrades.)
+15-3: at least 17 moves
+16-3: at least 18 moves
+19-2: at least 17 moves
 19-4: at least 16 moves
+# Placements the game also accepts (not the official goals):
+(the game counts a board as solved when every colour matches, so the 2x2 piece may also end
+ on another 2x2 block of its colour; each placement is searched as its own goal, named
+ <puzzle>@r<row>c<col> after the piece's top-left cell, 1-indexed; solutions in
+ build/levels_final/game_accepts/; none has a 1- or 2-move solution, checked 2026-11-03)
+4-4@r2c3: solved, 7 moves, 20 solutions
+4-4@r3c2: solved, 9 moves, 1430 solutions
+4-4@r3c4: solved, 6 moves, 14 solutions
+4-4@r4c3: solved, 8 moves, 295 solutions
+9-1@r2c3: solved, 8 moves, 216 solutions
+9-1@r3c2: solved, 8 moves, 77 solutions
+9-1@r3c4: solved, 8 moves, 118 solutions
+9-1@r4c3: solved, 8 moves, 295 solutions
+13-5@r2c2: solved, 8 moves, 308 solutions
+13-5@r2c3: solved, 7 moves, 12 solutions
+13-5@r2c4: solved, 8 moves, 387 solutions
+13-5@r3c2: solved, 8 moves, 226 solutions
+13-5@r3c4: solved, 8 moves, 315 solutions
+13-5@r4c2: solved, 8 moves, 888 solutions
+13-5@r4c3: solved, 7 moves, 324 solutions
+13-5@r4c4: solved, 7 moves, 53 solutions
+15-3@r4c3: at least 3 moves
+15-3@r5c3: at least 3 moves
+17-2@r2c4: at least 3 moves
+19-2@r2c4: at least 3 moves
+19-4@r2c1: at least 3 moves
+19-4@r5c4: at least 3 moves
+
  1-1
  1-2
  1-3
