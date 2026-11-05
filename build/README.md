@@ -15,17 +15,17 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 
 
 
-# 4 puzzles remain unsolved:
+# 3 puzzles remain unsolved:
 (each re-checked at 12 moves with the fixed solver on 2026-10-05: no solutions;
  6-4 also has none at 13, 14 or 15. Solved at 13 moves: 10-2 (32 solutions), 10-3 (1648).
  18-3 solved at 17 moves on 2026-11-03 on a friend's PC: 896 solutions. 16-1 solved at 16 moves
  on 2026-11-03 on this PC's RTX 5060 Ti: 12 solutions. 14-3 solved at 17 moves on 2026-11-03 on
- the friend's PC: 1790 solutions. Every other puzzle was solved on this PC, the early ones
- before its RAM and GPU upgrades.)
+ the friend's PC: 1790 solutions. 19-4 solved at 16 moves on 2026-11-04 on this PC's
+ RTX 5060 Ti: 40 solutions. Every other puzzle was solved on this PC, the early ones before its
+ RAM and GPU upgrades.)
 15-3: at least 17 moves
 16-3: at least 18 moves
 19-2: at least 17 moves
-19-4: at least 16 moves
 # Placements the game also accepts (not the official goals):
 (the game counts a board as solved when every colour matches, so the 2x2 piece may also end
  on another 2x2 block of its colour; each placement is searched as its own goal, named

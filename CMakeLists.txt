@@ -275,3 +275,4 @@ add_solver_program(decompMindbenderScramble "${CMAKE_SOURCE_DIR}/src/programs/to
 
 # experiments
 add_solver_program(experimentBoundSample  "${CMAKE_SOURCE_DIR}/src/programs/experiments/experimentBoundSample.cpp")
+add_solver_program(experimentFatSplitBound "${CMAKE_SOURCE_DIR}/src/programs/experiments/experimentFatSplitBound.cpp")

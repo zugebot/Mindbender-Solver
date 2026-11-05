@@ -42,6 +42,12 @@ namespace ssd {
             else if (a == "--gpu-dll") cfg.gpuDll = next();
             else if (a == "--gpu-list") cfg.gpuList = true;
             else if (a == "--gpu-vram-gb") cfg.gpuVramGb = std::stod(next());
+            else if (a == "--bloom-bits") {
+                cfg.bloomBits = std::stod(next());
+                if (!(cfg.bloomBits >= 2.0 && cfg.bloomBits <= 32.0)) {
+                    throw std::runtime_error("--bloom-bits: 2 to 32");
+                }
+            }
             else if (a == "--d7-first-partition") cfg.d7FirstPartition = static_cast<u32>(std::stoul(next()));
             else if (a == "--progress-file") cfg.progressFile = next();
             else if (a == "--progress-interval") cfg.progressInterval = std::stod(next());

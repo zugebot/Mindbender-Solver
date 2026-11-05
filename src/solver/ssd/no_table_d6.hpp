@@ -128,7 +128,7 @@ namespace ssd {
         while (meta.bucketBits < PARTITION_SHIFT && (estMax >> meta.bucketBits) > TARGET_STATES_PER_BUCKET) {
             ++meta.bucketBits;
         }
-        meta.bloomBlocksPerPartition = std::max<u64>(1, (estMax * BLOOM_BITS_PER_STATE + 255) / 256);
+        meta.bloomBlocksPerPartition = bloomBlocksFor(estMax, cfg.bloomBits);
         meta.stateCount = estTotal;
         tcout << "depth-6 raw children: " << rawTotal << ", de-dupe ratio " << ratio << " -> ~"
               << static_cast<u64>(static_cast<double>(rawTotal) * ratio) << " unique (counted in "

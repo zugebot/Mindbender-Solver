@@ -386,10 +386,12 @@ namespace ssd {
                 ProbeQueue::Piece p;
                 while (queue.pop(p)) {
                     const std::size_t n = p.states.size();
+                    // every leaf here passed the GPU's Bloom test of these same blocks
                     for (std::size_t lo = 0; lo < n; lo += PROBE_GROUP) {
                         const u32 cnt = static_cast<u32>(std::min<std::size_t>(PROBE_GROUP, n - lo));
-                        passes[t] += index.probeGroup(&p.states[lo], &p.keys[lo], cnt, found[t]);
+                        index.probePassed(&p.states[lo], &p.keys[lo], cnt, found[t]);
                     }
+                    passes[t] += n;
                 }
             });
         }

@@ -100,6 +100,7 @@ namespace ssd {
         std::string gpuDll;           // --gpu-dll PATH (default: mbgpu.dll, then mbvk.dll, next to the exe or in ../build_gpu)
         bool gpuList = false;         // --gpu-list: print the GPUs the modules see, then exit
         double gpuVramGb = 12.5;      // --gpu-vram-gb: VRAM the GPU module may use
+        double bloomBits = 10.0;      // --bloom-bits: Bloom bits per goal state, no-table modes (default = BLOOM_BITS_PER_STATE)
         lane_bound::Kind boundKind = lane_bound::Kind::Rotation;   // --bound-kind mix|rotation   // max; the run uses 3% of its search, >= 20 s
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }

@@ -4,20 +4,23 @@ Optimal solver for Chuzzle's Mind Bender puzzles (100 puzzles, 6x6 boards,
 row/column cyclic shifts, some with a 2x2 piece). It finds every shortest
 solution and proves nothing shorter exists. C++ solver plus Python tools.
 
-Status (2026-11-04): **96/100 solved**, all on this PC (the i7; before its RAM and GPU upgrades for the early ones,
+Status (2026-11-04): **97/100 solved**, all on this PC (the i7; before its RAM and GPU upgrades for the early ones,
 on the RTX 5060 Ti since 2026-11-01) except 18-3 and 14-3, solved on the friend's PC (Ryzen 5
 5600X, three Polaris GPUs over Vulkan). `docs/run_history.csv` starts in 2026-10, so the 61
 earlier answers have no row there. Latest: 15-1, 19-3, 17-3, 12-1 at 16 moves on the 5060 Ti; 6-4 at 16, 68
 solutions, `<5,4,7>`, 5060 Ti, 6 h 45 min; 15-4 at 16, 356 solutions, `<5,4,7>`, 5060 Ti,
 9 h 15 min; 18-3 at 17, 896 solutions, `<5,6,6>`, friend's PC, 2 h 50 min; 16-1 at 16, 12
 solutions, `<5,4,7>`, 5060 Ti, 8 h 45 min; 14-3 at 17, 1790 solutions, `<5,6,6>`, friend's PC,
-3 h 39 min (each run's machine: column `machine` of the run history);
+3 h 39 min; 19-4 at 16, 40 solutions, `<5,4,7>`, 5060 Ti, 9 h 36 min (13 h 15 min with two
+holds) (each run's machine: column `machine` of the run history);
 the unsolved normal board 16-3 >= 18 (no 17-move solution: `<5,6,6>`, friend's PC, 16 h 22 min,
-2026-11-03), the unsolved 2x2 boards 15-3 >= 17, 19-2 >= 17 (none at 16: 5060 Ti, 11 h 46 min),
-19-4 >= 16. `build/README.md` lists the unsolved ones with their
+2026-11-03), the unsolved 2x2 boards 15-3 >= 17, 19-2 >= 17 (none at 16: 5060 Ti, 11 h 46 min).
+19-2 at 17 on the friend's PC was stopped 2026-11-04 (unit 0 of 80 unfinished after 4 h 17 min,
+~1 month projected); the friend's PC is not available for long runs any more. `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
-History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-04.md`, 2x2 boards at
-17 moves: `<5,5,7>`, `--d7-groups` work units, the Vulkan 2-s job limit; `changes-2026-11-03.md`, the Linux port, Vulkan on
+History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-04.md`, 19-4 solved,
+a pass's cost measured, the GPU survivor check ~18% faster, a 2x2 split bound (cannot prune),
+2x2 boards at 17 moves: `<5,5,7>`, `--d7-groups` work units, the Vulkan 2-s job limit; `changes-2026-11-03.md`, the Linux port, Vulkan on
 AMD, several GPUs, the friend's-PC runs, game-accepted goals, Chuzzle Suite;
 `changes-2026-11-02.md`, 2x2 boards on
 the GPU and faster recovery; `changes-2026-11-01.md`, the GPU
@@ -99,7 +102,9 @@ is paused: the solver runs only when the user asks. A job cut off by a reboot is
   - `tests/` (incl. `exportGpuVectors`, the GPU's CPU reference data), `benchmarks/`
     (`benchmarkLeftStream`), `tools/` (`expandAllLevels`,
     `generate_ml_training_data`, `analyzeLevelsFinalHeuristic`, `DecompMindbenderScramble`),
-    `experiments/` (`experimentBoundSample`: `--check`, sampling, `--bench`, `--deep --kind`).
+    `experiments/` (`experimentBoundSample`: `--check`, sampling, `--bench`, `--deep --kind`;
+    `experimentFatSplitBound`: move-type-split tables for 2x2 boards, research, see
+    docs/changes-2026-11-04.md section 13).
 - `src/gpu/`: the CUDA module (`mbgpu.h` C interface, `mbgpu.cu` kernels + host driver,
   `test_gpu_stream.cu`, `build.cmd`, `README.md`); the solver side is `src/solver/ssd/gpu_stream.hpp`.
   `src/gpu/vulkan/`: the Vulkan module (`mbvk.cpp` host, `shaders/*.comp` GLSL ports of the
@@ -222,6 +227,7 @@ for the solver; GTX 1660 SUPER 6 GB (bus 4, x4, CUDA device 1) for the desktop.
 | `--gpu 5060` (2026-11-01, src/gpu/README.md) | 16-2 at 15: 42 min -> 54 s (stream 12.6 s); 16-4 at 14: 1 h 27 min -> 2 min 18 s; 18-3 at 16: stream ~2.5 min from a 1/64 shard (whole run ~4 min) |
 | `--gpu 5060`, 16 moves, normal boards (2026-11-02, 6 threads) | 15-1 19 min, 16-3 16 min, 17-3 38 min, 19-3 1 h 04 min, 12-1 2 h 13 min (2 h of it recovery; now 56 s) |
 | `--gpu 5060`, 2x2 boards (2026-11-02) | 17-4 at 13: 294 s -> 36 s; 17-2 at 14 (5 passes): 56 min -> 5 min 50 s; 18-4 at 15 `<5,3,7>` (6 passes): 10.0 h -> 25 min; 6-4 at 16 `<5,4,7>` (disk depth-7 index, 6 passes x ~4000 s, 3.1e14 left states): 6 h 45 min |
+| `--gpu 5060`, 2x2 boards at 16 `<5,4,7>` (2026-11-02..04) | 6-4 6 h 45 min, 16-1 8 h 45 min, 15-4 9 h 15 min, 15-3 ~9.3 h (none), 19-4 ~9 h 36 min, 19-2 ~10 h 37 min (none), without holds; 5-6 passes x ~5.2e13 left states; per pass ~1 260 s fixed + the Bloom tests and the CPU survivor check (about equal at 10 bits); survivor check ~18% faster since 2026-11-04 (docs/changes-2026-11-04.md sections 11-12) |
 | 15 moves, 6-4 (disk depth-7 index) | 13.4 h, 10 passes |
 | 13 moves, normal board, rotation bound | 10-3: 1 min 43 s; 9-3: ~6 min (colour mix: 5-25 min) |
 | First-move rule (2026-10-29/30, docs/changes-2026-10-16.md 13-14) | 18-3 at 15: stream 1103 s -> 759 s; 17-4 at 13 (2x2): 468 s -> 313 s; 17-2 at 14 (2x2, depth 7): 6010 s -> 3345 s |
@@ -257,24 +263,30 @@ Done (2026-10-04 to 10-12; details in docs/changes-*.md):
 9. Code reorganized (bounds/, ssd/, inram/, programs/ folders, old/, `src/` includes).
 
 Next:
-1. Smaller index for multi-pass runs: a binary fuse filter at ~2 B/state instead of 4.8 would
-   halve the passes of 2x2 15-move runs (~10 h -> ~5 h) and 2x2 16-move runs. Generation dominates
-   those runs (each pass re-streams the left side), so 3 reads per lookup instead of 1 hardly
-   matters. Prototype and A/B.
-2. A bound that prunes on 2x2 boards (15-3, 15-4, 16-1, 19-2, 19-4 need >= 16, all 2x2): the halved
+1. Fewer passes for 2x2 runs: on the GPU the passes are set by VRAM (Bloom blocks), and fewer
+   Bloom bits per state is much slower (9 bits: 5 passes, but 1.5x per pass; the CPU survivor
+   check is the limit; docs/changes-2026-11-04.md section 11). A smaller filter only helps with an
+   equally low false-pass rate (a binary fuse filter: 3 reads per test) or a faster survivor
+   check (the fingerprint stage on the GPU). Profile one pass (Nsight) before building either.
+2. A bound that prunes on 2x2 boards (15-3 and 19-2 need >= 17; 15-4, 16-1, 19-4 took 16): the halved
    lane bound tops out at 6 and pruning needs > 7, and no lane bound can do better (cover
-   argument in docs/changes-2026-10-12.md section 7). It needs bounds over several lanes at once
-   (pattern tables, e.g. split by move type), or the time has to come from fewer passes / the GPU.
-3. 16 moves on 2x2 boards: `<5,4,7>` with `--gpu 5060` (`mbq add ... --gpu 5060 --threads 6`),
-   ~7-10 h each (6-4: 6 h 45 min, 6 passes x ~4000 s of stream, 3.1e14 left states; CPU:
+   argument in docs/changes-2026-10-12.md section 7). Tables over several lanes do not get there
+   either: all-moves pattern databases ~0%, move-type-split tables capped at 4 + 4 (2026-11-04,
+   `experimentFatSplitBound`, docs/changes-2026-11-04.md section 13). Open: dissection-type search.
+3. 16 moves on 2x2 boards: done (2026-11-04; 6-4, 15-4, 16-1, 19-4 solved, 15-3 and 19-2 none).
+   17 moves on 2x2 boards: `<5,5,7>`, ~12 days each on the 5060 Ti; run as `--d7-groups` units
+   (`mbq add 19-2 --moves 17 --gpu 5060 --threads 6 --shards 80 --d7-groups 5`). 16 moves were
+   `<5,4,7>` with `--gpu 5060` (`mbq add ... --gpu 5060 --threads 6`),
+   ~7-11 h each (6-4: 6 h 45 min, 6 passes x ~4000 s of stream, 3.1e14 left states; CPU:
    ~200-300 h). Fewer passes need a
    smaller Bloom filter per state (VRAM caps a pass at ~8.7 G goal states) and a smaller index
    (item 1). Normal boards run `<5,5,6>` (~8.5 h); the goal-side
    filter by h(start) keeps 54% on 18-3, too little for a one-pass depth-7 goal side. 17 moves
    on normal boards: the 6-move stream `<5,6,6>` (item 5).
 4. Vulkan module (2026-11-02, `src/gpu/vulkan/`): built, device discovery checked; first run
-   `test_vk_stream` and a solved puzzle with `--gpu vulkan:5060` (README checks), then on other
-   PCs (a friend's: 6 threads, 64 GB RAM, two Radeon Pro Duo = four 16 GB GPUs).
+   `test_vk_stream` and a solved puzzle with `--gpu vulkan:5060` (README checks). Ran on a
+   friend's PC (Linux, three Polaris GPUs, 2026-11-02..04): solved 18-3 and 14-3 at 17, 16-3 >= 18;
+   that PC is no longer available for long runs. Still open: the checks on the 5060 Ti.
 5. GPU port: normal boards done (2026-11-01), 2x2 boards done (2026-11-02; stream, depth-6 and
    depth-7 goal sides, candidate check; the scheduler passes --gpu). 17 moves on normal boards
    (14-3, 16-3, 18-3) as `<5,6,6>`: built 2026-11-02 (docs/changes-2026-11-02.md section 5),

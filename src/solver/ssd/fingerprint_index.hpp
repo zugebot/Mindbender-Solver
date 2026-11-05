@@ -61,6 +61,11 @@ namespace ssd {
         return missing == 0;
     }
 
+    // 32-byte blocks for `states` keys at `bits` bits per key (at least one).
+    inline u64 bloomBlocksFor(const u64 states, const double bits) {
+        return std::max<u64>(1, static_cast<u64>(std::ceil(static_cast<double>(states) * bits / 256.0)));
+    }
+
     FORCEINLINE u64 bloomBlockInPartition(const u64 h, const u64 blocksPerPartition) {
         return ((h >> 32) * blocksPerPartition) >> 32;
     }
@@ -463,6 +468,41 @@ namespace ssd {
             }
             issue(b);
             return finish(b, candidates);
+        }
+
+        // For leaves that already passed this index's Bloom filter (the GPU tests the same
+        // blocks with the same hash): only the bucket and fingerprint stages, so one random
+        // read fewer per leaf; the candidates are the same as probeGroup's.
+        void probePassed(const B1B2* probes, const u64* keys, const u32 count,
+                         std::vector<KeyedState>& candidates) const {
+            const u64 bucketsPer = meta.bucketsPerPartition();
+            const u64 dirPer = bucketsPer + 1;
+            const u32 shift = meta.bucketShift();
+            const u32* dirSlot[MAX_PROBE_GROUP];
+            u64 lo[MAX_PROBE_GROUP], hi[MAX_PROBE_GROUP];
+            for (u32 j = 0; j < count; ++j) {
+                const u64 key = keys[j];
+                const u64 part = (key >> PARTITION_SHIFT) - pBegin;
+                lo[j] = partitionFirst[part];
+                dirSlot[j] = &starts[part * dirPer + ((key >> shift) & (bucketsPer - 1))];
+                __builtin_prefetch(dirSlot[j]);
+            }
+            for (u32 j = 0; j < count; ++j) {
+                hi[j] = lo[j] + dirSlot[j][1];
+                lo[j] += dirSlot[j][0];
+                if (lo[j] < hi[j]) {
+                    __builtin_prefetch(&fingerprints[lo[j]]);
+                }
+            }
+            for (u32 j = 0; j < count; ++j) {
+                const u16 fp = static_cast<u16>(keys[j]);
+                for (u64 k = lo[j]; k < hi[j]; ++k) {
+                    if (fingerprints[k] == fp) {
+                        candidates.push_back({keys[j], probes[j]});
+                        break;
+                    }
+                }
+            }
         }
     };
 

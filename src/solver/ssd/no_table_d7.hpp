@@ -314,8 +314,8 @@ namespace ssd {
             rawTotal += raw[p];
             rawMax = std::max(rawMax, raw[p]);
         }
-        meta.bloomBlocksPerPartition = std::max<u64>(
-                1, (static_cast<u64>(static_cast<double>(rawMax) * ratio * 1.02) * BLOOM_BITS_PER_STATE + 255) / 256);
+        meta.bloomBlocksPerPartition = bloomBlocksFor(static_cast<u64>(static_cast<double>(rawMax) * ratio * 1.02),
+                                                      cfg.bloomBits);
         meta.stateCount = rawTotal;
         tcout << "depth-7 raw descendants: " << rawTotal << " (" << fanOut << " per depth-5 state), de-dupe ratio " << ratio
               << " -> ~" << static_cast<u64>(static_cast<double>(rawTotal) * ratio) << " unique; 2^" << meta.bucketBits

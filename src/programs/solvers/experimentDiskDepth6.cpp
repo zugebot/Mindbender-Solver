@@ -106,8 +106,11 @@
 // Normal and 2x2 boards, forward. The GPU applies the same canonical rules and (normal
 // boards) the rotation lane bound at every level as the CPU's "both" mode, tests the leaves
 // against the pass's Bloom
-// blocks and hands the survivors back; CPU threads finish them with the same index code while
-// the GPU streams on, so the candidates are the CPU's. The GPU also audits its bound, builds
+// blocks and hands the survivors back; CPU threads finish them with the same index code (its
+// bucket and fingerprint stages: the Bloom stage is the GPU's) while the GPU streams on, so the
+// candidates are the CPU's. --bloom-bits B: Bloom bits per goal state in the no-table modes
+// (default 10). Fewer bits make fewer passes but more false passes for the CPU to check, and
+// were much slower on 19-4 (docs/changes-2026-11-04.md section 11). The GPU also audits its bound, builds
 // the depth-6 index (or the depth-7 one on 2x2 boards) and regenerates it to confirm
 // candidates. Large pages are off with
 // --gpu. Needs build_gpu/mbgpu.dll (src/gpu/build.cmd; src/gpu/README.md) or build_gpu/mbvk.dll
