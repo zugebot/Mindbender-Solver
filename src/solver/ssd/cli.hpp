@@ -22,7 +22,13 @@ namespace ssd {
             else if (a == "--batch") cfg.batchStates = std::stoull(next());
             else if (a == "--threads") cfg.threads = static_cast<u32>(std::stoul(next()));
             else if (a == "--seed-depth") cfg.seedDepth = static_cast<u32>(std::stoul(next()));
-            else if (a == "--reverse") cfg.reverse = true;
+            else if (a == "--reverse") cfg.direction = "reverse";
+            else if (a == "--direction") {
+                cfg.direction = next();
+                if (cfg.direction != "auto" && cfg.direction != "forward" && cfg.direction != "reverse") {
+                    throw std::runtime_error("--direction: auto, forward or reverse");
+                }
+            }
             else if (a == "--rebuild") cfg.rebuild = true;
             else if (a == "--no-recover") cfg.recover = false;
             else if (a == "--batched") cfg.batched = true;
@@ -42,6 +48,7 @@ namespace ssd {
             else if (a == "--gpu-dll") cfg.gpuDll = next();
             else if (a == "--gpu-list") cfg.gpuList = true;
             else if (a == "--gpu-vram-gb") cfg.gpuVramGb = std::stod(next());
+            else if (a == "--block") cfg.blockJoin = true;
             else if (a == "--bloom-bits") {
                 cfg.bloomBits = std::stod(next());
                 if (!(cfg.bloomBits >= 2.0 && cfg.bloomBits <= 32.0)) {
@@ -112,8 +119,8 @@ namespace ssd {
         if (cfg.tableDepth != 6 && cfg.tableDepth != 7) {
             throw std::runtime_error("--table-depth must be 6 or 7");
         }
-        if (cfg.tableDepth == 7 && (cfg.reverse || cfg.batched)) {
-            throw std::runtime_error("--table-depth 7 supports forward fingerprint mode only");
+        if (cfg.tableDepth == 7 && cfg.batched) {
+            throw std::runtime_error("--table-depth 7 does not support --batched");
         }
         if (cfg.d7Groups == 0) {
             cfg.d7Groups = 1;

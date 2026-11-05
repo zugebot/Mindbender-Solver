@@ -10,6 +10,7 @@
 // arrays (mbgpu_build_index: the same layout as the CPU loop below).
 
 #include "src/solver/ssd/probe.hpp"
+#include "src/solver/ssd/block_join.hpp"
 
 namespace ssd {
 
@@ -67,6 +68,9 @@ namespace ssd {
         GpuModule* gpu = gpuKeys ? &ensureGpu(cfg) : nullptr;
         const auto* d5States = reinterpret_cast<const uint64_t*>(depth5.data());
         const u8* d5Moves = g_goalMoves.empty() ? nullptr : g_goalMoves.data();
+        if (cfg.blockJoin) {
+            startBlockJoin(gpu);   // class keys from the count pass on
+        }
 
         // Exact raw child count per partition.
         std::vector<u64> raw(PARTITION_COUNT, 0);
@@ -296,6 +300,11 @@ namespace ssd {
         Timer verifyTimer;
         g_progress.phase("verify", 1, "regenerating depth 6 to confirm candidates");
         std::vector<KeyedState> cand(candidates.begin(), candidates.end());   // sorted by key, unique
+        if (cfg.blockJoin) {
+            std::vector<B1B2> m = confirmBlockJoin(*gpu, d5States, d5Moves, depth5.size(), 1, cand);
+            g_progress.add();
+            return m;
+        }
         constexpr u32 BITMAP_BITS = 1U << 27;
         std::vector<u64> bitmap(BITMAP_BITS / 64, 0);
         auto bitOf = [](const u64 key) { return static_cast<u32>((key >> 20) & (BITMAP_BITS - 1)); };

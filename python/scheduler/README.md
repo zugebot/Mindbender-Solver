@@ -70,6 +70,10 @@ localhost only.
   `<5,5,6>` at 16 and `<5,6,6>` at 17 (`--gpu` required); 2x2 boards `<4,3,7>` at 14,
   `<5,3,7>` at 15, `<5,4,7>` at 16 and `<5,5,7>` at 17 (~1-2 weeks of GPU time: run it as
   `--shards N --d7-groups G`, below) (`--table-depth`, `--stream-depth` 3-6 override).
+- **Block join** (2026-11-04): with `--gpu` (CUDA) the solver's `--block` is on by default from 16
+  moves on 2x2 boards and 15 on normal boards: the left side is one move shorter (`<5,4,7>` + block
+  at 17 on 2x2 boards, ~9 h instead of ~10 days; `docs/changes-2026-11-04.md` sections 15-16).
+  `mbq add ... --block` forces it, `--no-block` turns it off; `status` shows `+block`.
 - **Depth-7 work units** (`--shards N --d7-groups G`, N a multiple of G): unit k searches goal
   partition group k / (N/G) against seed shard k % (N/G). A plain seed shard rebuilds every
   pass's index (5-6 per 2x2 run); a grouped unit builds one, so long runs split with little

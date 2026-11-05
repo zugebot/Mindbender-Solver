@@ -21,6 +21,7 @@
 // frontier with the same rules as streamTwo (src/gpu/README.md).
 
 #include "src/solver/ssd/no_table_d6.hpp"
+#include "src/solver/ssd/block_join.hpp"
 
 namespace ssd {
 
@@ -217,9 +218,9 @@ namespace ssd {
         struct FilterReset {
             ~FilterReset() { g_goalFilter = GoalFilter{}; }
         } filterReset;
-        if (cfg.goalFilter && !isFat && !cfg.reverse && cfg.boundMode != 0) {
+        if (cfg.goalFilter && !isFat && cfg.boundMode != 0) {
             lane_bound::buildLaneTables(leftRoot.asB1B2(), leftTables, lane_bound::Kind::Rotation);
-            g_goalFilter = GoalFilter{&leftTables, static_cast<int>(cfg.seedDepth + cfg.streamDepth)};
+            g_goalFilter = GoalFilter{&leftTables, static_cast<int>(cfg.leftDepth())};
             tcout << "goal-side filter: depth-7 states with rotation h(start) > " << g_goalFilter.limit
                   << " dropped (no meeting point among them)\n";
         }
@@ -239,7 +240,13 @@ namespace ssd {
             }
             fanOut = static_cast<double>(got) / static_cast<double>(std::max<u64>(1, parents));
         }
-        const double rawEstimate = static_cast<double>(depth5.size()) * fanOut;
+        if (cfg.blockJoin) {
+            if (!gpuD7) {
+                throw std::runtime_error("--block on 2x2 boards needs --gpu");
+            }
+            startBlockJoin(gpu);
+        }
+        const double rawEstimate = static_cast<double>(depth5.size()) * fanOut * (cfg.blockJoin ? 1.2 : 1.0);
         FingerprintMeta meta;
         const auto rawMaxEstimate = static_cast<u64>(rawEstimate / PARTITION_COUNT * 1.05);
         while (meta.bucketBits < PARTITION_SHIFT && (rawMaxEstimate >> meta.bucketBits) > NT7_RAW_PER_BUCKET) {
@@ -552,6 +559,11 @@ namespace ssd {
                 candKeys[i] = candidates[i].key;
             }
             candKeys.erase(std::unique(candKeys.begin(), candKeys.end()), candKeys.end());
+            if (cfg.blockJoin) {
+                std::vector<B1B2> m = confirmBlockJoin(*gpu, d5States, d5Moves, depth5.size(), 2, candidates);
+                g_progress.add();
+                return m;
+            }
             GpuLeaves hits;
             if (gpu->matchChildren(d5States, d5Moves, depth5.size(), 2, candKeys.data(), candKeys.size(),
                                    &GpuLeaves::sink, &hits, nullptr) != 0) {

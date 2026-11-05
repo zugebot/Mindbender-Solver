@@ -436,7 +436,7 @@ class Scheduler:
                               "engine": job["engine"], "ram_gb": job.get("ram_gb"), "threads": job.get("threads"),
                               "promote": job["promote"], "keep_table": job["keep_table"], "front": True,
                               "table_depth": job.get("table_depth"), "stream_depth": job.get("stream_depth"),
-                              "gpu": job.get("gpu"), "parent": job["id"]})
+                              "gpu": job.get("gpu"), "block": job.get("block"), "parent": job["id"]})
             job["notes"].append(f"re-queued as #{again['id']}")
         self.save()
 
@@ -450,7 +450,7 @@ class Scheduler:
         if not re.fullmatch(PUZZLE_NAME_RE, puzzle):
             raise ValueError(f"bad puzzle name {puzzle!r}")
         if engine == "ssd" and not 10 <= moves <= 17:
-            raise ValueError("ssd engine supports 10-17 moves")
+            raise ValueError("ssd engine supports 10-17 moves (18 needs recovery at left depth 12: not built yet)")
         if engine == "inram" and not 3 <= moves <= 12:
             raise ValueError("inram engine supports 3-12 moves")
         # Splits <seed, stream, table>: 2x2 boards use the depth-7 goal table from 14 moves (it
@@ -460,13 +460,22 @@ class Scheduler:
         # 6 at 17 (<5,6,6>, on the GPU only). 2x2 boards at 17: <5,5,7>.
         fat = puzzle_is_fat(puzzle)
         table_depth = int(spec.get("table_depth") or (7 if fat and moves >= 14 else 6))
-        stream_depth = int(spec.get("stream_depth") or (6 if moves - table_depth >= 11
-                                                          else 5 if moves - table_depth >= 10
-                                                          else 4 if moves - table_depth >= 9 else 3))
-        seed_depth = moves - stream_depth - table_depth
+        gpu = spec.get("gpu") or None
+        # The free-block join (--block, docs/changes-2026-11-04.md section 15): the left side one
+        # move shorter, joined to the goal side by row and column class. CUDA, a depth-7 goal side
+        # on 2x2 boards and depth 6 on normal boards. Default: on with --gpu from 16 moves (2x2)
+        # and 15 (normal); "block": True / False forces it.
+        block = spec.get("block")
+        if block is None:
+            block = bool(gpu) and engine != "inram" and moves >= (16 if fat else 15) \
+                    and not str(gpu).lower().startswith(("vulkan:", "vk:"))
+        block = bool(block) and engine != "inram" and table_depth == (7 if fat else 6)
+        left = moves - table_depth - (1 if block else 0)
+        stream_depth = int(spec.get("stream_depth") or (6 if left >= 11 else 5 if left >= 10
+                                                          else 4 if left >= 9 else 3))
+        seed_depth = left - stream_depth
         if engine == "ssd" and (table_depth not in (6, 7) or stream_depth not in (3, 4, 5, 6) or not 2 <= seed_depth <= 5):
             raise ValueError(f"no <S,{stream_depth},{table_depth}> split for {moves} moves")
-        gpu = spec.get("gpu") or None
         if engine == "ssd" and stream_depth == 6 and (not gpu or fat):
             raise ValueError("a 6-move stream (17 moves, <5,6,6>) runs on the GPU and normal boards only: add --gpu 5060")
         if gpu and (engine != "ssd" or table_depth != 6 and not (fat and table_depth == 7)):
@@ -485,6 +494,7 @@ class Scheduler:
                 "result": None, "message": "", "notes": [], "phases": {}, "parent": spec.get("parent"),
                 "shard": spec.get("shard"), "merge": spec.get("merge"),
                 "d7_groups": spec.get("d7_groups"),
+                "block": block if engine == "ssd" else False,
             }
             self.next_id += 1
             if spec.get("front"):
@@ -691,6 +701,8 @@ class Scheduler:
                     if dll.exists():
                         shutil.copy2(dll, BIN_DIR / dll.name)
                 cmd += ["--gpu", str(job["gpu"])]
+            if job.get("block"):
+                cmd += ["--block"]
             if job.get("shard"):
                 k, n = job["shard"]
                 out = SHARD_ROOT / shard_group(job["puzzle"], job["moves"], n)
@@ -1078,6 +1090,8 @@ def describe(job: dict) -> str:
         kind += f" merge of {job['merge']} shards"
     if job.get("gpu"):
         kind += f" gpu {job['gpu']}"
+    if job.get("block"):
+        kind += " +block"
     until = f" (until {job['until']})" if job.get("until") else ""
     return f"#{job['id']:<3} {job['puzzle']:>5} {job['moves']} moves{until}  {kind}  [{job['status']}]"
 
@@ -1133,7 +1147,7 @@ def cmd_add(args) -> None:
         for puzzle in args.puzzles:
             jobs = api("POST", "/jobs", {"puzzle": puzzle, "moves": args.moves, "engine": args.engine,
                                          "ram_gb": args.ram_gb, "threads": args.threads, "gpu": args.gpu,
-                                         "d7_groups": args.d7_groups,
+                                         "d7_groups": args.d7_groups, "block": args.block,
                                          "promote": not args.no_promote, "keep_table": args.keep_table,
                                          "table_depth": args.table_depth, "stream_depth": args.stream_depth,
                                          "until": args.until, "shards": args.shards,
@@ -1144,7 +1158,7 @@ def cmd_add(args) -> None:
     for puzzle in args.puzzles:
         job = api("POST", "/jobs", {"puzzle": puzzle, "moves": args.moves, "until": args.until,
                                     "engine": args.engine, "ram_gb": args.ram_gb, "threads": args.threads,
-                                    "gpu": args.gpu,
+                                    "gpu": args.gpu, "block": args.block,
                                     "promote": not args.no_promote,
                                     "keep_table": args.keep_table, "front": args.front,
                                     "table_depth": args.table_depth, "stream_depth": args.stream_depth})
@@ -1285,6 +1299,10 @@ def main() -> None:
     a.add_argument("--d7-groups", type=int,
                    help="with --shards N on a depth-7 goal side: split it into G partition groups (N a multiple "
                         "of G); each unit then builds one pass's index and streams N/G of the seeds")
+    a.add_argument("--block", dest="block", action="store_true", default=None,
+                   help="the free-block join (one move less on the left; default: on with --gpu from 16 moves "
+                        "on 2x2 boards and 15 on normal boards)")
+    a.add_argument("--no-block", dest="block", action="store_false", help="never use the block join")
     a.add_argument("--stream-depth", type=int, choices=[3, 4, 5, 6],
                    help="left stream moves after the seeds (default: 4 for 15-move, 5 for 16-move and 6 for "
                         "17-move normal boards (--gpu only), 4 for 16-move 2x2 boards, else 3)")

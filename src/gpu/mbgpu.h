@@ -58,6 +58,14 @@ MBGPU_API int mbgpu_open(const char* nameMatch, uint64_t vramCapBytes, char* inf
 // pruning (every canonical sequence is streamed).
 MBGPU_API int mbgpu_set_target(uint64_t goalB1, uint64_t goalB2, int limit);
 
+// Leaf keys: 0 = each leaf's state key (the default); 1 = its row-class and column-class keys,
+// two per leaf (src/solver/ssd/class_key.hpp: the free-block join, the solver's --block); 2 = the
+// same set of keys without repeats (2x2 boards): a row-move leaf's row class is its parent's, so
+// each leaf gives only its other class and each parent its two classes once, for the leaves of
+// that direction (left-side survivors that stand for a parent carry class_key::PARENT_FLAG).
+// Every leaf mode uses them: counts, keys, index builds, the Bloom test and match_children.
+MBGPU_API int mbgpu_set_key_mode(int mode);
+
 // The Bloom blocks of partitions [pBegin, pEnd), laid out as FingerprintRange::bloom
 // ((pEnd - pBegin) * blocksPerPartition blocks of 8 u32), copied to the device.
 // bloomWords == NULL: no filter, every leaf in range passes.

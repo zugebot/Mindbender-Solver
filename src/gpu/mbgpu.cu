@@ -37,6 +37,7 @@
 
 #define MBGPU_BUILD_DLL
 #include "src/gpu/mbgpu.h"
+#include "src/solver/ssd/class_key.hpp"
 
 #include <cuda_runtime.h>
 #include <cub/cub.cuh>
@@ -133,6 +134,14 @@ namespace {
     __constant__ u64 c_colTarget[6];
     __constant__ int c_limit;   // < 0: no pruning
     __constant__ u32 c_salt[8];
+    __constant__ int c_keyMode;   // 0: state keys; 1: row and column class keys, two per leaf; 2: without repeats
+    __constant__ const u32* c_minRot;   // key modes 1-2: class_key::minRotation of every 18-bit lane code
+    constexpr u32 PARENT_CODE = 1000;     // emitLane's code for a parent's own class key (key mode 2)
+
+    // A child's key of class `t` (0 rows, 1 columns), or the state key.
+    __device__ __forceinline__ u64 leafKey(const u64 b1, const u64 b2, const int t) {
+        return t < 0 ? mixKey(stateHash(b1, b2)) : class_key::classKeyT(b1, b2, t == 1, class_key::TableMinRotation{c_minRot});
+    }
     // Packed mismatch counts (expandNodes): c_mc[(column c * 6 + row r) * 8 + colour v] has
     // nibble k = 1 when colour v at row r differs from column c's target cell at rotation k,
     // i.e. from target cell (r + k) % 6; c_mr the same for rows (row y, column x).
@@ -639,20 +648,32 @@ namespace {
             return;
         }
 
+        // Which keys: code >= PARENT_CODE: the parent itself (cb*[0]), its class code - PARENT_CODE;
+        // key mode 1: both classes of every leaf; mode 2: a leaf's class across its move's
+        // direction (along it, it has its parent's, given once by the caller); mode 0: the state.
+        const bool parentKey = code >= PARENT_CODE;
+        if (!parentKey) {
+            leaves += __popc(mask);
+        }
+        const u32 keyPasses = !parentKey && c_keyMode == 1 ? 2u : 1u;
+        for (u32 pass = 0; pass < keyPasses; ++pass) {
+        const int t = parentKey ? static_cast<int>(code - PARENT_CODE)
+                    : c_keyMode == 1 ? static_cast<int>(pass)
+                    : c_keyMode == 2 ? (code / 30 == 0 ? 1 : 0)
+                    : -1;
         u64 key[5];
         u32 inMask = 0;
 #pragma unroll
         for (u32 k = 0; k < 5; ++k) {
             key[k] = 0;
             if (mask & (1u << k)) {
-                key[k] = mixKey(stateHash(cb1[k], cb2[k]));
+                key[k] = leafKey(cb1[k], cb2[k] & ~class_key::PARENT_FLAG, t);
                 const u32 p = static_cast<u32>(key[k] >> 56);
                 if (p >= lo.pBegin && p < lo.pEnd) {
                     inMask |= 1u << k;
                 }
             }
         }
-        leaves += __popc(mask);
         if (lo.mode == LEAF_COUNTS) {
 #pragma unroll
             for (u32 k = 0; k < 5; ++k) {
@@ -704,6 +725,7 @@ namespace {
                 }
             }
         }
+        }   // key passes
     }
 
     // Children beyond s.outCap (non-leaf) or leaves beyond lo.oCap (LEAF_FILTER) are counted
@@ -773,6 +795,7 @@ namespace {
         }
 
         u32 leaves = 0, inRange = 0;
+        u32 rowLeaves = 0, colLeaves = 0;   // key mode 2: did any leaf come from a row (column) move
 #pragma unroll 1
         for (u32 dl = 0; dl < THREADS_PER_NODE; ++dl) {
             const u32 dir = dl < 6 ? 0u : 1u;
@@ -809,6 +832,17 @@ namespace {
             }
             emitLane<LEAF>(mask, cb1, cb2, dir * 30 + lane * 5, seed, s, lo, ctr, stage, warp, staged, hist, leaves,
                            inRange);
+            if (LEAF) {
+                (dir == 0 ? rowLeaves : colLeaves) |= mask;
+            }
+        }
+        if (LEAF && c_keyMode == 2) {
+            // the parent's own two classes, once each, for its row-move and column-move leaves
+            u64 pb1[5] = {b1, 0, 0, 0, 0}, pb2[5] = {b2 | class_key::PARENT_FLAG, 0, 0, 0, 0};
+            emitLane<LEAF>(rowLeaves != 0 ? 1u : 0u, pb1, pb2, PARENT_CODE + 0, seed, s, lo, ctr, stage, warp, staged,
+                           hist, leaves, inRange);
+            emitLane<LEAF>(colLeaves != 0 ? 1u : 0u, pb1, pb2, PARENT_CODE + 1, seed, s, lo, ctr, stage, warp, staged,
+                           hist, leaves, inRange);
         }
         if (LEAF) {
             warpAdd(&ctr->leaves, leaves);
@@ -921,6 +955,7 @@ namespace {
         const int prevNormalCol = prevDir == 1 && prevLane != fatX ? static_cast<int>(prevLane) : -1;
 
         u32 leaves = 0, inRange = 0;
+        u32 rowLeaves = 0, colLeaves = 0;   // key mode 2: did any leaf come from a row (column) move
 #pragma unroll 1
         for (u32 dl = 0; dl < THREADS_PER_NODE; ++dl) {
             const u32 dir = dl < 6 ? 0u : 1u;
@@ -950,6 +985,18 @@ namespace {
             }
             emitLane<LEAF>(mask, cb1, cb2, dir * 30 + lane * 5, seed, s, lo, ctr, stage, warp, staged, hist, leaves,
                            inRange);
+            if (LEAF) {
+                (dir == 0 ? rowLeaves : colLeaves) |= mask;
+            }
+        }
+        if (LEAF && c_keyMode == 2) {
+            // the parent's own two classes, once each, for its row-move and column-move leaves
+            // (every lane of the warp calls emitLane: it has warp-wide steps)
+            u64 pb1[5] = {b1, 0, 0, 0, 0}, pb2[5] = {b2 | class_key::PARENT_FLAG, 0, 0, 0, 0};
+            emitLane<LEAF>(rowLeaves != 0 ? 1u : 0u, pb1, pb2, PARENT_CODE + 0, seed, s, lo, ctr, stage, warp, staged,
+                           hist, leaves, inRange);
+            emitLane<LEAF>(colLeaves != 0 ? 1u : 0u, pb1, pb2, PARENT_CODE + 1, seed, s, lo, ctr, stage, warp, staged,
+                           hist, leaves, inRange);
         }
         if (LEAF) {
             warpAdd(&ctr->leaves, leaves);
@@ -1546,6 +1593,36 @@ MBGPU_API int mbgpu_open(const char* nameMatch, const uint64_t vramCapBytes, cha
                       "level buffers %llu nodes, %.2f GB in use",
                       prop.name, found, prop.major, prop.minor, prop.multiProcessorCount, totalBytes / 1e9,
                       freeBytes / 1e9, g_dev.cap / 1e9, g_dev.levelCap, g_dev.used / 1e9);
+    }
+    return 0;
+}
+
+MBGPU_API int mbgpu_set_key_mode(const int mode) {
+    g_error.clear();
+    if (!g_dev.open) {
+        g_error = "mbgpu_open has not been called";
+        return 1;
+    }
+    if (mode < 0 || mode > 2) {
+        g_error = "key mode must be 0 (states), 1 (row and column classes) or 2 (classes without repeats)";
+        return 1;
+    }
+    static u32* minRot = nullptr;   // 1 MB, allocated once
+    if (mode != 0 && minRot == nullptr) {
+        std::vector<u32> table(1u << 18);
+        for (u32 v = 0; v < (1u << 18); ++v) {
+            table[v] = static_cast<u32>(class_key::minRotation(v));
+        }
+        if (cudaMalloc(reinterpret_cast<void**>(&minRot), table.size() * 4) != cudaSuccess ||
+            cudaMemcpy(minRot, table.data(), table.size() * 4, cudaMemcpyHostToDevice) != cudaSuccess ||
+            cudaMemcpyToSymbol(c_minRot, &minRot, sizeof(minRot)) != cudaSuccess) {
+            g_error = "the class tables could not be set up";
+            return 1;
+        }
+    }
+    if (cudaMemcpyToSymbol(c_keyMode, &mode, sizeof(mode)) != cudaSuccess) {
+        g_error = "setting the key mode failed";
+        return 1;
     }
     return 0;
 }

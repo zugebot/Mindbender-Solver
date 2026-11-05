@@ -164,6 +164,17 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes), `
   normal boards (60 first moves -> ~41), ~1.45x on 2x2 boards (48 -> ~33). Suggested by the
   user's teacher (GitHub issue 1).
 - Seeds are visited in a strided order (4096-seed chunks), so the timed ones represent the list.
+- `--block` (2026-11-04, 2x2 boards, depth-7 goal side, CUDA): the free-block join. Leaves at depth
+  L - 8 are looked up by row and column class (`src/solver/ssd/class_key.hpp`: rows turned to their
+  smallest rotation, unchanged by row moves) in an index of the depth-7 goal states' classes; a goal
+  state of the same class one lane away is a middle. One move fewer on the left: 19-4 at 16 as
+  `<5,3,7>` + 1 in 34 min (was 9 h 36 min), EXACT MATCH, IDENTICAL SET. GPU key mode 2 gives each
+  class once per parent (`mbgpu_set_key_mode`). docs/changes-2026-11-04.md section 15.
+- `--direction auto|forward|reverse` (2026-11-04): reverse streams from the goal. auto (default, --gpu,
+  normal boards) samples each direction's seeds on the GPU and keeps the one that expands fewer nodes
+  (`src/solver/ssd/direction.hpp`; 16-2: forward, 15.6x; 16-3 at 18: reverse, 3.3x). `--block` also
+  runs on normal boards (depth-6 goal side, bound cut-off one higher); the scheduler turns it on
+  with --gpu from 16 moves (2x2) / 15 (normal). docs/changes-2026-11-04.md section 16.
 - Work units: `--shard k/N`, `--middles-out`, `--recover-from` (exact; see the scheduler README).
   Depth-7 runs: `--d7-groups G` makes unit k = goal partition group k / (N/G) x seed shard
   k % (N/G), so each unit builds one pass's index (`mbq add ... --shards N --d7-groups G`).
@@ -273,7 +284,8 @@ Next:
    either: all-moves pattern databases ~0%, move-type-split tables capped at 4 + 4 (2026-11-04,
    `experimentFatSplitBound`, docs/changes-2026-11-04.md section 13). Open: dissection-type search.
 3. 16 moves on 2x2 boards: done (2026-11-04; 6-4, 15-4, 16-1, 19-4 solved, 15-3 and 19-2 none).
-   17 moves on 2x2 boards: `<5,5,7>`, ~12 days each on the 5060 Ti; run as `--d7-groups` units
+   17 moves on 2x2 boards: `<5,4,7> --block` (estimated ~8-10 h each on the 5060 Ti; not run yet). Before
+   `--block`: `<5,5,7>`, ~12 days each on the 5060 Ti; run as `--d7-groups` units
    (`mbq add 19-2 --moves 17 --gpu 5060 --threads 6 --shards 80 --d7-groups 5`). 16 moves were
    `<5,4,7>` with `--gpu 5060` (`mbq add ... --gpu 5060 --threads 6`),
    ~7-11 h each (6-4: 6 h 45 min, 6 passes x ~4000 s of stream, 3.1e14 left states; CPU:

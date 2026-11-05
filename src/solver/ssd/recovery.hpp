@@ -62,7 +62,7 @@ namespace ssd {
 
     template<int TABLE_DEPTH>
     int recoverWithTableDepth(BoardSolverFrontier& solver, const Config& cfg, const std::vector<B1B2>& middles) {
-        switch (cfg.seedDepth + cfg.streamDepth) {
+        switch (cfg.leftDepth()) {
             case 4: return recoverWithLeftDepth<4, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
             case 5: return recoverWithLeftDepth<5, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
             case 6: return recoverWithLeftDepth<6, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);

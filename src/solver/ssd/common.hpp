@@ -101,7 +101,13 @@ namespace ssd {
         bool gpuList = false;         // --gpu-list: print the GPUs the modules see, then exit
         double gpuVramGb = 12.5;      // --gpu-vram-gb: VRAM the GPU module may use
         double bloomBits = 10.0;      // --bloom-bits: Bloom bits per goal state, no-table modes (default = BLOOM_BITS_PER_STATE)
+        bool blockJoin = false;       // --block: the left side stops one move early, matched by class (class_key.hpp)
+        std::string direction = "auto";   // --direction auto|forward|reverse (direction.hpp); sets `reverse`
         lane_bound::Kind boundKind = lane_bound::Kind::Rotation;   // --bound-kind mix|rotation   // max; the run uses 3% of its search, >= 20 s
+
+        // Moves from the left root to a middle: the seeds, the stream, and with --block the one
+        // move the class join bridges.
+        MUND u32 leftDepth() const { return seedDepth + streamDepth + (blockJoin ? 1 : 0); }
 
         MUND u32 d7End() const { return std::min<u32>(PARTITION_COUNT, d7FirstPartition + d7Partitions); }
         MUND bool d7Subset() const { return tableDepth == 7 && (d7FirstPartition != 0 || d7End() != PARTITION_COUNT); }

@@ -116,9 +116,6 @@ namespace ssd {
         const bool useGpu = !cfg.gpuDevice.empty();
         bool gpuBounded = false;
         if (useGpu) {
-            if (cfg.reverse) {
-                throw std::runtime_error("--gpu: forward searches only");
-            }
             if (STREAM_DEPTH > MBGPU_MAX_DEPTH) {
                 throw std::runtime_error("--gpu: stream depth above " + std::to_string(MBGPU_MAX_DEPTH));
             }
@@ -128,11 +125,12 @@ namespace ssd {
         // Colour-mix bound: eligible modes after the audit (see header).
         // boundMode: 0 off, 1 leaf, 2 leaf + parent; -1 = decide by timing.
         static lane_bound::LaneTables boundTables;   // read by bounds::LanePrune
-        const int boundLimit = static_cast<int>(cfg.tableDepth);
+        // --block: a leaf is still one move (the class join) from the goal side
+        const int boundLimit = static_cast<int>(cfg.tableDepth + (cfg.blockJoin ? 1 : 0));
         int boundMode = 0;
         std::vector<int> boundModes;   // modes to time (auto)
         static const char* BOUND_NAMES[7] = {"off", "leaf", "both", "pdb", "pdbleaf", "parent", "pdbparent"};
-        if (cfg.boundMode != 0 && !cfg.reverse) {
+        if (cfg.boundMode != 0) {
             if (g_rightRoot.getFatBool()) {
                 tcout << "bound: off (2x2 board; the halved bound prunes nothing)\n";
             } else if (useGpu) {
@@ -140,6 +138,9 @@ namespace ssd {
                     throw std::runtime_error("--gpu: only the rotation bound is implemented on the GPU");
                 }
                 const GpuAudit ga = gpuAuditBound(g_gpu, seeds, seedMoves, STREAM_DEPTH, boundLimit, g_rightRoot);
+                if (cfg.blockJoin && g_gpu.setKeyMode(2) != 0) {   // the audit ran on state keys
+                    throw std::runtime_error("GPU: " + g_gpu.error());
+                }
                 gpuBounded = ga.ok;
                 tcout << "bound (rotation, GPU): audit " << (ga.ok ? "ok" : "FAILED (" + ga.why + "), bound off")
                       << ": " << ga.seeds << " seeds streamed in full, " << ga.stats.nodes << " nodes, "

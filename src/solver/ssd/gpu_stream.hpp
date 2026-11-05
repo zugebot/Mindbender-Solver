@@ -47,6 +47,7 @@ namespace ssd {
         decltype(&mbgpu_vram_left) vramLeft = nullptr;
         decltype(&mbgpu_last_error) lastError = nullptr;
         decltype(&mbgpu_close) close = nullptr;
+        decltype(&mbgpu_set_key_mode) setKeyMode = nullptr;   // optional (older modules lack it)
         std::string path;
 
         MUND bool ready() const { return dll != nullptr; }
@@ -93,6 +94,7 @@ namespace ssd {
                 unload();
                 return false;
             }
+            get(setKeyMode, "mbgpu_set_key_mode");
             return true;
         }
 
@@ -220,6 +222,9 @@ namespace ssd {
                                   const i32 depth, const int limit, const B1B2& target) {
         GpuAudit a;
         Timer timer;
+        if (gpu.setKeyMode != nullptr) {
+            gpu.setKeyMode(0);   // the checksums compare state keys (a --block caller switches back)
+        }
         if (gpu.setTarget(target.b1, target.b2, limit) != 0) {
             throw std::runtime_error("GPU: " + gpu.error());
         }

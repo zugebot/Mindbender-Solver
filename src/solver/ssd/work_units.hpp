@@ -16,6 +16,19 @@ namespace ssd {
 
     // ------------------------------------------------------------------
     // Middles files (work units)
+
+    // The direction a middles file was searched in (its "reverse" line): 1 reverse, 0 forward,
+    // -1 unreadable. --recover-from with --direction auto follows it.
+    inline int middlesFileReverse(const std::string& path) {
+        std::ifstream in(path);
+        std::string line;
+        for (int i = 0; i < 16 && std::getline(in, line); ++i) {
+            if (line.rfind("reverse ", 0) == 0) {
+                return line.size() > 8 && line[8] == '1' ? 1 : 0;
+            }
+        }
+        return -1;
+    }
     // ------------------------------------------------------------------
     inline void writeMiddlesFile(const std::string& path, const Config& cfg, const u64 seedsInShard,
                           const std::vector<B1B2>& middles) {
@@ -29,6 +42,9 @@ namespace ssd {
                 << "shard " << cfg.shardIndex << " " << cfg.shardCount << "\n";
             if (cfg.d7Groups > 1) {
                 out << "d7groups " << cfg.d7Groups << "\n";   // older readers: only ever G = 1
+            }
+            if (cfg.blockJoin) {
+                out << "block 1\n";   // middles at left depth seed + stream + 1
             }
             out << "seeds " << seedsInShard << "\n"
                 << "count " << middles.size() << "\n";
@@ -58,7 +74,7 @@ namespace ssd {
                 throw std::runtime_error("cannot open " + path);
             }
             std::string line, puzzle;
-            u32 s0 = 0, s1 = 0, s2 = 0, rev = 0, k = 0, n = 0, g = 1;
+            u32 s0 = 0, s1 = 0, s2 = 0, rev = 0, k = 0, n = 0, g = 1, block = 0;
             u64 count = 0;
             std::getline(in, line);
             if (line.rfind("# mindbender middles v1", 0) != 0) {
@@ -75,10 +91,11 @@ namespace ssd {
                 else if (key == "reverse") kv >> rev;
                 else if (key == "shard") haveShard = static_cast<bool>(kv >> k >> n);
                 else if (key == "d7groups") kv >> g;
+                else if (key == "block") kv >> block;
                 else if (key == "count") haveCount = static_cast<bool>(kv >> count);
             }
             if (!haveCount || !haveShard || puzzle != cfg.puzzle || s0 != cfg.seedDepth || s1 != cfg.streamDepth
-                || s2 != cfg.tableDepth || (rev != 0) != cfg.reverse) {
+                || s2 != cfg.tableDepth || (rev != 0) != cfg.reverse || (block != 0) != cfg.blockJoin) {
                 throw std::runtime_error(path + ": a different puzzle or split than this run");
             }
             if (shardCount == 0) {

@@ -97,6 +97,17 @@
 // streams it too, for small checks only). The GPU audit streams 16 seeds in full, the GPU pass
 // reports progress per 1/64 of the seeds, and recovery (left depth 11) shares a 5-move start
 // half and streams 6 moves per middle, filtered toward the start root.
+// --direction auto|forward|reverse (default auto): stream from the start (forward) or from the goal
+// (reverse: the goal side is built around the start; recovery turns the paths around). auto, with
+// --gpu on normal boards: a sampled GPU stream each way picks the one that expands fewer nodes
+// (src/solver/ssd/direction.hpp); --recover-from follows the middles files; else forward.
+// --reverse = --direction reverse.
+// --block: the free-block join (docs/changes-2026-11-04.md section 15, src/solver/ssd/class_key.hpp).
+// The left side stops one move early: <S,T2,7> + 1 = S + T2 + 8 moves. Each leaf is looked up by
+// its row class and its column class in an index of the depth-7 goal states' classes; a goal
+// state of the same class exactly one lane away is a middle (left depth S + T2 + 1), so
+// recovery and --solutions work as for <S,T2+1,7>. Normal boards: <S,T2,6> + 1 (the bound's cut-off one
+// higher: a leaf is still one move from the goal side). CUDA only for now.
 // --gpu [cuda:|vulkan:]NAME [--gpu-vram-gb G] [--gpu-dll PATH]: stream the left side on the GPU
 // whose name contains NAME (e.g. 5060), at most G GB of its memory (default 12.5, and never more
 // than the driver reports free). Without a prefix the CUDA module (mbgpu.dll) is tried first,
@@ -151,6 +162,7 @@
 
 #include "src/solver/ssd/batched_probe.hpp"
 #include "src/solver/ssd/cli.hpp"
+#include "src/solver/ssd/direction.hpp"
 #include "src/solver/ssd/disk_depth6.hpp"
 #include "src/solver/ssd/disk_depth7.hpp"
 #include "src/solver/ssd/no_table_d6.hpp"
@@ -162,7 +174,7 @@
 using namespace ssd;
 
 int main(const int argc, char** argv) {
-    const Config cfg = parseArgs(argc, argv);
+    Config cfg = parseArgs(argc, argv);
     if (cfg.gpuList) {
         listGpus();
         return 0;
@@ -180,18 +192,30 @@ int main(const int argc, char** argv) {
 
     const Board start = pair->getStartState();
     const Board goal = pair->getEndState();
+    // The direction (direction.hpp): forced, taken from the middles files, or sampled on the GPU
+    // (normal boards: the bound prunes differently toward the start and toward the goal).
+    if (cfg.direction == "reverse" || cfg.direction == "forward") {
+        cfg.reverse = cfg.direction == "reverse";
+    } else if (!cfg.recoverFrom.empty()) {
+        cfg.reverse = middlesFileReverse(cfg.recoverFrom.front()) == 1;
+    } else if (!start.getFatBool() && !cfg.gpuDevice.empty() && cfg.boundMode != 0 && !cfg.gpuList) {
+        cfg.reverse = chooseReverse(start, goal, cfg);
+    }
     const Board& leftRoot = cfg.reverse ? goal : start;
     const Board& rightRoot = cfg.reverse ? start : goal;
     g_rightRoot = rightRoot.asB1B2();
     const fs::path dir = cfg.outRoot / (cfg.puzzle + (cfg.reverse ? "_start_d6" : "_goal_d6"));
-    const u32 leftDepth = cfg.seedDepth + cfg.streamDepth;
+    const u32 leftDepth = cfg.leftDepth();
     const u32 totalDepth = leftDepth + cfg.tableDepth;
+    if (cfg.blockJoin && (cfg.tableDepth != (start.getFatBool() ? 7u : 6u) || cfg.gpuDevice.empty())) {
+        throw std::runtime_error("--block: --gpu (CUDA), --table-depth 7 on 2x2 boards and 6 on normal boards");
+    }
 
     if (cfg.streamDepth != LEFT_STREAM_DEPTH && cfg.batched) {
         throw std::runtime_error("--batched supports only --stream-depth 3");
     }
     tcout << "puzzle " << cfg.puzzle << " <" << cfg.seedDepth << "," << cfg.streamDepth << ","
-          << cfg.tableDepth << "> = "
+          << cfg.tableDepth << ">" << (cfg.blockJoin ? " + 1 by class join" : "") << " = "
           << totalDepth << " moves, " << (cfg.reverse ? "reverse" : "forward")
           << ", threads " << cfg.threads << ", table dir " << dir.string() << '\n';
 
@@ -210,11 +234,17 @@ int main(const int argc, char** argv) {
     } else {
     std::vector<u64> counts = cfg.rebuild ? std::vector<u64>{} : loadPartitionCounts(dir);
     // No table unless one is already on disk (with its index) or the run needs it.
-    const bool noTable = cfg.tableDepth == 6 && !cfg.reverse && !cfg.batched && !cfg.diskTable && !cfg.ramBuild
+    const bool noTable = cfg.tableDepth == 6 && !cfg.batched && !cfg.diskTable && !cfg.ramBuild
                          && cfg.d7Sample == 0 && (counts.empty() || !fs::exists(fp16MetaPath(dir)));
     // Depth 7: no table unless a complete depth-7 index is already on disk (6-4).
-    const bool noTable7 = cfg.tableDepth == 7 && !cfg.reverse && !cfg.diskTable
+    const bool noTable7 = cfg.tableDepth == 7 && !cfg.diskTable
                           && cfg.d7Sample == 0 && !fs::exists(d7Files(dir).meta);
+    if (cfg.reverse && cfg.tableDepth == 7 && !noTable7) {
+        throw std::runtime_error("the depth-7 disk table searches forward only (--direction forward)");
+    }
+    if (cfg.blockJoin && !(noTable || noTable7)) {
+        throw std::runtime_error("--block: no-table modes only (no --disk-table, --ram-build, --batched)");
+    }
     if (noTable || noTable7) {
         tcout << "no-table mode: nothing is written to " << dir.string() << "\n";
     } else if (counts.empty()) {
