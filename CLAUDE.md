@@ -263,11 +263,10 @@ Done (2026-10-04 to 10-12; details in docs/changes-*.md):
 9. Code reorganized (bounds/, ssd/, inram/, programs/ folders, old/, `src/` includes).
 
 Next:
-1. Fewer passes for 2x2 runs: on the GPU the passes are set by VRAM (Bloom blocks), and fewer
-   Bloom bits per state is much slower (9 bits: 5 passes, but 1.5x per pass; the CPU survivor
-   check is the limit; docs/changes-2026-11-04.md section 11). A smaller filter only helps with an
-   equally low false-pass rate (a binary fuse filter: 3 reads per test) or a faster survivor
-   check (the fingerprint stage on the GPU). Profile one pass (Nsight) before building either.
+1. Bloom bits per goal state: more is faster (2026-11-04: 14 bits, 8 passes instead of 6, ~28%
+   less time per 2x2 run, 7x fewer candidates; fewer bits is much slower; docs/changes-2026-11-04.md
+   sections 11 and 14). Make it a per-device choice at run start (timed sample, cached) instead of
+   the fixed default 10; until then pass `--bloom-bits 14`. More ideas: docs/ideas-2026-11-04.md.
 2. A bound that prunes on 2x2 boards (15-3 and 19-2 need >= 17; 15-4, 16-1, 19-4 took 16): the halved
    lane bound tops out at 6 and pruning needs > 7, and no lane bound can do better (cover
    argument in docs/changes-2026-10-12.md section 7). Tables over several lanes do not get there
