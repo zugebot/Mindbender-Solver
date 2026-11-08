@@ -4,6 +4,8 @@
 // N seconds as a percentage of one core (the way Task Manager counts). Headless Firefox
 // composes in software, so its numbers are a relative measure, not what a GPU build costs.
 // usage: node ff_eval.mjs <url> [script.js] [--secs N] [--shot out.png]
+//   HEADED=1 opens a real window instead (GPU compositing, as the user's Firefox: the numbers
+//   Task Manager would show, per core)
 //   JS="Object.assign(MB_DEBUG, {noBoards: 1})" node ff_eval.mjs http://127.0.0.1:8770/ --secs 10
 //   PROF=C:/tmp/prof.json node ff_eval.mjs ... --secs 6   records a Gecko profile of the whole
 //   run (every thread, 2 ms samples) and writes it when Firefox closes; open it at
@@ -30,9 +32,9 @@ writeFileSync(join(dir, 'user.js'), [
   'user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);',
   ].join('\n'));
 const ff = spawn('C:/Program Files/Mozilla Firefox/firefox.exe', [
-  '-headless', '-no-remote', '-profile', dir, '--remote-debugging-port', String(port),
+  ...(process.env.HEADED ? [] : ['-headless']), '-no-remote', '-profile', dir, '--remote-debugging-port', String(port),
   '-width', '1600', '-height', '1000', 'about:blank',
-], { stdio: 'ignore', env: process.env.PROF ? { ...process.env, MOZ_PROFILER_STARTUP: '1', MOZ_PROFILER_SHUTDOWN: process.env.PROF, MOZ_PROFILER_STARTUP_FEATURES: 'js,stackwalk,cpu,screenshots', MOZ_PROFILER_STARTUP_INTERVAL: '2', MOZ_PROFILER_STARTUP_ENTRIES: '20000000' } : process.env });
+], { stdio: 'ignore', env: process.env.PROF ? { ...process.env, MOZ_PROFILER_STARTUP: '1', MOZ_PROFILER_SHUTDOWN: process.env.PROF, MOZ_PROFILER_STARTUP_FEATURES: 'js,stackwalk,cpu,screenshots', MOZ_PROFILER_STARTUP_INTERVAL: '2', MOZ_PROFILER_STARTUP_ENTRIES: '20000000', MOZ_PROFILER_STARTUP_FILTERS: '*' } : process.env });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 for (let i = 0; i < 100; i++) {
   const ok = await new Promise((r) => { const c = connect(port, '127.0.0.1'); c.on('connect', () => { c.destroy(); r(true); }); c.on('error', () => r(false)); });

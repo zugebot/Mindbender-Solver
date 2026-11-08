@@ -1505,10 +1505,14 @@
     // Firefox each composite, not the drawing, is what the idle page costs)
     // (with the match outline's stars running, idle still, but a tick every 20 ms: the stars
     // at 50 frames a second, the rest of the page with them, not one frame per screen refresh)
-    const idle = !dragLayer.node && !fx.length && now - lastPointer > 400 && (DEBUG.idleMs == null || DEBUG.idleMs > 0);
-    const tick = !idle || now - lastTick >= (starsAlive ? 20 : (DEBUG.idleMs ?? 80));
+    // in another window (playing the game beside the page, say), the Chuzzles hold still, as
+    // the game's own do when it loses the focus: no tick, so no pose changes and no composites;
+    // what moves (a replay's lanes, particles, a drag) still draws
+    const away = !dragLayer.node && !fx.length && (DEBUG.away ?? !document.hasFocus());
+    const idle = away || (!dragLayer.node && !fx.length && now - lastPointer > 400 && (DEBUG.idleMs == null || DEBUG.idleMs > 0));
+    const tick = !away && (!idle || now - lastTick >= (starsAlive ? 20 : (DEBUG.idleMs ?? 80)));
     if (tick) lastTick = now;
-    const rest = starsAlive ? 16 : 40;
+    const rest = away ? 100 : starsAlive ? 16 : 40;
     starsAlive = false;
     if (!DEBUG.noBoards) for (const id of ['goalBoard', 'startBoard']) {
       if (layout.two || state.side === (id === 'goalBoard' ? 'goal' : 'start')) drawBoard($(id), now, dt, !tick);

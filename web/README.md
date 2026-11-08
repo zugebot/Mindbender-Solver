@@ -46,7 +46,9 @@ nothing (see below).
 | `serve.py` | local server with caching off |
 | `gen_sprites.py` | regenerates `assets/` from the game textures in `python/deluxe_clone/textures/`, the way `python/deluxe_clone/engine/textures.py` builds them: grey body x colour + 60 x highlight, cut by the alpha mask (yellow has its own sheet), then eyes and pupils |
 | `gen_puzzles.py` | regenerates `puzzles.js` and `solutions/` from `src/chuzzles/levels*.hpp`, `build/levels_final/`, `build/README.md` (run it after a new solve) |
-| `tools/` | CPU measurement: `cpu_measure.mjs` (headless Chrome, CDP) and `ff_eval.mjs` (headless Firefox, WebDriver BiDi) load the served page, optionally run a scene script (`t_scrub.js` a lane sliding every frame, `t_dragloop.js` a chuzzle dragged round), then report the browser's CPU over N seconds as a share of one core; `JS=...` flips the `MB_DEBUG` switches first, `PROF=<file>` records a Gecko profile of the Firefox run; `cdp_eval.mjs` runs a scene in headless Chrome and screenshots it (`--shot`; `WIN=`, `EXTRA=` set the window and other Chrome flags), with `t_stars.js` (the outline on a hovered goal cell, `?m=drag` a 2x2 dragged, `?m=gone` the marks taken away), `t_dir.js` (a replay's first move: a 2x2 lane's direction) and `t_thumb.js` (the tabs' little boards) |
+| `tools/` | CPU measurement: `cpu_measure.mjs` (headless Chrome, CDP) and `ff_eval.mjs` (headless Firefox, WebDriver BiDi) load the served page, optionally run a scene script (`t_scrub.js` a lane sliding every frame, `t_dragloop.js` a chuzzle dragged round), then report the browser's CPU over N seconds as a share of one core; `JS=...` flips the `MB_DEBUG` switches first (headless Firefox has no focus, so the page rests:
+`MB_DEBUG.away=false` measures it as if focused), `HEADED=1` uses a real window, `PROF=<file>` records a Gecko profile of
+the Firefox run (`prof_threads.py` splits it by thread); `cdp_eval.mjs` runs a scene in headless Chrome and screenshots it (`--shot`; `WIN=`, `EXTRA=` set the window and other Chrome flags), with `t_stars.js` (the outline on a hovered goal cell, `?m=drag` a 2x2 dragged, `?m=gone` the marks taken away), `t_dir.js` (a replay's first move: a 2x2 lane's direction) and `t_thumb.js` (the tabs' little boards) |
 
 The solver itself is `src/solver/web/web_solver.hpp` (plain C++, no BMI2, no threads), with
 the WebAssembly entry points in `src/programs/web/wasmSolver.cpp`.
@@ -214,6 +216,13 @@ ring of cells its sprite reaches into), and while nothing but the idle sway is g
 canvas waits for the same 80 ms tick and the frame loop rests between ticks, so the page composes
 at most 12 frames a second instead of one per screen refresh (in Firefox the composite, not the
 drawing, is what an idle page costs: headless, 46% of a core at 25 composites a second, 29% at 10).
+That is close to Firefox's own floor: on 2026-11-08 the page idled at 15% of a core (a real window
+14%, Task Manager's 0.9% on 16 threads), and a bare page whose only content is one 50-pixel canvas
+changed every 80 ms cost 9% (600 pixels: 12%); taking away the header, dock, backdrop or every CSS
+filter changed nothing measurable. So the one lever left is how often the page changes: while the
+window does not have the focus (the game played beside it, say) the Chuzzles hold still, as the
+game's own do, and the page costs what it costs with nothing animated (1.7% of a core); a
+replay's lanes, particles and a drag still move, and a click on the page wakes it.
 Nothing on the page animates endlessly in CSS, and no CSS filter wraps a canvas that changes (the
 palette's shadows are baked into the canvases, the Scrambulator arrows sit beside the candy, not
 inside its drop-shadow), because a filter is redone every time what is under it changes. The held
