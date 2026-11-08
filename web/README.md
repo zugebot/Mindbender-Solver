@@ -46,6 +46,7 @@ nothing (see below).
 | `serve.py` | local server with caching off |
 | `gen_sprites.py` | regenerates `assets/` from the game textures in `python/deluxe_clone/textures/`, the way `python/deluxe_clone/engine/textures.py` builds them: grey body x colour + 60 x highlight, cut by the alpha mask (yellow has its own sheet), then eyes and pupils |
 | `gen_puzzles.py` | regenerates `puzzles.js` and `solutions/` from `src/chuzzles/levels*.hpp`, `build/levels_final/`, `build/README.md` (run it after a new solve) |
+| `tools/` | CPU measurement: `cpu_measure.mjs` (headless Chrome, CDP) and `ff_eval.mjs` (headless Firefox, WebDriver BiDi) load the served page, optionally run a scene script (`t_scrub.js` a lane sliding every frame, `t_dragloop.js` a chuzzle dragged round), then report the browser's CPU over N seconds as a share of one core; `JS=...` flips the `MB_DEBUG` switches first, `PROF=<file>` records a Gecko profile of the Firefox run |
 
 The solver itself is `src/solver/web/web_solver.hpp` (plain C++, no BMI2, no threads), with
 the WebAssembly entry points in `src/programs/web/wasmSolver.cpp`.
@@ -128,17 +129,22 @@ dialog use the navy-and-gold of the game's `DialogBox.png`.
 
 Smoothness and idle cost: every Chuzzle on the page is drawn from the game's sprite sheets onto a
 canvas (`drawChuzzle`): each board's on one canvas, the logo's and the palette's on a small one
-each, the held one and the particles on a layer over the page. A Chuzzle is redrawn only when its
-pose changes (a body frame every ~87 ms, a blink, the pupils moving), only its own cell is cleared
-and drawn (the 2x2 with the ring of cells its sprite reaches into), and while nothing but the idle
-sway is going on, every canvas waits for the same 40 ms tick and the frame loop rests between
-ticks, so the page composes at most 25 frames a second instead of one per screen refresh. Nothing
-on the page animates endlessly in CSS (an endless transform animation keeps the compositor at the
-screen's rate even when nothing else moves). Measured in headless Chrome on a GTX 1660: the earlier
-page, which redrew every Chuzzle every frame, cost about 1.1 cores; this one about 0.1 over the
-browser's own floor. The held Chuzzle is redrawn on every raw pointer event (`pointerrawupdate`)
-on a low-latency canvas, with its shadow baked once per body frame, so it keeps up with the
-cursor. The cells are see-through elements over the canvas that take the pointer.
+each, the held one on a small canvas of its own, the particles on a layer over the page. Every
+sprite is cut from its sheet once at its screen size and kept as an ImageBitmap (`cut`), so a
+Chuzzle is a few 1:1 blits (a scaled draw from a 4800-pixel sheet costs 9-10x a blit, and Firefox
+drew most of its CPU there). A Chuzzle is redrawn only when its pose changes (a body frame every
+~87 ms, a blink, the pupils moving), only its own cell is cleared and drawn (the 2x2 with the
+ring of cells its sprite reaches into), and while nothing but the idle sway is going on, every
+canvas waits for the same 80 ms tick and the frame loop rests between ticks, so the page composes
+at most 12 frames a second instead of one per screen refresh (in Firefox the composite, not the
+drawing, is what an idle page costs: headless, 46% of a core at 25 composites a second, 29% at 10).
+Nothing on the page animates endlessly in CSS, and no CSS filter wraps a canvas that changes (the
+palette's shadows are baked into the canvases, the Scrambulator arrows sit beside the candy, not
+inside its drop-shadow), because a filter is redone every time what is under it changes. The held
+Chuzzle is drawn once per pose onto its own small canvas and moved by a CSS transform on every raw
+pointer event (`pointerrawupdate`), so a drag costs the compositor a shifted texture, not a
+full-window canvas cleared and composed per mouse event. The cells are see-through elements over
+the canvas that take the pointer.
 The panels are solid (a see-through blur over the backdrop made every repaint slow), the board size
 is snapped so 20 game pixels are a whole number of screen pixels (every sprite frame starts on a
 pixel, so the Chuzzles sway in place instead of jittering), and the info bar, status line and Solve

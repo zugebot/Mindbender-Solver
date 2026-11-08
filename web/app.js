@@ -399,11 +399,11 @@
   // board's on one canvas, the logo's and the palette's each on its own small one, the held
   // one and the particles on a layer over the page. A chuzzle is redrawn only when its pose
   // changes (a body frame every ~87 ms, a blink, the pupils moving), and while nothing but the
-  // idle sway is going on, at most 25 times a second: the page then costs the browser a few
+  // idle sway is going on, at most 12 times a second: the page then costs the browser a few
   // small blits a second, not a repaint of everything at the screen's rate.
   const SHEETS = {};
   for (const [name, file] of [['body', 'chuzzles'], ['huge', 'huge'], ['eyes', 'eyes'], ['pupils', 'pupils'],
-    ['fizzy', 'fizzy'], ['hint', 'hint'], ['hintbig', 'hintbig'], ['arrows', 'arrows'], ['naked', 'naked'], ['wince', 'wince'], ['beauty', 'beauty'],
+    ['fizzy', 'fizzy'], ['arrows', 'arrows'], ['naked', 'naked'], ['wince', 'wince'], ['beauty', 'beauty'],
     ['cheeks', 'cheeks'], ['rosy', 'rosy'], ['fuzz', 'fuzz'], ['star', 'star'], ['splode', 'splode'],
     ['shockwave', 'shockwave']]) {
     const img = new Image();
@@ -481,6 +481,32 @@
     return { frame, bob, shut, busy, sig: ((((frame * 4 + bob) * 2 + (shut ? 1 : 0)) * 64 + px + 32) * 64 + py + 32) * 8 + node._k };
   }
 
+  // A piece of a sheet at the size it has on the screen, cut once and kept: every chuzzle is
+  // then a few 1:1 blits of small images. Drawing scaled from the sheets themselves on every
+  // frame was most of the page's drawing cost (in Chrome a scaled draw from a sheet is 9x a
+  // blit of an ImageBitmap, in Firefox 10x). The cut is a canvas until its ImageBitmap is
+  // made (Chrome blits a bitmap 4x faster than a canvas). rgb tints it.
+  const cuts = new Map();
+  function cut(name, sx, sy, sw, sh, dw, dh, rgb) {
+    const key = `${name}|${sx}|${sy}|${dw}|${dh}|${rgb || ''}`;
+    let c = cuts.get(key);
+    if (!c) {
+      const img = rgb ? tinted(name, rgb) : SHEETS[name];
+      if (!img) return null;
+      if (cuts.size > 1500) cuts.clear();
+      c = document.createElement('canvas');
+      c.width = dw;
+      c.height = dh;
+      const g = c.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+      cuts.set(key, c);
+      if (self.createImageBitmap) createImageBitmap(c).then((b) => { if (cuts.get(key) === c) cuts.set(key, b); }, () => {});
+    }
+    return c;
+  }
+  const blit = (ctx, c, x, y) => { if (c) ctx.drawImage(c, x, y); };
+
   // Draws one chuzzle (Chuzzle::Draw and DrawEyes): the body frame, the face with its lids or
   // pupils, and whatever antic it is in. x, y is its cell's top-left on the canvas.
   function drawChuzzle(ctx, node, p, now, dt, s, R, cellPx, padPx, lifted) {
@@ -522,18 +548,18 @@
       ctx.translate(x + half, y + half);
       ctx.scale(sc, sc);
       ctx.translate(-x - half, -y - half);
-      const sh = shadowOf(piece, p.frame, k, s);
+      const sh = shadowOf(piece, p.frame, k, s, dpr);
       ctx.globalAlpha = Math.min(1, (sc - 1) / 0.12);
       ctx.drawImage(sh, bx - sh._m, by - sh._m);
       ctx.globalAlpha = 1;
     }
     // the body; bald after the huge sneeze, the fuzz fading back in over it
     const fuzz = a && a.naked ? Math.max(0, 1 - a.fuzzGone) : 1;
-    if (a && a.naked && SHEETS.naked) ctx.drawImage(SHEETS.naked, R(x + 8 * s), R(y + 15 * s), R(64 * s), R(64 * s));
+    if (a && a.naked) blit(ctx, cut('naked', 0, 0, 64, 64, R(64 * s), R(64 * s)), R(x + 8 * s), R(y + 15 * s));
     if (fuzz > 0) {
       if (fuzz < 1) ctx.globalAlpha = fuzz;
-      if (piece) ctx.drawImage(SHEETS.huge, p.frame * 180, k * 180, 179, 179, bx, by, bw, bw);
-      else ctx.drawImage(SHEETS.body, p.frame * 80, k * 80, 80, 80, bx, by, bw, bw);
+      if (piece) blit(ctx, cut('huge', p.frame * 180, k * 180, 179, 179, bw, bw), bx, by);
+      else blit(ctx, cut('body', p.frame * 80, k * 80, 80, 80, bw, bw), bx, by);
       ctx.globalAlpha = 1;
     }
     // the face (DrawEyes): `at` is the cell's top-left one pixel down; the 2x2's face sits at
@@ -541,23 +567,22 @@
     const ax = piece ? x + 44 * s : x, ay = piece ? y + 71 * s : y + s;
     const bob = p.bob * s, cx = ax + 40 * s, cy = ay + 40 * s + f.oy * s + bob;
     const show = a && a.performing;
-    if (a && a.beauty && SHEETS.beauty) {
-      ctx.drawImage(SHEETS.beauty, R(cx - 10 * s - 57 * s), R(cy - 15 * s - 60.5 * s), R(114 * s), R(121 * s));
-    } else if (a && a.wince && SHEETS.wince) {
-      ctx.drawImage(SHEETS.wince, R(cx + a.ox * s - 20 * s), R(cy + 20 * s + a.oy * s - 6 * s), R(40 * s), R(12 * s));
+    if (a && a.beauty) {
+      blit(ctx, cut('beauty', 0, 0, 114, 121, R(114 * s), R(121 * s)), R(cx - 10 * s - 57 * s), R(cy - 15 * s - 60.5 * s));
+    } else if (a && a.wince) {
+      blit(ctx, cut('wince', 0, 0, 40, 12, R(40 * s), R(12 * s)), R(cx + a.ox * s - 20 * s), R(cy + 20 * s + a.oy * s - 6 * s));
     } else {
       const aox = show ? a.ox * s : 0, aoy = show ? a.oy * s : 0, up = a && a.sneezing ? 10 * s : 0;
-      const ex = R(cx - 42.5 * s + aox), ey = R(cy - 44 * s + aoy - up);
+      const ex = R(cx - 42.5 * s + aox), ey = R(cy - 44 * s + aoy - up), ew = R(85 * s), eh = R(88 * s);
       if (p.shut) {
-        const lids = tinted('eyes', BODY[k]);          // the lids, in its own colour
-        if (lids) ctx.drawImage(lids, f.es * 85, 0, 85, 88, ex, ey, R(85 * s), R(88 * s));
+        blit(ctx, cut('eyes', f.es * 85, 0, 85, 88, ew, eh, BODY[k]), ex, ey);   // the lids, in its own colour
       } else {
-        ctx.drawImage(SHEETS.eyes, f.es * 85, 0, 85, 88, ex, ey, R(85 * s), R(88 * s));
-        const [tx, ty] = EYE_PUPIL_TRAVEL[f.es], ps = R(14 * s);
+        blit(ctx, cut('eyes', f.es * 85, 0, 85, 88, ew, eh), ex, ey);
+        const [tx, ty] = EYE_PUPIL_TRAVEL[f.es], ps = R(14 * s), pupil = cut('pupils', f.ep * 14, 0, 14, 14, ps, ps);
         EYE_PUPIL_CENTERS[f.es].forEach(([pcx, pcy], i) => {
           // sneezing: cross-eyed (each pupil turned inwards)
           const lx = a && a.sneezing ? (i ? -tx : tx) : st.px * tx, ly = a && a.sneezing ? 0 : st.py * ty;
-          ctx.drawImage(SHEETS.pupils, f.ep * 14, 0, 14, 14, R(ex + (pcx - 7 + lx) * s), R(ey + (pcy - 7 + ly) * s), ps, ps);
+          blit(ctx, pupil, R(ex + (pcx - 7 + lx) * s), R(ey + (pcy - 7 + ly) * s));
         });
       }
     }
@@ -573,23 +598,25 @@
     if (sc > 1) ctx.restore();
   }
 
-  // The shadow under a lifted or settling chuzzle, baked once per body frame (a canvas shadow
-  // blur on every frame of a drag is what made the drag heavy).
+  // The shadow under a chuzzle (lifted or settling on a board: blur 8, 6 down; the logo's and
+  // the palette's at rest: blur 3, 2 down, CSS pixels), baked once per body frame (a canvas
+  // shadow blur on every frame of a drag is what made the drag heavy). dpr: device pixels per
+  // CSS pixel.
   const shadows = new Map();
-  function shadowOf(piece, frame, k, s) {
-    const key = `${piece ? 'p' : 'n'}${frame}|${k}|${s.toFixed(3)}`;
+  function shadowOf(piece, frame, k, s, dpr, blur = 8, dy = 6, alpha = 0.55) {
+    const key = `${piece ? 'p' : 'n'}${frame}|${k}|${s.toFixed(3)}|${blur}`;
     let c = shadows.get(key);
     if (!c) {
-      if (shadows.size > 90) shadows.clear();
-      const dpr = s / layout.u, size = Math.round((piece ? 179 : 80) * s), m = Math.ceil(20 * dpr);
+      if (shadows.size > 400) shadows.clear();
+      const size = Math.round((piece ? 179 : 80) * s), m = Math.ceil((2 * blur + dy) * dpr);
       c = document.createElement('canvas');
       c.width = size + 2 * m;
       c.height = size + 2 * m;
       c._m = m;
       const g = c.getContext('2d');
-      g.shadowColor = 'rgba(0, 0, 0, 0.55)';
-      g.shadowBlur = 8 * dpr;
-      g.shadowOffsetY = 6 * dpr;
+      g.shadowColor = `rgba(0, 0, 0, ${alpha})`;
+      g.shadowBlur = blur * dpr;
+      g.shadowOffsetY = dy * dpr;
       g.shadowOffsetX = 4 * size;        // the body itself lands off the canvas: only its shadow
       if (piece) g.drawImage(SHEETS.huge, frame * 180, k * 180, 179, 179, m - 4 * size, m, size, size);
       else g.drawImage(SHEETS.body, frame * 80, k * 80, 80, 80, m - 4 * size, m, size, size);
@@ -622,29 +649,38 @@
 
   // The game's match outline (Board::SparkleGroups), the burst it shows round the chuzzles a
   // drag would match. Its points: a ring 45 game pixels from each marked chuzzle's centre, one
-  // every 20 degrees (90 and 10 round the 2x2), less those inside another marked chuzzle (44;
-  // 89 from a 2x2), crowded by more than three (within 85) or on top of another point (5);
-  // so round neighbours the outline runs in and out between them. The points are chained from
-  // the first to the nearest one left each time, and each gets a fizzy star: a sprite fader
-  // delayed one update (10 ms) per place along the chain, 0.75-1 in scale, turned up to 45
-  // degrees, up to 2 pixels off its point, starting at alpha 0.5 and 0.1 brighter per star up
-  // to 1 (the last 20 of the chain 0.025 dimmer each), fading 0.02 an update. The game's code
-  // tints a white star with the chuzzle's hilite colour, but the game on screen draws them
-  // dark (black over whatever is there); that is the look kept. marks: {r, c, big} in cells.
-  const SPARKLE_RGB = [0, 0, 0];
+  // every 20 degrees (90 and every 10 round a 2x2 chuzzle), less those inside another marked
+  // chuzzle (44; 89 for a 2x2), crowded by more than three (within 85) or on top of another
+  // point (5); so round neighbours the outline runs in and out between them. A 2x2 footprint
+  // over single chuzzles (the 2x2 tool's spot, a 2x2's drop target) is its four cells, so
+  // the chain goes round each and dips into the middle. The chain runs clockwise round each
+  // chuzzle, then on to the nearest chuzzle left, from the point nearest to where it was.
+  // Each point gets a fizzy star in the chuzzle's hilite colour (half of them up to a quarter
+  // darker): a sprite fader delayed per place along the chain (the game: one update of 10
+  // ms; here two, slower), 0.75-1 in scale, turned up to 45 degrees, up to 2 pixels off its
+  // point, starting at alpha 0.5 and 0.1 brighter per star up to 1 (the last 20 of the chain
+  // 0.025 dimmer each), fading 0.015 an update (the game: 0.02). marks: {r, c, big, fat, k}
+  // in cells, k the colour the spot will have; fat: the 2x2 chuzzle itself.
   function sparkleGroup(marks) {
-    const cs = marks.map((m) => ({ x: m.c * 80 + (m.big ? 80 : 40), y: m.r * 80 + (m.big ? 80 : 40), big: m.big }));
-    const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
-    const pts = [];
-    for (const c of cs) {
-      const rad = c.big ? 90 : 45, step = c.big ? 10 : 20;
-      for (let a = 0; a < 360; a += step) {
-        const t = a * Math.PI / 180;
-        pts.push({ x: c.x + Math.cos(t) * rad, y: c.y + Math.sin(t) * rad });
+    const cs = [];
+    for (const m of marks) {
+      if (m.fat) cs.push({ x: m.c * 80 + 80, y: m.r * 80 + 80, big: true, k: m.k });
+      else for (const [dr, dc] of m.big ? [[0, 0], [0, 1], [1, 0], [1, 1]] : [[0, 0]]) {
+        cs.push({ x: (m.c + dc) * 80 + 40, y: (m.r + dr) * 80 + 40, big: false, k: m.k });
       }
     }
-    for (let i = 0; i < pts.length;) {
-      const p = pts[i];
+    const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+    // each chuzzle's ring, clockwise (angles up, y down on the canvas)
+    const rings = cs.map((c) => {
+      const pts = [], rad = c.big ? 90 : 45, step = c.big ? 10 : 20;
+      for (let a = 0; a < 360; a += step) {
+        const t = a * Math.PI / 180;
+        pts.push({ x: c.x + Math.cos(t) * rad, y: c.y + Math.sin(t) * rad, k: c.k, keep: true });
+      }
+      return pts;
+    });
+    const all = rings.flat();
+    for (const p of all) {
       let crowd = 0, inside = false;
       for (const c of cs) {
         const d = dist(p, c);
@@ -655,50 +691,55 @@
           if (d < 85) crowd++;
         }
       }
-      if (inside || crowd > 3 || pts.some((q) => q !== p && dist(p, q) < 5)) pts.splice(i, 1);
-      else i++;
+      if (inside || crowd > 3 || all.some((q) => q !== p && q.keep && dist(p, q) < 5)) p.keep = false;
+    }
+    const chain = [], left = rings.map((r) => r.filter((p) => p.keep)).filter((r) => r.length);
+    let last = null;
+    while (left.length) {
+      let ri = 0, si = 0;
+      if (last) {
+        let best = Infinity;
+        left.forEach((r, i) => r.forEach((p, j) => {
+          const d = dist(last, p);
+          if (d < best) { best = d; ri = i; si = j; }
+        }));
+      }
+      const r = left.splice(ri, 1)[0];
+      for (let i = 0; i < r.length; i++) chain.push(r[(si + i) % r.length]);
+      last = chain[chain.length - 1];
     }
     // (the game dims the last 20 of a chain that is always 40 or more points; a single
     // chuzzle's 18 would all be dim, so at most the second half is)
-    const stars = [], n = pts.length;
-    let at = pts.shift(), alpha = 0.5;
-    const fadeFrom = n - Math.min(20, n >> 1);
-    while (at) {
-      stars.push({ x: at.x + Math.random() * 2, y: at.y + Math.random() * 2, sc: 0.75 + Math.random() * 0.25,
-        rot: (Math.random() * 90 - 45) * Math.PI / 180, a: alpha, delay: stars.length });
-      alpha = stars.length < fadeFrom ? Math.min(1, alpha + 0.1) : Math.max(0, alpha - 0.025);
-      let best = 9999, next = null;
-      for (const q of pts) {
-        const d = dist(at, q);
-        if (d < best) { best = d; next = q; }
-      }
-      if (next) pts.splice(pts.indexOf(next), 1);
-      at = next;
-    }
+    const stars = [], n = chain.length, fadeFrom = n - Math.min(20, n >> 1);
+    let alpha = 0.5;
+    chain.forEach((p, i) => {
+      const dark = Math.random() < 0.5 ? 1 - 0.25 * Math.floor(Math.random() * 4) / 3 : 1;   // four shades, so few tinted stars
+      stars.push({ x: p.x + Math.random() * 2, y: p.y + Math.random() * 2, sc: 0.75 + Math.random() * 0.25,
+        rot: (Math.random() * 90 - 45) * Math.PI / 180, a: alpha, delay: 2 * i,
+        rgb: (HILITE[p.k] ?? HILITE[6]).map((v) => Math.round(v * dark * 100) / 100) });
+      alpha = i + 1 < fadeFrom ? Math.min(1, alpha + 0.1) : Math.max(0, alpha - 0.025);
+    });
     return stars;
   }
 
-  // The outline on a board: the game shows the burst once when a drag makes a group; here a
-  // new burst starts each time the last one's first star has gone, so the trail keeps running
-  // round the marks while they stand. A new set of marks starts afresh. 100 updates a second,
-  // whatever the frame rate.
-  function drawSparkles(ctx, el, marks, dt, s, padPx) {
-    const img = tinted('fizzy', SPARKLE_RGB);
-    if (!img) return;
-    const key = marks.map((m) => `${m.r},${m.c},${m.big ? 1 : 0}`).join(';');
+  // The outline on a board: as in the game, one burst when the marks appear (a drag holding
+  // a match in one spot), one turn round them, then gone; while the same marks stand it comes
+  // round again every 4 s. 100 updates a second, whatever the frame rate.
+  function drawSparkles(ctx, el, marks, now, dt, s, padPx) {
+    if (!SHEETS.fizzy) return;
+    const key = sparkleKey(marks);
     let sp = el._spark;
-    if (!sp || sp.key !== key) sp = el._spark = { key, stars: [], head: null, acc: 0 };
-    if (!sp.head || sp.head.a <= 0) {
-      const burst = sparkleGroup(marks);
-      sp.head = burst[0];
-      sp.stars.push(...burst);
+    if (!sp || sp.key !== key) sp = el._spark = { key, stars: [], at: -Infinity, acc: 0 };
+    if (now - sp.at >= 4000) {
+      sp.at = now;
+      sp.stars.push(...sparkleGroup(marks));
     }
     sp.acc += Math.min(dt, 100);
     for (; sp.acc >= 10; sp.acc -= 10) {
       for (const st of sp.stars) {
         if (st.delay-- > 0) continue;
         st.delay = 0;
-        st.a -= 0.02;
+        st.a -= 0.015;
       }
     }
     sp.stars = sp.stars.filter((st) => st.a > 0);
@@ -708,49 +749,58 @@
       ctx.globalAlpha = st.a;
       ctx.setTransform(sc, 0, 0, sc, padPx + st.x * s, padPx + st.y * s);
       ctx.rotate(st.rot);
-      ctx.drawImage(img, -10.5, -10);
+      ctx.drawImage(tinted('fizzy', st.rgb), -10.5, -10);
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
   }
 
-  // The game's hint circle (Animator_Hint): HintCircle (128 px; HintCircleBig, 227 x 225, round
-  // the 2x2) centred on the chuzzle, a black copy 4 pixels down and right under it, yellow and
-  // red by turns every 50 updates. Here it marks the palette item in use. (cx, cy) in canvas
-  // pixels.
-  function drawHint(ctx, cx, cy, big, s, now) {
-    const name = big ? 'hintbig' : 'hint';
-    const img = SHEETS[name];
-    if (!img) return;
-    const w = img.width * s, h = img.height * s, lit = Math.floor(now / 500) % 2 ? [1, 0, 0] : [1, 1, 0];
-    ctx.drawImage(tinted(name, [0, 0, 0]), cx - w / 2 + 4 * s, cy - h / 2 + 4 * s, w, h);
-    ctx.drawImage(tinted(name, lit), cx - w / 2, cy - h / 2, w, h);
+  // The ring round the palette item in use, after the game's hint circle (Animator_Hint: a
+  // circle with a black copy under it, down and right) but thin, close round the fur (the
+  // body reaches 38 game pixels from its centre, the 2x2's 84) and in the chuzzle's own colour.
+  // (cx, cy) in canvas pixels.
+  function drawHint(ctx, cx, cy, big, k, s) {
+    const rad = (big ? 90 : 44) * s, w = (big ? 5 : 4) * s;
+    ctx.lineWidth = w;
+    for (const [style, o] of [['rgba(0, 0, 0, 0.6)', 2 * s], [`rgb(${BODY[k].map((v) => Math.round(v * 255)).join(',')})`, 0]]) {
+      ctx.strokeStyle = style;
+      ctx.beginPath();
+      ctx.arc(cx + o, cy + o, rad, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
   }
 
-  // A faint chuzzle of the colour a drop's emptied spot will get, pulsing gently.
-  function drawGhost(ctx, r, c, k, big, s, R, cellPx, padPx, now) {
-    ctx.globalAlpha = 0.4 + 0.15 * Math.sin(now / 160);
+  // A faint chuzzle of the colour a drop's emptied spot will get.
+  function drawGhost(ctx, r, c, k, big, s, R, cellPx, padPx) {
+    ctx.globalAlpha = 0.45;
     const x = padPx + c * cellPx, y = padPx + r * cellPx;
-    if (big) ctx.drawImage(SHEETS.huge, 0, k * 180, 179, 179, R(x - 9.5 * s), R(y - 8.5 * s), R(179 * s), R(179 * s));
-    else ctx.drawImage(SHEETS.body, 0, k * 80, 80, 80, R(x), R(y), R(cellPx), R(cellPx));
+    if (big) blit(ctx, cut('huge', 0, k * 180, 179, 179, R(179 * s), R(179 * s)), R(x - 9.5 * s), R(y - 8.5 * s));
+    else blit(ctx, cut('body', 0, k * 80, 80, 80, R(cellPx), R(cellPx)), R(x), R(y));
     ctx.globalAlpha = 1;
   }
 
   // What a click on the goal would paint, under the pointer: the cell (or the whole 2x2 it is
-  // part of), or with the 2x2 tool the block the piece would cover.
+  // part of), or with the 2x2 tool the block the piece would cover; k the colour it gets.
   function paintPreview() {
     const h = $('goalBoard')._hover;
     if (!h || state.mode !== 'edit' || state.preset) return null;
     const b = state.goal;
-    if (state.tool === 'piece') return { r: Math.min(h.r, 4), c: Math.min(h.c, 4), big: true };
-    if (inPiece(b.fat, h.r, h.c)) return { r: b.fat.y, c: b.fat.x, big: true };
-    return { r: h.r, c: h.c, big: false };
+    if (state.tool === 'piece') {
+      const r = Math.min(h.r, 4), c = Math.min(h.c, 4), fat = !!b.fat && b.fat.y === r && b.fat.x === c;
+      return { r, c, big: true, fat, k: pieceColour(b) ?? state.color };
+    }
+    if (inPiece(b.fat, h.r, h.c)) return { r: b.fat.y, c: b.fat.x, big: true, fat: true, k: state.color };
+    return { r: h.r, c: h.c, big: false, k: state.color };
   }
 
-  // One board's chuzzles. Only the cells whose pose changed are cleared and drawn again
-  // (the 2x2's sprite reaches into the cells round it, so it and they go together); the whole
-  // canvas when something crosses cells (a replay slide, a chuzzle settling after a drop) or
-  // when rings and ghosts are shown. Idle, a redraw waits for the 40 ms tick.
+  const sparkleKey = (marks) => marks.map((m) => `${m.r},${m.c},${m.big ? 1 : 0}${m.fat ? 'f' : ''},${m.k}`).join(';');
+
+  // One board's chuzzles. Only what changed is cleared and drawn again: the cells whose pose
+  // changed (the 2x2's sprite reaches into the cells round it, so it and they go together), a
+  // sliding lane's strip (a replay move, with the cells its edges touch); the whole canvas
+  // when a chuzzle settles after a drop, when the held one is lifted or put back, and while
+  // the match outline's stars are alive or its marks change. A drag, with the pointer moving
+  // and nothing else, redraws nothing here. Idle, a redraw waits for the 80 ms tick.
   function drawBoard(el, now, dt, maySkip) {
     const cv = boardCanvas(el), ctx = el._ctx;
     const dpr = window.devicePixelRatio || 1, s = layout.u * dpr;
@@ -763,9 +813,17 @@
     }
     if (!SHEETS.body || !SHEETS.huge || !SHEETS.eyes || !SHEETS.pupils) return;
     const R = Math.round, cellPx = 80 * s, padPx = 10 * s;
+    // the match outline marks the picked chuzzle, where a drop lands, the spots it fills and
+    // what a click on the goal will paint
+    const marks = [];
+    if (el._target) marks.push({ r: el._target.r, c: el._target.c, big: el._target.piece, k: dragLayer.node ? dragLayer.node._k : 6 });
+    if (el._fills) for (const f of el._fills) marks.push({ r: f.r, c: f.c, big: false, k: f.k });
     const hover = el.id === 'goalBoard' ? paintPreview() : null;
-    if (el._fills || el._target || hover) full = true;
-    const nodes = [], dirty = [], marks = [];
+    if (hover) marks.push(hover);
+    const held = dragLayer.node && dragLayer.node.parentNode === el ? dragLayer.node : null;
+    if (held !== el._heldWas) full = true;
+    el._heldWas = held;
+    const nodes = [], dirty = [], moving = [];
     let piece = null;
     for (const node of el.children) {
       if (node._k === undefined) {
@@ -777,41 +835,63 @@
         node._c = +node.dataset.c;
       }
       if (node._k !== node._k) continue;     // not a chuzzle
-      if (node === dragLayer.node) {         // held: drawn on the layer over the page
-        full = true;
-        continue;
-      }
+      if (node === held) continue;           // drawn on its own canvas over the page
       nodes.push(node);
       if (node._piece) piece = node;
-      if (node.classList.contains('picked')) {
-        marks.push({ r: node._r, c: node._c, big: node._piece });
-        full = true;
-      }
-      if (node._off || node._f != null || node._ox || node._oy || node._tx || node._ty || node._sc > 1) full = true;
+      if (node.classList.contains('picked')) marks.push({ r: node._r, c: node._c, big: node._piece, fat: node._piece, k: node._k });
+      if (node._off) moving.push(node);
+      if (node._ox || node._oy || node._tx || node._ty || node._sc > 1) full = true;
       node._pose = pose(node, now, dt, false);
       if (node._pose.busy || node._pose.sig !== node._sig) dirty.push(node);
     }
-    if (!full && (!dirty.length || maySkip)) return;
+    if (el._movingWas && !moving.length) full = true;    // the slid sprites' last positions
+    el._movingWas = moving.length > 0;
+    const key = sparkleKey(marks), sp = el._spark;
+    if (marks.length ? !sp || sp.key !== key || sp.stars.length || now - sp.at >= 4000 : !!sp) full = true;
+    if (!full && !moving.length && (!dirty.length || maySkip)) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingQuality = 'high';
-    let draw = nodes;
+    const rectOf = (n) => {
+      const dx = n._off && !n._col ? n._off * dpr : 0, dy = n._off && n._col ? n._off * dpr : 0;
+      return n._piece ? [padPx + n._c * cellPx - 9.5 * s + dx, padPx + n._r * cellPx - 8.5 * s + dy, 179 * s, 179 * s]
+        : [padPx + n._c * cellPx + dx, padPx + n._r * cellPx + dy, cellPx, cellPx];
+    };
+    let draw = nodes, set = null;
     if (full) ctx.clearRect(0, 0, size, size);
     else {
-      const set = new Set(dirty);
+      set = new Set(dirty);
+      let strip = null;
+      if (moving.length) {
+        const col = moving[0]._col;
+        let lo = Infinity, hi = -Infinity;
+        for (const n of moving) {
+          const i = col ? n._c : n._r;
+          lo = Math.min(lo, i);
+          hi = Math.max(hi, i + (n._piece ? 1 : 0));
+        }
+        const a = padPx + lo * cellPx - 10 * s, b = padPx + (hi + 1) * cellPx + 10 * s;
+        strip = col ? [a, 0, b - a, size] : [0, a, size, b - a];
+        for (const n of nodes) {
+          const [x, y, w, h] = rectOf(n);
+          if (col ? x < b && x + w > a : y < b && y + h > a) set.add(n);
+        }
+      }
       if (piece) {
         const near = (n) => n !== piece && Math.abs(n._r - piece._r - 0.5) <= 1.5 && Math.abs(n._c - piece._c - 0.5) <= 1.5;
-        if (set.has(piece) || dirty.some(near)) {
+        if (set.has(piece) || [...set].some(near)) {
           set.add(piece);
           for (const n of nodes) if (near(n)) set.add(n);
         }
       }
-      for (const n of set) {
-        if (n._piece) ctx.clearRect(R(padPx + n._c * cellPx - 9.5 * s), R(padPx + n._r * cellPx - 8.5 * s), R(179 * s), R(179 * s));
-        else ctx.clearRect(R(padPx + n._c * cellPx), R(padPx + n._r * cellPx), R(cellPx), R(cellPx));
-      }
+      if (strip) ctx.clearRect(...strip.map(R));
+      for (const n of set) ctx.clearRect(...rectOf(n).map(R));
       draw = nodes.filter((n) => set.has(n));
     }
-    if (full && el._fills) for (const f of el._fills) drawGhost(ctx, f.r, f.c, f.k, false, s, R, cellPx, padPx, now);
+    if (el._fills) {
+      for (const f of el._fills) {
+        if (full || [...set].some((n) => n._r === f.r && n._c === f.c)) drawGhost(ctx, f.r, f.c, f.k, false, s, R, cellPx, padPx);
+      }
+    }
     const top = [];
     for (const node of draw) {
       if (node._sc > 1) top.push(node);
@@ -820,20 +900,15 @@
     }
     for (const node of top) drawChuzzle(ctx, node, node._pose, now, dt, s, R, cellPx, padPx, false);
     if (!full) return;
-    // the match outline marks the picked chuzzle, where a drop lands, the spots it fills and
-    // what a click on the goal will paint
-    if (el._target) marks.push({ r: el._target.r, c: el._target.c, big: el._target.piece });
-    if (el._fills) for (const f of el._fills) marks.push({ r: f.r, c: f.c, big: false });
-    if (hover) marks.push(hover);
-    if (marks.length) drawSparkles(ctx, el, marks, dt, s, padPx);
+    if (marks.length) drawSparkles(ctx, el, marks, now, dt, s, padPx);
     else el._spark = null;
   }
 
   // The logo's and the palette's chuzzles, each on its own canvas inside its element (the
   // element's box is 80 game pixels across, the 2x2's 180 with the sprite from (-9.5, -8.5)).
-  // A swatch's canvas reaches 24 game pixels past its box (style.css), room for the hint
-  // circle round the one in use.
-  const SWATCH_MARGIN = 24;
+  // The canvas reaches 10 game pixels past the box (style.css), room for the shadow and for
+  // the ring round the palette item in use.
+  const ACTOR_MARGIN = 10;
   function attachActor(el, kind, key) {
     const cv = document.createElement('canvas');
     cv.className = 'chz-canvas';
@@ -842,7 +917,7 @@
     el.classList.add('chz');
     const piece = kind !== 'normal';
     el._actor = {
-      key, units: piece ? 180 : 80, margin: el.classList.contains('swatch') ? SWATCH_MARGIN : 0,
+      key, units: piece ? 180 : 80, margin: ACTOR_MARGIN, swatch: el.classList.contains('swatch'),
       cv, ctx: cv.getContext('2d'), w: 0, measured: 0, lit: -1,
       node: { _k: el._k ?? 0, _key: key, _piece: piece, _x0: piece ? 9.5 : 0, _y0: piece ? 8.5 : 0, _r: 0, _c: 0 },
     };
@@ -868,7 +943,7 @@
       A.cv.height = size;
       full = true;
     }
-    const hint = A.margin && el.getAttribute('aria-checked') === 'true', lit = hint ? Math.floor(now / 500) % 2 : -1;
+    const hint = A.swatch && el.getAttribute('aria-checked') === 'true', lit = hint ? node._k : -1;
     if (lit !== A.lit) full = true;
     A.lit = lit;
     const p = pose(node, now, dt, false);
@@ -878,8 +953,11 @@
     A.ctx.clearRect(0, 0, size, size);
     A.ctx.imageSmoothingQuality = 'high';
     A.ctx.setTransform(1, 0, 0, 1, m, m);
+    const sh = shadowOf(node._piece, p.frame, node._k, s, dpr, 3, 2, 0.5);
+    blit(A.ctx, sh, -sh._m, -sh._m);
     drawChuzzle(A.ctx, node, p, now, dt, s, Math.round, 80 * s, 0, false);
-    if (hint) drawHint(A.ctx, A.units * s / 2, A.units * s / 2, node._piece, s, now);
+    // on the fur's own centre (the body sits 40, 40 in its frame, the 2x2's 89, 92)
+    if (hint) drawHint(A.ctx, (node._piece ? 90.5 : 40.5) * s, (node._piece ? 92 : 40) * s, node._piece, node._k, s);
     A.ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -1184,9 +1262,60 @@
   // The layer over the page: the held chuzzle, redrawn on every raw pointer event rather than
   // once a frame (a low-latency canvas where the browser allows one), so it keeps up with the
   // cursor; and the particles.
-  const dragLayer = { cv: null, ctx: null, node: null, board: null, box: null, fxWas: false };
+  const dragLayer = { cv: null, ctx: null, node: null, board: null, hc: null, hctx: null, hsig: null, fxWas: false };
+  // The held chuzzle: a small canvas of its own over the page, moved by a CSS transform as the
+  // pointer moves (the compositor shifts a texture, nothing is drawn) and drawn again only
+  // when its pose changes. Before, a full-window canvas was cleared and drawn on every mouse
+  // event, and the browser composed the whole window for it each time.
+  function drawHeld() {
+    const d = dragLayer, node = d.node;
+    if (!node || !node.isConnected || !SHEETS.body) {
+      if (d.hc) d.hc.style.display = 'none';
+      d.hsig = null;
+      return;
+    }
+    if (!d.hc) {
+      d.hc = document.createElement('canvas');
+      d.hc.className = 'drag-held';
+      d.hc.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(d.hc);
+      d.hctx = d.hc.getContext('2d');
+    }
+    const dpr = window.devicePixelRatio || 1, rect = d.board;
+    const s = layout.u * dpr, cellPx = 80 * s, padPx = 10 * s, half = (node._piece ? 80 : 40) * s;
+    const reach = Math.ceil(half * 1.12 + 30 * dpr), W = 2 * reach, H = 2 * reach + Math.ceil(12 * dpr);
+    const x = rect.left * dpr + padPx + node._c * cellPx + (node._dx || 0) * dpr;
+    const y = rect.top * dpr + padPx + node._r * cellPx + (node._dy || 0) * dpr;
+    // the canvas sits on whole device pixels (a transform by a fraction would blur it)
+    const x0 = Math.floor(x + half - reach), y0 = Math.floor(y + half - reach);
+    if (d.hc.width !== W || d.hc.height !== H) {
+      d.hc.width = W;
+      d.hc.height = H;
+      d.hc.style.width = `${W / dpr}px`;
+      d.hc.style.height = `${H / dpr}px`;
+      d.hsig = null;
+    }
+    d.hc.style.transform = `translate(${x0 / dpr}px, ${y0 / dpr}px)`;
+    d.hc.style.display = '';
+    const now = performance.now(), p = pose(node, now, 0, true);
+    if (p.sig === d.hsig) return;
+    d.hsig = p.sig;
+    const ctx = d.hctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.imageSmoothingQuality = 'high';
+    // the chuzzle at the same spot of its canvas whatever the pointer's fraction of a pixel
+    ctx.translate(reach - half - x, reach - half - y);
+    ctx.translate(rect.left * dpr, rect.top * dpr);
+    drawChuzzle(ctx, node, p, now, 0, s, Math.round, cellPx, padPx, true);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  // The particles (fuzz, stars, the shockwave): a full-window canvas, shown only while there
+  // are any.
   function drawOverlay() {
     const d = dragLayer;
+    if (!fx.length && !d.fxWas) return;
     if (!d.cv) {
       d.cv = document.createElement('canvas');
       d.cv.className = 'drag-layer';
@@ -1199,27 +1328,12 @@
     if (d.cv.width !== W || d.cv.height !== H) {
       d.cv.width = W;
       d.cv.height = H;
-      d.box = null;
     }
     const ctx = d.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (fx.length || d.fxWas) ctx.clearRect(0, 0, W, H);
-    else if (d.box) ctx.clearRect(...d.box);
+    ctx.clearRect(0, 0, W, H);
     d.fxWas = fx.length > 0;
-    d.box = null;
-    const node = d.node;
-    if (node && node.isConnected && SHEETS.body) {
-      const now = performance.now(), rect = d.board;
-      const s = layout.u * dpr, cellPx = 80 * s, padPx = 10 * s, half = (node._piece ? 80 : 40) * s;
-      const ox = rect.left * dpr, oy = rect.top * dpr;
-      const x = ox + padPx + node._c * cellPx + (node._dx || 0) * dpr, y = oy + padPx + node._r * cellPx + (node._dy || 0) * dpr;
-      const reach = half * 1.12 + 30 * dpr;
-      d.box = [Math.floor(x + half - reach), Math.floor(y + half - reach), Math.ceil(2 * reach), Math.ceil(2 * reach + 12 * dpr)];
-      ctx.translate(ox, oy);
-      ctx.imageSmoothingQuality = 'high';
-      drawChuzzle(ctx, node, pose(node, now, 0, true), now, 0, s, Math.round, cellPx, padPx, true);
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-    }
+    d.cv.style.display = fx.length ? '' : 'none';
     if (fx.length) drawFx(ctx, dpr);
   }
 
@@ -1248,9 +1362,10 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, H);
     const aw = R(60 * s), ah = R(104 * s), ax = R(W / 2 - 120 * s - 30 * s), ay = R(H / 2 + 3 * s - 52 * s);
-    ctx.drawImage(SHEETS.arrows, frame * 60, 0, 60, 104, ax, ay, aw, ah);
+    const arrow = cut('arrows', frame * 60, 0, 60, 104, aw, ah);
+    blit(ctx, arrow, ax, ay);
     ctx.setTransform(-1, 0, 0, 1, W, 0);
-    ctx.drawImage(SHEETS.arrows, frame * 60, 0, 60, 104, ax, ay, aw, ah);
+    blit(ctx, arrow, ax, ay);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -1266,7 +1381,7 @@
   // One loop, every frame: the game's 100 updates a second for the antics and particles, then
   // the boards (a board out of sight, on a phone, is skipped), the logo's and the palette's
   // chuzzles, the arrows and the layer over the page. With nothing but the idle sway going on
-  // (no drag, no particles, the mouse still) the canvases are let change only every 40 ms.
+  // (no drag, no particles, the mouse still) the canvases are let change only every 80 ms.
   let lastFrame = 0, updates = 0, lastTick = 0;
   const DEBUG = self.MB_DEBUG = {};        // switches for measuring (the console / tests)
   function frameLoop(now) {
@@ -1279,23 +1394,25 @@
       for (const a of antics.values()) stepAntic(a);
       if (fx.length || shake) stepFx();
     }
-    // idle: every canvas waits for the same 40 ms tick, so the page composes 25 frames a
-    // second at most, not one per canvas that changed
+    // idle: every canvas waits for the same 80 ms tick, so the page composes 12 frames a
+    // second at most, not one per canvas that changed (a body frame lasts ~87 ms anyway; in
+    // Firefox each composite, not the drawing, is what the idle page costs)
     const idle = !dragLayer.node && !fx.length && now - lastPointer > 400 && (DEBUG.idleMs == null || DEBUG.idleMs > 0);
-    const tick = !idle || now - lastTick >= (DEBUG.idleMs ?? 40);
+    const tick = !idle || now - lastTick >= (DEBUG.idleMs ?? 80);
     if (tick) lastTick = now;
     if (!DEBUG.noBoards) for (const id of ['goalBoard', 'startBoard']) {
       if (layout.two || state.side === (id === 'goalBoard' ? 'goal' : 'start')) drawBoard($(id), now, dt, !tick);
     }
     if (!DEBUG.noActors) for (const el of actors()) drawActor(el, now, dt, !tick);
     if (!DEBUG.noArrows && tick) drawArrows(now);
-    if (dragLayer.node || dragLayer.box || fx.length || dragLayer.fxWas) drawOverlay();
+    if (dragLayer.node) drawHeld();
+    drawOverlay();
     const app = $('app');
     if (shake > 0) app.style.translate = `${rnd(-1, 1) * shake * 0.4}px ${rnd(-1, 1) * shake * 0.4}px`;
     else if (app.style.translate) app.style.translate = '';
     // idle, the loop itself rests between ticks (a frame callback every vsync is not free);
     // the held chuzzle is drawn by the pointer events, so a drag never waits for it
-    if (idle) setTimeout(() => requestAnimationFrame(frameLoop), 25);
+    if (idle) setTimeout(() => requestAnimationFrame(frameLoop), 40);
     else requestAnimationFrame(frameLoop);
   }
 
@@ -1615,8 +1732,8 @@
   }
 
   function selectFatTool() {
-    state.tool = state.tool === 'piece' ? 'paint' : 'piece';
-    if (state.mode === 'edit') state.side = 'goal';
+    state.tool = 'piece';          // (a colour swatch takes the brush back; a second click here
+    if (state.mode === 'edit') state.side = 'goal';   // keeps it, so clicking on counts as pokes)
     render();
   }
 
@@ -1716,7 +1833,7 @@
       if (!g || !g.drag) return;
       g.cell._dx = e.clientX - g.x;
       g.cell._dy = e.clientY - g.y;
-      drawOverlay();
+      drawHeld();
     });
     if (which === 'goal') {
       el.addEventListener('pointerleave', () => { el._hover = null; });
@@ -1752,7 +1869,7 @@
           dragLayer.node = g.cell;
           dragLayer.board = el.getBoundingClientRect();
         }
-        if (!('onpointerrawupdate' in el)) drawOverlay();
+        if (!('onpointerrawupdate' in el)) drawHeld();
         const t = dropTarget(e);
         if (!g.target !== !t || (t && (t.r !== g.target.r || t.c !== g.target.c))) {
           el._fills = fillsFor(t);
@@ -1774,7 +1891,7 @@
         el._fills = null;
         el._target = null;
         dragLayer.node = null;
-        drawOverlay();
+        drawHeld();
         if (e.type === 'pointerup' && gesture.target) dropOn(which, gesture, gesture.target);
         else {
           renderBoard(el, state[which]);

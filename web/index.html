@@ -111,13 +111,15 @@
           <button type="button" class="icon-btn small" id="depthUpBtn" data-icon="plus" aria-label="Search more moves"></button>
         </div>
         <p class="known-note" id="knownNote" hidden></p>
-        <button type="button" class="solve" id="solveBtn" aria-label="Solve">
+        <span class="solve-wrap">
+          <button type="button" class="solve" id="solveBtn" aria-label="Solve">
+            <span class="solve-orb">
+              <span class="solve-fill" id="solveFill"></span>
+              <span class="solve-label" id="solveLabel"></span>
+            </span>
+          </button>
           <canvas class="solve-arrows" id="solveArrows" aria-hidden="true"></canvas>
-          <span class="solve-orb">
-            <span class="solve-fill" id="solveFill"></span>
-            <span class="solve-label" id="solveLabel"></span>
-          </span>
-        </button>
+        </span>
         <button type="button" class="icon-btn cancel" id="cancelBtn" data-icon="x" aria-label="Cancel" hidden></button>
       </div>
       <p class="status" id="status" aria-live="polite"></p>

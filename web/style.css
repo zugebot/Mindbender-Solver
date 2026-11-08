@@ -124,7 +124,7 @@ select option, select optgroup { background: #0f1650; color: #fff; text-shadow: 
 }
 .bar { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 12px; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.logo { position: relative; width: 32px; height: 32px; flex: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+.logo { --u: calc(32px / 80); position: relative; width: 32px; height: 32px; flex: none; }
 .brand-name { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .bar-right { margin-left: auto; display: flex; align-items: center; gap: 4px; min-width: 0; }
 .pick { min-width: 0; }
@@ -196,7 +196,12 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .cell { position: relative; z-index: 1; cursor: pointer; }
 /* the palette's and the logo's chuzzles: each drawn on a canvas filling its element (app.js
    attachActor), so a redraw touches nothing but that canvas */
-.chz-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* a chuzzle's own canvas (the logo, the palette): 10 game pixels past its box on every side,
+   room for its shadow (drawn in, not a CSS filter, which would be redone at every frame) and
+   the ring round the palette item in use */
+.chz-canvas { position: absolute; inset: calc(-10 * var(--u)); width: calc(100% + 20 * var(--u)); height: calc(100% + 20 * var(--u)); pointer-events: none; }
+/* the held chuzzle, a small canvas moved by a transform as the pointer moves */
+.drag-held { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 50; will-change: transform; }
 .board.placing .cell { cursor: copy; }
 .board.readonly .cell { cursor: default; }
 /* the start while editing: drag a chuzzle onto another (they swap), or tap two */
@@ -246,14 +251,11 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   --u: calc(var(--sz) / 80);
   position: relative; width: var(--sz); height: var(--sz); flex: none; border: 0; padding: 0; border-radius: 50%;
   background: none;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .45));
   transition: transform .12s;
 }
 .swatch.big { --bs: calc(2 * var(--sz) + var(--pg)); --u: calc(var(--bs) / 180); grid-column: 5 / span 2; grid-row: 1 / span 2; width: var(--bs); height: var(--bs); justify-self: center; border-radius: 28%; }
-/* the canvas reaches 24 game pixels past the box: the hint circle round the swatch in use */
-.swatch .chz-canvas { inset: calc(-24 * var(--u)); width: calc(100% + 48 * var(--u)); height: calc(100% + 48 * var(--u)); }
 .swatch:hover { transform: scale(1.08); }
-.swatch[aria-checked="true"] { transform: scale(1.12); z-index: 1; }
+.swatch[aria-checked="true"] { z-index: 1; }
 /* the board tools: an orb with its name under it, in the game's font */
 .tools { display: flex; gap: 2px; }
 .tool {
@@ -300,7 +302,9 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .55));
   transition: transform .1s;
 }
-/* the Scrambulator's arrows on the candy's ends (app.js drawArrows) */
+/* the Scrambulator's arrows on the candy's ends (app.js drawArrows): beside the button, not
+   inside it, so the candy's drop-shadow filter is not redone each time a frame changes */
+.solve-wrap { position: relative; display: inline-grid; flex: none; }
 .solve-arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .solve-orb {
   position: relative; display: grid; place-items: center; overflow: hidden;

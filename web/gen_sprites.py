@@ -15,8 +15,6 @@ Writes web/assets/:
   orbs.webp       the game's blank round button (GameButton.png): normal, hover, pressed, 120 px each
   candy.webp      the candy wrapper behind the Scramble button (ScrambulatorButtonBG.png)
   fizzy.webp      the fizzy star (21 x 20): the match outline round a marked chuzzle
-  hint.webp, hintbig.webp
-                  the hint circles (128; 227 x 225 round the 2x2): the goal's paint marker
   arrows.webp     the Scrambulator's arrows (5 frames of 60 x 104), on the candy's orange ends
   naked, wince, angry, beauty, cheeks, rosy, fuzz, star, splode, shockwave
                   the chuzzles' poke reactions (Chuzzle.cpp antics, Animators.cpp)
@@ -151,8 +149,6 @@ def build_fx():
     # The poke reactions and markers (src/game/Chuzzle.cpp, Animators.cpp), one file each:
     return {
         "fizzy.webp": white_alpha("FizzyStar_Alpha.png"),          # 21 x 20: the match outline's star
-        "hint.webp": white_alpha("HintCircle_Alpha.png"),          # 128: the hint circle round a chuzzle
-        "hintbig.webp": white_alpha("HintCircleBig_Alpha.png"),    # 227 x 225: round the 2x2
         "arrows.webp": with_alpha("Scrambulator_Arrow.png", "Scrambulator_Arrow_Alpha.png"),  # 5 x 60 x 104
         "naked.webp": with_alpha("NakedChuzzle.png", "NakedChuzzle_Alpha.png"),   # 64: bald
         "wince.webp": with_alpha("Wince.png", "Wince_Alpha.png"),                 # 40 x 12
