@@ -2004,7 +2004,7 @@
     });
     // the raw pointer stream (every mouse report, not once a frame) moves the held chuzzle
     el.addEventListener('pointerrawupdate', (e) => {
-      if (!g || !g.drag) return;
+      if (!g || !g.drag || released(e)) return;
       g.cell._dx = e.clientX - g.x;
       g.cell._dy = e.clientY - g.y;
       drawHeld();
@@ -2014,7 +2014,7 @@
     }
     el.addEventListener('pointermove', (e) => {
       if (which === 'goal') el._hover = e.pointerType === 'mouse' ? spotAt(e.clientX, e.clientY) : null;
-      if (!g) return;
+      if (!g || released(e)) return;
       if (!g.move) {
         if (state.tool === 'piece') return;
         // paint every cell the stroke crosses, not only where pointer events landed (a fast
@@ -2075,8 +2075,18 @@
       }
       if (e.type === 'pointerup') tapOn(which, gesture.cell);
     };
+    // The button can come up where the page never hears it (outside the window, or a click
+    // that closes the browser's own menu): the next move without the button down, a lost
+    // capture or the window losing focus ends the gesture there, the chuzzle sent back
+    const released = (e) => {
+      if (e.buttons & 1) return false;
+      end(e);
+      return true;
+    };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
+    el.addEventListener('lostpointercapture', end);
+    addEventListener('blur', end);
     el.addEventListener('contextmenu', (e) => {
       const cell = cellAt(e);
       if (!cell) return;
