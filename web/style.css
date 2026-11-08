@@ -442,11 +442,15 @@ dialog::backdrop { background: rgba(6, 4, 16, .7); }
 .skin { position: relative; }
 .skinned { scrollbar-width: none; }
 .skinned::-webkit-scrollbar { display: none; }
-.skin > .skinned { padding-right: 30px; }
-.sbar { position: absolute; top: 0; right: 0; bottom: 0; width: 24px; display: flex; flex-direction: column; align-items: center; gap: 3px; touch-action: none; }
+.skin > .skinned { padding-right: 38px; }
+.sbar {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 30px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+  contain: paint;            /* the star never reaches outside the bar (nor adds to what scrolls) */
+}
 .sbar.off { visibility: hidden; }
 .sb-btn {
-  flex: none; width: 24px; height: 18px; border: 0; padding: 0;
+  flex: none; width: 30px; height: 22px; border: 0; padding: 0;
   background: url("assets/scrollbtn.webp") 0 0 / 300% 200% no-repeat;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
 }
@@ -454,20 +458,27 @@ dialog::backdrop { background: rgba(6, 4, 16, .7); }
 .sb-btn:hover { background-position-x: 50%; }
 .sb-btn:active { background-position-x: 100%; }
 .sb-track {
-  position: relative; flex: 1; min-height: 40px; width: 12px;
-  border-style: solid; border-width: 7px 0;
-  border-image: url("assets/scrolltrack.webp") 11 0 fill / 7px 0 stretch;
+  position: relative; flex: 1; min-height: 40px; width: 16px;
+  border-style: solid; border-width: 9px 0;
+  border-image: url("assets/scrolltrack.webp") 11 0 fill / 9px 0 stretch;
 }
 .sb-thumb {
-  position: absolute; left: 50%; top: -7px; width: 22px; height: 22px; margin-left: -11px; cursor: grab;
+  position: absolute; left: 50%; top: -9px; width: 26px; height: 26px; margin-left: -13px; cursor: grab;
   background: url("assets/scrollthumb.webp") center / contain no-repeat;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .7));
 }
-.sb-thumb:hover, .sb-thumb.held { scale: 1.12; }
+.sb-thumb:hover, .sb-thumb.held { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .7)) brightness(1.15); }
 .sb-thumb.held { cursor: grabbing; }
 
 /* ------------------------------------------------------------------ the game's puzzles */
 dialog.wide { width: min(640px, calc(100vw - 24px)); }
+/* the puzzles dialog never scrolls itself: the list shrinks to the room left (a scrollbar on
+   the dialog would take width from the list, flip its cells' layout, and with it the scrollbar:
+   it flickered when the star was dragged to the bottom) */
+dialog.wide[open] { display: flex; flex-direction: column; overflow: hidden; }
+dialog.wide .dlg { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+dialog.wide .skin { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+dialog.wide .pz-grid { flex: 0 1 auto; min-height: 0; }
 .pz-grid { display: grid; gap: 6px; max-height: min(62vh, 640px); overflow-y: auto; padding-right: 4px; container-type: inline-size; }
 .pz-row { display: grid; grid-template-columns: 30px repeat(5, minmax(0, 1fr)); gap: 6px; align-items: center; }
 dialog.wide .skin { margin-top: 14px; }
@@ -485,7 +496,7 @@ dialog.wide .skin { margin-top: 14px; }
 .pz:hover { border-color: #ffc93a; }
 /* cells too narrow for "10-1  13 mv" on one line: the moves go under the name (the list's
    own width decides, not the window's: a dialog, a zoomed page and a phone differ) */
-@container (max-width: 560px) {
+@container (max-width: 500px) {
   .pz-row { grid-template-columns: 22px repeat(5, minmax(0, 1fr)); gap: 5px; }
   .pz { flex-direction: column; align-items: center; justify-content: center; gap: 0; height: 40px; padding: 0 2px; }
   .pz b { font-size: 13px; line-height: 1.1; white-space: nowrap; }
