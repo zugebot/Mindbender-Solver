@@ -664,14 +664,16 @@
   // the same corner, so they run in step. A lone chuzzle's ring starts top left.
   // marks: {r, c, big, fat, k} in cells, k the colour the spot will have; fat: the 2x2
   // chuzzle itself. The points are in board game pixels.
-  const markKey = (m) => `${m.r},${m.c},${m.big ? 1 : 0}${m.fat ? 'f' : ''},${m.cells ? m.cells.map((q) => q.join('')).join('/') : m.k}`;
+  // a mark's identity is its place (its chain keeps running when only its colours change)
+  const markId = (m) => `${m.r},${m.c},${m.big ? 1 : 0}${m.fat ? 'f' : ''}${m.cells ? ':' + m.cells.map((q) => `${q[0]}${q[1]}`).join('') : ''}`;
+  const markKey = (m) => `${markId(m)},${m.cells ? m.cells.map((q) => q[2]).join('') : m.k}`;
   const sparkleKey = (marks) => marks.map(markKey).join(';');
   function sparkleChains(marks) {
     const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
     const groups = marks.map((m) => {
       const cs = m.fat ? [{ x: m.c * 80 + 80, y: m.r * 80 + 80, big: true, k: m.k }]
         : (m.cells || (m.big ? [[0, 0], [0, 1], [1, 1], [1, 0]] : [[0, 0]])).map(([dr, dc, k]) => ({ x: (m.c + dc) * 80 + 40, y: (m.r + dr) * 80 + 40, big: false, k: k ?? m.k }));
-      return { key: markKey(m), cs, pts: [] };
+      return { key: markId(m), cs, pts: [] };
     });
     const all = groups.flatMap((g) => g.cs), kept = [];
     for (const g of groups) {
@@ -706,7 +708,7 @@
         x1 = Math.max(x1, p.x + 20);
         y1 = Math.max(y1, p.y + 20);
       }
-      g.box = [x0, y0, x1, y1];
+      g.cbox = [x0, y0, x1, y1];
     }
     return groups.filter((g) => g.pts.length);
   }
@@ -737,8 +739,8 @@
         if (g) old.delete(ch.key);
         else g = { key: ch.key, pos: 0, spawned: 0, stars: [] };
         g.live = true;
-        g.pts = ch.pts;
-        g.box = ch.box;
+        g.pts = ch.pts;        // new points, new colours; its stars and runner go on
+        g.cbox = ch.cbox;
         groups.push(g);
       }
       for (const g of old.values()) {
@@ -763,7 +765,18 @@
         }
       }
     }
-    for (const g of sp.groups) g.stars = g.stars.filter((st) => st.a > 0);
+    for (const g of sp.groups) {
+      g.stars = g.stars.filter((st) => st.a > 0);
+      // the box to clear: the chain's, and whatever stars of an older chain are still fading
+      const b = g.cbox.slice();
+      for (const st of g.stars) {
+        b[0] = Math.min(b[0], st.x - 18);
+        b[1] = Math.min(b[1], st.y - 18);
+        b[2] = Math.max(b[2], st.x + 20);
+        b[3] = Math.max(b[3], st.y + 20);
+      }
+      g.box = b;
+    }
     sp.groups = sp.groups.filter((g) => g.live || g.stars.length);
     if (!sp.groups.length) el._spark = null;
     return sp.groups.filter((g) => g.stars.length);
