@@ -435,13 +435,45 @@ dialog::backdrop { background: rgba(6, 4, 16, .7); }
   * { transition: none !important; animation: none !important; }
 }
 
+/* ------------------------------------------------------------------ the game's scrollbar */
+/* skinScroll (app.js): the box scrolls natively with its own bar hidden; this bar follows it.
+   ScrollUp / ScrollDown (40 x 30 frames: normal, hover, pressed), the options slider's groove
+   stood upright (21 x 191, its rounded ends kept by border-image) and its star as the thumb */
+.skin { position: relative; }
+.skinned { scrollbar-width: none; }
+.skinned::-webkit-scrollbar { display: none; }
+.skin > .skinned { padding-right: 30px; }
+.sbar { position: absolute; top: 0; right: 0; bottom: 0; width: 24px; display: flex; flex-direction: column; align-items: center; gap: 3px; touch-action: none; }
+.sbar.off { visibility: hidden; }
+.sb-btn {
+  flex: none; width: 24px; height: 18px; border: 0; padding: 0;
+  background: url("assets/scrollbtn.webp") 0 0 / 300% 200% no-repeat;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
+}
+.sb-btn.down { background-position-y: 100%; }
+.sb-btn:hover { background-position-x: 50%; }
+.sb-btn:active { background-position-x: 100%; }
+.sb-track {
+  position: relative; flex: 1; min-height: 40px; width: 12px;
+  border-style: solid; border-width: 7px 0;
+  border-image: url("assets/scrolltrack.webp") 11 0 fill / 7px 0 stretch;
+}
+.sb-thumb {
+  position: absolute; left: 50%; top: -7px; width: 22px; height: 22px; margin-left: -11px; cursor: grab;
+  background: url("assets/scrollthumb.webp") center / contain no-repeat;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .7));
+}
+.sb-thumb:hover, .sb-thumb.held { scale: 1.12; }
+.sb-thumb.held { cursor: grabbing; }
+
 /* ------------------------------------------------------------------ the game's puzzles */
 dialog.wide { width: min(640px, calc(100vw - 24px)); }
-.pz-grid { display: grid; gap: 6px; margin-top: 14px; max-height: min(62vh, 640px); overflow-y: auto; padding-right: 4px; }
+.pz-grid { display: grid; gap: 6px; max-height: min(62vh, 640px); overflow-y: auto; padding-right: 4px; container-type: inline-size; }
 .pz-row { display: grid; grid-template-columns: 30px repeat(5, minmax(0, 1fr)); gap: 6px; align-items: center; }
+dialog.wide .skin { margin-top: 14px; }
 .pz-world { font-weight: 800; color: var(--gold); text-align: right; padding-right: 4px; }
 .pz {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 4px; height: 34px; padding: 0 9px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 4px; height: 34px; padding: 0 9px; white-space: nowrap;
   border-radius: 9px; border: 2px solid #b8761a; color: #fff;
   background: linear-gradient(180deg, #1d2a8c, #0a1250 55%, #070c3a);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 2px 3px rgba(0, 0, 0, .45);
@@ -451,8 +483,9 @@ dialog.wide { width: min(640px, calc(100vw - 24px)); }
 .pz span::after { content: " mv"; color: #8f88c2; }
 .pz.fat { border-color: #d65cd6; }
 .pz:hover { border-color: #ffc93a; }
-@media (max-width: 480px) {
-  .pz-label { display: none; }
+/* cells too narrow for "10-1  13 mv" on one line: the moves go under the name (the list's
+   own width decides, not the window's: a dialog, a zoomed page and a phone differ) */
+@container (max-width: 560px) {
   .pz-row { grid-template-columns: 22px repeat(5, minmax(0, 1fr)); gap: 5px; }
   .pz { flex-direction: column; align-items: center; justify-content: center; gap: 0; height: 40px; padding: 0 2px; }
   .pz b { font-size: 13px; line-height: 1.1; white-space: nowrap; }

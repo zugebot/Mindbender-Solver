@@ -2231,6 +2231,72 @@
 
   // The game's puzzles, a row per world, in their own dialog: painting your own board is
   // what the page is for, so they stay out of the way until asked for.
+  // A scroll box with the game's scrollbar: its scroll arrows at the ends, the options slider's
+  // groove between them and its star as the thumb (assets/scroll*.webp). The box still scrolls
+  // natively (wheel, keys, touch; its own bar hidden), the bar follows it: drag the star, click
+  // the groove for a page, press an arrow for a row (held, it repeats).
+  function skinScroll(box, step = 60) {
+    const wrap = document.createElement('div');
+    wrap.className = 'skin';
+    box.replaceWith(wrap);
+    wrap.appendChild(box);
+    box.classList.add('skinned');
+    const bar = document.createElement('div');
+    bar.className = 'sbar';
+    bar.setAttribute('aria-hidden', 'true');
+    bar.innerHTML = '<button type="button" class="sb-btn up" tabindex="-1"></button>'
+      + '<div class="sb-track"><div class="sb-thumb"></div></div>'
+      + '<button type="button" class="sb-btn down" tabindex="-1"></button>';
+    wrap.appendChild(bar);
+    const track = bar.querySelector('.sb-track'), thumb = bar.querySelector('.sb-thumb');
+    const range = () => box.scrollHeight - box.clientHeight;
+    const room = () => Math.max(0, track.offsetHeight - thumb.offsetHeight);   // end to end of the groove
+    const place = () => {
+      const r = range();
+      bar.classList.toggle('off', r <= 1);
+      thumb.style.transform = `translateY(${r > 0 ? Math.round(box.scrollTop / r * room()) : 0}px)`;
+    };
+    box.addEventListener('scroll', place, { passive: true });
+    new ResizeObserver(place).observe(box);
+    // the star: dragged, it moves the list with it
+    thumb.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      thumb.setPointerCapture(e.pointerId);
+      const y0 = e.clientY, top0 = box.scrollTop, per = range() / Math.max(1, room());
+      const move = (m) => { box.scrollTop = top0 + (m.clientY - y0) * per; };
+      const up = () => {
+        thumb.removeEventListener('pointermove', move);
+        thumb.removeEventListener('pointerup', up);
+        thumb.removeEventListener('pointercancel', up);
+        thumb.classList.remove('held');
+      };
+      thumb.classList.add('held');
+      thumb.addEventListener('pointermove', move);
+      thumb.addEventListener('pointerup', up);
+      thumb.addEventListener('pointercancel', up);
+    });
+    // the groove: a page towards the click
+    track.addEventListener('pointerdown', (e) => {
+      if (e.target !== track) return;
+      const below = e.clientY > thumb.getBoundingClientRect().top;
+      box.scrollBy({ top: (below ? 1 : -1) * box.clientHeight * 0.9, behavior: 'smooth' });
+    });
+    // the arrows: a row, then more while held
+    for (const [b, dir] of [[bar.querySelector('.up'), -1], [bar.querySelector('.down'), 1]]) {
+      let timer = 0;
+      const stop = () => { clearTimeout(timer); clearInterval(timer); };
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        box.scrollBy({ top: dir * step, behavior: 'smooth' });
+        stop();
+        timer = setTimeout(() => { timer = setInterval(() => box.scrollBy({ top: dir * step / 3 }), 30); }, 350);
+      });
+      for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
+    }
+    place();
+  }
+
   function fillPresets() {
     const grid = $('pzGrid');
     let row = null, world = '';
@@ -3025,6 +3091,7 @@
   function init() {
     document.querySelectorAll('[data-icon]').forEach((el) => setIcon(el, el.dataset.icon));
     fillPresets();
+    skinScroll($('pzGrid'));
     document.querySelectorAll('[data-label]:not([data-mode])').forEach((el) =>
       fontText(el, el.dataset.label, 'gold' in el.dataset ? { ...GOLD_TEXT, size: 17 } : LABEL_TEXT));
     setProgress('', 0);

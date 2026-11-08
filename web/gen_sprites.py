@@ -16,6 +16,10 @@ Writes web/assets/:
   candy.webp      the candy wrapper behind the Scramble button (ScrambulatorButtonBG.png)
   fizzy.webp      the fizzy star (21 x 20): the match outline round a marked chuzzle
   arrows.webp     the Scrambulator's arrows (5 frames of 60 x 104), on the candy's orange ends
+  scrollbtn.webp  the scroll arrows (ScrollUp / ScrollDown.png): 2 rows (up, down) x 3 frames
+                  of 40 x 30 (normal, hover, pressed)
+  scrollthumb.webp  the options slider's star (SliderThumb.png, 30 px), the scroll thumb
+  scrolltrack.webp  the options slider's bar (OptionSliderBar.png) stood upright: 21 x 191
   naked, wince, angry, beauty, cheeks, rosy, fuzz, star, splode, shockwave
                   the chuzzles' poke reactions (Chuzzle.cpp antics, Animators.cpp)
   sounds/*.ogg    the chuzzle voices for them (from the decomp's exe/Sounds/speaks)
@@ -136,6 +140,17 @@ def build_candy():
     return with_alpha("ScrambulatorButtonBG.png", "ScrambulatorButtonBG_Alpha.png")
 
 
+def build_scroll():
+    # The game's scroll arrows and its options slider (star thumb on a red-rimmed groove),
+    # for the page's scrollbars
+    btn = Image.new("RGBA", (120, 60))
+    btn.paste(with_alpha("ScrollUp.png", "ScrollUp_Alpha.png"), (0, 0))
+    btn.paste(with_alpha("ScrollDown.png", "ScrollDown_Alpha.png"), (0, 30))
+    thumb = with_alpha("SliderThumb.png", "SliderThumb_Alpha.png")
+    track = with_alpha("OptionSliderBar.png", "OptionSliderBar_Alpha.png").transpose(Image.Transpose.ROTATE_90)
+    return {"scrollbtn.webp": btn, "scrollthumb.webp": thumb, "scrolltrack.webp": track}
+
+
 def white_alpha(name):
     # an alpha-only texture (PopCap keeps it in the red channel): white with that alpha, tinted
     # at run time the way the game's SetColor does
@@ -204,7 +219,7 @@ def main():
     save(build_cursors(), "cursors.webp", 92)
     save(build_orbs(), "orbs.webp", 92)
     save(build_candy(), "candy.webp", 92)
-    for name, im in build_fx().items():
+    for name, im in {**build_fx(), **build_scroll()}.items():
         save(im, name, 92)
     copy_sounds()
     atlas, metrics = build_font()
