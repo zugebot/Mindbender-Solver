@@ -209,6 +209,11 @@ The puzzle list scrolls with the game's own scrollbar (`skinScroll` in `app.js`)
 upright) with its star (`SliderThumb`) as the thumb; the list still scrolls natively underneath
 (wheel, keys, touch). Its cells put the moves under the puzzle's name when the list is too narrow
 for one line (a container query on the list's own width, so zoom and phones are covered alike).
+Settings is the game's Game Options panel: `DialogBox.png`'s yellow frame and navy panel as a
+9-slice with its star behind (sized so the frame always covers the star's middle), the title in
+the options title's pastels, the round check boxes (`OptionCheckBox.png`) for the solutions
+choice, the thread counts as a dotted list like the Display list, and the `Options_Done.png`
+button. The scroll arrows, held, glide by the frame's own time (a timer's steps dropped frames).
 
 Smoothness and idle cost: every Chuzzle on the page is drawn from the game's sprite sheets onto a
 canvas (`drawChuzzle`): each board's on one canvas, the logo's and the palette's on a small one

@@ -1607,9 +1607,10 @@
     };
     const ctx = cv.getContext('2d');
     ctx.clearRect(0, 0, cv.width, cv.height);
-    const grad = ctx.createLinearGradient(0, (o + 1 + 8 * s) * dpr, 0, (o + 1 + FONT.ascent * s) * dpr);
-    grad.addColorStop(0, fill[0]);
-    grad.addColorStop(1, fill[1]);
+    // two colours run down the letters; more run across the text (the options title's pastels)
+    const grad = fill.length > 2 ? ctx.createLinearGradient(0, 0, cv.width, 0)
+      : ctx.createLinearGradient(0, (o + 1 + 8 * s) * dpr, 0, (o + 1 + FONT.ascent * s) * dpr);
+    fill.forEach((c, i) => grad.addColorStop(i / (fill.length - 1), c));
     const dark = tint(outline);
     ctx.shadowColor = 'rgba(0, 0, 0, .55)';
     ctx.shadowBlur = 4 * dpr;
@@ -1887,16 +1888,30 @@
 
   // The Settings dialog: the solutions switch (the choice in gold, as in the header's switch)
   // and what it means. A change applies to the next search.
+  const OPT_TEXT = { size: 21 };
   function renderSettings() {
-    for (const [id, on] of [['solsFirst', settings.first], ['solsAll', !settings.first]]) {
-      $(id).setAttribute('aria-pressed', String(on));
+    fontText($('solsHead'), 'Solutions:', OPT_TEXT);
+    fontText($('threadsHead'), 'Threads', OPT_TEXT);
+    for (const [id, on, text] of [['solsFirst', settings.first, 'First found'], ['solsAll', !settings.first, 'All of them']]) {
       $(id).setAttribute('aria-checked', String(on));
-      const label = $(id).querySelector('[data-label]');
-      fontText(label, label.dataset.label, on ? { ...GOLD_TEXT, size: 16 } : { size: 16, fill: ['#d8d2f4', '#a9a2cf'] });
+      fontText($(id).querySelector('.opt-text'), text, OPT_TEXT);
+    }
+    for (const b of $('threadList').children) {
+      const t = +b.dataset.threads;
+      b.setAttribute('aria-checked', String(t === settings.threads));
+      fontText(b.firstChild, t ? String(t) : `Auto (${hardwareThreads})`, { size: 19 });
     }
     $('solsNote').textContent = settings.first
       ? 'Stops at the first solution of the shortest length. Every shorter length is still searched in full, so it is still the fewest moves, and long searches end many times sooner.'
       : 'Finds and counts every shortest solution. The last length is searched to the end, so long searches take several times longer.';
+  }
+
+  // The options star behind the frame: its frame's place (376 x 380 of 600 x 558, centred at
+  // 300, 292) scaled to fit inside the frame, so the frame always covers it.
+  function sizeOptStar() {
+    const f = $('optFrame'), star = $('optStar');
+    const W = f.offsetWidth, H = f.offsetHeight, k = Math.min(W / 376, H / 380);
+    Object.assign(star.style, { width: `${600 * k}px`, height: `${558 * k}px`, left: `${W / 2 - 300 * k}px`, top: `${H / 2 - 292 * k}px` });
   }
 
   // The move limit beside Solve ("up to / 10 moves", with - and +). A game puzzle longer than
@@ -2282,15 +2297,27 @@
       const below = e.clientY > thumb.getBoundingClientRect().top;
       box.scrollBy({ top: (below ? 1 : -1) * box.clientHeight * 0.9, behavior: 'smooth' });
     });
-    // the arrows: a row, then more while held
+    // the arrows: a row at once, then, held, a steady glide (moved every frame by the time the
+    // frame took, speeding up a little: steps on a timer dropped frames)
     for (const [b, dir] of [[bar.querySelector('.up'), -1], [bar.querySelector('.down'), 1]]) {
-      let timer = 0;
-      const stop = () => { clearTimeout(timer); clearInterval(timer); };
+      let timer = 0, frame = 0;
+      const stop = () => { clearTimeout(timer); cancelAnimationFrame(frame); frame = 0; };
       b.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        box.scrollBy({ top: dir * step, behavior: 'smooth' });
         stop();
-        timer = setTimeout(() => { timer = setInterval(() => box.scrollBy({ top: dir * step / 3 }), 30); }, 350);
+        box.scrollBy({ top: dir * step, behavior: 'smooth' });
+        timer = setTimeout(() => {
+          let last = performance.now(), pos = box.scrollTop;
+          const t0 = last;
+          const glide = (now) => {
+            const v = Math.min(1400, 500 + (now - t0) * 0.6);         // pixels a second
+            pos = Math.max(0, Math.min(range(), pos + dir * v * Math.min(50, now - last) / 1000));
+            last = now;
+            box.scrollTop = pos;
+            frame = requestAnimationFrame(glide);
+          };
+          frame = requestAnimationFrame(glide);
+        }, 300);
       });
       for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
     }
@@ -3097,16 +3124,23 @@
     setProgress('', 0);
     $('depthDown').addEventListener('click', () => setDepth(state.maxDepth - 1));
     $('depthUpBtn').addEventListener('click', () => setDepth(state.maxDepth + 1));
-    $('threads').appendChild(new Option(`Auto (${hardwareThreads})`, 0));
-    for (const t of [1, 2, 4, 8, 12, 16, 24, 32]) {
-      if (t < hardwareThreads) $('threads').appendChild(new Option(String(t), t));
+    // the thread counts, as the Display list: Auto (every core), then fewer
+    const counts = [0, ...[32, 24, 16, 12, 8, 4, 2, 1].filter((t) => t < hardwareThreads)];
+    if (!counts.includes(settings.threads)) settings.threads = 0;
+    for (const t of counts) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'opt-item';
+      b.setAttribute('role', 'radio');
+      b.dataset.threads = t;
+      b.innerHTML = '<span></span>';
+      b.addEventListener('click', () => {
+        settings.threads = t;
+        saveSettings();
+        renderSettings();
+      });
+      $('threadList').appendChild(b);
     }
-    $('threads').value = String(settings.threads);
-    if ($('threads').selectedIndex < 0) $('threads').value = '0';
-    $('threads').addEventListener('change', () => {
-      settings.threads = +$('threads').value;
-      saveSettings();
-    });
 
     fontText($('brandMain'), 'Mind Bender', { size: 21 });
     fontText($('brandSub'), 'Solver', { ...GOLD_TEXT, size: 21 });
@@ -3169,8 +3203,9 @@
     });
     fontText($('helpTitleText'), 'How it works', { ...GOLD_TEXT, size: 26 });
     $('helpBtn').addEventListener('click', () => $('helpDialog').showModal());
-    fontText($('setTitleText'), 'Settings', { ...GOLD_TEXT, size: 26 });
+    fontText($('setTitleText'), 'Settings', { size: 40, fill: ['#ffb4ea', '#fff6a0', '#b4ffcf'], outline: 'rgba(20, 6, 18, .95)' });
     $('settingsBtn').addEventListener('click', () => $('settingsDialog').showModal());
+    new ResizeObserver(sizeOptStar).observe($('optFrame'));
     for (const [id, on] of [['solsFirst', true], ['solsAll', false]]) {
       $(id).addEventListener('click', () => {
         settings.first = on;

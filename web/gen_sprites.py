@@ -20,6 +20,12 @@ Writes web/assets/:
                   of 40 x 30 (normal, hover, pressed)
   scrollthumb.webp  the options slider's star (SliderThumb.png, 30 px), the scroll thumb
   scrolltrack.webp  the options slider's bar (OptionSliderBar.png) stood upright: 21 x 191
+  optframe.webp   the Game Options panel (DialogBox.png) without its star: the yellow frame in
+                  its red rim round the navy panel, cut for a 9-slice (376 x 380; borders 87
+                  top, 35 sides, 41 bottom), outside the rim's rounded corners clear
+  optstar.webp    DialogBox.png's star alone (the frame's place left clear), drawn behind it
+  optcheck.webp   the options' round check box (OptionCheckBox.png): off, on, 29 px each
+  optdone.webp    the options' Done button (Options_Done.png): normal, hover, pressed, 213 x 40
   naked, wince, angry, beauty, cheeks, rosy, fuzz, star, splode, shockwave
                   the chuzzles' poke reactions (Chuzzle.cpp antics, Animators.cpp)
   sounds/*.ogg    the chuzzle voices for them (from the decomp's exe/Sounds/speaks)
@@ -151,6 +157,49 @@ def build_scroll():
     return {"scrollbtn.webp": btn, "scrollthumb.webp": thumb, "scrolltrack.webp": track}
 
 
+# DialogBox.png: the frame inside its dark outline, and the navy panel's edges (measured: the red
+# rim spans x 114-485, y 104-480; the navy x 147-452, y 189-441)
+OPT_FRAME = (112, 102, 488, 482)
+
+
+def build_options():
+    box = with_alpha("DialogBox.png", "DialogBox_Alpha.png")
+    a = np.asarray(box).copy()
+    rgb = a[..., :3].astype(int)
+    red = (rgb[..., 0] > 180) & (rgb[..., 1] < 80) & (rgb[..., 2] < 80) & (a[..., 3] > 128)
+    # inside the rim: between its first and last red pixel on the row or on the column (either
+    # alone keeps the rounded corners out; the gloss in the top-right corner is not red, so a
+    # row or column through it alone falls short)
+    inside = np.zeros(red.shape, bool)
+    rows, cols = np.zeros(red.shape, bool), np.zeros(red.shape, bool)
+    for y in range(red.shape[0]):
+        xs = np.flatnonzero(red[y])
+        if xs.size:
+            rows[y, xs[0]:xs[-1] + 1] = True
+    for x in range(red.shape[1]):
+        ys = np.flatnonzero(red[:, x])
+        if ys.size:
+            cols[ys[0]:ys[-1] + 1, x] = True
+    inside = rows | cols
+    # and its dark outline: two pixels round it
+    grown = inside.copy()
+    for dy in (-2, -1, 0, 1, 2):
+        for dx in (-2, -1, 0, 1, 2):
+            grown |= np.roll(np.roll(inside, dy, 0), dx, 1)
+    dark = rgb.max(axis=2) < 225                 # the outline, not the star's yellow beside it
+    frame = a.copy()
+    frame[..., 3] = np.where(inside | (grown & dark), frame[..., 3], 0)
+    star = a.copy()
+    star[..., 3] = np.where(grown, 0, star[..., 3])
+    x0, y0, x1, y1 = OPT_FRAME
+    return {
+        "optframe.webp": Image.fromarray(frame, "RGBA").crop((x0, y0, x1, y1)),
+        "optstar.webp": Image.fromarray(star, "RGBA"),
+        "optcheck.webp": with_alpha("OptionCheckBox.png", "OptionCheckBox_Alpha.png"),
+        "optdone.webp": with_alpha("Options_Done.png", "Options_Done_Alpha.png"),
+    }
+
+
 def white_alpha(name):
     # an alpha-only texture (PopCap keeps it in the red channel): white with that alpha, tinted
     # at run time the way the game's SetColor does
@@ -219,7 +268,7 @@ def main():
     save(build_cursors(), "cursors.webp", 92)
     save(build_orbs(), "orbs.webp", 92)
     save(build_candy(), "candy.webp", 92)
-    for name, im in {**build_fx(), **build_scroll()}.items():
+    for name, im in {**build_fx(), **build_scroll(), **build_options()}.items():
         save(im, name, 92)
     copy_sounds()
     atlas, metrics = build_font()

@@ -196,26 +196,25 @@
     </form>
   </dialog>
 
-  <dialog id="settingsDialog" aria-labelledby="setTitle">
-    <form method="dialog" class="dlg">
-      <div class="dlg-head">
-        <h2 id="setTitle"><span id="setTitleText">Settings</span></h2>
-        <button class="icon-btn" value="close" data-icon="x" aria-label="Close"></button>
-      </div>
-      <div class="setting">
-        <span>Solutions</span>
-        <div class="mode-switch" role="radiogroup" aria-label="Solutions">
-          <button type="button" class="mode-btn" role="radio" id="solsFirst"><span data-mode data-label="First found"></span></button>
-          <button type="button" class="mode-btn" role="radio" id="solsAll"><span data-mode data-label="All"></span></button>
+  <dialog id="settingsDialog" class="opt-dialog" aria-labelledby="setTitle">
+    <div class="opt-star" id="optStar" aria-hidden="true"></div>
+    <form method="dialog" class="opt" id="optFrame">
+      <h2 class="opt-title" id="setTitle"><span id="setTitleText">Settings</span></h2>
+      <div class="opt-cols">
+        <div class="opt-col" role="radiogroup" aria-labelledby="solsHead">
+          <span class="opt-head" id="solsHead"></span>
+          <button type="button" class="opt-radio" role="radio" id="solsFirst"><span class="opt-dot"></span><span class="opt-text"></span></button>
+          <button type="button" class="opt-radio" role="radio" id="solsAll"><span class="opt-dot"></span><span class="opt-text"></span></button>
+          <p class="opt-note" id="solsNote"></p>
         </div>
+        <fieldset class="opt-box">
+          <legend id="threadsHead"></legend>
+          <div class="opt-list" id="threadList" role="radiogroup" aria-labelledby="threadsHead"></div>
+        </fieldset>
       </div>
-      <p class="fine" id="solsNote"></p>
-      <label class="setting">
-        <span>Threads</span>
-        <select id="threads"></select>
-      </label>
-      <p class="fine">How many searches run at once. Auto uses every core; fewer keeps the computer cooler and
-        quieter.</p>
+      <p class="opt-note">How many searches run at once. Auto uses every core; fewer keeps the computer cooler and
+        quieter, at the cost of a slower solve speed.</p>
+      <button class="opt-done" value="close" aria-label="Done"></button>
     </form>
   </dialog>
 
