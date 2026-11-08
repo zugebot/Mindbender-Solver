@@ -1,9 +1,17 @@
 # Mind Bender Solver (web)
 
-A static page that solves Chuzzle Mind Bender boards in the browser: paint a start and a
-goal board (normal or with the 2x2 piece), press Solve, and get every shortest solution
-of up to 10 moves, with a step-by-step replay. Nothing is uploaded, and there is no server
+A static page that solves Chuzzle Mind Bender boards in the browser. The default is a custom
+puzzle: paint the goal (normal or with the 2x2 piece), then make the start, the scrambled board,
+by dragging its Chuzzles (drop one on another and they swap; tap two to swap; drag the 2x2) or
+with Mix. The start is only ever rearranged, never painted, so it always holds the goal's
+Chuzzles: repainting the goal repaints them on the start too. Solve gives every shortest
+solution of up to 10 moves, with a step-by-step replay. A three-step tutorial in the info bar
+shows the way on a first visit (Help: Show the tutorial again). The game's own 100 puzzles are
+under Game puzzles: there the boards are fixed and View replays every shortest solution, loaded
+from `solutions/` (all 100 are solved). The goal is on the left and the start on the right, as in
+the game. Nothing is uploaded, and there is no server
 code: the solver is C++ compiled to WebAssembly and runs in Web Workers.
+
 
 ## Run it locally
 
@@ -20,7 +28,7 @@ Then open http://localhost:8770/.
 
 Copy the `web/` folder's files to any static host (GitHub Pages, Netlify, Cloudflare Pages,
 or a plain web server): `index.html`, `style.css`, `app.js`, `solver-worker.js`,
-`mb_solver.js`, `puzzles.js` and `assets/`. No special headers are needed, because the workers share
+`mb_solver.js`, `puzzles.js`, `font.js`, `solutions/` and `assets/`. No special headers are needed, because the workers share
 nothing (see below).
 
 ## Files
@@ -31,12 +39,13 @@ nothing (see below).
 | `solver-worker.js` | one solver per Web Worker; talks to `app.js` by messages (the page fetches it and `mb_solver.js` once and starts every worker from one blob, so 16 workers cost no extra downloads; one worker is kept warm between solves) |
 | `mb_solver.js` | the solver as WebAssembly, embedded in one JS file (built, but committed so the folder is deployable) |
 | `puzzles.js` | the game's 100 boards with their known optimum or lower bound (generated) |
+| `solutions/` | `<puzzle>.txt`: every shortest solution of each of the game's 100 puzzles, 1-indexed (generated from `build/levels_final/`, 5.6 MB; one is loaded when its puzzle is viewed) |
 | `build_wasm.ps1` | rebuilds `mb_solver.js` with Emscripten (`emcc` on PATH) |
 | `assets/` | the Chuzzle sprites, eyes, rainbow board frame and backdrop tiles (generated; not in git: they are the game's copyrighted art, so run `gen_sprites.py` with the textures from a Chuzzle install in `python/deluxe_clone/textures/`) |
 | `font.js` | the game's Bauhaus 93 bitmap-font metrics (generated with `assets/bauhaus36.webp`) |
 | `serve.py` | local server with caching off |
 | `gen_sprites.py` | regenerates `assets/` from the game textures in `python/deluxe_clone/textures/`, the way `python/deluxe_clone/engine/textures.py` builds them: grey body x colour + 60 x highlight, cut by the alpha mask (yellow has its own sheet), then eyes and pupils |
-| `gen_puzzles.py` | regenerates `puzzles.js` from `src/chuzzles/levels*.hpp`, `build/levels_final/`, `build/README.md` |
+| `gen_puzzles.py` | regenerates `puzzles.js` and `solutions/` from `src/chuzzles/levels*.hpp`, `build/levels_final/`, `build/README.md` (run it after a new solve) |
 
 The solver itself is `src/solver/web/web_solver.hpp` (plain C++, no BMI2, no threads), with
 the WebAssembly entry points in `src/programs/web/wasmSolver.cpp`.
@@ -89,9 +98,27 @@ host redistributes it.
 One layout for every screen: the app fills the window (header, info bar, boards, control dock) and
 `app.js` measures the board area and sets `--u`, one pixel of the game's 800x600 screen. Boards are
 drawn in the game's own coordinates (`python/deluxe_clone/objects/board.py`): 80-unit cells, the 2x2
-Chuzzle's 179-unit sprite at (-10, -12), the 535-unit border 26 / 31 units out from the cells. Two
+Chuzzle's 179-unit sprite at (-9.5, -8.5), the 535-unit border 26 / 31 units out from the cells. Two
 boards side by side when that gives at least 3/4 of the size of one, else one with Start / Goal tabs;
 on short wide screens the dock moves to a column on the right. The solutions list is below the app.
+Each Chuzzle's look is random, as in the game's `Chuzzle.cpp`: eye shape, pupil colour, the face
+0-2 pixels lower, one of three bounce speeds; the face bobs 1 pixel with the bounce (2 on the 2x2).
 Eyes follow `engine/chuzzle.py`: idle looks every 5-14 s, blinks every 3-10 s, pupils turn to the
-mouse over their chuzzle, and drop half a pixel on sway frames 10-14. Text above the boards uses the
+mouse over their chuzzle. Text above the boards uses the
 game's Bauhaus 93 bitmap font (`textures/fonts`), drawn on canvases.
+
+The controls are the game's too: the round buttons are `GameButton.png` (blue, purple under the
+pointer, pink pressed) with white symbols in a dark outline, labelled in Bauhaus 93; Solve is the
+Scrambulator's candy wrapper (`ScrambulatorButtonBG.png`) holding a button that fills from the
+bottom while the solver runs; the move limit is a - / + stepper; moves, drop-downs and the help
+dialog use the navy-and-gold of the game's `DialogBox.png`.
+
+Smoothness: each board's Chuzzles are drawn on one canvas (`drawBoard`, one requestAnimationFrame
+loop for both boards), as a game draws them: about 150 image copies per board per frame and no
+restyling. The cells are see-through elements over the canvas that take the pointer and show the
+pick and drop rings. (As elements with CSS animations, every change on the page, even a blink,
+made the browser restyle all 150 animated parts, ~2.5 ms each time, dozens of times a second.)
+The panels are solid (a see-through blur over the backdrop made every repaint slow), the board size
+is snapped so 20 game pixels are a whole number of screen pixels (every sprite frame starts on a
+pixel, so the Chuzzles sway in place instead of jittering), and the info bar, status line and Solve
+row have fixed sizes, so messages coming and going never move the boards.

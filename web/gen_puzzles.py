@@ -1,6 +1,8 @@
 """web/gen_puzzles.py - writes web/puzzles.js (the game's 100 boards for the
 page's preset list) from src/chuzzles/levels_cells.hpp and levels.hpp, with
-each puzzle's known optimum (build/levels_final) or lower bound (build/README.md).
+each puzzle's known optimum (build/levels_final) or lower bound (build/README.md),
+and web/solutions/<puzzle>.txt: every shortest solution of each puzzle, in the page's
+1-indexed notation (a game puzzle is viewed from these, not searched again).
 
     python web/gen_puzzles.py
 """
@@ -9,6 +11,12 @@ import pathlib
 import re
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+
+def one_indexed(line):
+    """levels_final's 0-indexed moves ("C01", "R453" for the 2x2's lanes 4+5) -> the page's
+    1-indexed ones ("C11", "R563"): every lane digit + 1, the last digit (the shift) as is."""
+    return " ".join(t[0] + "".join(str(int(d) + 1) for d in t[1:-1]) + t[-1] for t in line.split())
 
 
 def main():
@@ -21,11 +29,12 @@ def main():
     defs = re.finditer(r'\{"(\d+-\d)",\s*LevelCells::(\w+),\s*LevelCells::(\w+),\s*' + fat_re + r",\s*" + fat_re,
                        defs_src)
 
-    optimum = {}
+    optimum, files = {}, {}
     for f in (ROOT / "build/levels_final").glob("*_c*_*.txt"):
         m = re.match(r"(\d+-\d)_c(\d+)_(\d+)\.txt$", f.name)
         if m and (m.group(1) not in optimum or int(m.group(2)) < optimum[m.group(1)][0]):
             optimum[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+            files[m.group(1)] = f
     bounds = {m.group(1): int(m.group(2)) for m in
               re.finditer(r"^(\d+-\d): at least (\d+) moves", (ROOT / "build/README.md").read_text(), re.M)}
 
@@ -53,6 +62,18 @@ def main():
            + "\n];\n")
     (ROOT / "web/puzzles.js").write_text(out, newline="\n")
     print(f"wrote web/puzzles.js ({len(puzzles)} puzzles)")
+
+    sol_dir = ROOT / "web/solutions"
+    sol_dir.mkdir(exist_ok=True)
+    for old in sol_dir.glob("*.txt"):
+        old.unlink()
+    written = 0
+    for p in puzzles:
+        if p.get("moves"):
+            lines = sorted(one_indexed(l) for l in files[p["name"]].read_text().splitlines() if l.strip())
+            (sol_dir / f"{p['name']}.txt").write_text("\n".join(lines) + "\n", newline="\n")
+            written += 1
+    print(f"wrote {written} solution files to web/solutions/")
 
 
 if __name__ == "__main__":

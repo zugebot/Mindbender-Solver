@@ -12,6 +12,8 @@ Writes web/assets/:
   pupils.webp     the 6 pupil colours (Pupils.png, 14 x 14 each)
   frame.webp      the board's rainbow border (Border.png with its alpha)
   cursors.webp    the game's cursors (the replay guide uses the pink and yellow wands)
+  orbs.webp       the game's blank round button (GameButton.png): normal, hover, pressed, 120 px each
+  candy.webp      the candy wrapper behind the Scramble button (ScrambulatorButtonBG.png)
   bkg1-9.webp     the backdrops' pattern, as seamless tiles
   bauhaus36.webp  the game's Bauhaus 93 bitmap font (textures/fonts/Bauhaus9336_Alpha.gif)
 and web/font.js, that font's glyph metrics (from tools/font/Bauhaus9336.py).
@@ -113,6 +115,22 @@ def build_cursors():
     return with_alpha("CustomCursors.png", "CustomCursors_Alpha.png")
 
 
+def build_orbs():
+    # GameButton.png: the game's blank round button, 3 states of 202 px (normal blue, hover
+    # purple, pressed pink), scaled to 120 px each for the page's buttons
+    im = with_alpha("GameButton.png", "GameButton_Alpha.png")
+    w = im.width // 3
+    sheet = Image.new("RGBA", (120 * 3, 120))
+    for k in range(3):
+        sheet.paste(im.crop((w * k, 0, w * k + w, im.height)).resize((120, 120), Image.LANCZOS), (120 * k, 0))
+    return sheet
+
+
+def build_candy():
+    # ScrambulatorButtonBG.png: the orange candy wrapper behind the Scrambulator's Scramble button
+    return with_alpha("ScrambulatorButtonBG.png", "ScrambulatorButtonBG_Alpha.png")
+
+
 def backdrop_tile(i):
     # The backdrops (800x600) carry the game's board panel at x 229-764 (Border.png's
     # place); the strip left of its shadow is pure pattern. Mirrored both ways it tiles seamlessly.
@@ -137,6 +155,8 @@ def main():
     save(with_alpha("Pupils.png", "Pupils_Alpha.png"), "pupils.webp", 94)
     save(build_frame(), "frame.webp", 90)
     save(build_cursors(), "cursors.webp", 92)
+    save(build_orbs(), "orbs.webp", 92)
+    save(build_candy(), "candy.webp", 92)
     atlas, metrics = build_font()
     atlas.save(OUT / "bauhaus36.webp", "WEBP", lossless=True)
     (ROOT / "web/font.js").write_text(

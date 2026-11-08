@@ -5,7 +5,7 @@
    The solutions list sits below the app. */
 :root {
   --bg: #0c0a1c;
-  --band: rgba(12, 9, 30, .82);
+  --band: rgba(14, 10, 34, .93);
   --glass-2: rgba(255, 255, 255, .07);
   --glass-3: rgba(255, 255, 255, .13);
   --line: rgba(255, 255, 255, .11);
@@ -41,33 +41,53 @@ body {
 body::before {
   content: ""; position: fixed; inset: -24px; z-index: -2;
   background: var(--bg) var(--backdrop, url("assets/bkg1.webp")) center top / 285px 900px repeat;
-  filter: blur(1.5px) saturate(1.1) brightness(.72);
 }
 body::after {
   content: ""; position: fixed; inset: 0; z-index: -1;
-  background: radial-gradient(120% 90% at 50% 40%, rgba(12, 10, 28, 0) 45%, rgba(12, 10, 28, .6) 100%);
+  /* darkens the pattern (a filter on it would cost a full-screen pass) and vignettes it */
+  background: radial-gradient(120% 90% at 50% 40%, rgba(12, 10, 28, .3) 45%, rgba(12, 10, 28, .72) 100%);
 }
 button, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 code { font: 600 13px/1 ui-monospace, "Cascadia Mono", Consolas, monospace; }
-svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-.icon-btn {
-  display: inline-grid; place-items: center; width: 36px; height: 36px; flex: none;
-  border: 0; border-radius: 10px; background: transparent; color: var(--muted);
+/* icons: a white symbol over a dark outline, the way the game letters its buttons */
+svg.i { width: 18px; height: 18px; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; overflow: visible; }
+svg.i .ol, svg.i .ol * { stroke: #1d0636; stroke-width: 6; }
+svg.i .fg, svg.i .fg * { stroke: #fff; stroke-width: 2.6; }
+svg.i .fg [fill="currentColor"] { fill: #fff; }
+svg.i .ol [fill="currentColor"] { fill: #1d0636; }
+/* the game's round button (GameButton.png, assets/orbs.webp): blue, purple under the
+   pointer, pink while pressed */
+.icon-btn, .orb {
+  --o: 38px;
+  position: relative; display: inline-grid; place-items: center; width: var(--o); height: var(--o); flex: none;
+  border: 0; padding: 0; border-radius: 50%;
+  background: url("assets/orbs.webp") 0 0 / 300% 100% no-repeat;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55));
+  transition: transform .1s;
 }
-.icon-btn:hover { background: var(--glass-3); color: var(--text); }
-.icon-btn:disabled { opacity: .3; pointer-events: none; }
-.text-btn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--gold); font-weight: 700; font-size: 14px; padding: 6px 8px; border-radius: 8px; }
-.text-btn:hover { background: var(--gold-soft); }
+.icon-btn svg.i, .orb svg.i { width: 56%; height: 56%; }
+.icon-btn:hover, button:hover > .orb { background-position: 50% 0; }
+.icon-btn:active, button:active > .orb { background-position: 100% 0; transform: translateY(1px) scale(.96); }
+.icon-btn.small { --o: 30px; }
+.icon-btn:disabled, button:disabled > .orb { filter: grayscale(.9) brightness(.7) drop-shadow(0 2px 3px rgba(0, 0, 0, .4)); opacity: .55; }
+.icon-btn:disabled { pointer-events: none; }
+.text-btn { display: inline-flex; align-items: center; gap: 7px; border: 0; background: none; color: var(--gold); font-weight: 700; font-size: 14px; padding: 4px 6px; border-radius: 8px; }
+.text-btn:hover .ftext { filter: brightness(1.15); }
+.orb.mini { --o: 28px; }
+/* drop-downs as the game's navy plaques in a gold rim */
 select {
   appearance: none; -webkit-appearance: none;
-  background: var(--glass-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23bdb7de' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
-  border: 1px solid var(--line); border-radius: 10px; height: 36px; padding: 0 30px 0 12px;
-  font-size: 14px; font-weight: 650; max-width: 100%;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffc93a' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 11px center,
+    linear-gradient(180deg, #1d2a8c, #0a1250 55%, #070c3a);
+  border: 2px solid #b8761a; border-radius: 11px; height: 36px; padding: 0 30px 0 12px;
+  font-size: 14px; font-weight: 750; max-width: 100%; color: #fff; text-shadow: 0 1px 0 #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 2px 4px rgba(0, 0, 0, .45);
 }
-select option, select optgroup { background: #1b1736; color: var(--text); }
+select:hover { border-color: #ffc93a; }
+select option, select optgroup { background: #0f1650; color: #fff; text-shadow: none; }
 /* text in the game's Bauhaus 93 bitmap font (app.js draws it onto a canvas) */
 .ftext { display: inline-block; vertical-align: middle; line-height: 0; max-width: 100%; }
 .ftext canvas { display: block; max-width: 100%; height: auto !important; }
@@ -95,19 +115,24 @@ select option, select optgroup { background: #1b1736; color: var(--text); }
   .palette { --sz: 38px; justify-content: center; }
   .solve-box { width: 100%; }
 }
-.bar, .subbar, .dock { background: var(--band); backdrop-filter: blur(12px) saturate(1.2); -webkit-backdrop-filter: blur(12px) saturate(1.2); }
+/* solid panels: a see-through blur over the backdrop made every repaint (even selecting text) slow */
+.bar, .subbar, .dock { background: var(--band); }
+/* the dock: a deep purple panel under a gold rim, like the game's menus */
+.dock {
+  background: linear-gradient(180deg, rgba(58, 22, 110, .9), rgba(22, 10, 52, .94) 60%, rgba(14, 7, 36, .96));
+  box-shadow: inset 0 2px 0 rgba(255, 201, 58, .75), inset 0 3px 0 rgba(120, 50, 0, .6), 0 -6px 20px rgba(0, 0, 0, .35);
+}
 .bar { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 12px; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .logo { --u: .4px; position: relative; width: 32px; height: 32px; flex: none; background: url("assets/chuzzles.webp") 0 calc(-320 * var(--u)) / calc(4800 * var(--u)) calc(640 * var(--u)) no-repeat; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
-.brand-name { font-weight: 800; font-size: 17px; letter-spacing: -.01em; white-space: nowrap; }
-.brand-sub { color: var(--gold); font-weight: 700; }
+.brand-name { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .bar-right { margin-left: auto; display: flex; align-items: center; gap: 4px; min-width: 0; }
 .pick { min-width: 0; }
 .pick select { width: 100%; max-width: min(230px, calc(100vw - 210px)); text-overflow: ellipsis; }
 @media (max-width: 420px) { .brand-sub { display: none; } }
 
-.subbar { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 8px; border-bottom: 1px solid var(--line); }
-.info { margin: 0; text-align: center; }
+.subbar { display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 8px; border-bottom: 1px solid var(--line); }
+.info { margin: 0; text-align: center; min-width: 0; max-width: 100%; }
 .sol-switch { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; max-width: 760px; }
 .sol-nav { display: flex; align-items: center; gap: 4px; }
 
@@ -121,7 +146,7 @@ select option, select optgroup { background: #1b1736; color: var(--text); }
 .seg-btn[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: linear-gradient(90deg, var(--gold-2), var(--gold)); }
 .thumb { --t: 7px; display: grid; grid-template-columns: repeat(6, var(--t)); grid-auto-rows: var(--t); gap: 1px; padding: 3px; border-radius: 6px; background: #06050f; box-shadow: 0 0 0 2px rgba(255, 140, 40, .6); flex: none; }
 .thumb i { border-radius: 50%; background: var(--col); }
-.thumb i.p { border-radius: 1.5px; }
+.thumb i.p { margin: 1px; }
 .seg-btn:not([aria-selected="true"]) .thumb { opacity: .7; }
 
 .boards { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 18px; padding: 8px; }
@@ -154,6 +179,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   background: url("assets/frame.webp") 0 0 / 100% 100% no-repeat;
 }
 .board {
+  contain: layout paint;
   position: absolute; left: calc(16 * var(--u)); top: calc(21 * var(--u));
   width: calc(500 * var(--u)); height: calc(500 * var(--u)); padding: calc(10 * var(--u));
   display: grid;
@@ -166,30 +192,12 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   -webkit-user-select: none;
 }
 
-/* a chuzzle (engine/chuzzle.py): the 80-unit body frame from its colour's row (--k) of the
-   60-frame bank, swaying through frames 0-19 every 4 game frames at 60 fps (1.333 s); the
-   eye shape at (-2, -3) and two pupils over it (placed and moved by app.js). The 2x2 one is
-   the 179-unit huge bank at (-10, -12) from its top-left cell, frames 0-9 at half that rate. */
-.cell {
-  position: relative; z-index: 1;
-  background: url("assets/chuzzles.webp") 0 calc(var(--k) * -80 * var(--u)) / calc(4800 * var(--u)) calc(640 * var(--u)) no-repeat;
-  animation: sway 1.3333s steps(20) infinite;
-  animation-delay: calc(var(--ph) * -1.3333s);
-  cursor: pointer;
-}
-@keyframes sway { to { background-position-x: calc(-1600 * var(--u)); } }
-.cell.piece { background: none; animation: none; }
-.cell.piece::before {
-  content: ""; position: absolute; left: calc(-10 * var(--u)); top: calc(-12 * var(--u));
-  width: calc(179 * var(--u)); height: calc(179 * var(--u)); pointer-events: none;
-  background: url("assets/huge.webp") 0 calc(var(--k) * -180 * var(--u)) / calc(5400 * var(--u)) calc(1440 * var(--u)) no-repeat;
-  animation: sway-huge 1.3333s steps(10) infinite;      /* half the normal chuzzles' frame rate */
-  animation-delay: calc(var(--ph) * -1.3333s);
-}
-@keyframes sway-huge { to { background-position-x: calc(-1800 * var(--u)); } }
-/* sliding: the game's frame for the direction and speed (--f, set by app.js) */
-.cell.mv { animation: none; background-position-x: calc(var(--f) * -80 * var(--u)); will-change: transform; }
-.cell.piece.mv::before { animation: none; background-position-x: calc(var(--f) * -180 * var(--u)); }
+/* the board's chuzzles are drawn on its canvas (app.js drawBoard, after the game's
+   Chuzzle.cpp); the cells over it are see-through: they take the pointer and show the rings */
+.board-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cell { position: relative; z-index: 1; cursor: pointer; }
+/* the palette's and the logo's chuzzles are still elements: still, with their eyes on top */
+.face { position: absolute; left: 0; top: 0; pointer-events: none; }
 .eyes, .pupil { position: absolute; pointer-events: none; }
 .eyes {
   width: calc(85 * var(--u)); height: calc(88 * var(--u));
@@ -201,16 +209,18 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   /* look direction (--dx, --dy in -1..1) times the shape's pupil travel (--tx, --ty) */
   transform: translate(calc(var(--dx, 0) * var(--tx) * var(--u)), calc(var(--dy, 0) * var(--ty) * var(--u)));
   transition: transform .5s cubic-bezier(.12, .75, .3, 1);   /* the idle lerp: 4.5 per second */
-  animation: bob 1.3333s step-end infinite;
-  animation-delay: calc(var(--ph) * -1.3333s);
 }
-.cell.track .pupil { transition-duration: .08s; }             /* following the mouse: 32 per second */
-.cell.blink .pupil { visibility: hidden; }
-.cell.piece .pupil { animation: none; }
-/* the pupils drop half a pixel while the body is on sway frames 10-14 */
-@keyframes bob { 0% { translate: 0 0; } 50% { translate: 0 calc(.5 * var(--u)); } 75% { translate: 0 0; } }
+/* a palette or logo chuzzle blinking */
+.blink .pupil { visibility: hidden; }
 .board.placing .cell { cursor: copy; }
 .board.readonly .cell { cursor: default; }
+/* the start while editing: drag a chuzzle onto another (they swap), or tap two */
+.board.mover .cell { cursor: grab; }
+.board.dragging, .board.dragging .cell { cursor: grabbing; }
+/* held: drawn by the canvas under the pointer, enlarged, with a shadow */
+.cell.lifted { pointer-events: none; }
+.cell.drop-on { border-radius: 50%; box-shadow: 0 0 0 calc(4 * var(--u)) #fff, 0 0 calc(18 * var(--u)) rgba(255, 255, 255, .7); }
+.cell.picked { border-radius: 50%; box-shadow: 0 0 0 calc(4 * var(--u)) var(--hl), 0 0 calc(18 * var(--u)) rgba(255, 216, 74, .8); }
 .band-hl {
   z-index: 0; margin: calc(2 * var(--u)); border-radius: calc(38 * var(--u));
   background: rgba(255, 216, 74, .18); box-shadow: inset 0 0 0 2px var(--hl), 0 0 14px rgba(255, 216, 74, .4);
@@ -253,7 +263,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .45));
   transition: transform .12s;
 }
-.swatch.big { --bs: calc(2 * var(--sz) + var(--pg)); --u: calc(var(--bs) / 179); grid-column: 5 / span 2; grid-row: 1 / span 2; width: var(--bs); height: var(--bs); justify-self: center; border-radius: 28%; background: none; }
+.swatch.big { --bs: calc(2 * var(--sz) + var(--pg)); --u: calc(var(--bs) / 180); grid-column: 5 / span 2; grid-row: 1 / span 2; width: var(--bs); height: var(--bs); justify-self: center; border-radius: 28%; background: none; }
 .swatch.big::before {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: url("assets/huge.webp") 0 calc(var(--k) * -180 * var(--u)) / calc(5400 * var(--u)) calc(1440 * var(--u)) no-repeat;
@@ -263,51 +273,83 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .swatch[aria-checked="true"] { transform: scale(1.12); box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(255, 201, 58, .55); }
 .swatch .n {
   position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%);
-  min-width: 18px; padding: 0 4px; border-radius: 6px; font: 800 10px/15px ui-sans-serif, system-ui, sans-serif;
-  background: rgba(10, 8, 26, .9); color: var(--muted); box-shadow: 0 0 0 1px var(--line); white-space: nowrap;
+  min-width: 18px; padding: 0 4px; border-radius: 6px; font: 800 10px/14px ui-sans-serif, system-ui, sans-serif;
+  background: linear-gradient(180deg, #1d2a8c, #070c3a); color: #fff; box-shadow: 0 0 0 1.5px #b8761a; white-space: nowrap;
 }
 .swatch .n:empty { display: none; }
 .swatch .n.bad { background: var(--danger); color: #fff; box-shadow: none; }
-.tools { display: flex; }
+/* the board tools: an orb with its name under it, in the game's font */
+.tools { display: flex; gap: 2px; }
 .tool {
-  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  height: 48px; min-width: 52px; padding: 0 6px; border: 0; border-radius: 10px; background: transparent;
-  color: var(--muted); font-size: 11px; font-weight: 700;
+  --o: 40px;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px;
+  min-width: 54px; padding: 2px 2px 0; border: 0; background: none;
 }
-.tool:hover { background: var(--glass-3); color: var(--text); }
-.tool:disabled { opacity: .3; pointer-events: none; }
-.tool-text { white-space: nowrap; }
+.tool .orb { --o: inherit; }
+.tool-text { min-height: 16px; }
+.tool:disabled { cursor: default; }
+.tool:disabled .tool-text { opacity: .45; }
 
-.player { display: flex; align-items: center; gap: 8px; }
-.play { width: 48px; height: 48px; border-radius: 50%; border: 0; background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: var(--gold-ink); display: grid; place-items: center; box-shadow: 0 2px 10px rgba(255, 158, 27, .45); }
-.play:hover { filter: brightness(1.06); }
-.play svg.i { width: 20px; height: 20px; }
+.player { display: flex; align-items: center; gap: 6px; }
+.player .play { --o: 54px; }
 .steps { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
 .step { margin: 0; font-size: 14px; color: var(--muted); text-align: center; }
 .step b { color: var(--gold); }
 .step .nm { color: var(--faint); font-size: 12px; }
-.chips { position: relative; display: flex; gap: 5px; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding: 1px; }
+/* the moves as little plaques: the game's navy panel (DialogBox.png) in a gold rim */
+.chips { position: relative; display: flex; gap: 5px; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding: 8px 10px; margin: -5px 0; }
 .chips::-webkit-scrollbar { display: none; }
-.chip { flex: none; font: 700 13px/1 ui-monospace, "Cascadia Mono", Consolas, monospace; height: 28px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--glass-2); color: var(--text); }
-.chip.done { color: var(--faint); }
-.chip.now { border-color: var(--gold); background: var(--gold-soft); color: var(--gold); }
-
-.solve-box { display: flex; gap: 8px; align-items: center; width: min(100%, 360px); }
-.depth select { height: 48px; border-radius: 12px; }
-.solve {
-  position: relative; overflow: hidden; flex: 1; height: 48px; border: 0; border-radius: 12px;
-  background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: var(--gold-ink); font-weight: 800; font-size: 16px; letter-spacing: .02em;
-  box-shadow: 0 3px 14px rgba(255, 158, 27, .4), inset 0 1px 0 rgba(255, 255, 255, .45);
+.chip {
+  flex: none; height: 28px; padding: 0 8px; border-radius: 9px; border: 2px solid #b8761a;
+  font: 800 13px/1 ui-monospace, "Cascadia Mono", Consolas, monospace; color: #fff;
+  background: linear-gradient(180deg, #1d2a8c, #0a1250 55%, #070c3a);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 2px 3px rgba(0, 0, 0, .45);
+  text-shadow: 0 1px 0 #000;
 }
-.solve:hover { filter: brightness(1.05); }
-.solve.running { background: var(--glass-3); color: var(--text); box-shadow: none; cursor: default; filter: none; }
-.solve-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--gold-2), var(--gold)); opacity: .5; transition: width .25s; }
-.solve-fill.indet { width: 35% !important; animation: indet 1.2s ease-in-out infinite; }
-@keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
-.solve-label { position: relative; font-size: 15px; }
-.cancel { width: 48px; height: 48px; border-radius: 12px; background: var(--glass-3); color: var(--text); }
-.status { flex-basis: 100%; margin: -4px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
-.status:empty { display: none; }
+.chip:hover { border-color: #ffc93a; }
+.chip.done { color: #9aa3e0; border-color: #6d4a17; background: linear-gradient(180deg, #151d5e, #080c34); }
+.chip.now { border-color: #ffe36a; color: #2b1600; text-shadow: none; background: linear-gradient(180deg, #fff3a6, #ffc93a 50%, #ff9e1b); box-shadow: 0 0 10px rgba(255, 201, 58, .6); }
+
+/* Solve: the Scrambulator's candy wrapper (assets/candy.webp) holding an orb; while it runs
+   the orb fills from the bottom with the progress */
+.solve-box { display: flex; gap: 10px; align-items: center; justify-content: center; }
+.depth { display: flex; align-items: center; gap: 6px; }
+.depth.busy { opacity: .5; pointer-events: none; }
+.depth-text { display: flex; flex-direction: column; align-items: center; min-width: 74px; gap: 1px; }
+.solve {
+  --sh: 76px;
+  position: relative; width: calc(var(--sh) * 1.584); height: var(--sh); flex: none; border: 0; padding: 0;
+  display: grid; place-items: center;
+  background: url("assets/candy.webp") center / 100% 100% no-repeat;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .55));
+  transition: transform .1s;
+}
+.solve-orb {
+  position: relative; display: grid; place-items: center; overflow: hidden;
+  width: calc(var(--sh) * .9); height: calc(var(--sh) * .9); border-radius: 50%;
+  background: url("assets/orbs.webp") 0 0 / 300% 100% no-repeat;
+}
+.solve:hover .solve-orb { background-position: 50% 0; }
+.solve:active { transform: translateY(1px) scale(.97); }
+.solve:active .solve-orb { background-position: 100% 0; }
+.solve.running { cursor: default; transform: none; }
+.solve.running .solve-orb { background-position: 0 0; }
+.solve-fill {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(255, 228, 120, .9), rgba(255, 150, 20, .85));
+  transform: scaleY(0); transform-origin: 50% 100%;
+  transition: transform .25s;
+}
+.solve-fill.indet { animation: slosh 1.2s ease-in-out infinite alternate; }
+@keyframes slosh { from { transform: scaleY(.18); } to { transform: scaleY(.42); } }
+.solve-label { position: relative; z-index: 1; max-width: 86%; }
+.cancel { --o: 40px; }
+.cancel[hidden] { display: grid !important; visibility: hidden; }
+/* the status line always takes one line (text coming and going must not move the boards) */
+.status {
+  flex-basis: 100%; max-width: 100%; margin: -4px 0 0; height: 19px; font-size: 13px; line-height: 19px;
+  color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .status.error { color: #ffb3a6; }
 
 /* phones: the dock stacks, full width */
@@ -316,21 +358,21 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   .dock-inner { width: 100%; gap: 8px; }
   .palette { --sz: min(46px, calc((100vw - 24px - 5 * 10px) / 6)); justify-content: center; }
   .tools { width: 100%; justify-content: space-between; }
-  .tool { flex: 1; min-width: 0; }
+  .tool { --o: 38px; flex: 1; min-width: 0; }
   .solve-box { width: 100%; }
   .steps { width: 100%; }
 }
 
 /* ------------------------------------------------------------------ the solutions, below the app */
 .results { max-width: 1000px; margin: 0 auto; padding: 16px 12px 40px; scroll-margin-top: 0; }
-.res-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--band); border: 1px solid var(--line); border-radius: 14px 14px 0 0; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.res-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--band); border: 1px solid var(--line); border-radius: 14px 14px 0 0; }
 .res-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
 .res-actions { display: flex; gap: 2px; }
 .stale { margin: 0; padding: 8px 14px; font-size: 13px; color: #ffb3a6; background: var(--band); border: 1px solid var(--line); border-top: 0; }
 .results.is-stale .solutions { opacity: .55; }
 .solutions {
   position: relative; list-style: none; margin: 0; padding: 4px 0; background: var(--band); border: 1px solid var(--line); border-top: 0;
-  border-radius: 0 0 14px 14px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-radius: 0 0 14px 14px;
   display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
 }
 .solutions:empty { display: none; }
@@ -345,14 +387,19 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .more { display: flex; margin: 10px auto 0; }
 
 /* ------------------------------------------------------------------ dialog */
-dialog { border: 1px solid var(--line); border-radius: 18px; padding: 0; background: rgba(20, 16, 44, .96); color: var(--text); width: min(480px, calc(100vw - 24px)); box-shadow: 0 20px 70px rgba(0, 0, 0, .6); }
-dialog::backdrop { background: rgba(6, 4, 16, .55); backdrop-filter: blur(3px); }
+/* the game's dialog (DialogBox.png): a navy panel in a gold and red rim */
+dialog {
+  border: 3px solid #ffc93a; border-radius: 20px; padding: 0; color: var(--text); width: min(480px, calc(100vw - 24px));
+  background: linear-gradient(180deg, #1a2580, #0b1356 40%, #070c3a);
+  box-shadow: 0 0 0 3px #e2400f, inset 0 2px 0 rgba(255, 255, 255, .15), 0 20px 70px rgba(0, 0, 0, .6);
+}
+dialog::backdrop { background: rgba(6, 4, 16, .7); }
 .dlg { padding: 18px 20px 20px; }
 .dlg-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .dlg h2 { margin: 0; font-size: 18px; }
 .dlg h3 { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--gold); }
 .notation { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
-.notation dt code { background: var(--glass-3); padding: 3px 6px; border-radius: 6px; }
+.notation dt code { display: inline-block; padding: 4px 7px; border-radius: 8px; border: 2px solid #b8761a; color: #fff; background: linear-gradient(180deg, #1d2a8c, #070c3a); }
 .notation dd { margin: 0; align-self: center; }
 .fine { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 .setting { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; font-weight: 700; font-size: 14px; }
@@ -360,11 +407,11 @@ dialog::backdrop { background: rgba(6, 4, 16, .55); backdrop-filter: blur(3px); 
 /* big screens: the controls grow with the boards */
 @media (min-width: 1200px) and (min-height: 860px) {
   .palette { --sz: 50px; }
-  .tool { height: 58px; min-width: 64px; font-size: 12.5px; }
-  .tool svg.i { width: 22px; height: 22px; }
-  .solve-box { width: 420px; }
-  .solve, .depth select, .cancel { height: 56px; }
-  .play { width: 56px; height: 56px; }
+  .tool { --o: 46px; min-width: 62px; }
+  .solve { --sh: 88px; }
+  .cancel { --o: 46px; }
+  .player .play { --o: 62px; }
+  .player .icon-btn:not(.play) { --o: 44px; }
   .chip { height: 32px; font-size: 14px; }
   .step { font-size: 15px; }
 }
@@ -372,3 +419,75 @@ dialog::backdrop { background: rgba(6, 4, 16, .55); backdrop-filter: blur(3px); 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ------------------------------------------------------------------ the game's puzzles */
+dialog.wide { width: min(640px, calc(100vw - 24px)); }
+.pz-grid { display: grid; gap: 6px; margin-top: 14px; max-height: min(62vh, 640px); overflow-y: auto; padding-right: 4px; }
+.pz-row { display: grid; grid-template-columns: 30px repeat(5, minmax(0, 1fr)); gap: 6px; align-items: center; }
+.pz-world { font-weight: 800; color: var(--gold); text-align: right; padding-right: 4px; }
+.pz {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 4px; height: 34px; padding: 0 9px;
+  border-radius: 9px; border: 2px solid #b8761a; color: #fff;
+  background: linear-gradient(180deg, #1d2a8c, #0a1250 55%, #070c3a);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 2px 3px rgba(0, 0, 0, .45);
+}
+.pz b { font-size: 14px; }
+.pz span { font-size: 12px; color: #c9c3ff; }
+.pz span::after { content: " mv"; color: #8f88c2; }
+.pz.fat { border-color: #d65cd6; }
+.pz:hover { border-color: #ffc93a; }
+@media (max-width: 480px) {
+  .pz-label { display: none; }
+  .pz-row { grid-template-columns: 22px repeat(5, minmax(0, 1fr)); gap: 5px; }
+  .pz { flex-direction: column; align-items: center; justify-content: center; gap: 0; height: 40px; padding: 0 2px; }
+  .pz b { font-size: 13px; line-height: 1.1; white-space: nowrap; }
+  .pz span { font-size: 11px; line-height: 1.1; }
+}
+
+/* ------------------------------------------------------------------ custom / game puzzles */
+.mode-switch {
+  display: flex; padding: 3px; gap: 3px; border-radius: 13px; border: 2px solid #b8761a;
+  background: linear-gradient(180deg, #0a1250, #070c3a); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+.mode-btn { display: grid; place-items: center; height: 30px; padding: 0 10px; border: 0; border-radius: 9px; background: none; }
+.mode-btn[aria-pressed="true"] { background: linear-gradient(180deg, #2d3db0, #16207a); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 0 0 1px rgba(255, 201, 58, .5); }
+.mode-btn:hover:not([aria-pressed="true"]) { background: rgba(255, 255, 255, .07); }
+@media (max-width: 520px) { .brand-name { display: none; } }
+
+/* the Move tool, on while pressed */
+.tool[aria-pressed="true"] .orb { box-shadow: 0 0 0 3px var(--gold), 0 0 14px rgba(255, 201, 58, .7); }
+
+/* a game puzzle: nothing to edit, its solutions to view */
+.known-note { margin: 0; font-weight: 700; color: var(--muted); }
+
+/* ------------------------------------------------------------------ the tutorial */
+.coach { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 900px; height: 100%; padding: 0 4px; }
+.coach-n {
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  font-weight: 800; color: var(--gold-ink); background: radial-gradient(circle at 35% 30%, #fff3b0, var(--gold) 50%, var(--gold-2));
+}
+.coach-text { margin: 0; flex: 1; min-width: 0; max-height: 100%; overflow: hidden; font-size: 14.5px; line-height: 19px; color: var(--text); }
+.coach-text b { color: var(--gold); }
+.coach-btn, .coach-skip { flex: none; border: 0; border-radius: 9px; font-weight: 800; font-size: 14px; height: 32px; padding: 0 14px; }
+.coach-btn { color: var(--gold-ink); background: linear-gradient(180deg, #fff3a6, #ffc93a 50%, #ff9e1b); }
+.coach-skip { color: var(--muted); background: none; padding: 0 8px; }
+.coach-skip:hover { color: var(--text); }
+/* what the step is about glows */
+.lit { position: relative; border-radius: 16px; }
+/* the glow pulses by opacity only (an animated box-shadow repaints the area every frame) */
+.lit::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 5;
+  box-shadow: 0 0 0 3px rgba(255, 201, 58, .9), 0 0 22px rgba(255, 201, 58, .55);
+  animation: lit .8s ease-in-out infinite alternate;
+}
+@keyframes lit { from { opacity: 1; } to { opacity: .35; } }
+.board-wrap.lit { border-radius: 24px; }
+@media (max-width: 600px) {
+  .subbar { height: 60px; }
+  .coach { gap: 6px; }
+  .coach-n { width: 24px; height: 24px; }
+  .coach-text { font-size: 13px; line-height: 17px; }
+  .coach-btn { padding: 0 10px; }
+  .coach-skip { padding: 0 4px; }
+}
+.tour { margin-top: 14px; }

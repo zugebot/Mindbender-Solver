@@ -29,8 +29,14 @@
     check: '<path d="M20 6 9 17l-5-5"/>',
     list: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
     up: '<path d="m18 15-6-6-6 6"/>',
+    shuffle: '<path d="M3 7h3.5c4.5 0 6.5 10 11 10H21"/><path d="m18 14 3 3-3 3"/><path d="M3 17h3.5c1.6 0 2.8-1.3 3.8-3"/><path d="M13.7 10c1-1.7 2.2-3 3.8-3H21"/><path d="m18 4 3 3-3 3"/>',
+    reset: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
+    grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+    minus: '<path d="M6 12h12"/>',
+    plus: '<path d="M12 6v12M6 12h12"/>',
   };
-  const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+  // White symbols over a dark outline, the way the game letters its buttons.
+  const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><g class="ol">${ICONS[name]}</g><g class="fg">${ICONS[name]}</g></svg>`;
   function setIcon(el, name) {
     const old = el.querySelector(':scope > svg.i');
     if (old) old.remove();
@@ -43,11 +49,16 @@
     start: blank(),
     goal: blank(),
     color: 2,
-    placing: false,         // the palette's 2x2 tool: taps place the big chuzzle
+    tool: 'paint',          // the goal's tool: 'paint' (the colour) or 'piece' (place the 2x2)
     undo: [],
     preset: '',
-    side: 'start',          // the board being edited (the one shown on phones)
+    follows: true,          // the start is still the goal's copy (Reset has nothing to do)
+    picked: null,           // the start chuzzle tapped first for a swap: { side, i }
+    custom: null,           // the custom puzzle, kept while a game puzzle is open
+    coach: 0,               // the tutorial's step (0: not showing)
+    side: 'goal',           // the board being edited (the one shown on phones)
     mode: 'edit',           // 'edit' | 'replay'
+    maxDepth: MAX_DEPTH,    // the longest solution the search looks for
   };
 
   // ids: which chuzzle sits in each cell (replay moves them, so each keeps its eyes)
@@ -57,7 +68,7 @@
   const otherSide = (s) => (s === 'start' ? 'goal' : 'start');
 
   function pushUndo() {
-    state.undo.push({ start: cloneBoard(state.start), goal: cloneBoard(state.goal), preset: state.preset });
+    state.undo.push({ start: cloneBoard(state.start), goal: cloneBoard(state.goal), preset: state.preset, follows: state.follows });
     if (state.undo.length > 200) state.undo.shift();
   }
 
@@ -80,13 +91,102 @@
     for (const i of pieceCells(board.fat)) board.cells[i] = color;
   }
 
-  // The 2x2 tool: moves this board's piece there, or places a new one (in the selected
-  // colour). A puzzle has the piece on both boards, so the other board gets one too.
+  // The 2x2 tool: moves this board's piece there, or places a new one in the selected colour.
+  // A puzzle has the piece on both boards, so the other board gets one too.
   function placeFat(which, r, c) {
     const b = state[which], o = state[otherSide(which)];
     const color = pieceColour(b) ?? pieceColour(o) ?? state.color;
     placePieceAt(b, r, c, color);
     if (!o.fat) placePieceAt(o, r, c, color);
+  }
+
+  // The start and goal no longer hold the same chuzzles (a board was painted).
+  const startMismatch = () => !state.follows && (!!state.start.fat !== !!state.goal.fat
+    || colourCounts(state.start).some((n, k) => n !== colourCounts(state.goal)[k]));
+
+  // The start is the goal's chuzzles rearranged (dragged, swapped or mixed, never painted):
+  // start.ids[k] = the goal cell whose chuzzle sits in start cell k. Painting the goal repaints
+  // that chuzzle on the start too, so the two always hold the same chuzzles. Placing, moving or
+  // removing the goal's 2x2 starts the start again from a copy of the goal.
+  const copyOfGoal = () => {
+    const b = cloneBoard(state.goal);
+    b.ids = b.cells.map((_, k) => k);
+    return b;
+  };
+  const pieceLinked = (s, g) => !s.fat === !g.fat
+    && (!s.fat || pieceCells(s.fat).every((k) => pieceCells(g.fat).includes(s.ids[k])));
+  function syncStart() {
+    const s = state.start;
+    if (!state.follows && !s.ids) {
+      linkStart();
+      return;
+    }
+    if (state.follows || !pieceLinked(s, state.goal)) {
+      state.start = copyOfGoal();
+      state.follows = true;
+      return;
+    }
+    s.cells = s.ids.map((i) => state.goal.cells[i]);
+  }
+  // A start from a link (or saved before the start was only rearranged): which goal chuzzle
+  // is which. The 2x2's cells go to the goal's 2x2, the rest to goal chuzzles of their colour
+  // in reading order; a start chuzzle with no goal chuzzle of its colour left takes one of the
+  // goal's leftovers and its colour. So the start always ends up a rearrangement of the goal.
+  function linkStart() {
+    const s = state.start, g = state.goal;
+    if (!!s.fat !== !!g.fat) {
+      state.start = copyOfGoal();
+      state.follows = true;
+      return;
+    }
+    const ids = Array(36).fill(-1);
+    const gp = g.fat ? pieceCells(g.fat) : [], sp = s.fat ? pieceCells(s.fat) : [];
+    sp.forEach((k, m) => { ids[k] = gp[m]; });
+    const free = g.cells.map((col, k) => (gp.includes(k) ? -1 : k)).filter((k) => k >= 0);
+    for (let k = 0; k < 36; k++) {
+      if (sp.includes(k)) continue;
+      const n = free.findIndex((j) => g.cells[j] === s.cells[k]);
+      if (n >= 0) ids[k] = free.splice(n, 1)[0];
+    }
+    for (let k = 0; k < 36; k++) if (ids[k] < 0) ids[k] = free.shift();
+    s.ids = ids;
+    s.cells = ids.map((i) => g.cells[i]);
+    state.follows = ids.every((v, k) => v === k);
+  }
+
+  // A lane move (Scramble uses them): lane `lane` of rows (col false) or columns shifted by n
+  // (right / down); a lane through the 2x2 takes the piece's other lane with it, and the
+  // piece never ends straddling the edge (the solver's moveValid). null if not allowed.
+  function laneMove(board, col, lane, n) {
+    n = ((n % 6) + 6) % 6;
+    const f = board.fat;
+    let lanes = [lane];
+    if (f) {
+      const a = col ? f.x : f.y;
+      if (lane === a || lane === a + 1) {
+        lanes = [a, a + 1];
+        const along = col ? f.y : f.x;
+        if ((along + n) % 6 === 5) return null;
+      }
+    }
+    return applyMove(board, { col, lanes, n });
+  }
+
+  // 30 random moves (no lane twice in a row), the game's Scrambulator in spirit.
+  function scrambled(board) {
+    let b = cloneBoard(board), last = -1;
+    for (let k = 0; k < 30; k++) {
+      let col, lane;
+      do {
+        col = Math.random() < 0.5;
+        lane = Math.floor(Math.random() * 6);
+      } while ((col ? 6 : 0) + lane === last);
+      last = (col ? 6 : 0) + lane;
+      const next = laneMove(b, col, lane, 1 + Math.floor(Math.random() * 5));
+      if (next) b = next;
+      else k--;
+    }
+    return b;
   }
 
   // ---------------------------------------------------------------- moves
@@ -164,11 +264,12 @@
         const color = board.cells[r * 6 + c];
         const d = document.createElement('div');
         d.className = piece ? 'cell piece' : 'cell';
+        if (state.picked && el.id === `${state.picked.side}Board` && state.mode === 'edit' && state.picked.i === r * 6 + c) d.classList.add('picked');
         d.dataset.r = r;
         d.dataset.c = c;
         const id = board.ids ? board.ids[r * 6 + c] : r * 6 + c;
-        setChuzzle(d, color, id);
-        addFace(d, id, piece ? 'piece' : 'normal', `${el.id}:${id}`);
+        d.dataset.k = color;            // drawn on the board's canvas
+        d.dataset.eye = `c:${id}`;
         d.style.gridRow = `${r + 1} / span ${piece ? 2 : 1}`;
         d.style.gridColumn = `${c + 1} / span ${piece ? 2 : 1}`;
         d.setAttribute('role', 'gridcell');
@@ -176,46 +277,67 @@
         frag.appendChild(d);
       }
     }
-    el.replaceChildren(frag);
+    el.replaceChildren(boardCanvas(el), frag);
   }
 
-  // ---------------------------------------------------------------- chuzzles (engine/chuzzle.py)
-  // Eye shape (0-3) and pupil colour (0-5) are random per chuzzle in the game; here they are
-  // fixed per chuzzle id so a chuzzle keeps its face through a replay.
+  // ---------------------------------------------------------------- chuzzles (the game's Chuzzle.cpp)
+  // Pupil centres and travel per eye shape (gEyeCentres, gPupilRange), left eye then right.
   const EYE_PUPIL_CENTERS = [[[34, 60], [53, 62]], [[33, 62], [53, 63]], [[34, 63], [52, 62]], [[35, 62], [54, 62]]];
   const EYE_PUPIL_TRAVEL = [[4, 5], [5, 4], [4, 4], [5, 4]];
-  // Eyes.png's top-left on the chuzzle's surface: NORMAL_EYES_POS, and FAT_EYES_POS (42, 64) on
-  // the 2x2's surface, which is drawn at (-10, -12) from its top-left cell. (FAT_*_PUPIL_CENTER
-  // in chuzzle.py would put the pupils below the eye whites, so the 2x2 uses the shape's own
-  // pupil centres and travel, like a normal chuzzle.)
-  const EYES_AT = { normal: [-2, -3], piece: [42 - 10, 64 - 12], surface: [42, 64] };
+  // Eyes.png's top-left (85 x 88, drawn centred), in game pixels from the chuzzle's cell:
+  // a chuzzle's face is centred at (40, 41) of its cell; the 2x2's at (84, 111) of its top-left
+  // cell (Chuzzle::Draw: DrawEyes at (cx - 36, cy - 10) of the block's centre (80, 81)); and
+  // on the palette's 2x2, whose sprite box is the 179-unit sprite drawn from (-9.5, -8.5).
+  const EYES_AT = { normal: [-2, -3], piece: [42, 67], surface: [51.5, 75.5] };
 
-  function setChuzzle(el, color, id) {
+  // Each chuzzle's own look, picked at random like the game's constructor: eye shape 0-3,
+  // pupil colour 0-5, the face 0-2 pixels lower, a bounce speed of 0.2, 0.22 or 0.18 (/ 1.75)
+  // per update at 100 updates a second over a 20-frame cycle, and a random start in it. Kept
+  // per key (board and chuzzle id) so a chuzzle keeps its face as it moves.
+  const looks = new Map();
+  function look(key) {
+    let f = looks.get(key);
+    if (!f) {
+      const speed = [0.2, 0.22, 0.18][Math.floor(Math.random() * 3)] / 1.75;
+      f = { es: Math.floor(Math.random() * 4), ep: Math.floor(Math.random() * 6), oy: Math.floor(Math.random() * 3),
+        sd: 20 / speed / 100, ph: Math.random() };
+      looks.set(key, f);
+    }
+    return f;
+  }
+
+  function setChuzzle(el, color) {
     el.style.setProperty('--k', color);
-    el.style.setProperty('--ph', ((id * 37) % 100) / 100);
   }
 
   const unit = (n) => `calc(${n} * var(--u))`;
-  // Adds the eyes and pupils; key names the chuzzle for its eye state (look direction).
+  // Adds the eyes and pupils; key names the chuzzle (its look and eye state).
   function addFace(el, id, kind, key) {
-    const es = (id * 7 + 3) % 4, ep = (id * 5 + 1) % 6;
-    const [ex, ey] = EYES_AT[kind];
-    el.style.setProperty('--es', es);
-    el.style.setProperty('--ep', ep);
+    const f = look(key || `${kind}:${id}`);
+    const [ex, ey0] = EYES_AT[kind];
+    const ey = ey0 + f.oy;
+    el.style.setProperty('--es', f.es);
+    el.style.setProperty('--ep', f.ep);
+    el.style.setProperty('--sd', `${f.sd.toFixed(3)}s`);
+    el.style.setProperty('--ph', f.ph.toFixed(3));
+    // the face: the eye shape and two pupils
+    const face = document.createElement('i');
+    face.className = 'face';
     const eyes = document.createElement('i');
     eyes.className = 'eyes';
     eyes.style.left = unit(ex);
     eyes.style.top = unit(ey);
-    el.appendChild(eyes);
-    for (const [cx, cy] of EYE_PUPIL_CENTERS[es]) {
+    face.appendChild(eyes);
+    for (const [cx, cy] of EYE_PUPIL_CENTERS[f.es]) {
       const pupil = document.createElement('i');
       pupil.className = 'pupil';
       pupil.style.left = unit(ex + cx - 7);
       pupil.style.top = unit(ey + cy - 7);
-      pupil.style.setProperty('--tx', EYE_PUPIL_TRAVEL[es][0]);
-      pupil.style.setProperty('--ty', EYE_PUPIL_TRAVEL[es][1]);
-      el.appendChild(pupil);
+      pupil.style.setProperty('--tx', EYE_PUPIL_TRAVEL[f.es][0]);
+      pupil.style.setProperty('--ty', EYE_PUPIL_TRAVEL[f.es][1]);
+      face.appendChild(pupil);
     }
+    el.appendChild(face);
     if (key) {
       el.dataset.eye = key;
       const s = eyeState(key);
@@ -244,18 +366,29 @@
     return [Math.cos(a) * r, -Math.sin(a) * r];
   }
   let tracked = null;           // the chuzzle the mouse is over (its eyes follow the mouse)
+  let eyeEls = null;            // the faces on the page, found again after a redraw
   function eyeTick() {
     const now = performance.now();
-    for (const el of document.querySelectorAll('[data-eye]')) {
-      const s = eyeState(el.dataset.eye);
-      if (now >= s.blinkAt) {
-        s.blinkAt = now + 83 + 3000 + rand(7000);
+    if (!eyeEls || !eyeEls.every((el) => el.isConnected)) eyeEls = [...document.querySelectorAll('[data-eye]:not(.cell)')];
+    // Every eye change happens here, once per tick: each change makes the browser restyle the
+    // page's animated parts, so a timer per blink (dozens a second) cost far more than the
+    // animations. A blink lasts one tick (100 ms; the game's is 83). A chuzzle shown on both
+    // boards blinks and looks on both.
+    const blinks = new Set(), glances = new Set();
+    for (const el of eyeEls) {
+      const key = el.dataset.eye, s = eyeState(key);
+      if (el.classList.contains('blink')) el.classList.remove('blink');
+      else if (blinks.has(key) || now >= s.blinkAt) {
+        if (!blinks.has(key)) s.blinkAt = now + 3000 + rand(7000);
+        blinks.add(key);
         el.classList.add('blink');
-        setTimeout(() => el.classList.remove('blink'), 83);
       }
-      if (el !== tracked && now >= s.lookAt) {
-        s.lookAt = now + 5000 + rand(9000);
-        [s.dx, s.dy] = randomLook();
+      if (el !== tracked && (glances.has(key) || now >= s.lookAt)) {
+        if (!glances.has(key)) {
+          s.lookAt = now + 5000 + rand(9000);
+          [s.dx, s.dy] = randomLook();
+        }
+        glances.add(key);
         el.style.setProperty('--dx', s.dx.toFixed(3));
         el.style.setProperty('--dy', s.dy.toFixed(3));
       }
@@ -263,13 +396,14 @@
   }
   // The mouse over a chuzzle: its pupils turn to the mouse (from the centre of its cell, or of
   // the 2x2's four); leaving holds that direction until the next idle look.
+  let trackedKey = null;
   function trackMouse(e) {
     const t = document.elementFromPoint(e.clientX, e.clientY);
-    const el = t && t.closest('.board [data-eye]');
+    const el = t && t.closest('.board .cell');
     if (tracked && tracked !== el) {
-      tracked.classList.remove('track');
       eyeState(tracked.dataset.eye).lookAt = performance.now() + 5000 + rand(9000);
       tracked = null;
+      trackedKey = null;
     }
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -277,11 +411,153 @@
     const len = Math.hypot(dx, dy);
     const s = eyeState(el.dataset.eye);
     [s.dx, s.dy] = len < 0.5 ? [0, 0] : [dx / len, dy / len];
-    el.style.setProperty('--dx', s.dx.toFixed(3));
-    el.style.setProperty('--dy', s.dy.toFixed(3));
-    el.classList.add('track');
     tracked = el;
+    trackedKey = el.dataset.eye;
   }
+
+  // ---------------------------------------------------------------- the boards' canvas
+  // Each board's chuzzles are drawn on one canvas, the way a game draws: the cells under it are
+  // see-through and only take the pointer (and show the pick and drop rings). A frame costs a
+  // few hundred image copies and no restyling, whatever is moving.
+  const SHEETS = {};
+  for (const [name, file] of [['body', 'chuzzles'], ['huge', 'huge'], ['eyes', 'eyes'], ['pupils', 'pupils']]) {
+    const img = new Image();
+    img.src = `assets/${file}.webp`;
+    img.decode().then(() => { SHEETS[name] = img; }, () => {});
+  }
+
+  function boardCanvas(el) {
+    if (!el._cv) {
+      el._cv = document.createElement('canvas');
+      el._cv.className = 'board-canvas';
+      el._cv.setAttribute('aria-hidden', 'true');
+      el._ctx = el._cv.getContext('2d');
+    }
+    return el._cv;
+  }
+
+  // Where a chuzzle is in its bounce: the body frame and the face's bob (20 frames, 10 on
+  // the 2x2; the face 0 or 1 game pixels lower, 0-2 on the 2x2).
+  function bounce(f, piece, now) {
+    if (reducedMotion.matches) return [0, 0];
+    const p = (now / 1000 / f.sd + f.ph) % 1;
+    if (piece) return [Math.floor(p * 10), p < 0.1 ? 0 : p < 0.3 ? 1 : p < 0.85 ? 2 : 1];
+    return [Math.floor(p * 20), p >= 0.2 && p < 0.95 ? 1 : 0];
+  }
+
+  // The eye timers and the pupils' easing, once per chuzzle per frame (a chuzzle can be on
+  // both boards).
+  let eyeStamp = 0;
+  function updateEyes(s, key, now, dt) {
+    if (s.stamp === eyeStamp) return;
+    s.stamp = eyeStamp;
+    if (now >= s.blinkAt) {
+      s.blinkUntil = now + 83;
+      s.blinkAt = now + 83 + 3000 + rand(7000);
+    }
+    const track = trackedKey === key;
+    if (!track && now >= s.lookAt) {
+      s.lookAt = now + 5000 + rand(9000);
+      [s.dx, s.dy] = randomLook();
+    }
+    // the idle look eases in over ~0.5 s, the mouse is followed at once
+    const k = 1 - Math.exp(-dt / (track ? 25 : 120));
+    s.px = (s.px ?? s.dx) + (s.dx - (s.px ?? s.dx)) * k;
+    s.py = (s.py ?? s.dy) + (s.dy - (s.py ?? s.dy)) * k;
+  }
+
+  function drawBoard(el, now, dt) {
+    const cv = boardCanvas(el), ctx = el._ctx;
+    const u = layout.u, dpr = window.devicePixelRatio || 1, s = u * dpr;
+    const size = Math.round(500 * s);
+    if (cv.width !== size) {
+      cv.width = size;
+      cv.height = size;
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    if (!SHEETS.body || !SHEETS.huge || !SHEETS.eyes || !SHEETS.pupils) return;
+    ctx.imageSmoothingQuality = 'high';
+    const R = Math.round, cellPx = 80 * s, padPx = 10 * s;
+    let lifted = null;
+    for (const node of el.children) {
+      if (node._k === undefined) {
+        if (!node.classList.contains('cell')) continue;
+        node._k = +node.dataset.k;
+        node._key = node.dataset.eye;
+        node._piece = node.classList.contains('piece');
+        node._r = +node.dataset.r;
+        node._c = +node.dataset.c;
+      }
+      if (node._k !== node._k) continue;     // not a chuzzle
+      if (node.classList.contains('lifted')) lifted = node;
+      else drawChuzzle(ctx, node, now, dt, s, R, cellPx, padPx, false);
+    }
+    if (lifted) drawChuzzle(ctx, lifted, now, dt, s, R, cellPx, padPx, true);
+  }
+
+  function drawChuzzle(ctx, node, now, dt, s, R, cellPx, padPx, lifted) {
+    const piece = node._piece, f = look(node._key), st = eyeState(node._key);
+    updateEyes(st, node._key, now, dt);
+    let frame, bob;
+    if (node._f != null) [frame, bob] = [node._f, bounce(f, piece, now)[1]];
+    else if (lifted || node.classList.contains('picked')) {
+      if (node._hold == null) node._hold = bounce(f, piece, now);
+      [frame, bob] = node._hold;
+    } else {
+      node._hold = null;
+      [frame, bob] = bounce(f, piece, now);
+    }
+    // the cell's place, plus a lane slide (replay) or a drag (in CSS pixels, so times dpr)
+    const dpr = s / layout.u;
+    let x = padPx + node._c * cellPx, y = padPx + node._r * cellPx;
+    if (node._off) {
+      if (node._col) y += node._off * dpr;
+      else x += node._off * dpr;
+    }
+    if (lifted) {
+      x += (node._dx || 0) * dpr;
+      y += (node._dy || 0) * dpr;
+      const half = (piece ? 80 : 40) * s;
+      ctx.save();
+      ctx.translate(x + half, y + half);
+      ctx.scale(1.12, 1.12);
+      ctx.translate(-x - half, -y - half);
+      ctx.shadowColor = 'rgba(0, 0, 0, .55)';
+      ctx.shadowBlur = 8 * dpr;
+      ctx.shadowOffsetY = 6 * dpr;
+    }
+    if (piece) {
+      ctx.drawImage(SHEETS.huge, frame * 180, node._k * 180, 179, 179, R(x - 9.5 * s), R(y - 8.5 * s), R(179 * s), R(179 * s));
+    } else {
+      ctx.drawImage(SHEETS.body, frame * 80, node._k * 80, 80, 80, R(x), R(y), R(cellPx), R(cellPx));
+    }
+    if (lifted) ctx.shadowColor = 'transparent';
+    const [ex, ey0] = EYES_AT[piece ? 'piece' : 'normal'];
+    const fx = x + ex * s, fy = y + (ey0 + f.oy + bob) * s;
+    ctx.drawImage(SHEETS.eyes, f.es * 85, 0, 85, 88, R(fx), R(fy), R(85 * s), R(88 * s));
+    if (now >= (st.blinkUntil || 0)) {
+      const [tx, ty] = EYE_PUPIL_TRAVEL[f.es], ps = R(14 * s);
+      for (const [cx, cy] of EYE_PUPIL_CENTERS[f.es]) {
+        ctx.drawImage(SHEETS.pupils, f.ep * 14, 0, 14, 14,
+          R(fx + (cx - 7 + st.px * tx) * s), R(fy + (cy - 7 + st.py * ty) * s), ps, ps);
+      }
+    }
+    if (lifted) ctx.restore();
+  }
+
+  // One loop draws both boards every frame (a board out of sight, on a phone, is skipped).
+  let lastFrame = 0;
+  function frameLoop(now) {
+    const dt = lastFrame ? Math.min(100, now - lastFrame) : 16;
+    lastFrame = now;
+    eyeStamp++;
+    for (const id of ['goalBoard', 'startBoard']) {
+      if (layout.two || state.side === (id === 'goalBoard' ? 'goal' : 'start')) drawBoard($(id), now, dt);
+    }
+    requestAnimationFrame(frameLoop);
+  }
+
 
   // ---------------------------------------------------------------- the game's bitmap font
   // Bauhaus 93 from textures/fonts (metrics: tools/font/Bauhaus9336.py), drawn onto a canvas:
@@ -360,6 +636,8 @@
   const redrawFonts = () => { for (const el of fontJobs.keys()) if (el.isConnected) drawFontText(el); };
   fontReady.then(redrawFonts);
   const GOLD_TEXT = { size: 20, fill: ['#fff6b8', '#ffb71e'] };
+  const LABEL_TEXT = { size: 14 };                                   // under the dock's buttons
+  const ORB_TEXT = { size: 22, fill: ['#ffffff', '#ffe9a8'], outline: 'rgba(60, 10, 0, .95)' };
   const captionStyle = () => ({ ...GOLD_TEXT, size: Math.round(Math.max(18, Math.min(30, 34 * layout.u))) });
   const infoSize = () => Math.round(Math.max(15, Math.min(22, innerWidth / 42)));
 
@@ -377,7 +655,12 @@
     const u2 = Math.min((W - pad - arrow) / 1070, (H - pad - caption) / 535);
     const u1 = Math.min((W - pad) / 535, (H - pad - tabs) / 535);
     const two = u2 >= u1 * 0.72;
-    const u = Math.max(0.25, Math.min(1.6, two ? u2 : u1));
+    // Snapped so 20 game pixels are a whole number of screen pixels: then every frame of the
+    // sprite strips (80 and 180 units) starts on a pixel, and the chuzzles sway in place
+    // instead of jittering sideways as the frame offsets round differently.
+    const dpr = window.devicePixelRatio || 1;
+    const u = Math.floor(Math.max(0.25, Math.min(1.6, two ? u2 : u1)) * 20 * dpr) / (20 * dpr);
+    snapPalette(dpr);
     const moved = Math.abs(u - layout.u) > 0.002 || two !== layout.two;
     layout.u = u;
     layout.two = two;
@@ -389,6 +672,18 @@
       fontText($('goalCap'), 'Goal', captionStyle());
       if (state.mode === 'replay' && result && result.replay && !result.playing) showStep(result.step);
     }
+  }
+
+  // The palette's chuzzles are sprites too: their size (and the 2x2's) in whole screen pixels.
+  function snapPalette(dpr) {
+    const pal = $('palette');
+    pal.style.removeProperty('--sz');
+    pal.style.removeProperty('--pg');
+    const s = pal.querySelector('.swatch:not(.big)');
+    if (!s) return;
+    const px = (v) => `${Math.max(1, Math.floor(v * dpr)) / dpr}px`;
+    pal.style.setProperty('--sz', px(parseFloat(getComputedStyle(s).width)));
+    pal.style.setProperty('--pg', px(parseFloat(getComputedStyle(pal).getPropertyValue('--pg')) || 10));
   }
 
   // Sets up a lane slide on a board already showing the state after the move: every moved
@@ -426,7 +721,6 @@
       const t = Math.sqrt(Math.min(1, (piece ? smooth * 0.5 : smooth) / 8));
       return piece ? 10 + seg * 5 + Math.round(t * 4) : 20 + seg * 10 + Math.round(t * 9);
     };
-    const tr = (k) => (mv.col ? `translateY(${k * pitch}px)` : `translateX(${k * pitch}px)`);
     const set = (p) => {
       const now = performance.now();
       const frames = Math.max(0.25, (now - lastT) / (1000 / 60));
@@ -435,8 +729,9 @@
       lastP = p;
       lastT = now;
       for (const [node, a, b] of moving) {
-        node.style.transform = tr(a + (b - a) * p);
-        node.style.setProperty('--f', frameFor(node.classList.contains('piece')));
+        node._off = (a + (b - a) * p) * pitch;
+        node._col = mv.col;
+        node._f = frameFor(node.classList.contains('piece'));
       }
     };
     set(0);
@@ -445,19 +740,26 @@
       finish() {
         el.querySelectorAll('.ghost').forEach((g) => g.remove());
         for (const [node] of moving) {
-          node.style.transform = '';
+          node._off = 0;
+          node._f = null;
           node.classList.remove('mv');
         }
       },
     };
   }
 
+  // The tab's little board: a dot per chuzzle, the 2x2 as one big dot over its four cells.
   function renderThumb(el, board) {
     const frag = document.createDocumentFragment();
+    const f = board.fat;
     board.cells.forEach((v, k) => {
+      const r = Math.floor(k / 6), c = k % 6;
+      const piece = inPiece(f, r, c);
+      if (piece && (r !== f.y || c !== f.x)) return;
       const i = document.createElement('i');
       i.style.setProperty('--col', `var(--c${v})`);
-      if (inPiece(board.fat, Math.floor(k / 6), k % 6)) i.className = 'p';
+      i.style.gridArea = `${r + 1} / ${c + 1} / span ${piece ? 2 : 1} / span ${piece ? 2 : 1}`;
+      if (piece) i.className = 'p';
       frag.appendChild(i);
     });
     el.replaceChildren(frag);
@@ -478,7 +780,7 @@
         s.type = 'button';
         s.className = 'swatch';
         s.setAttribute('role', 'radio');
-        setChuzzle(s, k, k * 3 + 1);
+        setChuzzle(s, k);
         addFace(s, k * 3 + 1, 'normal', `sw:${k}`);
         s.insertAdjacentHTML('beforeend', '<span class="n"></span>');
         s.addEventListener('click', () => selectColour(k));
@@ -497,7 +799,7 @@
     COLORS.forEach((name, k) => {
       const s = el.children[k];
       const ok = a[k] === b[k];
-      s.setAttribute('aria-checked', String(!state.placing && state.color === k));
+      s.setAttribute('aria-checked', String(state.tool === 'paint' && state.color === k));
       s.setAttribute('aria-label', `${name}: ${a[k]} on start, ${b[k]} on goal`);
       s.title = `${name} (key ${k + 1})${ok ? '' : ` - ${a[k]} on start, ${b[k]} on goal`}`;
       const n = s.querySelector('.n');
@@ -505,10 +807,10 @@
       n.textContent = a[k] || b[k] ? (ok ? a[k] : `${a[k]}≠${b[k]}`) : '';
     });
     const big = $('fatSwatch');
-    setChuzzle(big, pieceColour(state.start) ?? state.color, 40);
-    big.setAttribute('aria-checked', String(state.placing));
+    setChuzzle(big, pieceColour(state.goal) ?? state.color);
+    big.setAttribute('aria-checked', String(state.tool === 'piece'));
     big.setAttribute('aria-label', '2x2 Chuzzle: tap a cell to place it');
-    big.title = state.start.fat ? '2x2 Chuzzle: tap a cell to move it (key 9)' : '2x2 Chuzzle: tap a cell to place it (key 9)';
+    big.title = state.goal.fat ? '2x2 Chuzzle: tap the goal to move it (key 9)' : '2x2 Chuzzle: tap the goal to place it (key 9)';
   }
 
   function render() {
@@ -518,41 +820,63 @@
     }
     if (!replay) renderBoard($('startBoard'), state.start);
     renderBoard($('goalBoard'), state.goal);
+    const game = !!state.preset;
     for (const side of ['start', 'goal']) {
       const b = $(`${side}Board`);
-      b.classList.toggle('placing', !replay && state.placing);
-      b.classList.toggle('readonly', side === 'start' && !!replay);
+      const edit = !replay && !game;
+      b.classList.toggle('placing', edit && side === 'goal' && state.tool === 'piece');
+      b.classList.toggle('readonly', !edit);
+      b.classList.toggle('mover', edit && side === 'start');
+    }
+    $('customBtn').setAttribute('aria-pressed', String(!game));
+    $('puzzlesBtn').setAttribute('aria-pressed', String(game));
+    for (const [id, on] of [['customBtn', !game], ['puzzlesBtn', game]]) {
+      const label = $(id).querySelector('[data-label]');
+      fontText(label, label.dataset.label, on ? { ...GOLD_TEXT, size: 16 } : { size: 16, fill: ['#d8d2f4', '#a9a2cf'] });
     }
     renderThumb($('thumbStart'), replay ? result.replay[result.step] : state.start);
     renderThumb($('thumbGoal'), state.goal);
     $('tabStart').setAttribute('aria-selected', String(state.side === 'start'));
     $('tabGoal').setAttribute('aria-selected', String(state.side === 'goal'));
-    $('tabStartLabel').textContent = replay ? 'Replay' : 'Start';
+    const tab = (on) => (on ? { ...GOLD_TEXT, size: 19 } : { size: 19, fill: ['#d8d2f4', '#a9a2cf'] });
+    fontText($('tabStartLabel'), replay ? 'Replay' : 'Start', tab(state.side === 'start'));
+    fontText($('tabGoalLabel'), 'Goal', tab(state.side === 'goal'));
     fontText($('startCap'), replay ? 'Replay' : 'Start', captionStyle());
     fontText($('goalCap'), 'Goal', captionStyle());
-    $('editDock').hidden = !!replay;
+    $('editDock').hidden = !!replay || game;
+    $('knownNote').hidden = !game || !!replay;
+    if (game) {
+      const p = presetByName(state.preset);
+      $('knownNote').textContent = `${p.solutions.toLocaleString()} shortest solution${p.solutions > 1 ? 's' : ''} of ${p.moves} moves`;
+    }
     $('replayDock').hidden = !replay;
     $('solSwitch').hidden = !replay;
-    $('info').hidden = !!replay;
+    $('info').hidden = !!replay || !!state.coach;
     $('guide').hidden = !replay;
-    $('unfatBtn').disabled = !state.start.fat;
-    const other = otherSide(state.side);
-    $('copyBtn').title = `Copy the ${other} board onto the ${state.side} board`;
-    $('copyText').textContent = `Copy ${other}`;
-    $('fillBtn').title = `Fill the ${state.side} board with ${COLORS[state.color].toLowerCase()}`;
+    $('unfatBtn').disabled = !state.goal.fat;
+    $('resetBtn').disabled = state.follows;
+    renderDepth();
+    $('fillBtn').title = `Fill the goal with ${COLORS[state.color].toLowerCase()}`;
     $('undoBtn').disabled = state.undo.length === 0;
     renderPalette();
+    if (!run) {
+      fontText($('solveLabel'), game ? 'View' : 'Solve', ORB_TEXT);
+      $('solveBtn').setAttribute('aria-label', game ? 'View the solutions' : 'Solve');
+    }
     if (replay) showStep(result.step);
   }
 
+  // Colours and the 2x2 paint the goal (the board shown on phones switches to it).
   function selectColour(k) {
     state.color = k;
-    state.placing = false;
+    state.tool = 'paint';
+    if (state.mode === 'edit') state.side = 'goal';
     render();
   }
 
   function selectFatTool() {
-    state.placing = !state.placing;
+    state.tool = state.tool === 'piece' ? 'paint' : 'piece';
+    if (state.mode === 'edit') state.side = 'goal';
     render();
   }
 
@@ -561,49 +885,140 @@
     render();
   }
 
+  // The move limit beside Solve ("up to / 10 moves", with - and +). A game puzzle longer than
+  // the page's search has no limit to set: Solve shows the desktop solver's answer.
+  function renderDepth() {
+    const d = state.maxDepth;
+    $('depthBox').hidden = !!knownPreset();
+    fontText($('depthUp'), 'up to', { size: 12, fill: ['#e6e0ff', '#bdb7de'] });
+    fontText($('depthText'), `${d} move${d > 1 ? 's' : ''}`, { size: 17 });
+    $('depthDown').disabled = d <= 1;
+    $('depthUpBtn').disabled = d >= MAX_DEPTH;
+  }
+
+  function setDepth(d) {
+    state.maxDepth = Math.max(1, Math.min(MAX_DEPTH, d));
+    renderDepth();
+  }
+
   // ---------------------------------------------------------------- editing
+  // The goal is painted (the selected colour, or the 2x2: tap where its top-left goes). The
+  // start's chuzzles are dragged: drop one on another and they swap, or tap two; the 2x2 is
+  // dragged to its spot and the chuzzles it covers take the place it leaves.
   function attachEditor(el, which) {
-    let painting = false;
+    let g = null;              // the gesture under way
     const cellAt = (e) => {
       const t = document.elementFromPoint(e.clientX, e.clientY);
       const cell = t && t.closest('.cell');
-      return cell && el.contains(cell) ? cell : null;
+      return cell && el.contains(cell) && !cell.classList.contains('ghost') ? cell : null;
     };
-    const editable = () => !(which === 'start' && state.mode === 'replay');
-    const apply = (cell) => {
+    const editable = () => state.mode === 'edit' && !state.preset;
+    const paintAt = (cell) => {
       const r = +cell.dataset.r, c = +cell.dataset.c;
-      const b = state[which];
-      const before = JSON.stringify(b);
-      if (state.placing) placeFat(which, r, c);
+      const b = state.goal;
+      const before = b.cells.join() + JSON.stringify(b.fat);
+      if (state.tool === 'piece') placeFat('goal', r, c);
       else paint(b, r, c, state.color);
-      if (JSON.stringify(b) !== before) renderBoard(el, b);
+      if (b.cells.join() + JSON.stringify(b.fat) === before) return;
+      renderBoard(el, b);
+      syncStart();
+      renderBoard($('startBoard'), state.start);
     };
+
+    // The cell under a point (row, column), from the board's geometry.
+    const spotAt = (x, y) => {
+      const b = el.getBoundingClientRect(), pitch = 80 * layout.u;
+      const c = Math.floor((x - b.left - 10 * layout.u) / pitch), r = Math.floor((y - b.top - 10 * layout.u) / pitch);
+      return r >= 0 && r < 6 && c >= 0 && c < 6 ? { r, c } : null;
+    };
+    // Where a drag would drop: a cell for a chuzzle, a top-left for the 2x2 (it moves by the
+    // drag, kept inside the board). null where nothing would change.
+    const dropTarget = (e) => {
+      const piece = g.cell.classList.contains('piece');
+      if (piece) {
+        const pitch = 80 * layout.u;
+        const r = Math.max(0, Math.min(4, g.r + Math.round((e.clientY - g.y) / pitch)));
+        const c = Math.max(0, Math.min(4, g.c + Math.round((e.clientX - g.x) / pitch)));
+        return r === g.r && c === g.c ? null : { r, c, piece };
+      }
+      const s = spotAt(e.clientX, e.clientY);
+      if (!s || (s.r === g.r && s.c === g.c) || inPiece(state[which].fat, s.r, s.c)) return null;
+      return { ...s, piece };
+    };
+    const showTarget = (t) => {
+      const old = el.querySelector('.cell.drop-on');
+      if (old) old.classList.remove('drop-on');
+      if (t && !t.piece) {
+        const cell = el.querySelector(`.cell[data-r="${t.r}"][data-c="${t.c}"]`);
+        if (cell) cell.classList.add('drop-on');
+      }
+    };
+
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || !editable()) return;
       const cell = cellAt(e);
       if (!cell) return;
       e.preventDefault();
-      el.setPointerCapture(e.pointerId);
-      pushUndo();
+      try { el.setPointerCapture(e.pointerId); } catch { /* synthetic events */ }
       if (state.side !== which) {
         state.side = which;
         for (const wrap of document.querySelectorAll('.board-wrap')) wrap.classList.toggle('active', wrap.dataset.side === which);
       }
-      painting = true;
-      apply(cell);
+      g = { x: e.clientX, y: e.clientY, r: +cell.dataset.r, c: +cell.dataset.c, cell, move: which === 'start' };
+      if (!g.move) {
+        pushUndo();
+        paintAt(cell);
+      }
     });
     el.addEventListener('pointermove', (e) => {
-      if (!painting) return;
-      const cell = cellAt(e);
-      if (cell) apply(cell);
+      if (!g) return;
+      if (!g.move) {
+        if (state.tool === 'piece') return;
+        // paint every cell the stroke crosses, not only where pointer events landed (a fast
+        // drag reports few points)
+        const lx = g.lx ?? g.x, ly = g.ly ?? g.y;
+        const steps = Math.max(1, Math.ceil(Math.hypot(e.clientX - lx, e.clientY - ly) / (20 * layout.u)));
+        for (let k = 1; k <= steps; k++) {
+          const cell = cellAt({ clientX: lx + (e.clientX - lx) * k / steps, clientY: ly + (e.clientY - ly) * k / steps });
+          if (cell) paintAt(cell);
+        }
+        g.lx = e.clientX;
+        g.ly = e.clientY;
+        return;
+      }
+      const dx = e.clientX - g.x, dy = e.clientY - g.y;
+      if (!g.drag && Math.hypot(dx, dy) > 6) {
+        g.drag = true;
+        g.cell.classList.add('lifted');
+        el.classList.add('dragging');
+        clearPick();
+      }
+      if (g.drag) {
+        g.cell._dx = dx;
+        g.cell._dy = dy;
+        const t = dropTarget(e);
+        if (!g.target !== !t || (t && (t.r !== g.target.r || t.c !== g.target.c))) showTarget(t);
+        g.target = t;
+      }
     });
-    const stop = () => {
-      if (!painting) return;
-      painting = false;
-      changed();
+    const end = (e) => {
+      if (!g) return;
+      const gesture = g;
+      g = null;
+      if (!gesture.move) {
+        changed();
+        return;
+      }
+      if (gesture.drag) {
+        el.classList.remove('dragging');
+        if (e.type === 'pointerup' && gesture.target) dropOn(which, gesture, gesture.target);
+        else renderBoard(el, state[which]);
+        return;
+      }
+      if (e.type === 'pointerup') tapOn(which, gesture.cell);
     };
-    el.addEventListener('pointerup', stop);
-    el.addEventListener('pointercancel', stop);
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
     el.addEventListener('contextmenu', (e) => {
       const cell = cellAt(e);
       if (!cell) return;
@@ -613,26 +1028,91 @@
     });
   }
 
+  function clearPick() {
+    for (const c of document.querySelectorAll('.cell.picked')) c.classList.remove('picked');
+    state.picked = null;
+  }
+
+  // The start rearranged.
+  function moved(which, b) {
+    pushUndo();
+    state[which] = b;
+    state.follows = b.ids.every((v, k) => v === k);
+    clearPick();
+    changed();
+  }
+
+  // A drop: a chuzzle swaps with the one where it lands; the 2x2 moves to its new top-left,
+  // and the chuzzles it now covers go to the cells it left (in reading order).
+  function dropOn(which, from, to) {
+    const old = state[which];
+    const b = cloneBoard(old);
+    const ids = old.ids || old.cells.map((_, k) => k);
+    b.ids = ids.slice();
+    if (to.piece) {
+      const nf = { x: to.c, y: to.r };
+      const was = pieceCells(old.fat), now = pieceCells(nf);
+      const freed = was.filter((k) => !now.includes(k)), taken = now.filter((k) => !was.includes(k));
+      freed.forEach((k, n) => {
+        b.cells[k] = old.cells[taken[n]];
+        b.ids[k] = ids[taken[n]];
+      });
+      now.forEach((k, m) => {
+        b.cells[k] = old.cells[was[m]];
+        b.ids[k] = ids[was[m]];
+      });
+      b.fat = nf;
+    } else {
+      const i = from.r * 6 + from.c, j = to.r * 6 + to.c;
+      [b.cells[i], b.cells[j]] = [b.cells[j], b.cells[i]];
+      [b.ids[i], b.ids[j]] = [b.ids[j], b.ids[i]];
+    }
+    moved(which, b);
+  }
+
+  // A tap on the start: the first chuzzle is picked, a second one swaps with it.
+  // The 2x2 is dragged, never swapped.
+  function tapOn(which, cell) {
+    const i = +cell.dataset.r * 6 + +cell.dataset.c;
+    const p = state.picked;
+    clearPick();
+    if (cell.classList.contains('piece') || (p && p.side === which && p.i === i)) return;
+    if (!p || p.side !== which) {
+      state.picked = { side: which, i };
+      cell.classList.add('picked');
+      return;
+    }
+    const b = cloneBoard(state[which]);
+    if (!b.ids) b.ids = b.cells.map((_, k) => k);
+    [b.cells[i], b.cells[p.i]] = [b.cells[p.i], b.cells[i]];
+    [b.ids[i], b.ids[p.i]] = [b.ids[p.i], b.ids[i]];
+    moved(which, b);
+  }
+
   function changed({ keepPreset = false } = {}) {
+    if (!state.preset && !state.start.ids) syncStart();   // a custom start is the goal rearranged
     if (!keepPreset && state.preset) {
       const p = presetByName(state.preset);
       if (!p || !sameBoard(state.start, presetBoard(p, 'start')) || !sameBoard(state.goal, presetBoard(p, 'goal'))) {
         state.preset = '';
       }
     }
-    $('preset').value = state.preset;
     render();
     renderInfo();
     writeHash();
     markStale();
-    if (!run) showError('');
+    if (!run) {
+      showError('');
+      idleStatus();
+    }
   }
 
   function removeFat() {
     pushUndo();
     state.start.fat = null;
     state.goal.fat = null;
-    state.placing = false;
+    if (state.tool === 'piece') state.tool = 'paint';
+    syncStart();
     changed();
   }
 
@@ -642,42 +1122,114 @@
     state.start = s.start;
     state.goal = s.goal;
     state.preset = s.preset;
+    state.follows = s.follows;
+    state.picked = null;
     leaveReplay();
     changed({ keepPreset: true });
+  }
+
+  // ---------------------------------------------------------------- the tutorial
+  // Three steps in the info bar, each lighting what it talks about: paint the goal; drag the
+  // start's chuzzles to where they begin (or Mix); Solve. Shown on a first visit.
+  const COACH = [
+    null,
+    { side: 'goal', text: '<b>Paint the goal:</b> pick a colour below, then click or drag on the Goal board.', lit: ['goalWrap', 'palette'] },
+    { side: 'start', text: '<b>Now the start:</b> drag its Chuzzles to where they begin (they swap places), or press <b>Mix</b>.', lit: ['startWrap', 'scrambleBtn'] },
+    { side: null, text: '<b>Press Solve</b> to find every shortest solution.', lit: ['solveBtn'] },
+  ];
+  function coachStep(n) {
+    for (const el of document.querySelectorAll('.lit')) el.classList.remove('lit');
+    if (n >= COACH.length) {
+      endCoach(true);
+      return;
+    }
+    state.coach = n;
+    const s = COACH[n];
+    $('coach').hidden = false;
+    $('coachN').textContent = n;
+    $('coachText').innerHTML = s.text;
+    $('coachNext').textContent = n === COACH.length - 1 ? 'Got it' : 'Next';
+    $('coachSkip').hidden = n === COACH.length - 1;
+    for (const id of s.lit) $(id).classList.add('lit');
+    if (s.side) state.side = s.side;
+    render();
+    renderInfo();
+  }
+  function endCoach(done = true) {
+    if (!state.coach) return;
+    state.coach = 0;
+    for (const el of document.querySelectorAll('.lit')) el.classList.remove('lit');
+    $('coach').hidden = true;
+    if (done) try { localStorage.setItem('mb-tutorial', 'done'); } catch { /* storage blocked */ }
+    renderInfo();
   }
 
   // ---------------------------------------------------------------- presets and links
   const PUZZLES = self.MB_PUZZLES || [];
   const presetByName = (name) => PUZZLES.find((p) => p.name === name);
+  // A game puzzle open (boards as the game has them): all 100 are solved, and their shortest
+  // solutions are in solutions/<name>.txt, so it is viewed, not edited or searched.
+  const knownPreset = () => (state.preset && presetByName(state.preset)) || null;
   const presetBoard = (p, side) => ({
     cells: p[side].slice(),
     fat: p.fat ? { x: p.fat[side][0], y: p.fat[side][1] } : null,
   });
 
+  // The game's puzzles, a row per world, in their own dialog: painting your own board is
+  // what the page is for, so they stay out of the way until asked for.
   function fillPresets() {
-    const sel = $('preset');
-    let group = null, world = '';
+    const grid = $('pzGrid');
+    let row = null, world = '';
     for (const p of PUZZLES) {
       const w = p.name.split('-')[0];
       if (w !== world) {
         world = w;
-        group = document.createElement('optgroup');
-        group.label = `World ${w}`;
-        sel.appendChild(group);
+        row = document.createElement('div');
+        row.className = 'pz-row';
+        row.innerHTML = `<span class="pz-world">${w}</span>`;
+        grid.appendChild(row);
       }
-      const len = p.moves ? `${p.moves} moves` : `${p.atLeast}+ moves`;
-      group.appendChild(new Option(`Puzzle ${p.name} · ${len}${p.fat ? ' · 2x2' : ''}`, p.name));
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = p.fat ? 'pz fat' : 'pz';
+      b.dataset.name = p.name;
+      b.title = `Puzzle ${p.name}: ${p.moves} moves, ${p.solutions.toLocaleString()} solution${p.solutions > 1 ? 's' : ''}${p.fat ? ', with the 2x2' : ''}`;
+      b.innerHTML = `<b>${p.name}</b><span>${p.moves}</span>`;
+      row.appendChild(b);
     }
+    grid.addEventListener('click', (e) => {
+      const b = e.target.closest('.pz');
+      if (!b) return;
+      $('puzzlesDialog').close();
+      loadPreset(b.dataset.name);
+    });
   }
 
   function loadPreset(name) {
     const p = presetByName(name);
     if (!p) return;
+    if (!state.preset) state.custom = { start: cloneBoard(state.start), goal: cloneBoard(state.goal), follows: state.follows };
+    endCoach();
     pushUndo();
     state.start = presetBoard(p, 'start');
     state.goal = presetBoard(p, 'goal');
     state.preset = name;
-    state.placing = false;
+    state.follows = false;
+    state.picked = null;
+    leaveReplay();
+    changed({ keepPreset: true });
+  }
+
+  // Back to the custom puzzle (the one left for a game puzzle, else a blank goal to paint).
+  function enterCustom() {
+    if (!state.preset) return;
+    pushUndo();
+    const c = state.custom;
+    state.start = c ? c.start : blank();
+    state.goal = c ? c.goal : blank();
+    state.follows = c ? c.follows : true;
+    state.preset = '';
+    state.picked = null;
     leaveReplay();
     changed({ keepPreset: true });
   }
@@ -690,13 +1242,14 @@
       document.body.style.setProperty('--backdrop', `url("assets/bkg${n}.webp")`);
     }
     let text, warn = false;
-    if (!p) {
-      text = state.start.fat ? 'Custom puzzle with the 2x2 Chuzzle' : 'Custom puzzle';
-    } else if (p.moves && p.moves <= MAX_DEPTH) {
-      text = `Puzzle ${p.name}  -  shortest is ${p.moves} moves  -  ${p.solutions.toLocaleString()} solutions`;
-    } else if (p.moves) {
-      text = `Puzzle ${p.name} needs ${p.moves} moves, beyond this page's ${MAX_DEPTH}`;
+    $('info').hidden = !!state.coach || state.mode === 'replay';
+    if (startMismatch()) {
+      text = 'Start and goal need the same Chuzzles: the red numbers show which';
       warn = true;
+    } else if (!p) {
+      text = state.follows ? 'Paint the goal, then drag the start\'s Chuzzles into place' : state.start.fat ? 'Your puzzle, with the 2x2 Chuzzle' : 'Your puzzle';
+    } else if (p.moves) {
+      text = `Puzzle ${p.name}  -  shortest is ${p.moves} moves  -  ${p.solutions.toLocaleString()} solution${p.solutions > 1 ? 's' : ''}`;
     } else {
       text = `Puzzle ${p.name} is unsolved: it needs at least ${p.atLeast} moves`;
       warn = true;
@@ -727,6 +1280,9 @@
         state.goal.fat = { x: +f[2], y: +f[3] };
       }
       state.preset = q.get('p') || '';
+      state.follows = sameBoard(state.start, state.goal);
+      if (state.follows) state.start = copyOfGoal();
+      else linkStart();
       return true;
     }
     const p = presetByName(q.get('p'));
@@ -734,6 +1290,7 @@
       state.start = presetBoard(p, 'start');
       state.goal = presetBoard(p, 'goal');
       state.preset = p.name;
+      state.follows = false;
       return true;
     }
     return false;
@@ -812,20 +1369,37 @@
   let run = null;
   let result = null;
 
-  const fmtTime = (s) => (s < 10 ? `${s.toFixed(1)} s` : s < 90 ? `${Math.round(s)} s`
+  const fmtTime = (s) => (s < 0.1 ? 'under 0.1 s' : s < 10 ? `${s.toFixed(1)} s` : s < 90 ? `${Math.round(s)} s`
     : `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, '0')} s`);
 
+  // The Solve orb: "Solve" when idle; while a solve runs it fills from the bottom with the
+  // progress (or bobs when the step has none) and shows the percentage; `label` is what the
+  // status line says the solver is doing.
+  let stage = '';
   function setProgress(label, fraction) {
-    $('solveLabel').textContent = label;
+    const idle = !run;
+    stage = idle ? '' : label;
+    fontText($('solveLabel'), idle ? (state.preset ? 'View' : 'Solve') : fraction == null ? '...' : `${Math.floor(fraction * 100)}%`, ORB_TEXT);
     const fill = $('solveFill');
-    fill.classList.toggle('indet', fraction == null);
-    fill.style.width = fraction == null ? '' : `${Math.round(fraction * 1000) / 10}%`;
+    fill.classList.toggle('indet', !idle && fraction == null);
+    fill.style.transform = idle || fraction == null ? '' : `scaleY(${Math.round(fraction * 1000) / 1000})`;
+  }
+
+  // The status line when nothing runs: the last solve's summary while the boards are still
+  // the ones it solved.
+  function idleStatus() {
+    const el = $('status');
+    if (run || el.classList.contains('error')) return;
+    const same = result && sameBoard(result.boards.start, state.start) && sameBoard(result.boards.goal, state.goal);
+    el.textContent = same ? result.summary : '';
+    el.title = el.textContent;
   }
 
   function showError(text) {
     const el = $('status');
     if (text) {
       el.textContent = text;
+      el.title = text;
       el.classList.add('error');
     } else if (el.classList.contains('error')) {
       el.textContent = '';
@@ -837,8 +1411,8 @@
     const a = colourCounts(state.start), b = colourCounts(state.goal);
     const diff = [];
     for (let k = 0; k < 8; k++) if (a[k] !== b[k]) diff.push(`${COLORS[k].toLowerCase()} ${a[k]} vs ${b[k]}`);
-    if (diff.length) {
-      return { error: `Both boards need the same balls (start vs goal: ${diff.join(', ')}); the red badges show them.` };
+    if (diff.length || !!state.start.fat !== !!state.goal.fat) {
+      return { error: 'The start and the goal need the same Chuzzles: press Reset to copy the goal to the start again.' };
     }
     const fat = state.start.fat
       ? { start: [state.start.fat.x, state.start.fat.y], goal: [state.goal.fat.x, state.goal.fat.y] } : null;
@@ -847,31 +1421,47 @@
 
   async function solve() {
     if (run) return;
+    if (state.coach) endCoach(true);
     const { spec, error } = problemSpec();
     if (error) {
       showError(error);
       return;
     }
     showError('');
-    const maxDepth = +$('maxDepth').value;
+    const known = knownPreset();
+    const maxDepth = state.maxDepth;
     const threads = +$('threads').value || hardwareThreads;
     run = { workers: [], cancelled: false, t0: performance.now(), boards: { start: cloneBoard(state.start), goal: cloneBoard(state.goal) } };
     const thisRun = run;
     $('solveBtn').classList.add('running');
     $('solveBtn').disabled = true;
     $('cancelBtn').hidden = false;
+    $('depthBox').classList.add('busy');
     let detail = '';
-    const tick = setInterval(() => {
-      $('status').textContent = `${fmtTime((performance.now() - thisRun.t0) / 1000)}${detail}`;
-    }, 200);
+    const showStatus = () => {
+      $('status').textContent = `${stage} · ${fmtTime((performance.now() - thisRun.t0) / 1000)}${detail}`;
+    };
+    const tick = setInterval(showStatus, 200);
     try {
+      if (known) {
+        setProgress('Loading', null);
+        showStatus();
+        const r = await fetch(`solutions/${known.name}.txt`);
+        if (!r.ok) throw new Error(`could not load solutions/${known.name}.txt (${r.status})`);
+        const text = await r.text();
+        if (thisRun.cancelled) return;
+        const count = text.split('\n').filter(Boolean).length;
+        finish(thisRun, { depth: known.moves, count, text, threads: 0, maxDepth: known.moves, known: true });
+        return;
+      }
       await workerUrlReady;
       const w0 = warm || new SolverWorker();
       warm = null;
       run.workers.push(w0);
-      setProgress('Starting...', null);
+      setProgress('Starting', null);
+      showStatus();
       await w0.call('setup', spec);
-      setProgress(`Up to ${Math.min(6, maxDepth)} moves...`, null);
+      setProgress(`Up to ${Math.min(6, maxDepth)} moves`, null);
       const small = await w0.call('small', { maxDepth });
       if (small.depth >= 0) {
         finish(thisRun, { depth: small.depth, count: small.count, text: small.text, threads: 1, maxDepth });
@@ -881,7 +1471,7 @@
         finish(thisRun, { depth: -1, threads: 1, maxDepth });
         return;
       }
-      setProgress('Building tables...', null);
+      setProgress('Building tables', null);
       const g = await w0.call('goal4');
       const perWorker = g.memory * 1.5 + 32e6;
       const n = Math.max(1, Math.min(threads, Math.floor(memoryBudget() / perWorker)));
@@ -900,7 +1490,7 @@
           detail = ` · ${n} thread${n > 1 ? 's' : ''}${f > 0.03 && el > 1.5 ? ` · about ${fmtTime(el * (1 - f) / f)} left` : ''}`;
           setProgress(`${d} moves · ${Math.floor(f * 100)}%`, f);
         };
-        setProgress(`${d} moves...`, 0);
+        setProgress(`${d} moves`, 0);
         const res = await Promise.all(run.workers.map((w, i) =>
           w.call('depth', { depth: d }, (p) => { prog[i] = p; update(); })));
         const count = res.reduce((s, r) => s + r.count, 0);
@@ -923,8 +1513,13 @@
       $('solveBtn').classList.remove('running');
       $('solveBtn').disabled = false;
       $('cancelBtn').hidden = true;
-      setProgress('Solve', 0);
-      if (!$('status').classList.contains('error')) $('status').textContent = thisRun.summary || '';
+      $('depthBox').classList.remove('busy');
+      setProgress('', 0);
+      if (thisRun.cancelled) {
+        if (!$('status').classList.contains('error')) $('status').textContent = 'Cancelled';
+      } else {
+        idleStatus();
+      }
       warmUp();
     }
   }
@@ -932,7 +1527,6 @@
   function cancel() {
     if (!run) return;
     run.cancelled = true;
-    run.summary = 'Cancelled';
     for (const w of run.workers) w.terminate();
   }
 
@@ -941,9 +1535,9 @@
     if (r.cancelled) return;
     const secs = (performance.now() - r.t0) / 1000;
     const lines = res.text ? res.text.split('\n').filter(Boolean).sort() : [];
-    result = { ...res, lines, secs, boards: r.boards, shown: 0, selected: -1, step: 0, playing: false };
     const threads = `${res.threads} thread${res.threads > 1 ? 's' : ''}`;
-    r.summary = `Solved in ${fmtTime(secs)} on ${threads}`;
+    const summary = res.known ? '' : `${res.depth < 0 ? 'Searched' : 'Solved'} in ${fmtTime(secs)} on ${threads}`;
+    result = { ...res, lines, secs, summary, boards: r.boards, shown: 0, selected: -1, step: 0, playing: false };
     $('results').hidden = false;
     if (res.depth < 0) {
       fontText($('resultTitle'), `No solution in ${res.maxDepth} moves`, { size: 24, fill: ['#fff6b8', '#ffb71e'] });
@@ -955,7 +1549,8 @@
       const n = res.count;
       fontText($('resultTitle'), `${res.depth} move${res.depth > 1 ? 's' : ''}`, { size: 30, fill: ['#fff6b8', '#ffb71e'] });
       $('resultSub').textContent = `${n.toLocaleString()} shortest solution${n > 1 ? 's' : ''} · none shorter`
-        + (lines.length < n ? ` · ${lines.length.toLocaleString()} listed` : '') + ` · ${fmtTime(secs)}`;
+        + (lines.length < n ? ` · ${lines.length.toLocaleString()} listed` : '')
+        + (res.known ? '' : ` · ${fmtTime(secs)}`);
     }
     $('copyAllBtn').hidden = $('downloadBtn').hidden = lines.length === 0;
     $('solutionList').replaceChildren();
@@ -1037,7 +1632,6 @@
     $('prevSol').disabled = $('nextSol').disabled = result.lines.length < 2;
     state.mode = 'replay';
     state.side = 'start';
-    state.placing = false;
     render();
   }
 
@@ -1247,56 +1841,82 @@
   function init() {
     document.querySelectorAll('[data-icon]').forEach((el) => setIcon(el, el.dataset.icon));
     fillPresets();
-    for (let d = 1; d <= MAX_DEPTH; d++) $('maxDepth').appendChild(new Option(`≤ ${d} move${d > 1 ? 's' : ''}`, d));
-    $('maxDepth').value = MAX_DEPTH;
+    document.querySelectorAll('[data-label]:not([data-mode])').forEach((el) =>
+      fontText(el, el.dataset.label, 'gold' in el.dataset ? { ...GOLD_TEXT, size: 17 } : LABEL_TEXT));
+    setProgress('', 0);
+    $('depthDown').addEventListener('click', () => setDepth(state.maxDepth - 1));
+    $('depthUpBtn').addEventListener('click', () => setDepth(state.maxDepth + 1));
     $('threads').appendChild(new Option(`Auto (${hardwareThreads})`, 0));
     for (const t of [1, 2, 4, 8, 12, 16, 24, 32]) {
       if (t < hardwareThreads) $('threads').appendChild(new Option(String(t), t));
     }
 
-    setChuzzle($('logo'), 4, 7);
+    fontText($('brandMain'), 'Mind Bender', { size: 21 });
+    fontText($('brandSub'), 'Solver', { ...GOLD_TEXT, size: 21 });
+    setChuzzle($('logo'), 4);
     addFace($('logo'), 7, 'normal', 'logo');
-    setInterval(eyeTick, 50);
-    addEventListener('pointermove', trackMouse, { passive: true });
+    setInterval(eyeTick, 100);
+    requestAnimationFrame(frameLoop);
+    let lastMove = null;
+    addEventListener('pointermove', (e) => {
+      if (!lastMove) requestAnimationFrame(() => { trackMouse(lastMove); lastMove = null; });
+      lastMove = e;
+    }, { passive: true });
     matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change', redrawFonts);
     attachEditor($('startBoard'), 'start');
     attachEditor($('goalBoard'), 'goal');
 
-    $('preset').addEventListener('change', (e) => {
-      if (e.target.value) loadPreset(e.target.value);
-      else { state.preset = ''; changed(); }
-      e.target.blur();
-    });
     $('tabStart').addEventListener('click', () => setSide('start'));
     $('tabGoal').addEventListener('click', () => setSide('goal'));
     $('unfatBtn').addEventListener('click', removeFat);
     $('undoBtn').addEventListener('click', undo);
     $('fillBtn').addEventListener('click', () => {
       pushUndo();
-      state[state.side].cells.fill(state.color);
+      state.goal.cells.fill(state.color);
+      state.side = 'goal';
+      syncStart();
       changed();
     });
-    $('copyBtn').addEventListener('click', () => {
+    $('customBtn').addEventListener('click', enterCustom);
+    $('coachNext').addEventListener('click', () => coachStep(state.coach + 1));
+    $('coachSkip').addEventListener('click', endCoach);
+    $('tourBtn').addEventListener('click', () => {
+      $('helpDialog').close();
+      enterCustom();
+      coachStep(1);
+    });
+    $('scrambleBtn').addEventListener('click', () => {
       pushUndo();
-      state[state.side] = cloneBoard(state[otherSide(state.side)]);
+      state.start = scrambled(state.start);
+      state.follows = false;
+      state.picked = null;
+      state.side = 'start';
       changed();
     });
-    $('swapBtn').addEventListener('click', () => {
+    $('resetBtn').addEventListener('click', () => {
       pushUndo();
-      [state.start, state.goal] = [state.goal, state.start];
+      state.follows = true;
+      state.picked = null;
+      syncStart();
+      state.side = 'start';
       changed();
     });
     $('shareBtn').addEventListener('click', async () => {
       writeHash();
       try {
         await navigator.clipboard.writeText(location.href);
-        flash($('shareBtn'));
+        flash($('shareOrb'));
       } catch {
         prompt('Copy this link:', location.href);
       }
     });
+    fontText($('helpTitleText'), 'How it works', { ...GOLD_TEXT, size: 26 });
     $('helpBtn').addEventListener('click', () => $('helpDialog').showModal());
-    $('helpDialog').addEventListener('click', (e) => { if (e.target === $('helpDialog')) $('helpDialog').close(); });
+    fontText($('pzTitleText'), 'Game puzzles', { ...GOLD_TEXT, size: 26 });
+    $('puzzlesBtn').addEventListener('click', () => $('puzzlesDialog').showModal());
+    for (const d of [$('helpDialog'), $('puzzlesDialog')]) {
+      d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+    }
 
     $('solveBtn').addEventListener('click', solve);
     $('cancelBtn').addEventListener('click', cancel);
@@ -1362,19 +1982,15 @@
         return;
       }
       if (/^[1-8]$/.test(e.key)) selectColour(+e.key - 1);
-      else if (e.key === '9' || e.key.toLowerCase() === 'm') selectFatTool();
+      else if (e.key === '9') selectFatTool();
     });
 
-    if (!readHash()) {
-      const p = presetByName('4-3');
-      if (p) {
-        state.start = presetBoard(p, 'start');
-        state.goal = presetBoard(p, 'goal');
-        state.preset = p.name;
-      }
-    }
+    const linked = readHash();
     layoutStage();
     changed({ keepPreset: true });
+    let seen = false;
+    try { seen = localStorage.getItem('mb-tutorial') === 'done'; } catch { /* storage blocked */ }
+    if (!seen && !linked) coachStep(1);
     warmUp();
   }
 
