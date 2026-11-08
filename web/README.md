@@ -81,6 +81,11 @@ the WebAssembly entry points in `src/programs/web/wasmSolver.cpp`.
   joined), and the paths y -> goal (walking the G layers forward). Any D-move path is a
   shortest one when nothing shorter exists, so each is kept; every one is replayed against
   the boards.
+- One solution by default (Settings, the gear: "First found" or "All"): a depth ends at the
+  first worker's first hit (the page stops the others) and lists one path. Every shorter depth
+  is still searched in full, so it is still a shortest solution. Most of a search is its last
+  depth, so this ends long searches many times sooner (table below). Settings also holds the
+  thread count; both are kept in this browser (`localStorage`, `mb-settings`).
 - One search at a time, and it belongs to the boards it started on: other puzzles can be opened,
   viewed and edited meanwhile. The orb is then the shown puzzle's (View works; Solve waits for
   the search), the status line follows the search ("show it" goes back), and a search that ends
@@ -93,7 +98,8 @@ the WebAssembly entry points in `src/programs/web/wasmSolver.cpp`.
 
 `testWebSolver` (CMake target, run from the repo root) runs the same C++ on every solved
 puzzle up to `--max` moves and compares the solution set with `build/levels_final/`
-(`--join 0` turns the class lookups off):
+(`--join 0` turns the class lookups off; `--first 1` runs the page's default, one solution, and
+checks its length and that its line is one of the known ones):
 
 ```bash
 build/testWebSolver.exe --max 12 --parts 3
@@ -118,7 +124,24 @@ One native thread on the i7-10700F, the whole search (every depth up to the answ
 | 14-2 | 12 | - | 74 s before the class lookups |
 | 13-1 | 12 | - | 1347 s |
 
-In the page (Chrome, 16 threads, a quiet machine): 4-2 (2x2, 9 moves) 0.8 s; 8-1 (10) 8.1 s on
+One solution (`--first 1`, the page's default) against all of them, one native thread, 3 parts
+run one after another (2026-11-08; every answer the right length and one of the known lines, all
+45 puzzles up to 10 moves too):
+
+| Puzzle | Moves | All | First found |
+|---|---|---|---|
+| 8-1 | 10 | 7.7 s | 6.4 s |
+| 6-5 (2x2) | 10 | 32 s | 24 s |
+| 15-5 | 11 | 29 s | 6.3 s |
+| 7-5 | 11 | 172 s | 10.7 s |
+| 9-2 | 12 | - | 3.0 s |
+| 11-1 | 12 | - | 2.7 s |
+| 14-2 | 12 | - | 40 s |
+| 13-1 | 12 | 1347 s | 54 s |
+
+In the page, 9-2 at 12 moves takes 3.6 s for one solution and 7.4 s for all 1,200 (16 threads).
+
+In the page, all solutions (Chrome, 16 threads, a quiet machine): 4-2 (2x2, 9 moves) 0.8 s; 8-1 (10) 8.1 s on
 11 workers; 6-5 (2x2, 10) 8.2 s (19 s before); 11-2 (11) 4.0 s; 15-5 (11) 10 s; 7-5 (11) 46 s
 on 10 workers; 9-2 (12) 7.5 s (Firefox 7.9 s); 14-2 (12) 20 s on 11 workers. 12 moves depends on
 how much the bound prunes: 13-1 (four colours, one of them 16 cells) would take minutes.

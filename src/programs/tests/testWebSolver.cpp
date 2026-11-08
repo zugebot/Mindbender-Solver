@@ -7,7 +7,9 @@
 // do) and their results are merged. Run from the repo root.
 //
 //   testWebSolver [--max 12] [--parts 1] [--only 4-2,9-1] [--levels build/levels_final] [--join 0|1]
-//   (--join 0: the last middle move made and looked up one by one, as before 2026-11-08)
+//                 [--first 0|1]
+//   (--join 0: the last middle move made and looked up one by one, as before 2026-11-08;
+//   --first 1: the page's default, one solution: the same length, one line, one of the known ones)
 
 #include "src/chuzzles/levels.hpp"
 #include "src/solver/web/web_solver.hpp"
@@ -53,7 +55,7 @@ static std::set<std::string> splitLines(const std::string& text) {
 
 int main(int argc, char** argv) {
     int maxMoves = 10;
-    bool useJoin = true;
+    bool useJoin = true, firstOnly = false;
     unsigned parts = 1;
     std::string only;
     fs::path levelsDir = "build/levels_final";
@@ -64,6 +66,7 @@ int main(int argc, char** argv) {
         else if (k == "--only") only = "," + v + ",";
         else if (k == "--levels") levelsDir = v;
         else if (k == "--join") useJoin = v != "0";
+        else if (k == "--first") firstOnly = v != "0";
     }
 
     // Shortest file per puzzle: <p>_c<moves>_<count>.txt
@@ -103,6 +106,7 @@ int main(int argc, char** argv) {
         {
             web_solver::Solver first;
             first.useJoin = useJoin;
+            first.firstOnly = firstOnly;
             const std::string err = first.setup(sc, gc, fat, start.getFatX(), start.getFatY(),
                                                 goal.getFatX(), goal.getFatY());
             if (!err.empty()) {
@@ -120,6 +124,7 @@ int main(int argc, char** argv) {
                 std::vector<web_solver::Solver> workers(parts);
                 for (unsigned p = 0; p < parts; ++p) {
                     workers[p].useJoin = useJoin;
+                    workers[p].firstOnly = firstOnly;
                     workers[p].setup(sc, gc, fat, start.getFatX(), start.getFatY(), goal.getFatX(), goal.getFatY());
                     workers[p].buildGoal4();
                     workers[p].buildStart4(p, parts);
@@ -136,11 +141,13 @@ int main(int argc, char** argv) {
                         dCount += w.solutionCount;
                         invalid += w.invalidSolutions;
                         streamed += w.streamedStates;
+                        if (firstOnly && dCount != 0) break;     // the page stops the other workers
                     }
                     if (dCount == 0) continue;
                     found = d;
                     count = dCount;
                     for (auto& w : workers) {
+                        if (w.solutionCount == 0) continue;     // (with --first, maybe never run)
                         const auto lines = splitLines(w.solutionsText(true));
                         got.insert(lines.begin(), lines.end());
                     }
@@ -151,7 +158,9 @@ int main(int argc, char** argv) {
         totalSeconds += secs;
 
         const std::set<std::string> want = readLines(k.file);
-        const bool ok = found == k.moves && count == want.size() && got == want && invalid == 0;
+        const bool ok = found == k.moves && invalid == 0 && (firstOnly
+            ? count == 1 && got.size() == 1 && want.count(*got.begin()) != 0
+            : count == want.size() && got == want);
         ++checked;
         if (!ok) ++failed;
         std::printf("%-5s %s%s  moves %d (want %d)  solutions %llu (want %zu)  %.2fs  S4 %zu G4 %zu  streamed %llu  mem %.0f MB%s\n",
@@ -159,7 +168,7 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(count), want.size(), secs, s4, g4,
                     static_cast<unsigned long long>(streamed), memory / 1e6,
                     invalid != 0 ? "  INVALID LINES" : "");
-        if (!ok && got != want) {
+        if (!ok && !firstOnly && got != want) {
             int shown = 0;
             for (const auto& l : want) {
                 if (!got.count(l) && shown++ < 3) std::printf("      missing: %s\n", l.c_str());

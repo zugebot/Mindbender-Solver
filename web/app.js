@@ -8,6 +8,15 @@
   const $ = (id) => document.getElementById(id);
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
+  // The Settings dialog's choices, kept in this browser. first: stop at the first shortest
+  // solution (the default; every shorter length is still searched in full) or list them all.
+  // threads: 0 = auto.
+  const settings = { first: true, threads: 0 };
+  try { Object.assign(settings, JSON.parse(localStorage.getItem('mb-settings') || '{}')); } catch { /* storage blocked */ }
+  const saveSettings = () => {
+    try { localStorage.setItem('mb-settings', JSON.stringify(settings)); } catch { /* storage blocked */ }
+  };
+
   const ICONS = {
     help: '<circle cx="12" cy="12" r="9.5"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6.9c0 1.9-2.8 2.7-2.8 2.7"/><path d="M12 17h.01"/>',
     undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
@@ -33,6 +42,7 @@
     reset: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
     grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
     minus: '<path d="M6 12h12"/>',
+    gear: '<path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/>',
     plus: '<path d="M12 6v12M6 12h12"/>',
   };
   // White symbols over a dark outline, the way the game letters its buttons.
@@ -1871,6 +1881,20 @@
     render();
   }
 
+  // The Settings dialog: the solutions switch (the choice in gold, as in the header's switch)
+  // and what it means. A change applies to the next search.
+  function renderSettings() {
+    for (const [id, on] of [['solsFirst', settings.first], ['solsAll', !settings.first]]) {
+      $(id).setAttribute('aria-pressed', String(on));
+      $(id).setAttribute('aria-checked', String(on));
+      const label = $(id).querySelector('[data-label]');
+      fontText(label, label.dataset.label, on ? { ...GOLD_TEXT, size: 16 } : { size: 16, fill: ['#d8d2f4', '#a9a2cf'] });
+    }
+    $('solsNote').textContent = settings.first
+      ? 'Stops at the first solution of the shortest length. Every shorter length is still searched in full, so it is still the fewest moves, and long searches end many times sooner.'
+      : 'Finds and counts every shortest solution. The last length is searched to the end, so long searches take several times longer.';
+  }
+
   // The move limit beside Solve ("up to / 10 moves", with - and +). A game puzzle longer than
   // the page's search has no limit to set: Solve shows the desktop solver's answer.
   function renderDepth() {
@@ -2267,7 +2291,8 @@
     if (onBoards(result) && result.depth !== 0) {
       const r = result;
       return r.depth < 0 ? `Your puzzle  -  no solution in ${r.maxDepth} moves`
-        : `Your puzzle  -  shortest is ${r.depth} move${r.depth > 1 ? 's' : ''}  -  ${r.count.toLocaleString()} solution${r.count > 1 ? 's' : ''}`;
+        : `Your puzzle  -  shortest is ${r.depth} move${r.depth > 1 ? 's' : ''}`
+          + (r.first ? '' : `  -  ${r.count.toLocaleString()} solution${r.count > 1 ? 's' : ''}`);
     }
     const s = state.start, g = state.goal;
     let off = s.fat && g.fat && (s.fat.x !== g.fat.x || s.fat.y !== g.fat.y) ? 1 : 0;
@@ -2555,7 +2580,7 @@
     statusLink(false);
     awayResult = null;
     const maxDepth = state.maxDepth;
-    const threads = +$('threads').value || hardwareThreads;
+    const threads = settings.threads || hardwareThreads, first = settings.first;
     run = { workers: [], cancelled: false, t0: performance.now(), boards: { start: cloneBoard(state.start), goal: cloneBoard(state.goal) }, follows: state.follows };
     const thisRun = run;
     let detail = '';
@@ -2574,11 +2599,11 @@
       run.workers.push(w0);
       setProgress('Starting', null);
       showStatus();
-      await w0.call('setup', spec);
+      await w0.call('setup', { ...spec, first });
       setProgress(`Up to ${Math.min(6, maxDepth)} moves`, null);
       const small = await w0.call('small', { maxDepth });
       if (small.depth >= 0) {
-        finish(thisRun, { depth: small.depth, count: small.count, text: small.text, threads: 1, maxDepth });
+        finish(thisRun, { depth: small.depth, count: small.count, text: small.text, threads: 1, maxDepth, first });
         return;
       }
       if (maxDepth <= 6) {
@@ -2597,7 +2622,7 @@
       const n = join ? nJoin : nPlain;
       detail = ` · ${n} thread${n > 1 ? 's' : ''}`;
       for (let i = 1; i < n; i++) run.workers.push(new SolverWorker());
-      await Promise.all(run.workers.slice(1).map((w) => w.call('setup', spec).then(() => w.call('join', { on: join })).then(() => w.call('goal4'))));
+      await Promise.all(run.workers.slice(1).map((w) => w.call('setup', { ...spec, first }).then(() => w.call('join', { on: join })).then(() => w.call('goal4'))));
       await Promise.all(run.workers.map((w, i) => w.call('start4', { part: i, parts: n })));
       for (let d = 7; d <= maxDepth; d++) {
         const prog = run.workers.map(() => ({ done: 0, total: 1 }));
@@ -2611,11 +2636,20 @@
           setProgress(`${d} moves · ${Math.floor(f * 100)}%`, f);
         };
         setProgress(`${d} moves`, 0);
-        const res = await Promise.all(run.workers.map((w, i) =>
-          w.call('depth', { depth: d }, (p) => { prog[i] = p; update(); })));
+        // every worker's part, or (one solution) the first worker to find one: the others are
+        // stopped with the run
+        const res = await new Promise((resolve, reject) => {
+          const out = [];
+          let left = run.workers.length;
+          run.workers.forEach((w, i) => w.call('depth', { depth: d }, (p) => { prog[i] = p; update(); }).then((r) => {
+            out[i] = r;
+            if (first && r.count > 0) resolve([r]);
+            else if (--left === 0) resolve(out);
+          }, reject));
+        });
         const count = res.reduce((s, r) => s + r.count, 0);
         if (count > 0) {
-          finish(thisRun, { depth: d, count, text: res.map((r) => r.text).join(''), threads: n, maxDepth });
+          finish(thisRun, { depth: d, count, text: res.map((r) => r.text).join(''), threads: n, maxDepth, first });
           return;
         }
       }
@@ -2679,7 +2713,8 @@
     } else {
       const n = res.count;
       fontText($('resultTitle'), `${res.depth} move${res.depth > 1 ? 's' : ''}`, { size: 30, fill: ['#fff6b8', '#ffb71e'] });
-      $('resultSub').textContent = `${n.toLocaleString()} shortest solution${n > 1 ? 's' : ''} · none shorter`
+      $('resultSub').textContent = (res.first ? 'The first shortest solution found (Settings can list all) · none shorter'
+        : `${n.toLocaleString()} shortest solution${n > 1 ? 's' : ''} · none shorter`)
         + (lines.length < n ? ` · ${lines.length.toLocaleString()} listed` : '')
         + (res.known ? '' : ` · ${fmtTime(secs)}`);
     }
@@ -2762,9 +2797,9 @@
     });
     // the plaque keeps the width of its longest label, so its arrows stay put
     const all = result.lines.length.toLocaleString(), label = $('solLabel');
-    const widest = fontWidth(`Solution ${all.replace(/\d/g, '8')} of ${all}`, infoSize());
+    const widest = result.first ? 0 : fontWidth(`Solution ${all.replace(/\d/g, '8')} of ${all}`, infoSize());
     label.style.minWidth = widest ? `${widest + 16}px` : '';
-    fontText(label, `Solution ${(i + 1).toLocaleString()} of ${all}`, { size: infoSize() });
+    fontText(label, result.first ? 'Shortest solution' : `Solution ${(i + 1).toLocaleString()} of ${all}`, { size: infoSize() });
     $('prevSol').disabled = $('nextSol').disabled = result.lines.length < 2;
     state.mode = 'replay';
     state.side = 'start';
@@ -2986,6 +3021,12 @@
     for (const t of [1, 2, 4, 8, 12, 16, 24, 32]) {
       if (t < hardwareThreads) $('threads').appendChild(new Option(String(t), t));
     }
+    $('threads').value = String(settings.threads);
+    if ($('threads').selectedIndex < 0) $('threads').value = '0';
+    $('threads').addEventListener('change', () => {
+      settings.threads = +$('threads').value;
+      saveSettings();
+    });
 
     fontText($('brandMain'), 'Mind Bender', { size: 21 });
     fontText($('brandSub'), 'Solver', { ...GOLD_TEXT, size: 21 });
@@ -3048,9 +3089,19 @@
     });
     fontText($('helpTitleText'), 'How it works', { ...GOLD_TEXT, size: 26 });
     $('helpBtn').addEventListener('click', () => $('helpDialog').showModal());
+    fontText($('setTitleText'), 'Settings', { ...GOLD_TEXT, size: 26 });
+    $('settingsBtn').addEventListener('click', () => $('settingsDialog').showModal());
+    for (const [id, on] of [['solsFirst', true], ['solsAll', false]]) {
+      $(id).addEventListener('click', () => {
+        settings.first = on;
+        saveSettings();
+        renderSettings();
+      });
+    }
+    renderSettings();
     fontText($('pzTitleText'), 'Game puzzles', { ...GOLD_TEXT, size: 26 });
     $('puzzlesBtn').addEventListener('click', () => $('puzzlesDialog').showModal());
-    for (const d of [$('helpDialog'), $('puzzlesDialog')]) {
+    for (const d of [$('helpDialog'), $('puzzlesDialog'), $('settingsDialog')]) {
       d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
     }
 

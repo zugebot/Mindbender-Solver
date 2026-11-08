@@ -51,7 +51,7 @@ solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it
   left depth 10 on 2x2 boards, as `<5,5,7>` uses it), `testRotations` (112), `testJVec`,
   `testKnownSolutions` (replays every file in `<repo>/levels`; run from `build/`),
   `testWebSolver` (the web solver vs `build/levels_final`, all puzzles up to `--max` moves,
-  12 at most; run from the repo root),
+  12 at most; `--first 1` checks the page's default one-solution mode; run from the repo root),
   `experimentBoundSample --check` (bounds admissible on all 1.9 M known-optimal-path states; run
   from the repo root), `python -m unittest discover -s python/chuzzle_suite/tests`.
 - Exactness check for solver changes: run the solver on a solved puzzle with

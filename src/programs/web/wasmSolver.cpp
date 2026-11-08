@@ -2,7 +2,7 @@
 //
 // WebAssembly entry points for the browser solver (web/solver-worker.js calls
 // them; web/build_wasm.ps1 builds web/mb_solver.js). One solver per worker:
-//   mb_setup -> mb_solve_small (0-6 moves) -> [mb_set_join] -> mb_build_goal4 -> mb_build_start4
+//   mb_setup -> [mb_set_first_only] -> mb_solve_small (0-6 moves) -> [mb_set_join] -> mb_build_goal4 -> mb_build_start4
 //   -> per depth 7-12: mb_begin_depth, mb_step until done, mb_finish_depth.
 // Solutions come back as text, one per line, 1-based moves (R14 C453).
 
@@ -50,6 +50,9 @@ EMSCRIPTEN_KEEPALIVE double mb_memory_bytes() { return static_cast<double>(g_sol
 
 // The last middle move by class lookups (on by default); 0 turns it off and frees its indexes.
 EMSCRIPTEN_KEEPALIVE void mb_set_join(const int on) { g_solver.setJoin(on != 0); }
+
+// 1: each depth ends at its first solution and lists one (the page's default); 0: all of them.
+EMSCRIPTEN_KEEPALIVE void mb_set_first_only(const int on) { g_solver.firstOnly = on != 0; }
 
 EMSCRIPTEN_KEEPALIVE double mb_class_bytes() { return static_cast<double>(g_solver.classBytes()); }
 

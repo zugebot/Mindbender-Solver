@@ -13,7 +13,7 @@ function solutionsText() {
 }
 
 const handlers = {
-  setup({ start, goal, fat }) {
+  setup({ start, goal, fat, first }) {
     const p = M._malloc(72);
     M.HEAPU8.set(start, p);
     M.HEAPU8.set(goal, p + 36);
@@ -21,6 +21,7 @@ const handlers = {
       fat ? fat.start[0] : 0, fat ? fat.start[1] : 0, fat ? fat.goal[0] : 0, fat ? fat.goal[1] : 0));
     M._free(p);
     if (err) throw new Error(err);
+    M._mb_set_first_only(first ? 1 : 0);     // one solution (stop at the first) or every one
     return {};
   },
 

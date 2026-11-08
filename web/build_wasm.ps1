@@ -7,7 +7,7 @@ $repo = Split-Path -Parent $PSScriptRoot
 $exports = @(
     'mb_setup', 'mb_solve_small', 'mb_build_goal4', 'mb_build_start4', 'mb_begin_depth', 'mb_step',
     'mb_finish_depth', 'mb_solution_count', 'mb_invalid_count', 'mb_streamed', 'mb_layer_size',
-    'mb_memory_bytes', 'mb_set_join', 'mb_class_bytes', 'mb_solutions_text', 'malloc', 'free'
+    'mb_memory_bytes', 'mb_set_join', 'mb_set_first_only', 'mb_class_bytes', 'mb_solutions_text', 'malloc', 'free'
 ) | ForEach-Object { "_$_" }
 $emArgs = @(
     "$repo/src/programs/web/wasmSolver.cpp",

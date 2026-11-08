@@ -468,6 +468,9 @@ namespace web_solver {
         u64 invalidSolutions = 0;                     // must stay 0 (each listed path is replayed)
         u64 streamedStates = 0;
         bool useJoin = true;                          // the last middle move by class lookups
+        // One solution: a depth ends at its first hit and lists one path (the page's default).
+        // Every shorter depth is still searched in full, so it is still a shortest one.
+        bool firstOnly = false;
 
         // cells: 36 colours 0-7, row-major. fat: the 2x2 piece's top-left
         // (column x, row y) on each board. Returns "" or the reason it can't be solved.
@@ -586,6 +589,10 @@ namespace web_solver {
                 }
                 if (prune && bound(s) > middle + goalLayer) continue;
                 stream(s, s, middle, NO_ORIENTATION, 0, target);
+                if (firstOnly && !hits.empty()) {
+                    cursor = seeds.size();
+                    break;
+                }
             }
             return cursor >= seeds.size();
         }
@@ -899,6 +906,25 @@ namespace web_solver {
                 pathsFromStart(h.s, a, pre);
                 midPaths(h.s, h.y, m, mid);
                 pathsToGoal(h.y, b, suf);
+                if (firstOnly) {        // the first path that replays; the count is what is listed
+                    for (const auto& p : pre) {
+                        for (const auto& c : mid) {
+                            for (const auto& q : suf) {
+                                std::vector<u8> line = p;
+                                line.insert(line.end(), c.begin(), c.end());
+                                line.insert(line.end(), q.begin(), q.end());
+                                if (!replays(line)) {
+                                    ++invalidSolutions;
+                                    continue;
+                                }
+                                solutions.push_back(std::move(line));
+                                solutionCount = 1;
+                                return;
+                            }
+                        }
+                    }
+                    continue;
+                }
                 solutionCount += static_cast<u64>(pre.size()) * mid.size() * suf.size();
                 for (const auto& p : pre) {
                     for (const auto& c : mid) {
