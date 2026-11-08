@@ -249,9 +249,11 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .45));
   transition: transform .12s;
 }
-.swatch.big { --bs: calc(2 * var(--sz) + var(--pg)); grid-column: 5 / span 2; grid-row: 1 / span 2; width: var(--bs); height: var(--bs); justify-self: center; border-radius: 28%; }
+.swatch.big { --bs: calc(2 * var(--sz) + var(--pg)); --u: calc(var(--bs) / 180); grid-column: 5 / span 2; grid-row: 1 / span 2; width: var(--bs); height: var(--bs); justify-self: center; border-radius: 28%; }
+/* the canvas reaches 24 game pixels past the box: the hint circle round the swatch in use */
+.swatch .chz-canvas { inset: calc(-24 * var(--u)); width: calc(100% + 48 * var(--u)); height: calc(100% + 48 * var(--u)); }
 .swatch:hover { transform: scale(1.08); }
-.swatch[aria-checked="true"] { transform: scale(1.12); box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(255, 201, 58, .55); }
+.swatch[aria-checked="true"] { transform: scale(1.12); z-index: 1; }
 /* the board tools: an orb with its name under it, in the game's font */
 .tools { display: flex; gap: 2px; }
 .tool {

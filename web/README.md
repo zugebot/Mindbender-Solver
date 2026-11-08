@@ -111,12 +111,12 @@ frame at 100 updates a second): a poke, the oggle, a cough, a small sneeze, then
 that blows its fuzz off (bald for a while, the page shaking); the 2x2 squeezes, hurks with puffed
 cheeks, and on the 11th click puts on its beauty show with stars, a shockwave and 200 tufts. A
 right click pokes one (a squash and a note). The voices are the game's (`assets/sounds`). A
-picked Chuzzle, a drop's target and the spots it empties are marked with the game's match outline
+picked Chuzzle, a drop's target and the spots it empties, and what a click on the goal would
+paint (the whole 2x2 footprint with the 2x2 tool) are marked with the game's match outline
 (`Board::SparkleGroups`): a chain of dark fizzy stars running round them, 45 pixels out, dropping
 the points inside or crowded by a neighbour so it runs in and out between them, starting again
-each time it has faded. What a click on the goal would paint (the whole 2x2 footprint with the
-2x2 tool) is marked with the game's hint circle (`Animator_Hint`: `HintCircle`, black shadow 4
-pixels off, yellow and red by turns), centred on the Chuzzle. The Solve candy carries the
+each time it has faded. The palette item in use wears the game's hint circle (`Animator_Hint`:
+`HintCircle`, black shadow 4 pixels off, yellow and red by turns). The Solve candy carries the
 Scrambulator's two arrows, out and back as in the game's no-moves panel.
 Text above the boards uses the game's Bauhaus 93 bitmap font (`textures/fonts`), drawn on canvases.
 

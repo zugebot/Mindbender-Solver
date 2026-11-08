@@ -658,9 +658,11 @@
       if (inside || crowd > 3 || pts.some((q) => q !== p && dist(p, q) < 5)) pts.splice(i, 1);
       else i++;
     }
-    const stars = [];
+    // (the game dims the last 20 of a chain that is always 40 or more points; a single
+    // chuzzle's 18 would all be dim, so at most the second half is)
+    const stars = [], n = pts.length;
     let at = pts.shift(), alpha = 0.5;
-    const fadeFrom = pts.length + 1 - 20;
+    const fadeFrom = n - Math.min(20, n >> 1);
     while (at) {
       stars.push({ x: at.x + Math.random() * 2, y: at.y + Math.random() * 2, sc: 0.75 + Math.random() * 0.25,
         rot: (Math.random() * 90 - 45) * Math.PI / 180, a: alpha, delay: stars.length });
@@ -676,17 +678,21 @@
     return stars;
   }
 
-  // The outline on a board: the game shows the burst once when a drag makes a group; here it
-  // starts again as soon as its last star has gone, so the trail keeps running round the marks
-  // while they stand. A new set of marks starts a new burst. 100 updates a second, whatever
-  // the frame rate.
+  // The outline on a board: the game shows the burst once when a drag makes a group; here a
+  // new burst starts each time the last one's first star has gone, so the trail keeps running
+  // round the marks while they stand. A new set of marks starts afresh. 100 updates a second,
+  // whatever the frame rate.
   function drawSparkles(ctx, el, marks, dt, s, padPx) {
     const img = tinted('fizzy', SPARKLE_RGB);
     if (!img) return;
     const key = marks.map((m) => `${m.r},${m.c},${m.big ? 1 : 0}`).join(';');
     let sp = el._spark;
-    if (!sp || sp.key !== key) sp = el._spark = { key, stars: [], acc: 0 };
-    if (!sp.stars.length) sp.stars = sparkleGroup(marks);
+    if (!sp || sp.key !== key) sp = el._spark = { key, stars: [], head: null, acc: 0 };
+    if (!sp.head || sp.head.a <= 0) {
+      const burst = sparkleGroup(marks);
+      sp.head = burst[0];
+      sp.stars.push(...burst);
+    }
     sp.acc += Math.min(dt, 100);
     for (; sp.acc >= 10; sp.acc -= 10) {
       for (const st of sp.stars) {
@@ -709,8 +715,9 @@
   }
 
   // The game's hint circle (Animator_Hint): HintCircle (128 px; HintCircleBig, 227 x 225, round
-  // the 2x2) centred on the chuzzle's cell, a black copy 4 pixels down and right under it, yellow
-  // and red by turns every 50 updates. (cx, cy) in canvas pixels.
+  // the 2x2) centred on the chuzzle, a black copy 4 pixels down and right under it, yellow and
+  // red by turns every 50 updates. Here it marks the palette item in use. (cx, cy) in canvas
+  // pixels.
   function drawHint(ctx, cx, cy, big, s, now) {
     const name = big ? 'hintbig' : 'hint';
     const img = SHEETS[name];
@@ -813,20 +820,20 @@
     }
     for (const node of top) drawChuzzle(ctx, node, node._pose, now, dt, s, R, cellPx, padPx, false);
     if (!full) return;
-    // the match outline marks the picked chuzzle, where a drop lands and the spots it fills;
-    // the hint circle what a click on the goal will paint
+    // the match outline marks the picked chuzzle, where a drop lands, the spots it fills and
+    // what a click on the goal will paint
     if (el._target) marks.push({ r: el._target.r, c: el._target.c, big: el._target.piece });
     if (el._fills) for (const f of el._fills) marks.push({ r: f.r, c: f.c, big: false });
+    if (hover) marks.push(hover);
     if (marks.length) drawSparkles(ctx, el, marks, dt, s, padPx);
     else el._spark = null;
-    if (hover) {
-      const half = (hover.big ? 80 : 40) * s;
-      drawHint(ctx, padPx + hover.c * cellPx + half, padPx + hover.r * cellPx + half, hover.big, s, now);
-    }
   }
 
   // The logo's and the palette's chuzzles, each on its own canvas inside its element (the
   // element's box is 80 game pixels across, the 2x2's 180 with the sprite from (-9.5, -8.5)).
+  // A swatch's canvas reaches 24 game pixels past its box (style.css), room for the hint
+  // circle round the one in use.
+  const SWATCH_MARGIN = 24;
   function attachActor(el, kind, key) {
     const cv = document.createElement('canvas');
     cv.className = 'chz-canvas';
@@ -835,7 +842,8 @@
     el.classList.add('chz');
     const piece = kind !== 'normal';
     el._actor = {
-      key, units: piece ? 180 : 80, cv, ctx: cv.getContext('2d'), w: 0, measured: 0,
+      key, units: piece ? 180 : 80, margin: el.classList.contains('swatch') ? SWATCH_MARGIN : 0,
+      cv, ctx: cv.getContext('2d'), w: 0, measured: 0, lit: -1,
       node: { _k: el._k ?? 0, _key: key, _piece: piece, _x0: piece ? 9.5 : 0, _y0: piece ? 8.5 : 0, _r: 0, _c: 0 },
     };
     actorEls = null;
@@ -852,20 +860,27 @@
       A.measured = now;
     }
     if (!A.w || !SHEETS.body || !SHEETS.huge || !SHEETS.eyes || !SHEETS.pupils) return;
-    const dpr = window.devicePixelRatio || 1, size = Math.round(A.w * dpr), s = size / A.units;
+    const dpr = window.devicePixelRatio || 1, s = A.w * dpr / A.units, m = A.margin * s;
+    const size = Math.round((A.units + 2 * A.margin) * s);
     let full = false;
     if (A.cv.width !== size) {
       A.cv.width = size;
       A.cv.height = size;
       full = true;
     }
+    const hint = A.margin && el.getAttribute('aria-checked') === 'true', lit = hint ? Math.floor(now / 500) % 2 : -1;
+    if (lit !== A.lit) full = true;
+    A.lit = lit;
     const p = pose(node, now, dt, false);
     if (!full && !p.busy && (p.sig === node._sig || maySkip)) return;
     node._sig = p.sig;
     A.ctx.setTransform(1, 0, 0, 1, 0, 0);
     A.ctx.clearRect(0, 0, size, size);
     A.ctx.imageSmoothingQuality = 'high';
+    A.ctx.setTransform(1, 0, 0, 1, m, m);
     drawChuzzle(A.ctx, node, p, now, dt, s, Math.round, 80 * s, 0, false);
+    if (hint) drawHint(A.ctx, A.units * s / 2, A.units * s / 2, node._piece, s, now);
+    A.ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   // ---------------------------------------------------------------- antics (Chuzzle.cpp)
