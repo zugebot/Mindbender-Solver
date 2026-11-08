@@ -14,6 +14,12 @@ Writes web/assets/:
   cursors.webp    the game's cursors (the replay guide uses the pink and yellow wands)
   orbs.webp       the game's blank round button (GameButton.png): normal, hover, pressed, 120 px each
   candy.webp      the candy wrapper behind the Scramble button (ScrambulatorButtonBG.png)
+  fizzy.webp      the fizzy star (21 x 20): the page's match-outline ring round a chuzzle
+  arrows.webp     the Scrambulator's arrows (5 frames of 60 x 104), on the candy's orange ends
+  hint, hintbig   the hint circle (the 2x2's too)
+  naked, wince, angry, beauty, cheeks, rosy, fuzz, star, splode, shockwave
+                  the chuzzles' poke reactions (Chuzzle.cpp antics, Animators.cpp)
+  sounds/*.ogg    the chuzzle voices for them (from the decomp's exe/Sounds/speaks)
   bkg1-9.webp     the backdrops' pattern, as seamless tiles
   bauhaus36.webp  the game's Bauhaus 93 bitmap font (textures/fonts/Bauhaus9336_Alpha.gif)
 and web/font.js, that font's glyph metrics (from tools/font/Bauhaus9336.py).
@@ -131,6 +137,50 @@ def build_candy():
     return with_alpha("ScrambulatorButtonBG.png", "ScrambulatorButtonBG_Alpha.png")
 
 
+def white_alpha(name):
+    # an alpha-only texture (PopCap keeps it in the red channel): white with that alpha, tinted
+    # at run time the way the game's SetColor does
+    a = Image.open(TEX / name).convert("RGBA").split()[0]
+    im = Image.new("RGBA", a.size, (255, 255, 255, 0))
+    im.putalpha(a)
+    return im
+
+
+def build_fx():
+    # The poke reactions and markers (src/game/Chuzzle.cpp, Animators.cpp), one file each:
+    return {
+        "fizzy.webp": white_alpha("FizzyStar_Alpha.png"),          # 21 x 20: the match outline's star
+        "arrows.webp": with_alpha("Scrambulator_Arrow.png", "Scrambulator_Arrow_Alpha.png"),  # 5 x 60 x 104
+        "hint.webp": white_alpha("HintCircle_Alpha.png"),          # 128: the hint circle (yellow)
+        "hintbig.webp": white_alpha("HintCircleBig_Alpha.png"),    # 227 x 225: the 2x2's
+        "naked.webp": with_alpha("NakedChuzzle.png", "NakedChuzzle_Alpha.png"),   # 64: bald
+        "wince.webp": with_alpha("Wince.png", "Wince_Alpha.png"),                 # 40 x 12
+        "angry.webp": with_alpha("AngryEyes.png", "AngryEyes_Alpha.png"),         # 50 x 27
+        "beauty.webp": with_alpha("Beauty.png", "Beauty_Alpha.png"),              # 114 x 121
+        "cheeks.webp": with_alpha("ChuzzleCheeks.png", "ChuzzleCheeks_Alpha.png"),  # 98 x 50
+        "rosy.webp": white_alpha("RosyCheeks_Alpha.png"),          # 98 x 50, over the cheeks
+        "fuzz.webp": white_alpha("Fuzz_Alpha.png"),                # 16 x 18 tuft
+        "star.webp": white_alpha("Star_Alpha.png"),                # 64, drawn yellow
+        "splode.webp": with_alpha("Chuzzle-Splode.png", "Chuzzle-Splode_Alpha.png"),  # 17 x 149
+        "shockwave.webp": with_alpha("RainbowSplode.png", "RainbowSplode_Alpha.png"),  # 256
+    }
+
+
+SOUNDS = ["poke_boredom", "pokechuzzle", "oggleoggle", "cough", "smallsneeze", "hugesneeze",
+          "hurk", "SweetRelief", "handsoff"]
+
+
+def copy_sounds():
+    # The game's chuzzle voices (exe/Sounds/speaks/*.ogg in the decomp's copy of the game).
+    src = pathlib.Path("X:/chuzzle-decomp/exe/Sounds/speaks")
+    out = OUT / "sounds"
+    out.mkdir(exist_ok=True)
+    for name in SOUNDS:
+        f = src / f"{name}.ogg"
+        if f.exists():
+            (out / f"{name.lower()}.ogg").write_bytes(f.read_bytes())
+
+
 def backdrop_tile(i):
     # The backdrops (800x600) carry the game's board panel at x 229-764 (Border.png's
     # place); the strip left of its shadow is pure pattern. Mirrored both ways it tiles seamlessly.
@@ -157,6 +207,9 @@ def main():
     save(build_cursors(), "cursors.webp", 92)
     save(build_orbs(), "orbs.webp", 92)
     save(build_candy(), "candy.webp", 92)
+    for name, im in build_fx().items():
+        save(im, name, 92)
+    copy_sounds()
     atlas, metrics = build_font()
     atlas.save(OUT / "bauhaus36.webp", "WEBP", lossless=True)
     (ROOT / "web/font.js").write_text(

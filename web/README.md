@@ -103,9 +103,19 @@ boards side by side when that gives at least 3/4 of the size of one, else one wi
 on short wide screens the dock moves to a column on the right. The solutions list is below the app.
 Each Chuzzle's look is random, as in the game's `Chuzzle.cpp`: eye shape, pupil colour, the face
 0-2 pixels lower, one of three bounce speeds; the face bobs 1 pixel with the bounce (2 on the 2x2).
-Eyes follow `engine/chuzzle.py`: idle looks every 5-14 s, blinks every 3-10 s, pupils turn to the
-mouse over their chuzzle. Text above the boards uses the
-game's Bauhaus 93 bitmap font (`textures/fonts`), drawn on canvases.
+Eyes follow `engine/chuzzle.py`: idle looks every 5-14 s, blinks every 3-10 s (the lids in the
+Chuzzle's own colour, as the game draws them), pupils turn to the mouse over their chuzzle (the
+logo's and the palette's only while the mouse is inside their square). Clicking the logo or a
+palette Chuzzle again and again makes it perform the game's antics (`Chuzzle.cpp`, frame by
+frame at 100 updates a second): a poke, the oggle, a cough, a small sneeze, then the huge sneeze
+that blows its fuzz off (bald for a while, the page shaking); the 2x2 squeezes, hurks with puffed
+cheeks, and on the 11th click puts on its beauty show with stars, a shockwave and 200 tufts. A
+right click pokes one (a squash and a note). The voices are the game's (`assets/sounds`). A
+picked Chuzzle, a drop's target and the spots it empties, and what a click on the goal would
+paint (the whole 2x2 footprint with the 2x2 tool) are marked with the game's match outline
+(`Board::SparkleGroups`): fizzy stars running round the Chuzzle in its hilite colour. The Solve
+candy carries the Scrambulator's two arrows, out and back as in the game's no-moves panel.
+Text above the boards uses the game's Bauhaus 93 bitmap font (`textures/fonts`), drawn on canvases.
 
 The controls are the game's too: the round buttons are `GameButton.png` (blue, purple under the
 pointer, pink pressed) with white symbols in a dark outline, labelled in Bauhaus 93; Solve is the
@@ -113,11 +123,19 @@ Scrambulator's candy wrapper (`ScrambulatorButtonBG.png`) holding a button that 
 bottom while the solver runs; the move limit is a - / + stepper; moves, drop-downs and the help
 dialog use the navy-and-gold of the game's `DialogBox.png`.
 
-Smoothness: each board's Chuzzles are drawn on one canvas (`drawBoard`, one requestAnimationFrame
-loop for both boards), as a game draws them: about 150 image copies per board per frame and no
-restyling. The cells are see-through elements over the canvas that take the pointer and show the
-pick and drop rings. (As elements with CSS animations, every change on the page, even a blink,
-made the browser restyle all 150 animated parts, ~2.5 ms each time, dozens of times a second.)
+Smoothness and idle cost: every Chuzzle on the page is drawn from the game's sprite sheets onto a
+canvas (`drawChuzzle`): each board's on one canvas, the logo's and the palette's on a small one
+each, the held one and the particles on a layer over the page. A Chuzzle is redrawn only when its
+pose changes (a body frame every ~87 ms, a blink, the pupils moving), only its own cell is cleared
+and drawn (the 2x2 with the ring of cells its sprite reaches into), and while nothing but the idle
+sway is going on, every canvas waits for the same 40 ms tick and the frame loop rests between
+ticks, so the page composes at most 25 frames a second instead of one per screen refresh. Nothing
+on the page animates endlessly in CSS (an endless transform animation keeps the compositor at the
+screen's rate even when nothing else moves). Measured in headless Chrome on a GTX 1660: the earlier
+page, which redrew every Chuzzle every frame, cost about 1.1 cores; this one about 0.1 over the
+browser's own floor. The held Chuzzle is redrawn on every raw pointer event (`pointerrawupdate`)
+on a low-latency canvas, with its shadow baked once per body frame, so it keeps up with the
+cursor. The cells are see-through elements over the canvas that take the pointer.
 The panels are solid (a see-through blur over the backdrop made every repaint slow), the board size
 is snapped so 20 game pixels are a whole number of screen pixels (every sprite frame starts on a
 pixel, so the Chuzzles sway in place instead of jittering), and the info bar, status line and Solve

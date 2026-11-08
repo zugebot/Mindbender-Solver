@@ -124,7 +124,7 @@ select option, select optgroup { background: #0f1650; color: #fff; text-shadow: 
 }
 .bar { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 12px; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.logo { --u: .4px; position: relative; width: 32px; height: 32px; flex: none; background: url("assets/chuzzles.webp") 0 calc(-320 * var(--u)) / calc(4800 * var(--u)) calc(640 * var(--u)) no-repeat; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+.logo { position: relative; width: 32px; height: 32px; flex: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
 .brand-name { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .bar-right { margin-left: auto; display: flex; align-items: center; gap: 4px; min-width: 0; }
 .pick { min-width: 0; }
@@ -160,10 +160,8 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   width: clamp(46px, calc(64 * var(--u)), 72px); height: clamp(46px, calc(64 * var(--u)), 72px); border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #fff3b0, var(--gold) 45%, var(--gold-2));
   color: var(--gold-ink); box-shadow: 0 0 0 3px rgba(43, 22, 0, .55), 0 0 24px rgba(255, 201, 58, .65), 0 6px 14px rgba(0, 0, 0, .5);
-  animation: nudge 1.6s ease-in-out infinite;
 }
 .to svg { width: 58%; height: 58%; fill: none; stroke: currentColor; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
-@keyframes nudge { 0%, 100% { transform: translateX(-3px); } 50% { transform: translateX(3px); } }
 
 /* objects/board.py: Border.png (535 x 535) at (229, 29), the board at (255, 60), so the cells
    start 26 / 31 units inside the frame; chuzzles are drawn on a surface padded by 10 units
@@ -196,34 +194,19 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
    Chuzzle.cpp); the cells over it are see-through: they take the pointer and show the rings */
 .board-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .cell { position: relative; z-index: 1; cursor: pointer; }
-/* the palette's and the logo's chuzzles are still elements: still, with their eyes on top */
-.face { position: absolute; left: 0; top: 0; pointer-events: none; }
-.eyes, .pupil { position: absolute; pointer-events: none; }
-.eyes {
-  width: calc(85 * var(--u)); height: calc(88 * var(--u));
-  background: url("assets/eyes.webp") calc(var(--es) * -85 * var(--u)) 0 / calc(340 * var(--u)) calc(88 * var(--u)) no-repeat;
-}
-.pupil {
-  width: calc(14 * var(--u)); height: calc(14 * var(--u));
-  background: url("assets/pupils.webp") calc(var(--ep) * -14 * var(--u)) 0 / calc(84 * var(--u)) calc(14 * var(--u)) no-repeat;
-  /* look direction (--dx, --dy in -1..1) times the shape's pupil travel (--tx, --ty) */
-  transform: translate(calc(var(--dx, 0) * var(--tx) * var(--u)), calc(var(--dy, 0) * var(--ty) * var(--u)));
-  transition: transform .5s cubic-bezier(.12, .75, .3, 1);   /* the idle lerp: 4.5 per second */
-}
-/* a palette or logo chuzzle blinking */
-.blink .pupil { visibility: hidden; }
-.track .pupil { transition-duration: .08s; }             /* following the mouse */
+/* the palette's and the logo's chuzzles: each drawn on a canvas filling its element (app.js
+   attachActor), so a redraw touches nothing but that canvas */
+.chz-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .board.placing .cell { cursor: copy; }
 .board.readonly .cell { cursor: default; }
 /* the start while editing: drag a chuzzle onto another (they swap), or tap two */
 .board.mover .cell { cursor: grab; }
-/* while dragging, the held chuzzle is the cursor (the system arrow is drawn ahead of any page
-   content, so a chuzzle under it always seemed to trail it) */
-.board.dragging, .board.dragging .cell { cursor: none; }
+.board.dragging, .board.dragging .cell { cursor: grabbing; }
+/* the held chuzzle, over everything (app.js drawDragLayer) */
+.drag-layer { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 50; }
 /* held: drawn by the canvas under the pointer, enlarged, with a shadow */
 .cell.lifted { pointer-events: none; }
-.cell.drop-on { border-radius: 50%; box-shadow: 0 0 0 calc(4 * var(--u)) #fff, 0 0 calc(18 * var(--u)) rgba(255, 255, 255, .7); }
-.cell.picked { border-radius: 50%; box-shadow: 0 0 0 calc(4 * var(--u)) var(--hl), 0 0 calc(18 * var(--u)) rgba(255, 216, 74, .8); }
+/* the pick and the drop target are marked on the canvas (the game's hint circle) */
 .band-hl {
   z-index: 0; margin: calc(2 * var(--u)); border-radius: calc(38 * var(--u));
   background: rgba(255, 216, 74, .18); box-shadow: inset 0 0 0 2px var(--hl), 0 0 14px rgba(255, 216, 74, .4);
@@ -262,15 +245,11 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .swatch {
   --u: calc(var(--sz) / 80);
   position: relative; width: var(--sz); height: var(--sz); flex: none; border: 0; padding: 0; border-radius: 50%;
-  background: url("assets/chuzzles.webp") 0 calc(var(--k) * -80 * var(--u)) / calc(4800 * var(--u)) calc(640 * var(--u)) no-repeat;
+  background: none;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .45));
   transition: transform .12s;
 }
-.swatch.big { --bs: calc(2 * var(--sz) + var(--pg)); --u: calc(var(--bs) / 180); grid-column: 5 / span 2; grid-row: 1 / span 2; width: var(--bs); height: var(--bs); justify-self: center; border-radius: 28%; background: none; }
-.swatch.big::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: url("assets/huge.webp") 0 calc(var(--k) * -180 * var(--u)) / calc(5400 * var(--u)) calc(1440 * var(--u)) no-repeat;
-}
+.swatch.big { --bs: calc(2 * var(--sz) + var(--pg)); grid-column: 5 / span 2; grid-row: 1 / span 2; width: var(--bs); height: var(--bs); justify-self: center; border-radius: 28%; }
 .swatch:hover { transform: scale(1.08); }
 .swatch[aria-checked="true"] { transform: scale(1.12); box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(255, 201, 58, .55); }
 /* the board tools: an orb with its name under it, in the game's font */
@@ -319,6 +298,8 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .55));
   transition: transform .1s;
 }
+/* the Scrambulator's arrows on the candy's ends (app.js drawArrows) */
+.solve-arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .solve-orb {
   position: relative; display: grid; place-items: center; overflow: hidden;
   width: calc(var(--sh) * .9); height: calc(var(--sh) * .9); border-radius: 50%;
