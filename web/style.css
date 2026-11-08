@@ -18,6 +18,8 @@
   --gold-soft: rgba(255, 201, 58, .16);
   --danger: #ff6b6b;
   --hl: #ffd84a;
+  --navy: linear-gradient(180deg, #1d2a8c, #0a1250 55%, #070c3a);
+  --rim: #b8761a;
   /* the game's chuzzle tints (python/deluxe_clone/engine/textures.py), for the small dots */
   --c0: #d81c1c; --c1: #1fbf1f; --c2: #3048ff; --c3: #ff7a14;
   --c4: #ffe41a; --c5: #d11fd1; --c6: #f2f2f2; --c7: #67cfe6;
@@ -110,10 +112,11 @@ select option, select optgroup { background: #0f1650; color: #fff; text-shadow: 
     grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas: "bar bar" "sub dock" "stage dock";
   }
-  .dock { flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; overflow-y: auto; border-top: 0; border-left: 1px solid var(--line); padding: 12px; }
+  .app > .dock { flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; overflow-y: auto; border-top: 0; border-left: 1px solid var(--line); padding: 12px; }
   .dock-inner { width: 100%; }
   .palette { --sz: 38px; justify-content: center; }
-  .solve-box { width: 100%; }
+  .solve-box { width: 100%; flex-wrap: wrap; }
+  .status { flex-basis: auto; width: 100%; }
 }
 /* solid panels: a see-through blur over the backdrop made every repaint (even selecting text) slow */
 .bar, .subbar, .dock { background: var(--band); }
@@ -133,8 +136,12 @@ select option, select optgroup { background: #0f1650; color: #fff; text-shadow: 
 
 .subbar { display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 8px; border-bottom: 1px solid var(--line); }
 .info { margin: 0; text-align: center; min-width: 0; max-width: 100%; }
+.subbar { container-type: inline-size; }
 .sol-switch { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; max-width: 760px; }
-.sol-nav { display: flex; align-items: center; gap: 4px; }
+.sol-nav { gap: 2px; }
+/* a narrow bar keeps Edit and All as their orbs (the switcher needs the width) */
+@container (max-width: 560px) { .sol-switch .text-btn .ftext { display: none; } }
+.sol-label { display: flex; justify-content: center; padding: 0 8px; }
 
 /* ------------------------------------------------------------------ the board area */
 .stage { position: relative; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
@@ -266,15 +273,24 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .tool:disabled { cursor: default; }
 .tool:disabled .tool-text { opacity: .45; }
 
-.player { display: flex; align-items: center; gap: 6px; }
-.player .play { --o: 54px; }
-.steps { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+/* a control and its buttons joined in one plaque: the game's navy panel (DialogBox.png) in a
+   gold rim (the move limit, the solution switcher, the replay's moves) */
+.plaque {
+  display: flex; align-items: center; gap: 4px; padding: 3px; border-radius: 999px;
+  border: 2px solid var(--rim); background: var(--navy);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 2px 4px rgba(0, 0, 0, .45);
+}
+/* the replay: what the next move does, over Play and the moves with their step buttons (the
+   moves wrap rather than scroll, so the whole solution is always in view) */
+.replay { flex-direction: column; flex-wrap: nowrap; gap: 8px; max-width: 100%; }
 .step { margin: 0; font-size: 14px; color: var(--muted); text-align: center; }
 .step b { color: var(--gold); }
 .step .nm { color: var(--faint); font-size: 12px; }
-/* the moves as little plaques: the game's navy panel (DialogBox.png) in a gold rim */
-.chips { position: relative; display: flex; gap: 5px; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding: 8px 10px; margin: -5px 0; }
-.chips::-webkit-scrollbar { display: none; }
+.track { display: flex; align-items: center; justify-content: center; gap: 12px; max-width: 100%; }
+.track .play { --o: 54px; }
+.line { min-width: 0; border-radius: 24px; padding: 4px; }
+.line .icon-btn { --o: 34px; }
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; min-width: 0; padding: 0 4px; }
 .chip {
   flex: none; height: 28px; padding: 0 8px; border-radius: 9px; border: 2px solid #b8761a;
   font: 800 13px/1 ui-monospace, "Cascadia Mono", Consolas, monospace; color: #fff;
@@ -289,9 +305,9 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 /* Solve: the Scrambulator's candy wrapper (assets/candy.webp) holding an orb; while it runs
    the orb fills from the bottom with the progress */
 .solve-box { display: flex; gap: 10px; align-items: center; justify-content: center; }
-.depth { display: flex; align-items: center; gap: 6px; }
+.depth { gap: 2px; }
 .depth.busy { opacity: .5; pointer-events: none; }
-.depth-text { display: flex; flex-direction: column; align-items: center; min-width: 74px; gap: 1px; }
+.depth-text { display: flex; justify-content: center; padding: 0 6px; }
 .solve {
   --sh: 76px;
   position: relative; width: calc(var(--sh) * 1.584); height: var(--sh); flex: none; border: 0; padding: 0;
@@ -343,7 +359,23 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   .tools { max-width: 100%; justify-content: center; }
   .tool { --o: 38px; flex: 0 1 56px; min-width: 0; }
   .solve-box { width: 100%; }
-  .steps { width: 100%; }
+}
+/* narrow docks (phones, and the side column of phones turned sideways): the moves get the
+   width, the buttons go under them */
+@media (max-width: 719px), (max-height: 560px) and (min-aspect-ratio: 4/3) {
+  .replay { width: 100%; }
+  .track { display: grid; grid-template-columns: 1fr repeat(5, auto) 1fr; gap: 10px 12px; width: 100%; }
+  .line { display: contents; }
+  .chips {
+    grid-area: 1 / 1 / 2 / -1; padding: 6px; border-radius: 18px;
+    border: 2px solid var(--rim); background: var(--navy); box-shadow: 0 2px 4px rgba(0, 0, 0, .45);
+  }
+  .line .icon-btn { --o: 38px; }
+  #firstBtn { grid-area: 2 / 2; }
+  #prevBtn { grid-area: 2 / 3; }
+  .track .play { grid-area: 2 / 4; }
+  #nextBtn { grid-area: 2 / 5; }
+  #lastBtn { grid-area: 2 / 6; }
 }
 
 /* ------------------------------------------------------------------ the solutions, below the app */
@@ -393,8 +425,8 @@ dialog::backdrop { background: rgba(6, 4, 16, .7); }
   .tool { --o: 46px; min-width: 62px; }
   .solve { --sh: 88px; }
   .cancel { --o: 46px; }
-  .player .play { --o: 62px; }
-  .player .icon-btn:not(.play) { --o: 44px; }
+  .track .play { --o: 62px; }
+  .line .icon-btn { --o: 40px; }
   .chip { height: 32px; font-size: 14px; }
   .step { font-size: 15px; }
 }

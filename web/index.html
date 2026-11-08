@@ -39,9 +39,9 @@
       </div>
       <div class="sol-switch" id="solSwitch" hidden>
         <button type="button" class="text-btn" id="editBtn" aria-label="Edit the boards"><span class="orb mini" data-icon="pencil"></span><span data-label="Edit" data-gold></span></button>
-        <div class="sol-nav">
+        <div class="sol-nav plaque">
           <button type="button" class="icon-btn" id="prevSol" data-icon="left" aria-label="Previous solution"></button>
-          <span id="solLabel"></span>
+          <span class="sol-label" id="solLabel"></span>
           <button type="button" class="icon-btn" id="nextSol" data-icon="right" aria-label="Next solution"></button>
         </div>
         <button type="button" class="text-btn" id="listBtn" aria-label="All solutions"><span data-label="All" data-gold></span><span class="orb mini" data-icon="list"></span></button>
@@ -90,22 +90,22 @@
         </div>
       </div>
 
-      <div class="dock-inner" id="replayDock" hidden>
-        <div class="player">
-          <button type="button" class="icon-btn" id="firstBtn" data-icon="first" aria-label="Back to the start"></button>
-          <button type="button" class="icon-btn" id="prevBtn" data-icon="left" aria-label="Previous move"></button>
+      <div class="dock-inner replay" id="replayDock" hidden>
+        <p class="step" id="stepText" aria-live="polite"></p>
+        <div class="track">
           <button type="button" class="icon-btn play" id="playBtn" data-icon="play" aria-label="Play"></button>
-          <button type="button" class="icon-btn" id="nextBtn" data-icon="right" aria-label="Next move"></button>
-          <button type="button" class="icon-btn" id="lastBtn" data-icon="last" aria-label="Jump to the end"></button>
-        </div>
-        <div class="steps">
-          <p class="step" id="stepText" aria-live="polite"></p>
-          <div class="chips" id="replayChips"></div>
+          <div class="line plaque">
+            <button type="button" class="icon-btn" id="firstBtn" data-icon="first" aria-label="Back to the start"></button>
+            <button type="button" class="icon-btn" id="prevBtn" data-icon="left" aria-label="Previous move"></button>
+            <div class="chips" id="replayChips"></div>
+            <button type="button" class="icon-btn" id="nextBtn" data-icon="right" aria-label="Next move"></button>
+            <button type="button" class="icon-btn" id="lastBtn" data-icon="last" aria-label="Jump to the end"></button>
+          </div>
         </div>
       </div>
 
-      <div class="solve-box">
-        <div class="depth" id="depthBox" role="group" aria-label="Longest solution to search for">
+      <div class="solve-box" id="solveBox">
+        <div class="depth plaque" id="depthBox" role="group" aria-label="Longest solution to search for">
           <button type="button" class="icon-btn small" id="depthDown" data-icon="minus" aria-label="Search fewer moves"></button>
           <span class="depth-text"><span id="depthText"></span></span>
           <button type="button" class="icon-btn small" id="depthUpBtn" data-icon="plus" aria-label="Search more moves"></button>

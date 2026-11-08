@@ -103,6 +103,8 @@ On 2026-11-08 all 45 puzzles of 10 moves or fewer matched exactly split into 3 p
 the workers do, and so did every 11-move puzzle and the 12-move 9-2, 11-1, 14-2 and 13-1.
 `tools/wasm_bench.mjs` runs the WebAssembly build itself in Node and checks the counts;
 `tools/t_background.js` (with `cdp_eval.mjs`) starts a search, views 16-4 meanwhile and goes back.
+`tools/t_layout.js` (with `cdp_eval.mjs --shot`, `WIN=--window-size=W,H`; `?pz=15-3` opens a game
+puzzle's replay) reports where the dock's parts sit, for screenshots at several sizes.
 
 One native thread on the i7-10700F, the whole search (every depth up to the answer):
 
@@ -140,6 +142,12 @@ drawn in the game's own coordinates (`python/deluxe_clone/objects/board.py`): 80
 Chuzzle's 179-unit sprite at (-9.5, -8.5), the 535-unit border 26 / 31 units out from the cells. Two
 boards side by side when that gives at least 3/4 of the size of one, else one with Start / Goal tabs;
 on short wide screens the dock moves to a column on the right. The solutions list is below the app.
+Controls that belong together share one navy plaque in a gold rim: the move limit with its - and +,
+the solution switcher with its arrows, and in a replay the moves with their step buttons (the moves
+wrap, so a whole solution is in view; on phones the buttons go under them). A replay has no Solve
+(Edit goes back to it), except while a search of another puzzle can still be stopped. A custom
+puzzle's info line counts the Chuzzles out of place, and once solved gives the answer the way a game
+puzzle's does.
 Each Chuzzle's look is random, as in the game's `Chuzzle.cpp`: eye shape, pupil colour, the face
 0-2 pixels lower, one of three bounce speeds; the face bobs 1 pixel with the bounce (2 on the 2x2).
 Eyes follow `engine/chuzzle.py`: idle looks every 5-14 s, blinks every 3-10 s (the lids in the

@@ -1531,6 +1531,16 @@
     el.setAttribute('aria-label', text);
     drawFontText(el);
   }
+  // The width fontText gives a text, in CSS pixels (0 until the font has loaded).
+  function fontWidth(text, size) {
+    if (!FONT) return 0;
+    let w = 0;
+    for (const ch of text) {
+      const g = FONT.glyphs[ch === '≤' ? '<' : ch];
+      w += ch === ' ' || !g ? FONT.space : g.w;
+    }
+    return Math.ceil(w * size / FONT.size + 2 * Math.max(1, Math.round(size / 9)) + 2);
+  }
   function drawFontText(el) {
     const job = fontJobs.get(el);
     if (!job || !FONT || !fontAtlas.naturalWidth) return;
@@ -1603,7 +1613,8 @@
   const LABEL_TEXT = { size: 14 };                                   // under the dock's buttons
   const ORB_TEXT = { size: 22, fill: ['#ffffff', '#ffe9a8'], outline: 'rgba(60, 10, 0, .95)' };
   const captionStyle = () => ({ ...GOLD_TEXT, size: Math.round(Math.max(18, Math.min(30, 34 * layout.u))) });
-  const infoSize = () => Math.round(Math.max(15, Math.min(22, innerWidth / 42)));
+  // (the bar's own width: phones turned sideways give it a column, not the window)
+  const infoSize = () => Math.round(Math.max(15, Math.min(22, (document.querySelector('.subbar').clientWidth || innerWidth) / 42)));
 
   // ---------------------------------------------------------------- layout
   // The boards fill the space between the info bar and the dock: two side by side when that
@@ -1866,6 +1877,8 @@
     const d = state.maxDepth;
     $('depthBox').hidden = !!knownPreset();
     fontText($('depthText'), `≤ ${d} move${d > 1 ? 's' : ''}`, { size: 17 });
+    const widest = fontWidth(`≤ ${MAX_DEPTH} moves`, 17);    // the plaque keeps one width
+    $('depthText').parentElement.style.minWidth = widest ? `${widest + 12}px` : '';
     $('depthDown').disabled = d <= 1;
     $('depthUpBtn').disabled = d >= MAX_DEPTH;
   }
@@ -2247,6 +2260,25 @@
     changed({ keepPreset: true });
   }
 
+  // A custom puzzle's line: what to do first, then how far the start is from the goal (it
+  // changes with every drag), then, once solved, the answer, worded as a game puzzle's is.
+  function customInfo() {
+    if (state.follows) return 'Paint the goal, then drag the start\'s Chuzzles into place';
+    if (onBoards(result) && result.depth !== 0) {
+      const r = result;
+      return r.depth < 0 ? `Your puzzle  -  no solution in ${r.maxDepth} moves`
+        : `Your puzzle  -  shortest is ${r.depth} move${r.depth > 1 ? 's' : ''}  -  ${r.count.toLocaleString()} solution${r.count > 1 ? 's' : ''}`;
+    }
+    const s = state.start, g = state.goal;
+    let off = s.fat && g.fat && (s.fat.x !== g.fat.x || s.fat.y !== g.fat.y) ? 1 : 0;
+    for (let i = 0; i < 36; i++) {
+      const r = Math.floor(i / 6), c = i % 6;
+      if (inPiece(s.fat, r, c)) continue;
+      if (inPiece(g.fat, r, c) || s.cells[i] !== g.cells[i]) off++;
+    }
+    return off === 0 ? 'The start is already the goal' : `${off} Chuzzle${off > 1 ? 's' : ''} out of place`;
+  }
+
   function renderInfo() {
     const el = $('info');
     const p = state.preset && presetByName(state.preset);
@@ -2260,7 +2292,7 @@
       text = 'Start and goal need the same Chuzzles: press Reset';
       warn = true;
     } else if (!p) {
-      text = state.follows ? 'Paint the goal, then drag the start\'s Chuzzles into place' : state.start.fat ? 'Your puzzle, with the 2x2 Chuzzle' : 'Your puzzle';
+      text = customInfo();
     } else if (p.moves) {
       text = `Puzzle ${p.name}  -  shortest is ${p.moves} moves  -  ${p.solutions.toLocaleString()} solution${p.solutions > 1 ? 's' : ''}`;
     } else {
@@ -2416,6 +2448,8 @@
     btn.disabled = !!run && (here || !known);
     btn.title = run && !here && !known ? 'Another puzzle is being solved: one search at a time' : '';
     stop.hidden = !run;
+    // a replay has nothing to solve (Edit goes back), unless a search can be stopped here
+    $('solveBox').hidden = state.mode === 'replay' && !!result && !!result.replay && !run;
     stop.setAttribute('aria-label', here ? 'Cancel' : 'Stop solving the other puzzle');
     stop.title = here ? '' : 'Stop solving the other puzzle';
     $('depthBox').classList.toggle('busy', here);
@@ -2660,6 +2694,7 @@
       leaveReplay();
       render();
     }
+    renderInfo();
   }
 
   function markStale() {
@@ -2725,7 +2760,11 @@
       b.addEventListener('click', () => { interrupt(); showStep(k); });
       chips.appendChild(b);
     });
-    fontText($('solLabel'), `Solution ${(i + 1).toLocaleString()} of ${result.lines.length.toLocaleString()}`, { size: infoSize() });
+    // the plaque keeps the width of its longest label, so its arrows stay put
+    const all = result.lines.length.toLocaleString(), label = $('solLabel');
+    const widest = fontWidth(`Solution ${all.replace(/\d/g, '8')} of ${all}`, infoSize());
+    label.style.minWidth = widest ? `${widest + 16}px` : '';
+    fontText(label, `Solution ${(i + 1).toLocaleString()} of ${all}`, { size: infoSize() });
     $('prevSol').disabled = $('nextSol').disabled = result.lines.length < 2;
     state.mode = 'replay';
     state.side = 'start';
@@ -3035,7 +3074,7 @@
       selectSolution(+li.dataset.i);
       scrollTo({ top: 0, behavior: 'smooth' });
     });
-    $('editBtn').addEventListener('click', () => { leaveReplay(); render(); });
+    $('editBtn').addEventListener('click', () => { leaveReplay(); render(); renderInfo(); });
     $('listBtn').addEventListener('click', () => $('results').scrollIntoView({ behavior: 'smooth', block: 'start' }));
     $('upBtn').addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
     $('prevSol').addEventListener('click', () => selectSolution(result.selected - 1));
