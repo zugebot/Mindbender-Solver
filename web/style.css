@@ -558,7 +558,7 @@ dialog.wide .skin { margin-top: 14px; }
    on the top band, labels in Bauhaus, the round check boxes (OptionCheckBox.png), a dotted
    list like the Display list, and the Done button (Options_Done.png). */
 dialog.opt-dialog {
-  width: min(560px, calc(100vw - 32px)); max-width: none; max-height: none; overflow: visible;
+  width: min(480px, calc(100vw - 32px)); max-width: none; max-height: none; overflow: visible;
   border: 0; border-radius: 0; padding: 0; background: none; box-shadow: none;
 }
 .opt-star {
@@ -568,20 +568,23 @@ dialog.opt-dialog {
 }
 .opt {
   position: relative; container-type: inline-size;
-  border-style: solid; border-width: 79px 40px 44px;
-  border-image: url("assets/optframe.webp") 105 54 59 53 fill / 79px 40px 44px stretch;
+  border-style: solid; border-width: 79px 40px 46px;
+  border-image: url("assets/optframe.webp") 105 54 61 53 fill / 79px 40px 46px stretch;
   padding: 6px 8px 8px;
 }
 .opt-title { position: absolute; left: 0; right: 0; top: -66px; margin: 0; display: flex; justify-content: center; line-height: 0; }
 .opt-cols { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; }
-.opt-col { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
-.opt-head { margin-bottom: 2px; }
+.opt-col { display: flex; flex-direction: column; padding-top: 4px; }
+.opt-head { margin-bottom: 4px; }
+/* the rows as close as the game's (a text canvas is taller than its letters: its box is cut
+   to the row, the letters drawn over the edge) */
 .opt-radio {
-  display: flex; align-items: center; gap: 9px; border: 0; padding: 3px 4px; background: none; border-radius: 10px; text-align: left;
+  display: flex; align-items: center; gap: 8px; height: 29px; border: 0; padding: 0 4px; background: none; border-radius: 8px; text-align: left;
 }
+.opt-radio .opt-text { height: 29px; display: flex; align-items: center; overflow: visible; }
 .opt-radio:hover { background: rgba(255, 255, 255, .07); }
 .opt-dot {
-  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  flex: none; width: 24px; height: 24px; border-radius: 50%;
   background: url("assets/optcheck.webp") 0 0 / 200% 100% no-repeat;
 }
 .opt-radio[aria-checked="true"] .opt-dot { background-position: 100% 0; }
@@ -589,11 +592,10 @@ dialog.opt-dialog {
 .opt-box { margin: 0; padding: 2px 6px 6px; min-width: 132px; border: 2px dotted rgba(235, 230, 255, .85); border-radius: 2px; }
 .opt-box legend { padding: 0 4px; margin: 0 auto; line-height: 0; }
 .opt-list { display: flex; flex-direction: column; }
-.opt-item { display: flex; border: 0; padding: 1px 6px; background: none; line-height: 0; }
+.opt-item { display: flex; align-items: center; height: 24px; border: 0; padding: 0 6px; background: none; line-height: 0; }
 .opt-item:hover { background: rgba(255, 255, 255, .08); }
 .opt-item[aria-checked="true"] { background: rgba(196, 188, 255, .42); }
-.opt-note { margin: 10px 2px 0; font-size: 13px; line-height: 1.4; color: #c9c3ff; }
-.opt-col .opt-note { margin: 4px 4px 0; }
+.opt-note { margin: 8px 4px 0; font-size: 13px; line-height: 1.4; color: #c9c3ff; }
 .opt-done {
   display: block; margin: 12px auto 0; width: 160px; height: 30px; border: 0; padding: 0;
   background: url("assets/optdone.webp") 0 0 / 300% 100% no-repeat;

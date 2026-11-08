@@ -21,8 +21,8 @@ Writes web/assets/:
   scrollthumb.webp  the options slider's star (SliderThumb.png, 30 px), the scroll thumb
   scrolltrack.webp  the options slider's bar (OptionSliderBar.png) stood upright: 21 x 191
   optframe.webp   the Game Options panel (DialogBox.png) without its star: the yellow frame in
-                  its red rim round the navy panel, cut for a 9-slice (376 x 380; borders 87
-                  top, 35 sides, 41 bottom), outside the rim's rounded corners clear
+                  its red rim round the navy panel, its rounded corners smooth (a supersampled
+                  mask) in a 2-pixel dark outline, cut for a 9-slice (376 x 382)
   optstar.webp    DialogBox.png's star alone (the frame's place left clear), drawn behind it
   optcheck.webp   the options' round check box (OptionCheckBox.png): off, on, 29 px each
   optdone.webp    the options' Done button (Options_Done.png): normal, hover, pressed, 213 x 40
@@ -157,44 +157,45 @@ def build_scroll():
     return {"scrollbtn.webp": btn, "scrollthumb.webp": thumb, "scrolltrack.webp": track}
 
 
-# DialogBox.png: the frame inside its dark outline, and the navy panel's edges (measured: the red
-# rim spans x 114-485, y 104-480; the navy x 147-452, y 189-441)
-OPT_FRAME = (112, 102, 488, 482)
+# DialogBox.png: the red rim's outside (measured: x 114-485, y 104-481, corners of radius 30),
+# the navy panel (x 147-452, y 189-441), and the cut for the 9-slice: the rim with a 2-pixel
+# dark outline round it
+OPT_RIM = (114, 104, 486, 482, 30)
+OPT_FRAME = (112, 102, 488, 484)
+
+
+def rounded_cover(h, w, x0, y0, x1, y1, r, ss=4):
+    """How much of each pixel a rounded rectangle covers (0-1), sampled ss x ss per pixel, so
+    its edge is smooth rather than stepped."""
+    ys = (np.arange(h * ss) + 0.5) / ss
+    xs = (np.arange(w * ss) + 0.5) / ss
+    dx = np.maximum(np.maximum(x0 + r - xs, xs - (x1 - r)), 0)[None, :]
+    dy = np.maximum(np.maximum(y0 + r - ys, ys - (y1 - r)), 0)[:, None]
+    inside = (xs[None, :] >= x0) & (xs[None, :] < x1) & (ys[:, None] >= y0) & (ys[:, None] < y1) & (dx * dx + dy * dy <= r * r)
+    return inside.reshape(h, ss, w, ss).mean(axis=(1, 3))
 
 
 def build_options():
     box = with_alpha("DialogBox.png", "DialogBox_Alpha.png")
-    a = np.asarray(box).copy()
-    rgb = a[..., :3].astype(int)
-    red = (rgb[..., 0] > 180) & (rgb[..., 1] < 80) & (rgb[..., 2] < 80) & (a[..., 3] > 128)
-    # inside the rim: between its first and last red pixel on the row or on the column (either
-    # alone keeps the rounded corners out; the gloss in the top-right corner is not red, so a
-    # row or column through it alone falls short)
-    inside = np.zeros(red.shape, bool)
-    rows, cols = np.zeros(red.shape, bool), np.zeros(red.shape, bool)
-    for y in range(red.shape[0]):
-        xs = np.flatnonzero(red[y])
-        if xs.size:
-            rows[y, xs[0]:xs[-1] + 1] = True
-    for x in range(red.shape[1]):
-        ys = np.flatnonzero(red[:, x])
-        if ys.size:
-            cols[ys[0]:ys[-1] + 1, x] = True
-    inside = rows | cols
-    # and its dark outline: two pixels round it
-    grown = inside.copy()
-    for dy in (-2, -1, 0, 1, 2):
-        for dx in (-2, -1, 0, 1, 2):
-            grown |= np.roll(np.roll(inside, dy, 0), dx, 1)
-    dark = rgb.max(axis=2) < 225                 # the outline, not the star's yellow beside it
-    frame = a.copy()
-    frame[..., 3] = np.where(inside | (grown & dark), frame[..., 3], 0)
+    a = np.asarray(box).astype(np.float32)
+    h, w = a.shape[:2]
+    x0, y0, x1, y1, r = OPT_RIM
+    rim = rounded_cover(h, w, x0, y0, x1, y1, r)                       # the frame's own pixels
+    ring = rounded_cover(h, w, x0 - 2, y0 - 2, x1 + 2, y1 + 2, r + 2)   # and the outline round it
+    # the gloss in the top-right corner is near white and reaches the rim: everything inside
+    # the rim keeps the art; the outline ring is a dark line, as the game draws round its panels
+    outline = np.array([46, 30, 4], np.float32)
+    frame = np.zeros_like(a)
+    t = np.where(ring > 0, rim / np.maximum(ring, 1e-6), 0)[..., None]
+    frame[..., :3] = a[..., :3] * t + outline * (1 - t)
+    frame[..., 3] = 255 * ring
     star = a.copy()
-    star[..., 3] = np.where(grown, 0, star[..., 3])
-    x0, y0, x1, y1 = OPT_FRAME
+    star[..., 3] = np.where(ring > 0, 0, star[..., 3])                  # the frame's place, clear
+    fx0, fy0, fx1, fy1 = OPT_FRAME
+    img = lambda q: Image.fromarray(np.clip(q, 0, 255).astype(np.uint8), "RGBA")
     return {
-        "optframe.webp": Image.fromarray(frame, "RGBA").crop((x0, y0, x1, y1)),
-        "optstar.webp": Image.fromarray(star, "RGBA"),
+        "optframe.webp": img(frame).crop((fx0, fy0, fx1, fy1)),
+        "optstar.webp": img(star),
         "optcheck.webp": with_alpha("OptionCheckBox.png", "OptionCheckBox_Alpha.png"),
         "optdone.webp": with_alpha("Options_Done.png", "Options_Done_Alpha.png"),
     }
