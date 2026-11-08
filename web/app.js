@@ -1605,15 +1605,6 @@
       if (!s || (s.r === g.r && s.c === g.c) || inPiece(state[which].fat, s.r, s.c)) return null;
       return { ...s, piece };
     };
-    const showTarget = (t) => {
-      const old = el.querySelector('.cell.drop-on');
-      if (old) old.classList.remove('drop-on');
-      if (t && !t.piece) {
-        const cell = el.querySelector(`.cell[data-r="${t.r}"][data-c="${t.c}"]`);
-        if (cell) cell.classList.add('drop-on');
-      }
-    };
-
     // The cells a drop would empty and the colour each would get: the held chuzzle's own cell
     // takes the one it lands on; the 2x2's freed cells take the chuzzles it would cover.
     const fillsFor = (t) => {
@@ -1685,7 +1676,6 @@
         if (!('onpointerrawupdate' in el)) drawOverlay();
         const t = dropTarget(e);
         if (!g.target !== !t || (t && (t.r !== g.target.r || t.c !== g.target.c))) {
-          showTarget(t);
           el._fills = fillsFor(t);
           el._target = t;
         }

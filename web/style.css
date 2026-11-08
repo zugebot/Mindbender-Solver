@@ -191,7 +191,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 }
 
 /* the board's chuzzles are drawn on its canvas (app.js drawBoard, after the game's
-   Chuzzle.cpp); the cells over it are see-through: they take the pointer and show the rings */
+   Chuzzle.cpp); the cells over it are see-through and only take the pointer */
 .board-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .cell { position: relative; z-index: 1; cursor: pointer; }
 /* the palette's and the logo's chuzzles: each drawn on a canvas filling its element (app.js
@@ -206,7 +206,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .drag-layer { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 50; }
 /* held: drawn by the canvas under the pointer, enlarged, with a shadow */
 .cell.lifted { pointer-events: none; }
-/* the pick and the drop target are marked on the canvas (the game's hint circle) */
+/* the pick and the drop target are marked on the canvas (the game's match outline) */
 .band-hl {
   z-index: 0; margin: calc(2 * var(--u)); border-radius: calc(38 * var(--u));
   background: rgba(255, 216, 74, .18); box-shadow: inset 0 0 0 2px var(--hl), 0 0 14px rgba(255, 216, 74, .4);
