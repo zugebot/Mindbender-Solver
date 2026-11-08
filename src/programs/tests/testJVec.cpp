@@ -1,4 +1,3 @@
-// JVec_Test.cpp
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -108,7 +107,6 @@ void TestSwap() {
 
     vec1.swap(vec2);
 
-    // After swap
     assert(vec1.size() == 2);
     assert(vec1.capacity() == 2);
     assert(vec1[0] == 4);
@@ -169,8 +167,6 @@ void TestResizeWithZero() {
     assert(vec.capacity() == 5);
     printf("Passed\n");
 }
-
-// --- Main Function to Run Tests ---
 
 int main() {
     printf("Running JVec Unit Tests...\n\n");

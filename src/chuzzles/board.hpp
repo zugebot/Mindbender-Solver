@@ -190,16 +190,8 @@ public:
         }
     }
 
-    // ############################################################
-    // #                       u64 hash                           #
-    // ############################################################
-
     MUND FORCEINLINE HD u64 getMem() const { return mem; }
     MU FORCEINLINE HD void setMem(const u64 value) { mem = value; }
-
-    // ############################################################
-    // #                       u64 moves                          #
-    // ############################################################
 
     MUND FORCEINLINE HD u8 getMoveCount() const {
         return mem & MEMORY_MOVE_DATA_MASK;
@@ -221,10 +213,6 @@ public:
             setNextNMove<1>(moveValue);
         }
     }
-
-    // ############################################################
-    // #            To String -Similar- Functions                 #
-    // ############################################################
 
     MUND std::string toString() const;
 

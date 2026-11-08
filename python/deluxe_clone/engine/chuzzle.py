@@ -77,7 +77,6 @@ class Chuzzle:
         self.textures = game.textures
         self.fps = game.fps
 
-        # position
         self.direction = 0
         self.position = position
 
@@ -88,7 +87,6 @@ class Chuzzle:
         self.motionSpeed = 0.0
         self.motionSpeedSmoothed = 0.0
 
-        # properties
         self.version = version
         self.super = False
         self.naked = False
@@ -103,7 +101,6 @@ class Chuzzle:
         else:
             self.color = color
 
-        # facial features
         self.eyeballShape = r.randint(0, 3)
         self.eyeballColor = r.randint(0, 5)
 
@@ -125,7 +122,6 @@ class Chuzzle:
         self.mouthType = r.randint(0, 15)
         self.superPulse = []
 
-        # swaying animation
         self.swayFrameCap = 20
         self.swayFrame = r.randint(0, self.swayFrameCap - 1)
         self.swaySubFrameCap = 4
@@ -428,8 +424,7 @@ class Chuzzle:
 
         else:
             if self.mouseWasInsideOwnCell:
-                # This is the key behavior you asked for:
-                # on mouse exit, freeze the eyes at the last mouse-facing direction.
+                # On mouse exit, freeze the eyes at the last mouse-facing direction.
                 # Do not immediately pick a new idle direction.
                 self.idleEyeDir = self.leftEyeDir.copy()
                 self.eyeTargetDir = self.idleEyeDir.copy()

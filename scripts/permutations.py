@@ -18,7 +18,6 @@ def get_permutations(s):
 
     groups.append(current_group)
 
-    # Generate all permutations for each group of repeating R's or C's
     all_combinations = []
     for group in groups:
         if len(group) > 1:
@@ -26,10 +25,8 @@ def get_permutations(s):
         else:
             all_combinations.append([group])
 
-    # Create all combinations of the permuted groups
     all_orders = list(itertools.product(*all_combinations))
 
-    # Reconstruct the original moves in all possible orders
     result = [' '.join(' '.join(group) for group in order) for order in all_orders]
 
     return result

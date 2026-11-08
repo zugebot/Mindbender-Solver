@@ -36,7 +36,7 @@ namespace {
         const u64 s = sect1 ^ sect2;
         return (s | s >> 1 | s >> 2) & 0'111111'111111'111111;
     }
-} // misc
+}
 
 
 Board::ColorArray_t Board::ColorsDefault = {0, 1, 2, 3, 4, 5, 6, 7};
@@ -100,15 +100,6 @@ MU B1B2::ColorArray_t B1B2::setStateAndRetColors(const u8 values[36]) {
 
 
 
-
-// ############################################################
-// #                        Board                            #
-// ############################################################
-
-
-// ============================================================
-// Board-only helpers
-// ============================================================
 
 MU HD bool Board::doActISColMatch(const u8 x1, const u8 y1, const u8 m, const u8 n) const {
     const i32 y2 = (y1 - n + 6) % 6;
@@ -834,9 +825,9 @@ namespace {
     // check commits before 10/16/24 for previous impl.
     MU HD FORCEINLINE u64 getSegment3bits(const u64 segment) {
         static constexpr u64 MASK_CS = 0'003003'003003'003003;
-        const u64 o1 = (segment >> 6 & MASK_CS) * 9 /* 0b1001 */
+        const u64 o1 = (segment >> 6 & MASK_CS) * 9
                    |
-                   (segment >> 3 & MASK_CS) * 3 /* 0b1001 */
+                   (segment >> 3 & MASK_CS) * 3
                    |
                    segment & MASK_CS
                 ;
@@ -876,6 +867,6 @@ namespace {
         return o3;
 #endif
     }
-} // hashing
+}
 
 

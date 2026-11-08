@@ -27,11 +27,9 @@ std::tuple<int, int, int, int> parseFileName(const fs::path&filepath) {
         return std::make_tuple(X, Y, N, M);
     }
 
-    // If the pattern doesn't match, return default values (could handle error)
     return std::make_tuple(0, 0, 0, 0);
 }
 
-// Comparator for sorting the files
 bool compareFiles(const fs::path& file1, const fs::path& file2) {
     auto [X1, Y1, N1, M1] = parseFileName(file1.filename().string());
     auto [X2, Y2, N2, M2] = parseFileName(file2.filename().string());

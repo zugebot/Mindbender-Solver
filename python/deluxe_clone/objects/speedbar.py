@@ -51,7 +51,6 @@ class SpeedBar(spriteObject):
                 self.dec_frame = self.dec_frame_count
                 self.percentage = 1
 
-                # call on_alert
                 if callable(self.on_full):
                     self.on_alert()
 

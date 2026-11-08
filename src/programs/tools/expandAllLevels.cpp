@@ -17,9 +17,6 @@
 #include <unordered_set>
 #include <vector>
 
-// -----------------------------------------------------------------------------
-// Hardcoded directories
-// -----------------------------------------------------------------------------
 static const std::vector<fs::path> INPUT_DIRS = {
         "levels",
 };
@@ -75,9 +72,6 @@ struct PuzzleKey {
     }
 };
 
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
 static std::string makeLevelName(const int x, const int y) {
     return std::to_string(x) + "-" + std::to_string(y);
 }
@@ -195,9 +189,6 @@ static void removeExistingSpeciesOutputs(const fs::path& outputDir,
     }
 }
 
-// -----------------------------------------------------------------------------
-// Move helpers
-// -----------------------------------------------------------------------------
 static bool applyMovesAndCheckGoal(Board board,
                                    const Board& goal,
                                    const std::vector<u8>& moves) {
@@ -311,9 +302,6 @@ static bool tryProcessFatLine(const Board& start,
     return true;
 }
 
-// -----------------------------------------------------------------------------
-// Group processing
-// -----------------------------------------------------------------------------
 struct GroupResult {
     bool isFatPuzzle = false;
     std::size_t sourceFileCount = 0;
@@ -474,8 +462,6 @@ static GroupResult processGroup(const PuzzleKey& key,
     };
 }
 
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
 int main() {
     const unsigned int hw = std::thread::hardware_concurrency();
     const std::size_t maxThreads = hw == 0 ? 8 : static_cast<std::size_t>(hw);

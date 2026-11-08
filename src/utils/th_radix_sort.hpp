@@ -30,14 +30,6 @@
  * [4 15]: ~7.4-7.5sec\n
  * [5 12]: ~5.8-6.0sec\n
  * [6 10]: ~5.6-5.7sec\n
- *
- *
- * @tparam NUM_PASSES
- * @tparam NUM_BITS_PER_PASS
- * @tparam T
- * @tparam DEBUG
- * @param data_out
- * @param aux_buffer
  */
 
 #ifdef USE_CUDA
@@ -96,7 +88,6 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
         const uint64_t mask = masks[pass];
         const count_t shift = shifts[pass];
 
-        // Counting Phase
         for (count_t t = 0; t < num_threads; ++t) {
             count_t start = t * chunk_size;
             count_t end = std::min(start + chunk_size, static_cast<count_t>(data_out.size()));
@@ -140,7 +131,6 @@ void radix_sort(JVec<T>& data_out, JVec<T>& aux_buffer) {
 
         RADIX_IF_DEBUG_COUT(" Compute Thread Offsets Phase\n")
 
-        // Distribution Phase
         for (count_t t = 0; t < num_threads; ++t) {
             count_t start = t * chunk_size;
             count_t end = std::min(start + chunk_size, static_cast<count_t>(data_out.size()));

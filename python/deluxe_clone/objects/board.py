@@ -77,9 +77,8 @@ class Board(spriteObject):
     NORMAL_MIN_CELLS = -6.0
     NORMAL_MAX_CELLS = 6.0
 
-    # Locked row/column clamp from the locked branch in 0040c3b0 / 0040c5f0.
-    # The exact data constants are not emitted in the Ghidra C dump, but this is no longer
-    # tied to your old arbitrary threshold names or direction lock logic.
+    # Locked row/column clamp from the locked branch in 0040c3b0 / 0040c5f0 (the exact data
+    # constants are not emitted in the Ghidra C dump).
     LOCKED_MIN_CELLS = -0.25
     LOCKED_MAX_CELLS = 0.25
 

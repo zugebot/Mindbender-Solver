@@ -14,7 +14,6 @@ from tools.platform_factory import create_platform
 class Game:
     def __init__(self, settings: Settings):
 
-        # settings
         self.settings = settings
         self.internalSize = Point(self.settings.internalWindowSize)
         self.outputSize = Point(self.settings.outputWindowSize)
@@ -22,7 +21,6 @@ class Game:
         self.fps = self.settings.fps
         self.debug = self.settings.debug
 
-        # platform
         self.platform = create_platform()
         self.platform.setup_process()
 
@@ -44,7 +42,6 @@ class Game:
         self.minButtonWidth = 45
         self.minButtonHeight = self.borderTop
 
-        # pygame stuff
         self.instance = p
         self.instance.init()
         self.instance.display.set_caption(self.settings.windowName)
@@ -66,7 +63,6 @@ class Game:
         self.textures = None
         self.sounds = None
 
-        # running
         self.running = True
         self.mouseState = MOUSE_HOVER
         self.mousePos = Point()
@@ -77,22 +73,18 @@ class Game:
         # This is populated by global polling, not by pygame mouse events.
         self.mouseSamples = []
 
-        # menus
         self.menuIndex = -1
         self.menus = []
         self.lastMenuSize = 0
         self.lastMenuImage = None
 
-        # window dragging
         self._draggingWindow = False
         self._dragOffsetX = 0
         self._dragOffsetY = 0
 
-        # button hover state
         self._hoveringClose = False
         self._hoveringMinimize = False
 
-        # title font
         self.captionFont = p.font.SysFont("Segoe UI", 9, bold=False)
         self._caption_surface_focused = None
         self._caption_surface_unfocused = None

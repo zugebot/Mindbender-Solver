@@ -105,15 +105,12 @@ def matches_skip_pattern(relative_path: Path) -> bool:
         if not pattern:
             continue
 
-        # Match the complete repository-relative path.
         if fnmatch.fnmatch(relative_string, pattern):
             return True
 
-        # Match any individual path component.
         if any(fnmatch.fnmatch(part, pattern) for part in relative_path.parts):
             return True
 
-        # Treat a non-glob path as a directory prefix.
         has_glob = any(character in pattern for character in "*?[")
 
         if not has_glob and (

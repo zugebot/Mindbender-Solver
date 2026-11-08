@@ -23,7 +23,6 @@ struct IsAllowedPermsType {
 template<typename T>
 constexpr bool AllowedPermsType = IsAllowedPermsType<T>::value;
 #else
-// const++20 concept implementation
 template<typename T>
 concept AllowedPermsType =
         std::is_same_v<T, Board>  ||
@@ -73,10 +72,6 @@ namespace perms_detail {
         std::array<u8, MAX_DEPTH> intersectSeq{};
     };
 
-    // ============================================================
-    // Normal board permutation generation
-    // ============================================================
-
     template<typename T,
              i32 CUR_DEPTH, i32 MAX_DEPTH,
              bool CHECK_CROSS, bool CHECK_SIM>
@@ -107,10 +102,6 @@ namespace perms_detail {
             const Board& board_in,
             JVec<T>& boards_out,
             JVec<u64>& hashes_out);
-
-    // ============================================================
-    // Fat board permutation generation
-    // ============================================================
 
     template<typename T,
              i32 CUR_DEPTH, i32 MAX_DEPTH,

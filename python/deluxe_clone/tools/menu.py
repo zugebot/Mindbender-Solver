@@ -19,7 +19,6 @@ class Menu:
             "hover": self.game.sounds.Hilite,
             "clickdown": self.game.sounds.GameSelect
         }
-        # hiliteLow for hover
         self.buttonSoundLow = {
             "hover": self.game.sounds.HiliteLow,
             "clickdown": self.game.sounds.GameSelect
@@ -47,7 +46,6 @@ class Menu:
 
     def update(self, screen, default=False):
 
-        # display menu behind this menu
         if self.display_under:
             screen.blit(self.game.lastMenuImage, (0, 0))
 

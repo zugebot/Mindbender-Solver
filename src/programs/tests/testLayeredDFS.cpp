@@ -89,12 +89,10 @@ __global__ void kernelGenBoardsFromOffsets(
 
     Board srcBoard = inPtr[boardId];
 
-    // Determine the number of unique states to generate
     u32 numUnique = scanSizes[warpId];
     u32 startOffset = scanOffsets[warpId];
     u32 startLaneId = 30 - numUnique + laneId;
 
-    // Mask out threads beyond max count
     if (laneId < numUnique) {
 
         bool isRow = (warpId % 2) == 0;
@@ -114,7 +112,6 @@ __global__ void kernelGenBoardsFromOffsets(
 
 int main() {
     tcout << "entered 'main()'.\n";
-    // 13-1
     const Board board = BoardLookup::getBoardPair("4-4")->getStartState();
     Board solve = board;
 
@@ -132,7 +129,6 @@ int main() {
     u32 *d_cc_sizes, *d_scan_offsets;
 
 
-    // allocate all the memory
     h_boards_in = new Board[ARRAY_SIZE];
 
     CUDA_MALLOC(Board, &d_boards_in, ARRAY_SIZE);
@@ -142,7 +138,6 @@ int main() {
     CUDA_MALLOC(u32, &d_scan_offsets, 2 * ARRAY_SIZE);
 
 
-    // setup data for testing out the kernels
     for (int i = 0; i < ARRAY_SIZE; ++i) {
         h_boards_in[i] = solve;
         /*
@@ -154,13 +149,11 @@ int main() {
     CUDA_H_TO_D(Board, d_boards_in, h_boards_in, ARRAY_SIZE);
 
 
-    // call kernel #1 to calculate children sizes
     kernelCalcOffsetIndex<<<CUDA_KERNEL_OPT(ARRAY_SIZE, 128)>>>
             (ARRAY_SIZE, d_boards_in, d_cc_sizes);
     CUDA_LAST_ERROR_TIME_SYNC("Kernel #1 Time: ");
 
 
-    // exclusive scan
     thrust::device_ptr<u32> dev_counts(d_cc_sizes);
     thrust::device_ptr<u32> dev_scan(d_scan_offsets);
     thrust::exclusive_scan(dev_counts, dev_counts + 2 * ARRAY_SIZE, dev_scan);
@@ -170,14 +163,12 @@ int main() {
     //if constexpr (PRINT_ARRAYS) {
     // tcout << "Output Board Size: " << FINAL_OUTPUT_SIZE << "\n"; //}
 
-    // call kernel #2 to create children in output board
     kernelGenBoardsFromOffsets<<<CUDA_KERNEL_OPT(64 * ARRAY_SIZE, 128)>>>
             (2 * ARRAY_SIZE, d_boards_in, d_boards_out, d_cc_sizes, d_scan_offsets);
     CUDA_LAST_ERROR_TIME_SYNC("Kernel #2 Time: ");
 
 
 
-    // show GPU Results
     //if constexpr (PRINT_ARRAYS) {
         u32 MAX_SIZE = 20;
         auto* h_boards_out = new Board[MAX_SIZE];
@@ -202,7 +193,6 @@ int main() {
     //}
 
 
-    // deallocate all memory
     delete[] h_boards_in;
 
     CUDA_FREE(d_boards_in);

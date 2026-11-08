@@ -27,8 +27,6 @@ namespace perms_detail {
             boards_out.resize(1);
             hashes_out.resize(1);
             count = 1;
-
-            // Base case: process and store the final board
         } else if constexpr (CUR_DEPTH == MAX_DEPTH) {
             if constexpr (std::is_same_v<T, Board>) {
                 boards_out[count] = board_in;
@@ -66,7 +64,6 @@ namespace perms_detail {
                     }
                 }
 
-                // check intersection here
                 if constexpr (CHECK_CROSS) {
                     if constexpr (CUR_DEPTH > 0) {
                         if (state.checkRCSeq[CUR_DEPTH] &&
@@ -78,7 +75,6 @@ namespace perms_detail {
 
                 const u64 move_next = move_prev | (cur << (MEMORY_MOVE_TYPE_BITSIZE * CUR_DEPTH));
 
-                // Recursive call to the next depth
                 make_perm_list_inner<T, CUR_DEPTH + 1, MAX_DEPTH, CHECK_CROSS, CHECK_SIM>(
                         board_next,
                         boards_out,

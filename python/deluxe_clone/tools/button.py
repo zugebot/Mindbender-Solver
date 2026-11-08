@@ -112,10 +112,8 @@ class Button:
         self.mouseDownStartedInside = False
 
     def fixData(self):
-        # attributes
         self.data.setdefault("draggable", False)
 
-        # textures
         self.data.setdefault("textures", {})
         self.data["textures"].setdefault("default", None)
         self.data["textures"].setdefault("clickup", None)
@@ -124,24 +122,20 @@ class Button:
         if "hitbox" not in self.data and self.clickable:
             self.data["hitbox"] = self.data["textures"]["default"]
 
-        # rendering tags
         self.data.setdefault("render", {})
         self.data["render"].setdefault("type", None)
         self.data["render"].setdefault("clip-width", None)
 
-        # rotating flags
         if "rot" in self.data["render"]:
             self.data["render"].setdefault("rot-frame", 0)
             self.data["render"].setdefault("rot-frame-count", 0)
             self.data["render"].setdefault("rot-clockwise", 1)
 
-        # sounds
         self.data.setdefault("sounds", {})
         self.data["sounds"].setdefault("clickup", None)
         self.data["sounds"].setdefault("clickdown", None)
         self.data["sounds"].setdefault("hover", None)
 
-        # functions tied to it
         self.data.setdefault("func", {})
         self.data["func"].setdefault("clickup", None)
         self.data["func"].setdefault("clickdown", None)
@@ -268,7 +262,6 @@ class Button:
         if "render" in data:
             render = data["render"]
 
-            # rotate an image around a point
             if "rot" in render:
                 rot = render["rot"]
                 angle = 360 * rot["frame"] / rot["frame-count"]
@@ -276,7 +269,6 @@ class Button:
                 size = Point((image.get_width(), image.get_height()))
                 image, rect = rotate(image, angle, pivot=(size / 2).tuple())
 
-            # make the image move panoramically left or right.
             if "panorama" in render:
                 panorama = render["panorama"]
 

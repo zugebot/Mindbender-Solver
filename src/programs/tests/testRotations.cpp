@@ -11,7 +11,6 @@ namespace {
 
     using Cells = std::array<u8, 36>;
 
-    // Per your documented packed layout.
     static constexpr u64 B1_UNUSED_MASK = 0x3ULL << 54;
     static constexpr u64 B2_UNUSED_MASK = 0x7FULL << 54;
 

@@ -38,23 +38,19 @@ inline torch::Tensor encodeBoardPair(
         const int state_idx = static_cast<int>(state_color) - 1;
         const int goal_idx = static_cast<int>(goal_color) - 1;
         
-        // One-hot state (channels 0-7)
         if (state_idx >= 0 && state_idx < kMaxColors) {
             accessor[state_idx][row][col] = 1.0f;
         }
         
-        // One-hot goal (channels 8-15)
         if (goal_idx >= 0 && goal_idx < kMaxColors) {
             accessor[8 + goal_idx][row][col] = 1.0f;
         }
         
-        // Equality mask (channel 16)
         if (state_color == goal_color) {
             accessor[16][row][col] = 1.0f;
         }
     }
     
-    // Color count normalized (channel 17, broadcast to all cells)
     const float color_norm = static_cast<float>(color_count) / static_cast<float>(kMaxColors);
     tensor[17].fill_(color_norm);
     

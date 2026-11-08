@@ -165,7 +165,6 @@ class Textures:
         self.Rainbow = self.loadTexture("textures/Rainbow.png", pngOnly=True)
         self.RainbowBonus = self.loadTexture("textures/RainbowBonus.png")
         self.RainbowChaser = self.loadTexture("textures/RainbowChaser.png", pngOnly=True)
-        # used in other function
         self.RainbowChuzzle = self.loadTexture("textures/RainbowChuzzle.png", split=60)
         self.RainbowChuzzle_Alpha = self.loadTexture("textures/RainbowChuzzle_Alpha.png", split=60, alphaOnly=True)
         self.RainbowSplode = self.loadTexture("textures/RainbowSplode.png")
@@ -296,7 +295,6 @@ class Textures:
             if not split_vertical:
                 return splitTexture(surface, split)
 
-            # vertical split
             piece_h = surface.get_height() // split
             pieces = []
             for i in range(split):
@@ -409,7 +407,6 @@ class Textures:
                 base.blit(baseImage, (0, 0))
                 base = applyAlphaMask(base, colorObj["texture"]["alpha"])
 
-            # This creates all the chuzzle textures
             surfaces = []
             for i in range(60):
                 surf = p.Surface((81, 81), p.SRCALPHA)
@@ -417,7 +414,6 @@ class Textures:
                 surfaces.append(surf)
                 surfaces[-1].blit(base, (0, 0), (81 * i, 2, 80, 80))
 
-                # resize the texture
                 new = 480 / self.game.settings.boardSize + 1
                 if self.game.settings.boardSize != 6:
                     oldSize = Point(surfaces[-1].get_size())
@@ -489,7 +485,6 @@ class Textures:
                 surfaces.append(surf)
                 surfaces[-1].blit(base, (0, 0), (179 * i, 0, 179, 179))
 
-                # resize the texture
                 new = 480 / self.game.settings.boardSize * 2 + 18
                 if self.game.settings.boardSize != 6:
                     oldSize = Point(surfaces[-1].get_size())

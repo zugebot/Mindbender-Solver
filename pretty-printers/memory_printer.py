@@ -9,7 +9,6 @@ class MemoryPrinter:
         self.val = val
 
     def to_string(self):
-        # Custom summary string similar to the C++ toString method
         moves = self.val['moves']
         move_count = moves & 0xF
         move_list = []
@@ -28,8 +27,7 @@ class MemoryPrinter:
         return result
 
     def children(self):
-        # Return the fields of the Memory class to allow them to be expanded
-        yield "moves", self.val['moves']  # The 'moves' field will be collapsable
+        yield "moves", self.val['moves']
 
     @staticmethod
     def display_hint():

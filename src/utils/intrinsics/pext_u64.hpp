@@ -27,7 +27,6 @@ MU HD inline u64 my_pext_u64(u64 src, u64 mask) {
     return result;
 
 #else
-    // Host implementation using BMI2 intrinsic
     return _pext_u64(src, mask);
 #endif
 }

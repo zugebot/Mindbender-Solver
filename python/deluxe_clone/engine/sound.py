@@ -75,7 +75,6 @@ class Sounds:
         self.TrophyShrink = self.loadSound("sounds/TrophyShrink.ogg")
         self.Zen = self.loadSound("sounds/Zen.ogg")
 
-        # /Speaks
         self.cough = self.loadSound("sounds/Speaks/cough.ogg")
         self.dizzy = self.loadSound("sounds/Speaks/dizzy.ogg")
         self.handsoff = self.loadSound("sounds/Speaks/handsoff.ogg")
@@ -93,7 +92,6 @@ class Sounds:
         self.smallsneeze = self.loadSound("sounds/Speaks/smallsneeze.ogg")
         self.SweetRelief = self.loadSound("sounds/Speaks/SweetRelief.ogg")
 
-        # /Bonus
         self.GotJewel = self.loadSound("sounds/Bonus/GotJewel.ogg")
         self.JewelLand = self.loadSound("sounds/Bonus/JewelLand.ogg")
 

@@ -250,7 +250,6 @@ class StudioApp:
 
         self.route_summary_var = tk.StringVar(value="No route profile loaded")
 
-        # route editor vars
         self.route_name_var = tk.StringVar(value="")
         self.route_description_var = tk.StringVar(value="")
         self.route_category_var = tk.StringVar(value="custom")

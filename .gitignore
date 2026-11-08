@@ -32,3 +32,4 @@ cmake-build-*/
 /python/viewer/profiles/
 
 build_gpu/
+python/watchdog/

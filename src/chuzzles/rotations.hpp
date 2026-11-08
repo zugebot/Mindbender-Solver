@@ -7,7 +7,6 @@
 
 #define DECLARE_PERM(name) __host__ __device__ void name(B1B2& board);
 
-// normal row moves
 #define FOR_EACH_ROW_MOVE(X) \
     X(R01) X(R02) X(R03) X(R04) X(R05) \
     X(R11) X(R12) X(R13) X(R14) X(R15) \
@@ -16,7 +15,6 @@
     X(R41) X(R42) X(R43) X(R44) X(R45) \
     X(R51) X(R52) X(R53) X(R54) X(R55)
 
-// normal column moves
 #define FOR_EACH_COL_MOVE(X) \
     X(C01) X(C02) X(C03) X(C04) X(C05) \
     X(C11) X(C12) X(C13) X(C14) X(C15) \
@@ -25,7 +23,6 @@
     X(C41) X(C42) X(C43) X(C44) X(C45) \
     X(C51) X(C52) X(C53) X(C54) X(C55)
 
-// fat row moves
 #define FOR_EACH_FAT_ROW_MOVE(X) \
     X(R011) X(R012) X(R013) X(R014) X(R015) \
     X(R121) X(R122) X(R123) X(R124) X(R125) \
@@ -33,7 +30,6 @@
     X(R341) X(R342) X(R343) X(R344) X(R345) \
     X(R451) X(R452) X(R453) X(R454) X(R455)
 
-// fat column moves
 #define FOR_EACH_FAT_COL_MOVE(X) \
     X(C011) X(C012) X(C013) X(C014) X(C015) \
     X(C121) X(C122) X(C123) X(C124) X(C125) \

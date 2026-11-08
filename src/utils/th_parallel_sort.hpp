@@ -63,7 +63,6 @@ MU void parallel_sort(JVec<T>& data) {
         return merged;
     };
 
-    // Merging in a pairwise fashion (multi-way merge)
     while (sorted_chunks.size() > 1) {
         std::vector<JVec<T>> new_sorted_chunks;
 
@@ -71,7 +70,6 @@ MU void parallel_sort(JVec<T>& data) {
             if (i + 1 < sorted_chunks.size()) {
                 new_sorted_chunks.push_back(merge_two_sorted(sorted_chunks[i], sorted_chunks[i + 1]));
             } else {
-                // If there is an odd chunk, just carry it forward
                 new_sorted_chunks.push_back(sorted_chunks[i]);
             }
         }

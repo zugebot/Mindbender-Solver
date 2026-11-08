@@ -20,7 +20,6 @@ class MainMenu(Menu):
     def populate(self):
         self.textures = self.game.textures
 
-        # background
         self.sprites.append(Image(image=self.textures.MainMenuBackground))
 
         # classic chuzzle button
@@ -29,7 +28,6 @@ class MainMenu(Menu):
                 "hitbox": self.textures.GameButton_Alpha[0],
                 "sounds": self.buttonSound
             }))
-        # classic chuzzle text
         self.sprites.append(Image((71, 263), self.textures.ClassicChuzzle_Menu))
 
         # speed chuzzle
@@ -40,7 +38,6 @@ class MainMenu(Menu):
                                        "sounds": self.buttonSound
                                    }))
 
-        # speed chuzzle text
         self.sprites.append(Image((224, 421), self.textures.SpeedChuzzle_Menu))
 
         # game button 3/4
@@ -51,7 +48,6 @@ class MainMenu(Menu):
                                        "sounds": self.buttonSound,
                                        "func": {"clickup": (self.game.addMenu, AwayScreen)}
                                    }))
-        # zen chuzzle text
         self.sprites.append(Image((435, 415), self.textures.ZenChuzzle_Menu))
 
         # mindbender button
@@ -61,7 +57,6 @@ class MainMenu(Menu):
                 "sounds": self.buttonSound,
                 "func": {"clickup": (self.game.addMenu, MindBender)}
             }))
-        # mindbender text
         self.sprites.append(Image((590, 265), self.textures.Mindbender_Menu))
 
         # Options button 1/4
