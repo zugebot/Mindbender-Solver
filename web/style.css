@@ -217,7 +217,9 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .board.readonly .cell { cursor: default; }
 /* the start while editing: drag a chuzzle onto another (they swap), or tap two */
 .board.mover .cell { cursor: grab; }
-.board.dragging, .board.dragging .cell { cursor: grabbing; }
+/* while dragging, the held chuzzle is the cursor (the system arrow is drawn ahead of any page
+   content, so a chuzzle under it always seemed to trail it) */
+.board.dragging, .board.dragging .cell { cursor: none; }
 /* held: drawn by the canvas under the pointer, enlarged, with a shadow */
 .cell.lifted { pointer-events: none; }
 .cell.drop-on { border-radius: 50%; box-shadow: 0 0 0 calc(4 * var(--u)) #fff, 0 0 calc(18 * var(--u)) rgba(255, 255, 255, .7); }
@@ -254,7 +256,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 28px;
   padding: 12px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line);
 }
-.dock-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 24px; }
+.dock-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px 24px; }
 /* 6 x 2: the 8 colours as 4 x 2, the 2x2 chuzzle as a 2 x 2 block on the right */
 .palette { --pg: 10px; display: grid; grid-template-columns: repeat(6, var(--sz)); grid-template-rows: repeat(2, var(--sz)); gap: 12px var(--pg); --sz: 42px; }
 .swatch {
@@ -269,16 +271,8 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: url("assets/huge.webp") 0 calc(var(--k) * -180 * var(--u)) / calc(5400 * var(--u)) calc(1440 * var(--u)) no-repeat;
 }
-.swatch.big .n { background: var(--gold); color: var(--gold-ink); box-shadow: none; }
 .swatch:hover { transform: scale(1.08); }
 .swatch[aria-checked="true"] { transform: scale(1.12); box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(255, 201, 58, .55); }
-.swatch .n {
-  position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%);
-  min-width: 18px; padding: 0 4px; border-radius: 6px; font: 800 10px/14px ui-sans-serif, system-ui, sans-serif;
-  background: linear-gradient(180deg, #1d2a8c, #070c3a); color: #fff; box-shadow: 0 0 0 1.5px #b8761a; white-space: nowrap;
-}
-.swatch .n:empty { display: none; }
-.swatch .n.bad { background: var(--danger); color: #fff; box-shadow: none; }
 /* the board tools: an orb with its name under it, in the game's font */
 .tools { display: flex; gap: 2px; }
 .tool {
@@ -356,7 +350,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 /* phones: the dock stacks, full width */
 @media (max-width: 719px) and (min-height: 561px), (max-width: 719px) and (max-aspect-ratio: 4/3) {
   .dock { gap: 10px; padding-top: 10px; }
-  .dock-inner { width: 100%; gap: 8px; }
+  .dock-inner { width: 100%; gap: 16px 8px; }
   .palette { --sz: min(46px, calc((100vw - 24px - 5 * 10px) / 6)); justify-content: center; }
   /* kept together and centred (stretched over the width they looked scattered) */
   .tools { max-width: 100%; justify-content: center; }

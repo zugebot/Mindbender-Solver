@@ -519,6 +519,7 @@
     if (!SHEETS.body || !SHEETS.huge || !SHEETS.eyes || !SHEETS.pupils) return;
     ctx.imageSmoothingQuality = 'high';
     const R = Math.round, cellPx = 80 * s, padPx = 10 * s;
+    if (el._fills) for (const f of el._fills) drawFill(ctx, f, s, R, cellPx, padPx, now);
     let lifted = null;
     const top = [];
     for (const node of el.children) {
@@ -561,7 +562,7 @@
     // easing (a swap's preview while dragging, a chuzzle settling into its cell after a drop
     // or swap): the offset _ox/_oy moves to _tx/_ty, the size _sc back to 1
     if (node._ox || node._oy || node._tx || node._ty) {
-      const k = 1 - Math.exp(-dt / 55), tx = node._tx || 0, ty = node._ty || 0;
+      const k = 1 - Math.exp(-dt / 70), tx = node._tx || 0, ty = node._ty || 0;
       node._ox = Math.abs(tx - (node._ox || 0)) < 0.2 ? tx : (node._ox || 0) + (tx - (node._ox || 0)) * k;
       node._oy = Math.abs(ty - (node._oy || 0)) < 0.2 ? ty : (node._oy || 0) + (ty - (node._oy || 0)) * k;
       x += node._ox * dpr;
@@ -603,6 +604,29 @@
       }
     }
     if (sc > 1) ctx.restore();
+  }
+
+  // A spot a drop would fill: a glow of the colour it will get and a faint chuzzle of it,
+  // pulsing gently.
+  const FILL_RGB = ['216,28,28', '31,191,31', '48,72,255', '255,122,20', '255,228,26', '209,31,209', '242,242,242', '103,207,230'];
+  function drawFill(ctx, f, s, R, cellPx, padPx, now) {
+    const x = padPx + f.c * cellPx, y = padPx + f.r * cellPx, half = cellPx / 2;
+    const pulse = 0.5 + 0.5 * Math.sin(now / 160);
+    const glow = ctx.createRadialGradient(x + half, y + half, 0, x + half, y + half, half);
+    glow.addColorStop(0, `rgba(${FILL_RGB[f.k]}, ${0.55 + 0.25 * pulse})`);
+    glow.addColorStop(0.7, `rgba(${FILL_RGB[f.k]}, ${0.25 + 0.15 * pulse})`);
+    glow.addColorStop(1, `rgba(${FILL_RGB[f.k]}, 0)`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(x, y, cellPx, cellPx);
+    ctx.globalAlpha = 0.45 + 0.15 * pulse;
+    const inset = cellPx * 0.12;
+    ctx.drawImage(SHEETS.body, 0, f.k * 80, 80, 80, R(x + inset), R(y + inset), R(cellPx - 2 * inset), R(cellPx - 2 * inset));
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(x + half, y + half, half - 3 * s, 0, Math.PI * 2);
+    ctx.lineWidth = 3 * s;
+    ctx.strokeStyle = `rgba(255, 216, 74, ${0.55 + 0.4 * pulse})`;
+    ctx.stroke();
   }
 
   // Chuzzles easing into their cells after a board is redrawn: [r, c, dx, dy, size], the
@@ -648,7 +672,8 @@
     const s = size / FONT.size, dpr = Math.min(3, window.devicePixelRatio || 1);
     const o = Math.max(1, Math.round(size / 9));                       // outline width, CSS px
     let w = 0;
-    for (const ch of text) w += ch === ' ' ? FONT.space : (FONT.glyphs[ch] ? FONT.glyphs[ch].w : FONT.space);
+    const glyphOf = (c) => FONT.glyphs[c === '≤' ? '<' : c];
+    for (const ch of text) w += ch === ' ' ? FONT.space : (glyphOf(ch) ? glyphOf(ch).w : FONT.space);
     const cw = Math.ceil(w * s + 2 * o + 2), ch = Math.ceil(FONT.height * s + 2 * o + 2);
     let cv = el.querySelector('canvas');
     if (!cv) {
@@ -667,10 +692,15 @@
     g.scale(dpr, dpr);
     let x = o + 1;
     for (const c of text) {
-      const gl = FONT.glyphs[c];
+      const gl = glyphOf(c);
       if (gl) {
         const [rx, ry, rw, rh] = gl.r;
-        g.drawImage(fontAtlas, rx, ry, rw, rh, x + gl.o[0] * s, o + 1 + gl.o[1] * s, rw * s, rh * s);
+        const lift = c === '≤' ? FONT.ascent * 0.16 * s : 0;
+        g.drawImage(fontAtlas, rx, ry, rw, rh, x + gl.o[0] * s, o + 1 + gl.o[1] * s - lift, rw * s, rh * s);
+        if (c === '≤') {
+          const bar = Math.max(1.5, FONT.ascent * 0.11 * s);
+          g.fillRect(x + gl.o[0] * s, o + 1 + FONT.ascent * s - bar, rw * s, bar);
+        }
       }
       x += (gl ? gl.w : FONT.space) * s;
     }
@@ -840,7 +870,6 @@
   };
 
   function renderPalette() {
-    const a = colourCounts(state.start), b = colourCounts(state.goal);
     const el = $('palette');
     if (!el.children.length) {
       COLORS.forEach((name, k) => {
@@ -850,7 +879,6 @@
         s.setAttribute('role', 'radio');
         setChuzzle(s, k);
         addFace(s, k * 3 + 1, 'normal', `sw:${k}`);
-        s.insertAdjacentHTML('beforeend', '<span class="n"></span>');
         s.addEventListener('click', () => selectColour(k));
         el.appendChild(s);
       });
@@ -860,19 +888,14 @@
       big.id = 'fatSwatch';
       big.setAttribute('role', 'radio');
       addFace(big, 40, 'surface', 'sw:big');
-      big.insertAdjacentHTML('beforeend', '<span class="n">2x2</span>');
       big.addEventListener('click', selectFatTool);
       el.appendChild(big);
     }
     COLORS.forEach((name, k) => {
       const s = el.children[k];
-      const ok = a[k] === b[k];
       s.setAttribute('aria-checked', String(state.tool === 'paint' && state.color === k));
-      s.setAttribute('aria-label', `${name}: ${a[k]} on start, ${b[k]} on goal`);
-      s.title = `${name} (key ${k + 1})${ok ? '' : ` - ${a[k]} on start, ${b[k]} on goal`}`;
-      const n = s.querySelector('.n');
-      n.className = ok ? 'n' : 'n bad';
-      n.textContent = a[k] || b[k] ? (ok ? a[k] : `${a[k]}≠${b[k]}`) : '';
+      s.setAttribute('aria-label', name);
+      s.title = `${name} (key ${k + 1})`;
     });
     const big = $('fatSwatch');
     setChuzzle(big, pieceColour(state.goal) ?? state.color);
@@ -958,8 +981,7 @@
   function renderDepth() {
     const d = state.maxDepth;
     $('depthBox').hidden = !!knownPreset();
-    fontText($('depthUp'), 'up to', { size: 12, fill: ['#e6e0ff', '#bdb7de'] });
-    fontText($('depthText'), `${d} move${d > 1 ? 's' : ''}`, { size: 17 });
+    fontText($('depthText'), `≤ ${d} move${d > 1 ? 's' : ''}`, { size: 17 });
     $('depthDown').disabled = d <= 1;
     $('depthUpBtn').disabled = d >= MAX_DEPTH;
   }
@@ -1022,6 +1044,17 @@
       }
     };
 
+    // The cells a drop would empty and the colour each would get: the held chuzzle's own cell
+    // takes the one it lands on; the 2x2's freed cells take the chuzzles it would cover.
+    const fillsFor = (t) => {
+      if (!t) return null;
+      const b = state[which];
+      if (!t.piece) return [{ r: g.r, c: g.c, k: b.cells[t.r * 6 + t.c] }];
+      const was = pieceCells(b.fat), now = pieceCells({ x: t.c, y: t.r });
+      const freed = was.filter((k) => !now.includes(k)), taken = now.filter((k) => !was.includes(k));
+      return freed.map((k, n) => ({ r: Math.floor(k / 6), c: k % 6, k: b.cells[taken[n]] }));
+    };
+
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || !editable()) return;
       const cell = cellAt(e);
@@ -1062,19 +1095,15 @@
         clearPick();
       }
       if (g.drag) {
-        g.cell._dx = dx;
-        g.cell._dy = dy;
+        // drawn where the browser predicts the pointer will be, so it does not trail the cursor
+        const pr = e.getPredictedEvents ? e.getPredictedEvents() : [];
+        const at = pr.length ? pr[pr.length - 1] : e;
+        g.cell._dx = at.clientX - g.x;
+        g.cell._dy = at.clientY - g.y;
         const t = dropTarget(e);
         if (!g.target !== !t || (t && (t.r !== g.target.r || t.c !== g.target.c))) {
           showTarget(t);
-          if (g.preview) Object.assign(g.preview, { _tx: 0, _ty: 0 });
-          g.preview = null;
-          if (t && !t.piece) {
-            const n = el.querySelector(`.cell[data-r="${t.r}"][data-c="${t.c}"]`);
-            const P = 80 * layout.u;
-            if (n) Object.assign(n, { _tx: (g.c - t.c) * P, _ty: (g.r - t.r) * P });
-            g.preview = n;
-          }
+          el._fills = fillsFor(t);
         }
         g.target = t;
       }
@@ -1089,6 +1118,7 @@
       }
       if (gesture.drag) {
         el.classList.remove('dragging');
+        el._fills = null;
         if (e.type === 'pointerup' && gesture.target) dropOn(which, gesture, gesture.target);
         else {
           renderBoard(el, state[which]);
@@ -1150,9 +1180,8 @@
       const i = from.r * 6 + from.c, j = to.r * 6 + to.c;
       [b.cells[i], b.cells[j]] = [b.cells[j], b.cells[i]];
       [b.ids[i], b.ids[j]] = [b.ids[j], b.ids[i]];
-      // the swapped one was already sliding over (the preview): it carries on from there
-      const n = el.querySelector(`.cell[data-r="${to.r}"][data-c="${to.c}"]`);
-      glides.push([from.r, from.c, (to.c - from.c) * P + ((n && n._ox) || 0), (to.r - from.r) * P + ((n && n._oy) || 0)]);
+      // the one it swaps with flies over to fill the spot the held one left
+      glides.push([from.r, from.c, (to.c - from.c) * P, (to.r - from.r) * P]);
     }
     moved(which, b);
     glide(el, glides);
@@ -1334,7 +1363,7 @@
     let text, warn = false;
     $('info').hidden = !!state.coach || state.mode === 'replay';
     if (startMismatch()) {
-      text = 'Start and goal need the same Chuzzles: the red numbers show which';
+      text = 'Start and goal need the same Chuzzles: press Reset';
       warn = true;
     } else if (!p) {
       text = state.follows ? 'Paint the goal, then drag the start\'s Chuzzles into place' : state.start.fat ? 'Your puzzle, with the 2x2 Chuzzle' : 'Your puzzle';
