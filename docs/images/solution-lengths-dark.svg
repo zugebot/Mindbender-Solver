@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" width="720" height="340" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13">
+<rect width="720" height="340" fill="#0d1117"/>
+<text x="52" y="26" font-size="16" font-weight="600" fill="#e6edf3">Shortest solution length of the 100 puzzles</text>
+<line x1="52" x2="704" y1="286.0" y2="286.0" stroke="#21262d" stroke-width="1"/>
+<text x="44" y="290.0" text-anchor="end" fill="#8b949e">0</text>
+<line x1="52" x2="704" y1="241.2" y2="241.2" stroke="#21262d" stroke-width="1"/>
+<text x="44" y="245.2" text-anchor="end" fill="#8b949e">2</text>
+<line x1="52" x2="704" y1="196.4" y2="196.4" stroke="#21262d" stroke-width="1"/>
+<text x="44" y="200.4" text-anchor="end" fill="#8b949e">4</text>
+<line x1="52" x2="704" y1="151.6" y2="151.6" stroke="#21262d" stroke-width="1"/>
+<text x="44" y="155.6" text-anchor="end" fill="#8b949e">6</text>
+<line x1="52" x2="704" y1="106.8" y2="106.8" stroke="#21262d" stroke-width="1"/>
+<text x="44" y="110.8" text-anchor="end" fill="#8b949e">8</text>
+<line x1="52" x2="704" y1="62.0" y2="62.0" stroke="#21262d" stroke-width="1"/>
+<text x="44" y="66.0" text-anchor="end" fill="#8b949e">10</text>
+<text x="14" y="174.0" transform="rotate(-90 14 174.0)" text-anchor="middle" fill="#8b949e">puzzles</text>
+<path d="M55.0,286.0 V267.6 a4,4 0 0 1 4,-4 H81.2 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>1 moves: 1 puzzle</title></path>
+<text x="70.1" y="257.6" text-anchor="middle" fill="#e6edf3" font-size="12">1</text>
+<text x="70.1" y="304.0" text-anchor="middle" fill="#8b949e">1</text>
+<path d="M91.2,286.0 V245.2 a4,4 0 0 1 4,-4 H117.4 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>2 moves: 2 puzzles</title></path>
+<text x="106.3" y="235.2" text-anchor="middle" fill="#e6edf3" font-size="12">2</text>
+<text x="106.3" y="304.0" text-anchor="middle" fill="#8b949e">2</text>
+<path d="M127.4,286.0 V178.0 a4,4 0 0 1 4,-4 H153.7 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>3 moves: 5 puzzles</title></path>
+<text x="142.6" y="168.0" text-anchor="middle" fill="#e6edf3" font-size="12">5</text>
+<text x="142.6" y="304.0" text-anchor="middle" fill="#8b949e">3</text>
+<path d="M163.7,286.0 V178.0 a4,4 0 0 1 4,-4 H189.9 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>4 moves: 5 puzzles</title></path>
+<text x="178.8" y="168.0" text-anchor="middle" fill="#e6edf3" font-size="12">5</text>
+<text x="178.8" y="304.0" text-anchor="middle" fill="#8b949e">4</text>
+<path d="M199.9,286.0 V267.6 a4,4 0 0 1 4,-4 H226.1 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>5 moves: 1 puzzle</title></path>
+<text x="215.0" y="257.6" text-anchor="middle" fill="#e6edf3" font-size="12">1</text>
+<text x="215.0" y="304.0" text-anchor="middle" fill="#8b949e">5</text>
+<path d="M236.1,286.0 V245.2 a4,4 0 0 1 4,-4 H262.3 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>6 moves: 2 puzzles</title></path>
+<text x="251.2" y="235.2" text-anchor="middle" fill="#e6edf3" font-size="12">2</text>
+<text x="251.2" y="304.0" text-anchor="middle" fill="#8b949e">6</text>
+<path d="M272.3,286.0 V200.4 a4,4 0 0 1 4,-4 H298.6 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>7 moves: 4 puzzles</title></path>
+<text x="287.4" y="190.4" text-anchor="middle" fill="#e6edf3" font-size="12">4</text>
+<text x="287.4" y="304.0" text-anchor="middle" fill="#8b949e">7</text>
+<path d="M308.6,286.0 V66.0 a4,4 0 0 1 4,-4 H334.8 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>8 moves: 10 puzzles</title></path>
+<text x="323.7" y="56.0" text-anchor="middle" fill="#e6edf3" font-size="12">10</text>
+<text x="323.7" y="304.0" text-anchor="middle" fill="#8b949e">8</text>
+<path d="M344.8,286.0 V155.6 a4,4 0 0 1 4,-4 H371.0 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>9 moves: 6 puzzles</title></path>
+<text x="359.9" y="145.6" text-anchor="middle" fill="#e6edf3" font-size="12">6</text>
+<text x="359.9" y="304.0" text-anchor="middle" fill="#8b949e">9</text>
+<path d="M381.0,286.0 V88.4 a4,4 0 0 1 4,-4 H407.2 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>10 moves: 9 puzzles</title></path>
+<text x="396.1" y="78.4" text-anchor="middle" fill="#e6edf3" font-size="12">9</text>
+<text x="396.1" y="304.0" text-anchor="middle" fill="#8b949e">10</text>
+<path d="M417.2,286.0 V66.0 a4,4 0 0 1 4,-4 H443.4 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>11 moves: 10 puzzles</title></path>
+<text x="432.3" y="56.0" text-anchor="middle" fill="#e6edf3" font-size="12">10</text>
+<text x="432.3" y="304.0" text-anchor="middle" fill="#8b949e">11</text>
+<path d="M453.4,286.0 V88.4 a4,4 0 0 1 4,-4 H479.7 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>12 moves: 9 puzzles</title></path>
+<text x="468.6" y="78.4" text-anchor="middle" fill="#e6edf3" font-size="12">9</text>
+<text x="468.6" y="304.0" text-anchor="middle" fill="#8b949e">12</text>
+<path d="M489.7,286.0 V178.0 a4,4 0 0 1 4,-4 H515.9 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>13 moves: 5 puzzles</title></path>
+<text x="504.8" y="168.0" text-anchor="middle" fill="#e6edf3" font-size="12">5</text>
+<text x="504.8" y="304.0" text-anchor="middle" fill="#8b949e">13</text>
+<path d="M525.9,286.0 V110.8 a4,4 0 0 1 4,-4 H552.1 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>14 moves: 8 puzzles</title></path>
+<text x="541.0" y="100.8" text-anchor="middle" fill="#e6edf3" font-size="12">8</text>
+<text x="541.0" y="304.0" text-anchor="middle" fill="#8b949e">14</text>
+<path d="M562.1,286.0 V110.8 a4,4 0 0 1 4,-4 H588.3 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>15 moves: 8 puzzles</title></path>
+<text x="577.2" y="100.8" text-anchor="middle" fill="#e6edf3" font-size="12">8</text>
+<text x="577.2" y="304.0" text-anchor="middle" fill="#8b949e">15</text>
+<path d="M598.3,286.0 V66.0 a4,4 0 0 1 4,-4 H624.6 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>16 moves: 10 puzzles</title></path>
+<text x="613.4" y="56.0" text-anchor="middle" fill="#e6edf3" font-size="12">10</text>
+<text x="613.4" y="304.0" text-anchor="middle" fill="#8b949e">16</text>
+<path d="M634.6,286.0 V222.8 a4,4 0 0 1 4,-4 H660.8 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>17 moves: 3 puzzles</title></path>
+<text x="649.7" y="212.8" text-anchor="middle" fill="#e6edf3" font-size="12">3</text>
+<text x="649.7" y="304.0" text-anchor="middle" fill="#8b949e">17</text>
+<path d="M670.8,286.0 V245.2 a4,4 0 0 1 4,-4 H697.0 a4,4 0 0 1 4,4 V286.0 Z" fill="#58a6ff"><title>18 moves: 2 puzzles</title></path>
+<text x="685.9" y="235.2" text-anchor="middle" fill="#e6edf3" font-size="12">2</text>
+<text x="685.9" y="304.0" text-anchor="middle" fill="#8b949e">18</text>
+<line x1="52" x2="704" y1="286.0" y2="286.0" stroke="#484f58" stroke-width="1"/>
+<text x="378.0" y="328" text-anchor="middle" fill="#8b949e">moves in the shortest solution</text>
+</svg>

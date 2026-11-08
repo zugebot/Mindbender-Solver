@@ -50,6 +50,11 @@ Shortest solution length over the 100 puzzles:
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Puzzles | 1 | 2 | 5 | 5 | 1 | 2 | 4 | 10 | 6 | 9 | 10 | 9 | 5 | 8 | 8 | 10 | 3 | 2 |
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/solution-lengths-dark.svg">
+  <img alt="Bar chart: how many of the 100 puzzles need each number of moves, 1 to 18; most need 8 to 16, three need 17 and two need 18" src="docs/images/solution-lengths-light.svg" width="720">
+</picture>
+
 - 18 moves: 15-3 (4384 solutions; 2x2 piece) and 16-3 (3524; a normal board, searched in
   reverse, from the goal).
 - 17 moves: 14-3 (1790 solutions), 18-3 (896) and 19-2 (3960).
