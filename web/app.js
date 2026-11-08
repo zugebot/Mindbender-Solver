@@ -1836,10 +1836,8 @@
     $('fillBtn').title = `Fill the goal with ${COLORS[state.color].toLowerCase()}`;
     $('undoBtn').disabled = state.undo.length === 0;
     renderPalette();
-    if (!run) {
-      fontText($('solveLabel'), game ? 'View' : 'Solve', ORB_TEXT);
-      $('solveBtn').setAttribute('aria-label', game ? 'View the solutions' : 'Solve');
-    }
+    $('solveBtn').setAttribute('aria-label', game ? 'View the solutions' : 'Solve');
+    paintOrb();
     if (replay) showStep(result.step);
   }
 
@@ -2115,7 +2113,8 @@
     renderInfo();
     writeHash();
     markStale();
-    if (!run) {
+    if (awayResult && onBoards(awayResult)) showResult(awayResult);
+    if (!onBoards(run)) {
       showError('');
       idleStatus();
     }
@@ -2383,33 +2382,87 @@
     return hardwareThreads >= 12 ? 2400e6 : 1600e6;
   }
 
+  // One search at a time. It belongs to the boards it was started on (run.boards) and goes on
+  // whatever puzzle is shown meanwhile: game puzzles can be viewed, other boards edited, and
+  // the status line follows the search (a click on it goes back). A search that ends while
+  // another puzzle is shown keeps its result (awayResult) until its puzzle is shown again.
   let run = null;
   let result = null;
+  let awayResult = null;
+  const onBoards = (r) => !!r && sameBoard(r.boards.start, state.start) && sameBoard(r.boards.goal, state.goal);
 
   const fmtTime = (s) => (s < 0.1 ? 'under 0.1 s' : s < 10 ? `${s.toFixed(1)} s` : s < 90 ? `${Math.round(s)} s`
     : `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, '0')} s`);
 
-  // The Solve orb: "Solve" when idle; while a solve runs it fills from the bottom with the
-  // progress (or bobs when the step has none) and shows the percentage; `label` is what the
-  // status line says the solver is doing.
-  let stage = '';
+  // The Solve orb: "Solve" ("View" for a game puzzle) when idle; while the puzzle shown is
+  // being solved it fills from the bottom with the progress (or bobs when the step has none)
+  // and shows the percentage; `label` is what the status line says the solver is doing. With
+  // another puzzle shown during a search, the orb is that puzzle's: View works, Solve waits
+  // for the search, and the cancel button stops the search.
+  let stage = '', progress = 0;
   function setProgress(label, fraction) {
-    const idle = !run;
-    stage = idle ? '' : label;
-    fontText($('solveLabel'), idle ? (state.preset ? 'View' : 'Solve') : fraction == null ? '...' : `${Math.floor(fraction * 100)}%`, ORB_TEXT);
+    stage = run ? label : '';
+    progress = fraction;
+    paintOrb();
+  }
+  function paintOrb() {
+    const here = onBoards(run), known = !!knownPreset(), f = progress;
+    fontText($('solveLabel'), !here ? (known ? 'View' : 'Solve') : f == null ? '...' : `${Math.floor(f * 100)}%`, ORB_TEXT);
     const fill = $('solveFill');
-    fill.classList.toggle('indet', !idle && fraction == null);
-    fill.style.transform = idle || fraction == null ? '' : `scaleY(${Math.round(fraction * 1000) / 1000})`;
+    fill.classList.toggle('indet', here && f == null);
+    fill.style.transform = !here || f == null ? '' : `scaleY(${Math.round(f * 1000) / 1000})`;
+    const btn = $('solveBtn'), stop = $('cancelBtn');
+    btn.classList.toggle('running', here);
+    btn.disabled = !!run && (here || !known);
+    btn.title = run && !here && !known ? 'Another puzzle is being solved: one search at a time' : '';
+    stop.hidden = !run;
+    stop.setAttribute('aria-label', here ? 'Cancel' : 'Stop solving the other puzzle');
+    stop.title = here ? '' : 'Stop solving the other puzzle';
+    $('depthBox').classList.toggle('busy', here);
   }
 
-  // The status line when nothing runs: the last solve's summary while the boards are still
-  // the ones it solved.
+  // The status line as a link back to another puzzle (the one being solved, or solved).
+  function statusLink(on) {
+    const el = $('status');
+    el.classList.toggle('link', on);
+    if (on) {
+      el.setAttribute('role', 'button');
+      el.tabIndex = 0;
+    } else {
+      el.removeAttribute('role');
+      el.removeAttribute('tabindex');
+    }
+  }
+
+  // The status line when no search runs on the puzzle shown: the last result's summary while
+  // the boards are still the ones it solved, or word of a search that ended on another puzzle.
   function idleStatus() {
     const el = $('status');
-    if (run || el.classList.contains('error')) return;
-    const same = result && sameBoard(result.boards.start, state.start) && sameBoard(result.boards.goal, state.goal);
-    el.textContent = same ? result.summary : '';
+    if (onBoards(run) || el.classList.contains('error')) return;
+    if (run) return;                 // a search of another puzzle: its timer writes the line
+    if (awayResult) {
+      const a = awayResult;
+      el.textContent = `Your other puzzle is ${a.depth < 0 ? `searched: no solution in ${a.maxDepth} moves` : `solved: ${a.depth} moves`} · show it`;
+      el.title = 'Back to the puzzle that was solved';
+      statusLink(true);
+      return;
+    }
+    statusLink(false);
+    el.textContent = onBoards(result) ? result.summary : '';
     el.title = el.textContent;
+  }
+
+  // Back to the boards of a search (running, or ended while another puzzle was shown).
+  function goToBoards(r) {
+    endCoach();
+    pushUndo();
+    state.start = cloneBoard(r.boards.start);
+    state.goal = cloneBoard(r.boards.goal);
+    state.preset = '';
+    state.follows = r.follows;
+    state.picked = null;
+    leaveReplay();
+    changed({ keepPreset: true });
   }
 
   function showError(text) {
@@ -2436,41 +2489,51 @@
     return { spec: { start: state.start.cells.slice(), goal: state.goal.cells.slice(), fat } };
   }
 
+  // A game puzzle: every shortest solution, from solutions/ (the desktop solver's answers).
+  async function viewKnown(p) {
+    const r = { cancelled: false, t0: performance.now(), boards: { start: cloneBoard(state.start), goal: cloneBoard(state.goal) }, follows: false };
+    try {
+      const resp = await fetch(`solutions/${p.name}.txt`);
+      if (!resp.ok) throw new Error(`could not load solutions/${p.name}.txt (${resp.status})`);
+      const text = await resp.text();
+      if (!onBoards(r)) return;         // another puzzle was opened meanwhile
+      const count = text.split('\n').filter(Boolean).length;
+      finish(r, { depth: p.moves, count, text, threads: 0, maxDepth: p.moves, known: true });
+    } catch (err) {
+      showError(`The solutions could not be loaded: ${err.message}`);
+    }
+  }
+
   async function solve() {
-    if (run) return;
     if (state.coach) endCoach(true);
+    const known = knownPreset();
+    if (known) {
+      viewKnown(known);
+      return;
+    }
+    if (run) return;                    // one search at a time (the orb says so)
     const { spec, error } = problemSpec();
     if (error) {
       showError(error);
       return;
     }
     showError('');
-    const known = knownPreset();
+    statusLink(false);
+    awayResult = null;
     const maxDepth = state.maxDepth;
     const threads = +$('threads').value || hardwareThreads;
-    run = { workers: [], cancelled: false, t0: performance.now(), boards: { start: cloneBoard(state.start), goal: cloneBoard(state.goal) } };
+    run = { workers: [], cancelled: false, t0: performance.now(), boards: { start: cloneBoard(state.start), goal: cloneBoard(state.goal) }, follows: state.follows };
     const thisRun = run;
-    $('solveBtn').classList.add('running');
-    $('solveBtn').disabled = true;
-    $('cancelBtn').hidden = false;
-    $('depthBox').classList.add('busy');
     let detail = '';
     const showStatus = () => {
-      $('status').textContent = `${stage} · ${fmtTime((performance.now() - thisRun.t0) / 1000)}${detail}`;
+      const el = $('status'), away = !onBoards(thisRun);
+      if (away && el.classList.contains('error')) return;     // about the puzzle shown
+      statusLink(away);
+      el.textContent = `${away ? 'Solving your other puzzle: ' : ''}${stage} · ${fmtTime((performance.now() - thisRun.t0) / 1000)}${detail}${away ? ' · show it' : ''}`;
+      el.title = away ? 'Back to the puzzle being solved' : '';
     };
     const tick = setInterval(showStatus, 200);
     try {
-      if (known) {
-        setProgress('Loading', null);
-        showStatus();
-        const r = await fetch(`solutions/${known.name}.txt`);
-        if (!r.ok) throw new Error(`could not load solutions/${known.name}.txt (${r.status})`);
-        const text = await r.text();
-        if (thisRun.cancelled) return;
-        const count = text.split('\n').filter(Boolean).length;
-        finish(thisRun, { depth: known.moves, count, text, threads: 0, maxDepth: known.moves, known: true });
-        return;
-      }
       await workerUrlReady;
       const w0 = warm || new SolverWorker();
       warm = null;
@@ -2533,11 +2596,8 @@
       clearInterval(tick);
       for (const w of thisRun.workers) w.terminate();
       if (run === thisRun) run = null;
-      $('solveBtn').classList.remove('running');
-      $('solveBtn').disabled = false;
-      $('cancelBtn').hidden = true;
-      $('depthBox').classList.remove('busy');
       setProgress('', 0);
+      statusLink(false);
       if (thisRun.cancelled) {
         if (!$('status').classList.contains('error')) $('status').textContent = 'Cancelled';
       } else {
@@ -2560,7 +2620,21 @@
     const lines = res.text ? res.text.split('\n').filter(Boolean).sort() : [];
     const threads = `${res.threads} thread${res.threads > 1 ? 's' : ''}`;
     const summary = res.known ? '' : `${res.depth < 0 ? 'Searched' : 'Solved'} in ${fmtTime(secs)} on ${threads}`;
-    result = { ...res, lines, secs, summary, boards: r.boards, shown: 0, selected: -1, step: 0, playing: false };
+    const done = { ...res, lines, secs, summary, boards: r.boards, follows: r.follows };
+    if (!onBoards(r)) {
+      awayResult = done;                // shown when its puzzle is (status line: "show it")
+      return;
+    }
+    showResult(done);
+  }
+
+  function showResult(done) {
+    const { secs, lines } = done, res = done;
+    if (awayResult === done) {
+      awayResult = null;
+      statusLink(false);
+    }
+    result = { ...done, shown: 0, selected: -1, step: 0, playing: false };
     $('results').hidden = false;
     if (res.depth < 0) {
       fontText($('resultTitle'), `No solution in ${res.maxDepth} moves`, { size: 24, fill: ['#fff6b8', '#ffb71e'] });
@@ -2943,6 +3017,17 @@
 
     $('solveBtn').addEventListener('click', solve);
     $('cancelBtn').addEventListener('click', cancel);
+    const statusGo = () => {
+      if (run && !onBoards(run)) goToBoards(run);
+      else if (awayResult && !onBoards(awayResult)) goToBoards(awayResult);
+    };
+    $('status').addEventListener('click', statusGo);
+    $('status').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        statusGo();
+      }
+    });
     $('moreBtn').addEventListener('click', showMore);
     $('solutionList').addEventListener('click', (e) => {
       const li = e.target.closest('li');

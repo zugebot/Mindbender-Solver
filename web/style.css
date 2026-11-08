@@ -331,6 +331,8 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .status.error { color: #ffb3a6; }
+.status.link { cursor: pointer; color: var(--text); }
+.status.link:hover, .status.link:focus-visible { text-decoration: underline; outline: none; }
 
 /* phones: the dock stacks, full width */
 @media (max-width: 719px) and (min-height: 561px), (max-width: 719px) and (max-aspect-ratio: 4/3) {

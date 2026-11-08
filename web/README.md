@@ -81,6 +81,10 @@ the WebAssembly entry points in `src/programs/web/wasmSolver.cpp`.
   joined), and the paths y -> goal (walking the G layers forward). Any D-move path is a
   shortest one when nothing shorter exists, so each is kept; every one is replayed against
   the boards.
+- One search at a time, and it belongs to the boards it started on: other puzzles can be opened,
+  viewed and edited meanwhile. The orb is then the shown puzzle's (View works; Solve waits for
+  the search), the status line follows the search ("show it" goes back), and a search that ends
+  on another puzzle keeps its result until its puzzle is shown again.
 - Worker count = the thread count, capped so that the workers' tables fit a RAM budget
   (1.6 GB on desktops, 2.4 GB with 12 or more threads, less where `navigator.deviceMemory`
   is small; a worker's heap is about 1.5 times what its tables hold).
@@ -97,7 +101,8 @@ build/testWebSolver.exe --max 12 --parts 3
 
 On 2026-11-08 all 45 puzzles of 10 moves or fewer matched exactly split into 3 partitions as
 the workers do, and so did every 11-move puzzle and the 12-move 9-2, 11-1, 14-2 and 13-1.
-`tools/wasm_bench.mjs` runs the WebAssembly build itself in Node and checks the counts.
+`tools/wasm_bench.mjs` runs the WebAssembly build itself in Node and checks the counts;
+`tools/t_background.js` (with `cdp_eval.mjs`) starts a search, views 16-4 meanwhile and goes back.
 
 One native thread on the i7-10700F, the whole search (every depth up to the answer):
 
