@@ -1889,8 +1889,10 @@
       return cell && el.contains(cell) && !cell.classList.contains('ghost') ? cell : null;
     };
     const editable = () => state.mode === 'edit' && !state.preset;
-    const paintAt = (cell) => {
-      const r = +cell.dataset.r, c = +cell.dataset.c;
+    // spot: the cell under the pointer, when known (the 2x2 is one element whose row and
+    // column are its top-left, so with the 2x2 tool its element alone would put it back in place)
+    const paintAt = (cell, spot) => {
+      const r = spot ? spot.r : +cell.dataset.r, c = spot ? spot.c : +cell.dataset.c;
       const b = state.goal;
       const before = b.cells.join() + JSON.stringify(b.fat);
       if (state.tool === 'piece') placeFat('goal', r, c);
@@ -1945,7 +1947,7 @@
       g = { x: e.clientX, y: e.clientY, r: +cell.dataset.r, c: +cell.dataset.c, cell, move: which === 'start' };
       if (!g.move) {
         pushUndo();
-        paintAt(cell);
+        paintAt(cell, spotAt(e.clientX, e.clientY));
       }
     });
     // the raw pointer stream (every mouse report, not once a frame) moves the held chuzzle
