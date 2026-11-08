@@ -487,10 +487,12 @@
   // then a few 1:1 blits of small images. Drawing scaled from the sheets themselves on every
   // frame was most of the page's drawing cost (in Chrome a scaled draw from a sheet is 9x a
   // blit of an ImageBitmap, in Firefox 10x). The cut is a canvas until its ImageBitmap is
-  // made (Chrome blits a bitmap 4x faster than a canvas). rgb tints it.
+  // made (Chrome blits a bitmap 4x faster than a canvas). rgb tints it; disc = [cx, cy, r] in
+  // the sheet's pixels keeps only that circle of it.
+  const PUPIL_DISC = [6.5, 6.5, 5.5];   // the iris and its ring in the 14 px pupil frame
   const cuts = new Map();
-  function cut(name, sx, sy, sw, sh, dw, dh, rgb) {
-    const key = `${name}|${sx}|${sy}|${dw}|${dh}|${rgb || ''}`;
+  function cut(name, sx, sy, sw, sh, dw, dh, rgb, disc) {
+    const key = `${name}|${sx}|${sy}|${dw}|${dh}|${rgb || ''}|${disc || ''}`;
     let c = cuts.get(key);
     if (!c) {
       const img = rgb ? tinted(name, rgb) : SHEETS[name];
@@ -502,6 +504,12 @@
       const g = c.getContext('2d');
       g.imageSmoothingQuality = 'high';
       g.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+      if (disc) {
+        g.globalCompositeOperation = 'destination-in';
+        g.beginPath();
+        g.arc(disc[0] * dw / sw, disc[1] * dh / sh, disc[2] * dw / sw, 0, 2 * Math.PI);
+        g.fill();
+      }
       cuts.set(key, c);
       if (self.createImageBitmap) createImageBitmap(c).then((b) => { if (cuts.get(key) === c) cuts.set(key, b); }, () => {});
     }
@@ -580,7 +588,9 @@
         blit(ctx, cut('eyes', f.es * 85, 0, 85, 88, ew, eh, BODY[k]), ex, ey);   // the lids, in its own colour
       } else {
         blit(ctx, cut('eyes', f.es * 85, 0, 85, 88, ew, eh), ex, ey);
-        const [tx, ty] = EYE_PUPIL_TRAVEL[f.es], ps = R(14 * s), pupil = cut('pupils', f.ep * 14, 0, 14, 14, ps, ps);
+        // the pupil texture is a rounded square (an 11 px iris in a dark ring, cut at the corners
+        // by its alpha), which reads as round at the game's 1:1 but not scaled up: keep its disc
+        const [tx, ty] = EYE_PUPIL_TRAVEL[f.es], ps = R(14 * s), pupil = cut('pupils', f.ep * 14, 0, 14, 14, ps, ps, null, PUPIL_DISC);
         EYE_PUPIL_CENTERS[f.es].forEach(([pcx, pcy], i) => {
           // sneezing: cross-eyed (each pupil turned inwards)
           const lx = a && a.sneezing ? (i ? -tx : tx) : st.px * tx, ly = a && a.sneezing ? 0 : st.py * ty;
