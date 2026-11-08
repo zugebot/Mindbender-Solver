@@ -1847,11 +1847,8 @@
     fontText($('startCap'), replay ? 'Replay' : 'Start', captionStyle());
     fontText($('goalCap'), 'Goal', captionStyle());
     $('editDock').hidden = !!replay || game;
-    $('knownNote').hidden = !game || !!replay;
-    if (game) {
-      const p = presetByName(state.preset);
-      $('knownNote').textContent = `${p.solutions.toLocaleString()} shortest solution${p.solutions > 1 ? 's' : ''} of ${p.moves} moves`;
-    }
+    // a game puzzle's Solve is View alone, centred (the info bar gives its moves and solutions)
+    $('solveBox').classList.toggle('known', game);
     $('replayDock').hidden = !replay;
     $('solSwitch').hidden = !replay;
     $('info').hidden = !!replay || !!state.coach;

@@ -341,6 +341,9 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .solve-label { position: relative; z-index: 1; max-width: 86%; }
 .cancel { --o: 40px; }
 .cancel[hidden] { display: grid !important; visibility: hidden; }
+/* a game puzzle's View stands alone, centred: no room kept for the stop button (it shows only
+   while another puzzle is being solved); a custom puzzle keeps it, so Solve never shifts */
+.solve-box.known .cancel[hidden] { display: none !important; }
 /* the status line always takes one line (text coming and going must not move the boards) */
 .status {
   flex-basis: 100%; max-width: 100%; margin: -4px 0 0; height: 19px; font-size: 13px; line-height: 19px;
@@ -516,8 +519,6 @@ dialog.wide .skin { margin-top: 14px; }
 /* the Move tool, on while pressed */
 .tool[aria-pressed="true"] .orb { box-shadow: 0 0 0 3px var(--gold), 0 0 14px rgba(255, 201, 58, .7); }
 
-/* a game puzzle: nothing to edit, its solutions to view */
-.known-note { margin: 0; font-weight: 700; color: var(--muted); }
 
 /* ------------------------------------------------------------------ the tutorial */
 .coach { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 900px; height: 100%; padding: 0 4px; }
