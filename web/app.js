@@ -1899,7 +1899,8 @@
     for (const b of $('threadList').children) {
       const t = +b.dataset.threads;
       b.setAttribute('aria-checked', String(t === settings.threads));
-      fontText(b.firstChild, t ? String(t) : `Auto (${hardwareThreads})`, { size: 19 });
+      // the count first, so Auto's sits in the column with the numbers under it
+      fontText(b.firstChild, t ? String(t) : `(${hardwareThreads}) Auto`, { size: 19 });
     }
     $('noteFirst').setAttribute('aria-hidden', String(!settings.first));
     $('noteAll').setAttribute('aria-hidden', String(settings.first));
