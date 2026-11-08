@@ -67,10 +67,11 @@ layout(buffer_reference, std430, buffer_reference_align = 8) readonly buffer Glo
     uint pEnd;
     uint oCap;
     uint bloomPartsPerBuf;
-    uint pad1;
+    uint keyMode;          // 0: state keys; 1, 2: class keys (mbgpu.h: mbgpu_set_key_mode)
     uint pad2;
     uint mc[288];          // packed mismatch counts (mbgpu.cu: c_mc, c_mr)
     uint mr[288];
+    uint64_t minRot;       // key modes 1-2: class_key::minRotation of every 18-bit lane code (u32 each)
 };
 
 const uint64_t LANE_BITS = 0x3FFFFul;
@@ -153,6 +154,46 @@ uint64_t mixKey(uint64_t x) {
     x *= 0x94d049bb133111ebul;
     x ^= x >> 31;
     return x;
+}
+
+// ---- class keys (src/solver/ssd/class_key.hpp, line for line; the --block join) ----
+
+const uint64_t CK_COLUMN_SALT = 0x9E3779B97F4A7C15ul;
+const uint64_t CK_PARENT_FLAG = 1ul << 63;   // b2 bit 63: a survivor that stands for its leaves
+
+uint64_t ckRotate(uint64_t v, uint cells) {
+    uint s = 3u * (cells % 6u);
+    return s == 0u ? v : (((v << s) | (v >> (18u - s))) & 0x3FFFFul);
+}
+
+uint64_t ckRowCode(uint64_t b1, uint64_t b2, uint y) {
+    return ((y < 3u ? b1 : b2) >> (36u - 18u * (y % 3u))) & 0x3FFFFul;
+}
+
+uint64_t ckColCode(uint64_t b1, uint64_t b2, uint x) {
+    uint64_t v = 0ul;
+    for (uint y = 0u; y < 6u; ++y) {
+        v = (v << 3) | (((y < 3u ? b1 : b2) >> (51u - 18u * (y % 3u) - 3u * x)) & 7ul);
+    }
+    return v;
+}
+
+uint64_t classKey(Globals g, uint64_t b1, uint64_t b2, bool cols) {
+    bool f = ((b1 >> 57) & 1ul) != 0ul;
+    uint px = f ? uint(b1 >> 61) & 7u : 0u;
+    uint py = f ? uint(b1 >> 58) & 7u : 0u;
+    U32Ref table = U32Ref(g.minRot);
+    uint64_t code[6];
+    for (uint i = 0u; i < 6u; ++i) {
+        uint64_t raw = cols ? ckColCode(b1, b2, i) : ckRowCode(b1, b2, i);
+        bool pair = f && (cols ? (i == px || i == px + 1u) : (i == py || i == py + 1u));
+        code[i] = pair ? ckRotate(raw, cols ? py : px) : uint64_t(table.v[uint(raw)]);
+    }
+    uint64_t lo = code[0] | (code[1] << 18) | (code[2] << 36);
+    uint64_t hi = code[3] | (code[4] << 18) | (code[5] << 36);
+    hi |= uint64_t(f ? 1u + (cols ? px : py) : 0u) << 56;
+    uint64_t h = lo ^ ((hi << 1) | (hi >> 63)) ^ (lo >> 17) ^ (hi << 13);
+    return mixKey(h ^ (cols ? CK_COLUMN_SALT : 0ul));
 }
 
 // ---------------- bound from its definition (the audit kernel and mbgpu_bounds) ----------------

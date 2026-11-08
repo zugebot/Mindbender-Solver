@@ -26,6 +26,7 @@
 
 #define MBGPU_BUILD_DLL
 #include "src/gpu/vulkan/mbvk.h"
+#include "src/solver/ssd/class_key.hpp"
 
 #define VK_NO_PROTOTYPES
 #ifdef _WIN32
@@ -79,6 +80,12 @@ namespace {
     const uint32_t kFat1[] =
 #include "fat1.inc"
             ;
+    const uint32_t kExpand1c[] =
+#include "expand1c.inc"
+            ;
+    const uint32_t kFat1c[] =
+#include "fat1c.inc"
+            ;
     const uint32_t kAudit[] =
 #include "audit.inc"
             ;
@@ -119,7 +126,9 @@ namespace {
     enum Pipe {
         P_EXPAND0, P_EXPAND1, P_FAT0, P_FAT1, P_AUDIT, P_BOUND,
         P_RADIX_HIST, P_RADIX_SCATTER, P_SCAN_LOCAL, P_SCAN_ADD, P_UNIQUE_FLAGS, P_UNIQUE_SCATTER,
-        P_PART_BOUNDS, P_FINGERPRINTS, P_BUCKET_STARTS, P_BLOOM, P_COUNT
+        P_PART_BOUNDS, P_FINGERPRINTS, P_BUCKET_STARTS, P_BLOOM,
+        P_EXPAND1C, P_FAT1C,   // the leaf kernels with class keys (key modes 1-2, --block)
+        P_COUNT
     };
 
     struct Spv {
@@ -134,6 +143,7 @@ namespace {
             {kKeys4, sizeof(kKeys4)},     {kKeys5, sizeof(kKeys5)},     {kKeys6, sizeof(kKeys6)},
             {kKeys7, sizeof(kKeys7)},     {kKeys8, sizeof(kKeys8)},     {kKeys9, sizeof(kKeys9)},
             {kKeys10, sizeof(kKeys10)},
+            {kExpand1c, sizeof(kExpand1c)}, {kFat1c, sizeof(kFat1c)},
     };
 
     constexpr u32 NO_PREV = 255;
@@ -162,10 +172,12 @@ namespace {
         u64 partCounts;
         u64 bloomBuf[8];           // the Bloom blocks, bloomPartsPerBuf partitions per buffer
         int32_t limit, mode;
-        u32 pBegin, pEnd, oCap, bloomPartsPerBuf, pad1, pad2;
+        u32 pBegin, pEnd, oCap, bloomPartsPerBuf, keyMode, pad2;
         u32 mc[288];
         u32 mr[288];
+        u64 minRot;                // key modes 1-2: the min-rotation table's device address
     };
+    static_assert(offsetof(Globals, minRot) == 2592, "std430 layout");
     static_assert(offsetof(Globals, cnt) == 96, "std430 layout");
     static_assert(offsetof(Globals, bloomBuf) == 192, "std430 layout");
     static_assert(offsetof(Globals, limit) == 256, "std430 layout");
@@ -681,6 +693,7 @@ namespace {
         Buffer lb1[MBGPU_MAX_DEPTH], lb2[MBGPU_MAX_DEPTH], lpk[MBGPU_MAX_DEPTH];
         Buffer ctr, ctrRead, globals, staging;
         Buffer ob1, ob2, okey, oseed;
+        Buffer minRot;   // key modes 1-2: class_key::minRotation of every 18-bit lane code (1 MB)
         // The pass's Bloom blocks, `partsPerBuf` partitions per buffer: a driver may cap one buffer
         // (Mesa RADV: 4 GB), and a pass's filter is often larger.
         static constexpr u32 MAX_BLOOM_BUFS = 8;
@@ -837,7 +850,7 @@ namespace {
             static const char* const kPipeNames[P_COUNT] = {
                     "expand0", "expand1", "fat0", "fat1", "audit", "bound", "radix_hist", "radix_scatter",
                     "scan_local", "scan_add", "unique_flags", "unique_scatter", "part_bounds", "fingerprints",
-                    "bucket_starts", "bloom"};
+                    "bucket_starts", "bloom", "expand1c", "fat1c"};
             cmdPipes += (cmdPipes.empty() ? "" : " ") + std::string(kPipeNames[p]) + "x" + std::to_string(threads);
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipe[p]);
             vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, pushBytes, push);
@@ -974,7 +987,7 @@ namespace {
                 release(lb2[d]);
                 release(lpk[d]);
             }
-            for (Buffer* b : {&ctr, &ctrRead, &globals, &staging, &ob1, &ob2, &okey, &oseed}) {
+            for (Buffer* b : {&ctr, &ctrRead, &globals, &staging, &ob1, &ob2, &okey, &oseed, &minRot}) {
                 release(*b);
             }
             for (Buffer& b : bloom) {
@@ -1038,6 +1051,7 @@ namespace {
     struct Module {
         bool open = false;
         std::vector<std::unique_ptr<Gpu>> gpus;
+        int keyMode = 0;   // mbgpu_set_key_mode
         int limit = -1;
         bool targetSet = false;
         u64 rowTarget[6] = {}, colTarget[6] = {};
@@ -1085,7 +1099,10 @@ namespace {
         p.rem = run.depth - (d + 1);
         p.prune = static_cast<u32>(run.prune);
         p.seedBase = run.seedBase;
-        const Pipe which = run.audit ? P_AUDIT : run.fat ? (leaf ? P_FAT1 : P_FAT0) : (leaf ? P_EXPAND1 : P_EXPAND0);
+        const bool classKeys = leaf && g_m.keyMode != 0;
+        const Pipe which = run.audit ? P_AUDIT
+                         : run.fat ? (classKeys ? P_FAT1C : leaf ? P_FAT1 : P_FAT0)
+                                   : (classKeys ? P_EXPAND1C : leaf ? P_EXPAND1 : P_EXPAND0);
         const u64 threads = run.audit ? m * 12 : m;
         if (!begin()) {
             return false;
@@ -1222,6 +1239,8 @@ namespace {
         std::memcpy(gl.mr, g_m.mr, sizeof(gl.mr));
         gl.limit = g_m.limit;
         gl.mode = run.mode;
+        gl.keyMode = static_cast<u32>(g_m.keyMode);
+        gl.minRot = minRot.addr;
         gl.oCap = static_cast<u32>(std::min<u64>(run.oCap, 0xFFFFFFFFULL));
         if (!uploadGlobals()) {
             return false;
@@ -1795,6 +1814,36 @@ MBGPU_API int mbgpu_open(const char* nameMatch, const uint64_t vramCapBytes, cha
     if (info != nullptr && infoLen > 0) {
         std::snprintf(info, static_cast<size_t>(infoLen), "%s", text.c_str());
     }
+    return finish(true);
+}
+
+MBGPU_API int mbgpu_set_key_mode(const int mode) {
+    t_error.clear();
+    if (!needOpen()) {
+        return finish(false);
+    }
+    if (mode < 0 || mode > 2) {
+        return finish(fail("key mode must be 0 (states), 1 (row and column classes) or 2 (classes without repeats)"));
+    }
+    if (mode != 0) {
+        // every device's copy of the min-rotation table (1 MB), once
+        std::vector<u32> table;
+        for (auto& gp : g_m.gpus) {
+            if (gp->minRot.buf != VK_NULL_HANDLE) {
+                continue;
+            }
+            if (table.empty()) {
+                table.resize(1u << 18);
+                for (u32 v = 0; v < (1u << 18); ++v) {
+                    table[v] = static_cast<u32>(class_key::minRotation(v));
+                }
+            }
+            if (!gp->alloc(gp->minRot, table.size() * 4) || !gp->upload(gp->minRot, 0, table.data(), table.size() * 4)) {
+                return finish(false);
+            }
+        }
+    }
+    g_m.keyMode = mode;
     return finish(true);
 }
 

@@ -188,6 +188,10 @@ namespace perm_stream_detail {
     // A move as one byte, in the streams' own order: dir * 30 + lane * 5 +
     // (amount - 1), a fat lane at its first index. NO_PREV_MOVE: the stream
     // starts with no previous move (every first move allowed).
+    // This encoding, the prevMove parameter of streamDepth / streamDepthPruned
+    // and the "gate on the previous move, not CUR_DEPTH > 0" change in
+    // stream_lanes_dfs are from the patch in GitHub issue 1 by algorithm0r
+    // (Chris Marriott), extended here to 2x2 boards.
     inline constexpr u8 NO_PREV_MOVE = 255;
     struct PrevMove {
         i32 dir;

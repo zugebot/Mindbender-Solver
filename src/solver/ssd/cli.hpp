@@ -5,6 +5,7 @@
 // src/programs/solvers/experimentDiskDepth6.cpp).
 
 #include "src/solver/ssd/common.hpp"
+#include "src/utils/platform.hpp"
 
 namespace ssd {
 
@@ -114,7 +115,7 @@ namespace ssd {
             else cfg.puzzle = a;
         }
         if (cfg.threads == 0) {
-            cfg.threads = std::max(1U, std::thread::hardware_concurrency());
+            cfg.threads = platform::cpuCount();   // capped by a container's CPU quota
         }
         if (cfg.tableDepth != 6 && cfg.tableDepth != 7) {
             throw std::runtime_error("--table-depth must be 6 or 7");

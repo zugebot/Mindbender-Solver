@@ -150,6 +150,72 @@ A work unit's middles count is trusted as reported: a missing middle cannot
 be detected without redoing that shard, so use machines you trust (or run a
 shard twice on different PCs and compare the files).
 
+## Fleet (rented GPU machines)
+
+`mbq fleet` runs every shard of one search on rented Linux GPU machines
+(`fleet.py`, `fleet_worker/`). This PC stays in charge: it connects out to
+each machine over SSH (no public address needed), copies the sources over,
+hands out units, collects the middles files into `state/shards/` and runs the
+merge job (recovery, validation, promotion) here, like any sharded search.
+
+What to rent (vast.ai, RunPod, ...): one NVIDIA GPU per machine, RTX 5090
+(32 GB) best, RTX 4090 next; 128 GB RAM (more RAM and VRAM = fewer goal
+partition groups = less work); 8+ cores; 100 GB disk; SSH access. Image:
+`nvidia/cuda:12.8.1-devel-ubuntu24.04` (nvcc, g++ 13, cmake 3.28; driver
+570+). Rent identical machines: the unit layout is fixed per search.
+
+```bash
+python python/scheduler/mbq.py fleet key        # once: prints the public key for the rental account
+python python/scheduler/mbq.py fleet add m1 root@1.2.3.4 -p 41234 --price 0.62
+python python/scheduler/mbq.py fleet status     # setup: build + GPU self-test, ~5-10 min per machine
+python python/scheduler/mbq.py fleet run 15-3 --moves 18 --units 60 --d7-groups 3
+python python/scheduler/mbq.py fleet run 16-3 --moves 18 --units 40 --direction reverse
+python python/scheduler/mbq.py fleet remove m1  # after its current unit (--now: at once)
+```
+
+- **Setup** (`fleet_worker/setup.sh`, on the machine): installs what is
+  missing, builds `experimentDiskDepth6` (`-march=native`) and the CUDA module
+  (`src/gpu/build.sh`, `-arch=native`), runs `test_gpu_stream` on
+  `build_gpu/vectors.bin` and only then takes units.
+- **Units** (`fleet_worker/run_unit.sh`): detached, one at a time per machine,
+  so they keep running while this PC sleeps or the server restarts. Each poll
+  (every 60 s, `status.sh`) reads progress and exit codes; a finished unit's
+  file is checked (puzzle, split, shard, block) before it is filed.
+- **Failures**: a unit that fails, disappears, stops making progress for an
+  hour, or whose machine does not answer for 15 min goes back to the queue (at
+  most 4 attempts). A finished unit found later is still collected; the first
+  copy wins and a different second copy is reported.
+- **Checks**: `--checks C` (default 2) units run again on another machine and
+  must be byte-identical to the first copy; a mismatch is reported in `fleet
+  status`. A missing middle cannot otherwise be detected.
+- **Direction**: normal boards need `--direction forward|reverse`, decided once
+  (the units must agree); 2x2 boards stream forward.
+- **Merge**: the merge job is an ordinary queued job, so it waits while the
+  queue is paused (`mbq resume`). Recovery runs on this PC (left depth 12 on
+  normal boards at 18 moves: minutes to ~1.5 h, more middles take longer).
+- Cost: `--price` (dollars per hour) gives the "spent so far" figure; stop
+  paying at the rental site after `fleet remove`.
+- `fleet run` options added 2026-11-06: `--front` (ahead of the other
+  searches), `--only m4[,m5]` (only those machines take it), `--no-promote`
+  (merge and validate, promote by hand). Fleet searches always use the SSD
+  engine, so short (11-12 move) searches can be sharded too.
+- Draining: `fleet remove NAME` lets the current unit finish, then the machine
+  leaves; `fleet add NAME ...` with the same name brings it back (setup
+  re-runs, ~5-10 min).
+- Logs: every unit's full log comes home when it ends
+  (`docs/run_logs/fleet/<puzzle>_m<M>_n<N>/<unit>.<machine>.ok|exit<code>.log`),
+  and each machine's setup and self-test logs go to `docs/run_logs/fleet/machines/`.
+- Recovery on rented machines (done by hand for 15-3 at 18, 2026-11-07):
+  `--recover-from` needs every shard's file exactly once, so give each machine
+  all N files with only its share of the unique middles left in (lower
+  `count`); solutions through different middles differ, so the union of the
+  machines' solution files is the answer. Scripts and logs:
+  `docs/run_logs/fleet/15-3_m18_n76/recovery/`; docs/changes-2026-11-05-07.md
+  section 6.
+- vast.ai notes: image `nvidia/cuda:12.8.2-devel-ubuntu24.04` (template with
+  SSH), use the **direct** SSH address, not the proxy; the instances page shows
+  each rental's end date, and the site mails "expiring soon" before it.
+
 ## Solved alarm
 
 When a job's solutions pass validation, the server loops the game's trophy jingles on this PC, loud (`GetTrophy` with

@@ -71,6 +71,7 @@ namespace ssd {
             case 9: return recoverWithLeftDepth<9, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
             case 10: return recoverWithLeftDepth<10, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
             case 11: return recoverWithLeftDepth<11, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
+            case 12: return recoverWithLeftDepth<12, TABLE_DEPTH>(solver, cfg.reverse, middles, cfg.threads);
             default: throw std::runtime_error("unsupported left depth for recovery");
         }
     }

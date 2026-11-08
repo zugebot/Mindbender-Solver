@@ -23,6 +23,8 @@ set GLSLC="%VULKAN_SDK%\Bin\glslc.exe" --target-env=vulkan1.2 -O -mfmt=c
 %GLSLC% -DLEAF=1 "%SH%\expand.comp" -o "%SPV%\expand1.inc" || exit /b 1
 %GLSLC% -DLEAF=0 "%SH%\expand_fat.comp" -o "%SPV%\fat0.inc" || exit /b 1
 %GLSLC% -DLEAF=1 "%SH%\expand_fat.comp" -o "%SPV%\fat1.inc" || exit /b 1
+%GLSLC% -DLEAF=1 -DCLASS_KEYS=1 "%SH%\expand.comp" -o "%SPV%\expand1c.inc" || exit /b 1
+%GLSLC% -DLEAF=1 -DCLASS_KEYS=1 "%SH%\expand_fat.comp" -o "%SPV%\fat1c.inc" || exit /b 1
 %GLSLC% "%SH%\audit.comp" -o "%SPV%\audit.inc" || exit /b 1
 %GLSLC% "%SH%\bound.comp" -o "%SPV%\bound.inc" || exit /b 1
 for /L %%k in (1,1,10) do (

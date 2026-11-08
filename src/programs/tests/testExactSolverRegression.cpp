@@ -643,6 +643,10 @@ bool testSmallEndToEndExactSolver() {
 // LEFT + the rest, must come back exactly from their middles. Opt-in (needs a levels_final file):
 //   testExactSolverRegression --recovery11 build/levels_final/15-1_c16_16.txt
 //   testExactSolverRegression --recovery 10 build/levels_final/16-1_c16_12.txt   (2x2, 10 + 6)
+// Left depth 12 (normal boards at 18 with --block: 5 shared + 7 per middle) and 11 on 2x2 boards
+// (2x2 at 18 with --block: 5 shared + 6 per middle, unfiltered):
+//   testExactSolverRegression --recovery 12 build/levels_final/18-3_c17_896.txt   (12 + 5)
+//   testExactSolverRegression --recovery 11 build/levels_final/19-2_c17_3960.txt  (2x2, 11 + 6)
 template<int LEFT, int RIGHT>
 void recoverAt(BoardSolverFrontier& solver, const std::vector<B1B2>& middles) {
     solver.recoverSolutionsFromMiddles<LEFT, RIGHT, false>(middles, 4);
@@ -666,14 +670,16 @@ bool testRecoveryAtLeftDepth(const int left, const std::string& file) {
     const std::vector<B1B2> middles = ssd::expectedMiddles(*pair, known, static_cast<std::size_t>(left));
     BoardSolverFrontier solver(pair);
     solver.setWriteSolutionsToFile(false);
-    if (left == 11 && right == 5 && !fat) recoverAt<11, 5>(solver, middles);
-    else if (left == 11 && right == 6 && !fat) recoverAt<11, 6>(solver, middles);
+    if (left == 12 && right == 5 && !fat) recoverAt<12, 5>(solver, middles);
+    else if (left == 12 && right == 6 && !fat) recoverAt<12, 6>(solver, middles);
+    else if (left == 11 && right == 5) recoverAt<11, 5>(solver, middles);
+    else if (left == 11 && right == 6) recoverAt<11, 6>(solver, middles);
     else if (left == 10 && right == 5) recoverAt<10, 5>(solver, middles);
     else if (left == 10 && right == 6) recoverAt<10, 6>(solver, middles);
     else if (left == 10 && right == 7) recoverAt<10, 7>(solver, middles);
     else {
         std::cout << "recovery at left depth " << left << ": " << moves << "-move " << (fat ? "2x2" : "normal")
-                  << " solutions are not supported (left 10 + 5-7, or 11 + 5-6 on normal boards)\n";
+                  << " solutions are not supported (left 10 + 5-7, 11 + 5-6, or 12 + 5-6 on normal boards)\n";
         return false;
     }
     const std::set<std::string> knownSet(known.begin(), known.end());

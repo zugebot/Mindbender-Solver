@@ -45,13 +45,25 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 typedef unsigned long long u64;
 typedef unsigned int u32;
 typedef unsigned char u8;
+
+// The C interface uses uint64_t, the kernels u64 (unsigned long long, what CUDA's atomics take).
+// Same size everywhere, but distinct types on Linux (uint64_t = unsigned long): cast between them.
+static_assert(sizeof(u64) == sizeof(uint64_t), "u64 must be 64 bits");
+static inline const u64* asU(const uint64_t* p) { return reinterpret_cast<const u64*>(p); }
+static inline u64* asU(uint64_t* p) { return reinterpret_cast<u64*>(p); }
+static inline const uint64_t* asC(const u64* p) { return reinterpret_cast<const uint64_t*>(p); }
 
 namespace {
 
@@ -1107,10 +1119,18 @@ namespace {
         u64 levelCap = 0;     // nodes per level buffer
         Nodes level[MBGPU_MAX_DEPTH] = {};
         Counters* ctr = nullptr;
-        // output of leaves that passed
+        // output of leaves that passed (set 0; LEAF_KEYS uses okey alone)
         u64 outCap = 0;
         u64 *ob1 = nullptr, *ob2 = nullptr, *okey = nullptr;
         u32* oseed = nullptr;
+        // LEAF_FILTER output in two sets used in turn: while the host copies one set out and
+        // hands it to the sink (helper thread, pinned memory, non-blocking stream), the kernels
+        // fill the other. Set 0 is ob1..oseed above, set 1 these.
+        u64 *xb1 = nullptr, *xb2 = nullptr, *xkey = nullptr;
+        u32* xseed = nullptr;
+        bool pinned = false;                       // host sets below are page-locked
+        u64* hb1[2] = {}; u64* hb2[2] = {}; u64* hkey[2] = {}; u32* hseed[2] = {};
+        cudaStream_t copyStream = nullptr;
         // filter
         u32* bloom = nullptr;
         u64 bloomWords = 0;
@@ -1150,6 +1170,8 @@ namespace {
         ~Scratch() { release(p, p != nullptr ? bytes : 0); }
     };
 
+    class OutputPipe;
+
     struct Run {
         int depth = 0;
         int prune = 1;
@@ -1163,6 +1185,8 @@ namespace {
         double ratio[MBGPU_MAX_DEPTH] = {60, 60, 60, 60, 60, 60};   // children per node, as measured
         bool fat = false;   // 2x2 boards (expandFat)
         Counters snap{};   // the device counters after the last launch
+        int outSet = 0;               // LEAF_FILTER output set the kernels write
+        OutputPipe* pipe = nullptr;   // set by streamAll when the host sets are pinned
     };
 
     bool readCounters(Counters& c) {
@@ -1173,25 +1197,124 @@ namespace {
         return true;
     }
 
+    // Hands the LEAF_FILTER output sets to the sink on a helper thread, in order: copy set s
+    // (n leaves) to the host on the copy stream, wait for it, call the sink. One job at a time;
+    // `wait()` returns once the previous job is finished, so its set can be filled again.
+    class OutputPipe {
+    public:
+        explicit OutputPipe(Run& run) : run_(run), worker_([this] { loop(); }) {}
+        ~OutputPipe() {
+            {
+                std::lock_guard<std::mutex> lock(m_);
+                stop_ = true;
+            }
+            cv_.notify_all();
+            worker_.join();
+        }
+        bool wait() {
+            std::unique_lock<std::mutex> lock(m_);
+            cv_.wait(lock, [this] { return !busy_; });
+            if (!error_.empty()) {
+                return fail(error_);
+            }
+            return true;
+        }
+        // the caller has waited, and the kernels that wrote set s have finished
+        bool submit(const int s, const u64 n) {
+            const u64* d1 = s == 0 ? g_dev.ob1 : g_dev.xb1;
+            const u64* d2 = s == 0 ? g_dev.ob2 : g_dev.xb2;
+            const u64* dk = s == 0 ? g_dev.okey : g_dev.xkey;
+            const u32* ds = s == 0 ? g_dev.oseed : g_dev.xseed;
+            cudaStream_t st = g_dev.copyStream;
+            MB_CUDA(cudaMemcpyAsync(g_dev.hb1[s], d1, n * 8, cudaMemcpyDeviceToHost, st));
+            MB_CUDA(cudaMemcpyAsync(g_dev.hb2[s], d2, n * 8, cudaMemcpyDeviceToHost, st));
+            MB_CUDA(cudaMemcpyAsync(g_dev.hkey[s], dk, n * 8, cudaMemcpyDeviceToHost, st));
+            MB_CUDA(cudaMemcpyAsync(g_dev.hseed[s], ds, n * 4, cudaMemcpyDeviceToHost, st));
+            {
+                std::lock_guard<std::mutex> lock(m_);
+                busy_ = true;
+                set_ = s;
+                n_ = n;
+            }
+            cv_.notify_all();
+            return true;
+        }
+
+    private:
+        void loop() {
+            cudaSetDevice(g_dev.index);   // the current device is per thread
+            std::unique_lock<std::mutex> lock(m_);
+            for (;;) {
+                cv_.wait(lock, [this] { return stop_ || busy_; });
+                if (busy_) {
+                    const int s = set_;
+                    const u64 n = n_;
+                    lock.unlock();
+                    std::string err;
+                    const cudaError_t e = cudaStreamSynchronize(g_dev.copyStream);
+                    if (e != cudaSuccess) {
+                        err = std::string("output copy: ") + cudaGetErrorString(e);
+                    } else if (run_.sink != nullptr) {
+                        run_.sink(run_.ctx, asC(g_dev.hb1[s]), asC(g_dev.hb2[s]), asC(g_dev.hkey[s]), g_dev.hseed[s], n);
+                    }
+                    lock.lock();
+                    if (!err.empty() && error_.empty()) {
+                        error_ = err;
+                    }
+                    busy_ = false;
+                    cv_.notify_all();
+                    continue;
+                }
+                if (stop_) {
+                    return;
+                }
+            }
+        }
+
+        Run& run_;
+        std::mutex m_;
+        std::condition_variable cv_;
+        bool busy_ = false, stop_ = false;
+        int set_ = 0;
+        u64 n_ = 0;
+        std::string error_;
+        std::thread worker_;
+    };
+
+    // The leaves in the current output set go to the sink; the kernels switch to the other set.
+    // With a pipe the copy and the sink run on its thread while the GPU streams on; without one
+    // (pinned host memory unavailable) the copy and the sink run here, as before.
     bool flushOutput(Run& run) {
+        OutputPipe* const pipe = run.pipe;
         Counters c{};
-        if (!readCounters(c)) {
+        if (!readCounters(c)) {   // a blocking copy on the default stream: the kernels are done
             return false;
         }
         const u64 n = c.passed;
         if (n == 0) {
             return true;
         }
-        run.hb1.resize(n);
-        run.hb2.resize(n);
-        run.hkey.resize(n);
-        run.hseed.resize(n);
-        MB_CUDA(cudaMemcpy(run.hb1.data(), g_dev.ob1, n * 8, cudaMemcpyDeviceToHost));
-        MB_CUDA(cudaMemcpy(run.hb2.data(), g_dev.ob2, n * 8, cudaMemcpyDeviceToHost));
-        MB_CUDA(cudaMemcpy(run.hkey.data(), g_dev.okey, n * 8, cudaMemcpyDeviceToHost));
-        MB_CUDA(cudaMemcpy(run.hseed.data(), g_dev.oseed, n * 4, cudaMemcpyDeviceToHost));
-        if (run.sink != nullptr) {
-            run.sink(run.ctx, run.hb1.data(), run.hb2.data(), run.hkey.data(), run.hseed.data(), n);
+        if (pipe != nullptr) {
+            if (!pipe->wait() || !pipe->submit(run.outSet, n)) {   // the other set is free again
+                return false;
+            }
+            run.outSet ^= 1;
+            run.lo.ob1 = run.outSet == 0 ? g_dev.ob1 : g_dev.xb1;
+            run.lo.ob2 = run.outSet == 0 ? g_dev.ob2 : g_dev.xb2;
+            run.lo.okey = run.outSet == 0 ? g_dev.okey : g_dev.xkey;
+            run.lo.oseed = run.outSet == 0 ? g_dev.oseed : g_dev.xseed;
+        } else {
+            run.hb1.resize(n);
+            run.hb2.resize(n);
+            run.hkey.resize(n);
+            run.hseed.resize(n);
+            MB_CUDA(cudaMemcpy(run.hb1.data(), run.lo.ob1, n * 8, cudaMemcpyDeviceToHost));
+            MB_CUDA(cudaMemcpy(run.hb2.data(), run.lo.ob2, n * 8, cudaMemcpyDeviceToHost));
+            MB_CUDA(cudaMemcpy(run.hkey.data(), run.lo.okey, n * 8, cudaMemcpyDeviceToHost));
+            MB_CUDA(cudaMemcpy(run.hseed.data(), run.lo.oseed, n * 4, cudaMemcpyDeviceToHost));
+            if (run.sink != nullptr) {
+                run.sink(run.ctx, asC(run.hb1.data()), asC(run.hb2.data()), asC(run.hkey.data()), run.hseed.data(), n);
+            }
         }
         run.stats->passed += n;
         const unsigned long long zero = 0;
@@ -1325,6 +1448,18 @@ namespace {
         Counters zero{};
         MB_CUDA(cudaMemcpy(g_dev.ctr, &zero, sizeof(Counters), cudaMemcpyHostToDevice));
         run.snap = zero;
+        std::unique_ptr<OutputPipe> pipe;
+        if (run.lo.mode == LEAF_FILTER) {
+            run.outSet = 0;
+            run.lo.ob1 = g_dev.ob1;
+            run.lo.ob2 = g_dev.ob2;
+            run.lo.okey = g_dev.okey;
+            run.lo.oseed = g_dev.oseed;
+            if (g_dev.pinned) {
+                pipe = std::make_unique<OutputPipe>(run);
+                run.pipe = pipe.get();
+            }
+        }
         std::vector<u32> seedIdx;
         std::vector<u64> hb1, hb2;
         std::vector<u8> hprev;
@@ -1350,9 +1485,10 @@ namespace {
                 return false;
             }
         }
-        if (run.lo.mode == LEAF_FILTER && !flushOutput(run)) {
+        if (run.lo.mode == LEAF_FILTER && (!flushOutput(run) || (pipe && !pipe->wait()))) {
             return false;
         }
+        run.pipe = nullptr;
         Counters c{};
         if (!readCounters(c)) {
             return false;
@@ -1578,6 +1714,29 @@ MBGPU_API int mbgpu_open(const char* nameMatch, const uint64_t vramCapBytes, cha
          allocate(reinterpret_cast<void**>(&g_dev.ob2), g_dev.outCap * 8) &&
          allocate(reinterpret_cast<void**>(&g_dev.okey), g_dev.outCap * 8) &&
          allocate(reinterpret_cast<void**>(&g_dev.oseed), g_dev.outCap * 4);
+    // The output pipe (OutputPipe) is opt-in: MBGPU_OUTPUT_PIPE=1. Exact (2026-11-06, RTX 5090:
+    // self-test PASS, 16-2 at 15 and 17-2 at 14 EXACT MATCH + IDENTICAL SET, the same 15-3
+    // candidates), but only ~8% faster there (354 vs 384 s per pass, a noisy rented machine):
+    // the copy-back was not the main wait. Off, VRAM and pass layout are as before.
+    const char* pipeEnv = std::getenv("MBGPU_OUTPUT_PIPE");
+    if (ok && pipeEnv != nullptr && std::strcmp(pipeEnv, "1") == 0) {
+        ok = allocate(reinterpret_cast<void**>(&g_dev.xb1), g_dev.outCap * 8) &&
+             allocate(reinterpret_cast<void**>(&g_dev.xb2), g_dev.outCap * 8) &&
+             allocate(reinterpret_cast<void**>(&g_dev.xkey), g_dev.outCap * 8) &&
+             allocate(reinterpret_cast<void**>(&g_dev.xseed), g_dev.outCap * 4);
+        // page-locked host sets for the output pipe; without them the output is copied as before
+        bool pin = ok && cudaStreamCreateWithFlags(&g_dev.copyStream, cudaStreamNonBlocking) == cudaSuccess;
+        for (int s = 0; pin && s < 2; ++s) {
+            pin = cudaHostAlloc(reinterpret_cast<void**>(&g_dev.hb1[s]), g_dev.outCap * 8, cudaHostAllocDefault) == cudaSuccess &&
+                  cudaHostAlloc(reinterpret_cast<void**>(&g_dev.hb2[s]), g_dev.outCap * 8, cudaHostAllocDefault) == cudaSuccess &&
+                  cudaHostAlloc(reinterpret_cast<void**>(&g_dev.hkey[s]), g_dev.outCap * 8, cudaHostAllocDefault) == cudaSuccess &&
+                  cudaHostAlloc(reinterpret_cast<void**>(&g_dev.hseed[s]), g_dev.outCap * 4, cudaHostAllocDefault) == cudaSuccess;
+        }
+        g_dev.pinned = pin;
+        if (!pin) {
+            cudaGetLastError();   // clear the failed allocation's error
+        }
+    }
     if (!ok) {
         const std::string why = g_error.empty() ? "VRAM cap too small" : g_error;
         mbgpu_close();
@@ -1590,9 +1749,10 @@ MBGPU_API int mbgpu_open(const char* nameMatch, const uint64_t vramCapBytes, cha
     if (info != nullptr && infoLen > 0) {
         std::snprintf(info, static_cast<size_t>(infoLen),
                       "%s (CUDA device %d, sm_%d%d, %d SMs), %.1f GB total, %.1f GB free, cap %.1f GB; "
-                      "level buffers %llu nodes, %.2f GB in use",
+                      "level buffers %llu nodes, %.2f GB in use%s",
                       prop.name, found, prop.major, prop.minor, prop.multiProcessorCount, totalBytes / 1e9,
-                      freeBytes / 1e9, g_dev.cap / 1e9, g_dev.levelCap, g_dev.used / 1e9);
+                      freeBytes / 1e9, g_dev.cap / 1e9, g_dev.levelCap, g_dev.used / 1e9,
+                      g_dev.pinned ? ", output pipe on (MBGPU_OUTPUT_PIPE)" : "");
     }
     return 0;
 }
@@ -1725,7 +1885,7 @@ MBGPU_API int mbgpu_stream(const uint64_t* states, const uint8_t* prevMove, cons
     run.lo.okey = g_dev.okey;
     run.lo.oseed = g_dev.oseed;
     run.lo.oCap = g_dev.outCap;
-    return streamAll(run, states, prevMove, count) ? 0 : 1;
+    return streamAll(run, asU(states), prevMove, count) ? 0 : 1;
 }
 
 MBGPU_API int mbgpu_stream_checksums(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
@@ -1736,7 +1896,7 @@ MBGPU_API int mbgpu_stream_checksums(const uint64_t* states, const uint8_t* prev
     Run run;
     run.depth = depth;
     run.stats = stats != nullptr ? stats : &local;
-    return checksumRun(run, states, prevMove, count, leafCount, keySum, keyXor, nullptr) ? 0 : 1;
+    return checksumRun(run, asU(states), prevMove, count, leafCount, keySum, keyXor, nullptr) ? 0 : 1;
 }
 
 MBGPU_API int mbgpu_audit_stream(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
@@ -1754,7 +1914,7 @@ MBGPU_API int mbgpu_audit_stream(const uint64_t* states, const uint8_t* prevMove
     run.audit = 1;
     run.stats = &st;
     Counters c{};
-    if (!checksumRun(run, states, prevMove, count, wantedCount, wantedSum, wantedXor, &c)) {
+    if (!checksumRun(run, asU(states), prevMove, count, wantedCount, wantedSum, wantedXor, &c)) {
         return 1;
     }
     if (stats != nullptr) {
@@ -1813,7 +1973,7 @@ MBGPU_API int mbgpu_child_counts(const uint64_t* states, const uint8_t* prevMove
     run.stats = &st;
     run.lo.mode = LEAF_COUNTS;
     run.lo.partCounts = static_cast<unsigned long long*>(counts.p);
-    if (!streamAll(run, states, prevMove, count)) {
+    if (!streamAll(run, asU(states), prevMove, count)) {
         return 1;
     }
     if (cudaMemcpy(partitionCounts, counts.p, 256 * 8, cudaMemcpyDeviceToHost) != cudaSuccess) {
@@ -1835,7 +1995,7 @@ MBGPU_API int mbgpu_child_keys(const uint64_t* states, const uint8_t* prevMove, 
         g_error = "bad partition range";
         return 1;
     }
-    return childKeys(states, prevMove, count, depth, p0, p1, out, outCap, outCount) ? 0 : 1;
+    return childKeys(asU(states), prevMove, count, depth, p0, p1, asU(out), outCap, asU(outCount)) ? 0 : 1;
 }
 
 MBGPU_API int mbgpu_match_children(const uint64_t* states, const uint8_t* prevMove, const uint64_t count,
@@ -1874,7 +2034,7 @@ MBGPU_API int mbgpu_match_children(const uint64_t* states, const uint8_t* prevMo
     run.lo.okey = g_dev.okey;
     run.lo.oseed = g_dev.oseed;
     run.lo.oCap = g_dev.outCap;
-    return streamAll(run, states, prevMove, count) ? 0 : 1;
+    return streamAll(run, asU(states), prevMove, count) ? 0 : 1;
 }
 
 MBGPU_API uint64_t mbgpu_vram_left(void) {
@@ -1898,7 +2058,7 @@ MBGPU_API int mbgpu_build_index(const uint64_t* states, const uint8_t* prevMove,
         g_error = "bad index layout";
         return 1;
     }
-    return buildIndex(states, prevMove, count, depth, p0, p1, bucketBits, bloomBlocksPerPartition,
+    return buildIndex(asU(states), prevMove, count, depth, p0, p1, bucketBits, bloomBlocksPerPartition,
                       reinterpret_cast<unsigned short*>(fpsOut), fpsCap, startsOut, bloomOut, uniqueOut)
                ? 0
                : 1;
@@ -1923,6 +2083,19 @@ MBGPU_API void mbgpu_close(void) {
     cudaFree(g_dev.ob2);
     cudaFree(g_dev.okey);
     cudaFree(g_dev.oseed);
+    cudaFree(g_dev.xb1);
+    cudaFree(g_dev.xb2);
+    cudaFree(g_dev.xkey);
+    cudaFree(g_dev.xseed);
+    for (int s = 0; s < 2; ++s) {
+        cudaFreeHost(g_dev.hb1[s]);
+        cudaFreeHost(g_dev.hb2[s]);
+        cudaFreeHost(g_dev.hkey[s]);
+        cudaFreeHost(g_dev.hseed[s]);
+    }
+    if (g_dev.copyStream != nullptr) {
+        cudaStreamDestroy(g_dev.copyStream);
+    }
     cudaFree(g_dev.bloom);
     g_dev = Device{};
 }

@@ -298,6 +298,7 @@ namespace perm_stream_detail {
                         if (shifted[k] == board) {
                             // the first amount that gives the board back is the lane's period
                             // (1, 2 or 3); every larger amount repeats a smaller one
+                            // (break instead of continue: GitHub issue 1, algorithm0r)
                             break;
                         }
                     }

@@ -4,9 +4,10 @@ Finds every shortest solution to the 100 Mind Bender puzzles from PopCap's *Chuz
 whose rows and columns shift cyclically, some with a 2x2 piece), and proves that nothing shorter
 exists.
 
-**Status:** 97/100 solved optimally, up to 17 moves. The other three have proven lower bounds:
-15-3 and 19-2 (2x2 piece) need at least 17 moves, 16-3 at least 18 (`build/README.md`). The
-answers, with every shortest solution, are in `build/levels_final/`.
+**Status:** 100/100 solved optimally (2026-11-07), up to 18 moves. The answers, with every
+shortest solution, are in `build/levels_final/`. The 22 placements of the 2x2 piece that the
+game also accepts (the piece on another 2x2 block of its colour) are solved too
+(`build/levels_final/game_accepts/`).
 
 ## Project history
 
@@ -33,24 +34,32 @@ answers, with every shortest solution, are in `build/levels_final/`.
   Vulkan version of the GPU code (any vendor, Windows and Linux) and several GPUs per run. On a
   friend's PC with three AMD Radeon Pro GPUs, 18-3 and 14-3 were solved at 17 moves. 97/100
   solved (`docs/changes-2026-11-03.md`, `-11-04.md`).
+- **November 5-7, 2026** (with Claude): the last three. 19-2 was solved at 17 moves on the
+  RTX 5060 Ti (9 h 50 min, with the free-block join `--block`, which saves one move on the
+  start side). 15-3 and 16-3 needed 18 moves: each search was split into work units and run
+  on up to nine rented vast.ai RTX 5090s (`mbq fleet`; about 18 hours of machines in all,
+  $131.54), 15-3 in 13 h 37 min of wall time (76 units) and 16-3 in 31.5 machine-hours
+  (30 units), finishing on 2026-11-07. The 22 game-accepted placements of the 2x2 piece were
+  solved the same week. 100/100 solved (`docs/changes-2026-11-05-07.md`).
 
 ## Results
 
-Shortest solution length over the 97 solved puzzles:
+Shortest solution length over the 100 puzzles:
 
-| Moves | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Puzzles | 1 | 2 | 5 | 5 | 1 | 2 | 4 | 10 | 6 | 9 | 10 | 9 | 5 | 8 | 8 | 10 | 2 |
+| Moves | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Puzzles | 1 | 2 | 5 | 5 | 1 | 2 | 4 | 10 | 6 | 9 | 10 | 9 | 5 | 8 | 8 | 10 | 3 | 2 |
 
-- 17 moves: 14-3 (1790 solutions) and 18-3 (896).
+- 18 moves: 15-3 (4384 solutions; 2x2 piece) and 16-3 (3524; a normal board, searched in
+  reverse, from the goal).
+- 17 moves: 14-3 (1790 solutions), 18-3 (896) and 19-2 (3960).
 - 16 moves: 6-4, 12-1, 15-1, 15-4, 16-1, 17-3, 19-3, 19-4, 20-2, 20-5.
 - Most solutions: 4-5, 57 663 shortest solutions of 9 moves. Only 1-1 and 1-3 have a single one.
-- Unsolved: 15-3 and 19-2 (at least 17 moves), 16-3 (at least 18). A 17-move search on a 2x2
-  board streams ~1e16 states, about 12 days on the RTX 5060 Ti.
 
 Up to 13 moves the CPU was enough; 14-16 moves needed the lower-bound pruning (20-5 at 16 moves
-took 36.5 h on the CPU), and the 2x2 boards at 16 and every 17-move search needed the GPU (hours
-per puzzle instead of days to weeks).
+took 36.5 h on the CPU), the 2x2 boards at 16 and every 17-move search needed the GPU (hours
+per puzzle instead of days to weeks), and the two 18-move searches needed several GPUs at once
+(a 17-move search on a 2x2 board streams ~1e16 states; one more move costs ~30x).
 
 ## How the large searches work
 
@@ -71,6 +80,7 @@ the `pre-ai` tag on GitHub.
 
 - An outline of the codebase:
   https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
-- `build/README.md`: the unsolved puzzles and their bounds.
+- `build/README.md`: the per-puzzle status, kept up to date by the scheduler (now: none unsolved),
+  and the game-accepted placements.
 - `docs/changes-*.md`: what changed and why, from October 2026 on.
 - `src/gpu/README.md`: the GPU solver (design, checks, measurements).

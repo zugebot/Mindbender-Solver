@@ -15,17 +15,16 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 
 
 
-# 3 puzzles remain unsolved:
+# 0 puzzles remain unsolved:
 (each re-checked at 12 moves with the fixed solver on 2026-10-05: no solutions;
  6-4 also has none at 13, 14 or 15. Solved at 13 moves: 10-2 (32 solutions), 10-3 (1648).
  18-3 solved at 17 moves on 2026-11-03 on a friend's PC: 896 solutions. 16-1 solved at 16 moves
  on 2026-11-03 on this PC's RTX 5060 Ti: 12 solutions. 14-3 solved at 17 moves on 2026-11-03 on
  the friend's PC: 1790 solutions. 19-4 solved at 16 moves on 2026-11-04 on this PC's
- RTX 5060 Ti: 40 solutions. Every other puzzle was solved on this PC, the early ones before its
- RAM and GPU upgrades.)
-15-3: at least 17 moves
-16-3: at least 18 moves
-19-2: at least 17 moves
+ RTX 5060 Ti: 40 solutions. 19-2 solved at 17 moves on 2026-11-05 on this PC's RTX 5060 Ti:
+ 3960 solutions. 15-3 and 16-3 solved at 18 moves on 2026-11-07 on rented vast.ai RTX 5090s
+ (mbq fleet): 4384 and 3524 solutions. Every other puzzle was solved on this PC, the early ones
+ before its RAM and GPU upgrades. All 100 solved as of 2026-11-07.)
 # Placements the game also accepts (not the official goals):
 (the game counts a board as solved when every colour matches, so the 2x2 piece may also end
  on another 2x2 block of its colour; each placement is searched as its own goal, named
@@ -47,12 +46,12 @@ https://docs.google.com/document/d/17agxdvm6SnTsG4v5XrAdCslnxOafnWyb4Zu2hGxkrWg
 13-5@r4c2: solved, 8 moves, 888 solutions
 13-5@r4c3: solved, 7 moves, 324 solutions
 13-5@r4c4: solved, 7 moves, 53 solutions
-15-3@r4c3: at least 3 moves
-15-3@r5c3: at least 3 moves
-17-2@r2c4: at least 3 moves
-19-2@r2c4: at least 3 moves
-19-4@r2c1: at least 3 moves
-19-4@r5c4: at least 3 moves
+15-3@r4c3: solved, 17 moves, 28 solutions
+15-3@r5c3: solved, 17 moves, 48 solutions
+17-2@r2c4: solved, 13 moves, 6 solutions
+19-2@r2c4: solved, 17 moves, 330 solutions
+19-4@r2c1: solved, 16 moves, 168 solutions
+19-4@r5c4: solved, 16 moves, 232 solutions
 
  1-1
  1-2

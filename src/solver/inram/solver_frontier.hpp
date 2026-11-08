@@ -640,7 +640,7 @@ private:
             JVec<u64>& middleMatchHashes,
             GlobalRecoveryMetrics& metrics,
             const int worker_count) {
-        static_assert(TOTAL_LEFT_DEPTH >= 0 && TOTAL_LEFT_DEPTH <= 11);
+        static_assert(TOTAL_LEFT_DEPTH >= 0 && TOTAL_LEFT_DEPTH <= 12);
         // Recovery splits each side in two halves of at most 5 moves.
         static_assert(RIGHT_FRONTIER_DEPTH >= 0 && RIGHT_FRONTIER_DEPTH <= 10);
 
@@ -667,7 +667,9 @@ private:
         // every middle; each middle only builds the smaller half. The shared start half stays
         // at most 5 moves (all 60^5 = 778 M paths, ~25 GB, when there are too many middles for
         // `reach`): at left depth 11 (17-move runs) each middle streams the other 6, filtered
-        // toward the start root (`towardStart`, normal boards).
+        // toward the start root (`towardStart`, normal boards); at left depth 12 (18-move normal
+        // runs with --block) the other 7. 2x2 boards stream at most 6 per middle, unfiltered
+        // (left depth 11: 18-move 2x2 runs with --block).
         static constexpr u32 START_SHARED_DEPTH = std::min<u32>((TOTAL_LEFT_DEPTH + 1) / 2, 5);
         static constexpr u32 START_PER_MIDDLE_DEPTH = TOTAL_LEFT_DEPTH - START_SHARED_DEPTH;
         static constexpr u32 GOAL_PER_MIDDLE_DEPTH = RIGHT_FRONTIER_DEPTH / 2;
@@ -699,8 +701,8 @@ private:
             towardStart.targets.resize(1);
             lane_bound::buildLaneTables(searchStartRoot, towardStart.targets[0], lane_bound::Kind::Rotation);
         }
-        if (searchStartRoot.getFatBool() && START_PER_MIDDLE_DEPTH > 5) {
-            throw std::runtime_error("recovery: a 6-move per-middle start half needs a normal board (2x2: 48^6 paths unfiltered)");
+        if (searchStartRoot.getFatBool() && START_PER_MIDDLE_DEPTH > 6) {
+            throw std::runtime_error("recovery: a 7-move per-middle start half needs a normal board (2x2: 48^7 paths unfiltered)");
         }
         startSharedCache.root = searchStartRoot;
         startSharedCache.depth = START_SHARED_DEPTH;

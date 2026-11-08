@@ -5,9 +5,11 @@
 // 64-bit file seeks, the process id, the exe's own path, shared libraries (the GPU modules)
 // and page-aligned zeroed memory. Windows keeps the calls it always used.
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <thread>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -51,8 +53,63 @@ namespace platform {
             if (key == "MemTotal:") m.total = kb * 1024;
             if (key == "MemAvailable:") m.available = kb * 1024;
         }
+        // In a container (rented GPU machines) /proc/meminfo shows the whole host, but the
+        // cgroup limit is what the process may use before it is killed: cap both figures by it.
+        const auto readU64 = [](const char* path, uint64_t& v) {
+            std::ifstream f(path);
+            std::string s;
+            if (!(f >> s) || s == "max") return false;
+            try { v = std::stoull(s); } catch (...) { return false; }
+            return true;
+        };
+        const auto statValue = [](const char* path, const std::string& name) {
+            std::ifstream f(path);
+            std::string key;
+            uint64_t v = 0;
+            while (f >> key >> v)
+                if (key == name) return v;
+            return uint64_t{0};
+        };
+        uint64_t limit = 0, used = 0, reclaimable = 0;
+        if (readU64("/sys/fs/cgroup/memory.max", limit)) {   // cgroup v2
+            readU64("/sys/fs/cgroup/memory.current", used);
+            reclaimable = statValue("/sys/fs/cgroup/memory.stat", "inactive_file");
+        } else if (readU64("/sys/fs/cgroup/memory/memory.limit_in_bytes", limit)) {   // v1
+            readU64("/sys/fs/cgroup/memory/memory.usage_in_bytes", used);
+            reclaimable = statValue("/sys/fs/cgroup/memory/memory.stat", "total_inactive_file");
+        }
+        if (limit != 0 && limit < m.total) {
+            const uint64_t inUse = used > reclaimable ? used - reclaimable : 0;
+            m.total = limit;
+            m.available = std::min(m.available, limit > inUse ? limit - inUse : 0);
+        }
 #endif
         return m;
+    }
+
+    // CPUs this process may use: the hardware threads, capped by a container's CPU quota
+    // (cgroup cpu.max), so a rented 32-thread machine with a 15-CPU share runs 16 threads.
+    inline unsigned cpuCount() {
+        unsigned n = std::max(1U, std::thread::hardware_concurrency());
+#ifndef _WIN32
+        const auto cap = [&n](const std::string& quota, const uint64_t period) {
+            if (quota == "max" || quota.empty() || quota[0] == '-' || period == 0) return;
+            try {
+                const uint64_t q = std::stoull(quota);
+                n = std::min(n, static_cast<unsigned>(std::max<uint64_t>(1, (q + period - 1) / period)));
+            } catch (...) {}
+        };
+        std::ifstream v2("/sys/fs/cgroup/cpu.max");   // cgroup v2: "QUOTA PERIOD" or "max PERIOD"
+        std::string quota;
+        uint64_t period = 0;
+        if (v2 >> quota >> period) {
+            cap(quota, period);
+        } else {   // cgroup v1: cfs_quota_us (-1 = none) and cfs_period_us
+            std::ifstream q1("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"), p1("/sys/fs/cgroup/cpu/cpu.cfs_period_us");
+            if (q1 >> quota && p1 >> period) cap(quota, period);
+        }
+#endif
+        return n;
     }
 
     inline int fseek64(std::FILE* f, const long long offset, const int whence) {

@@ -19,6 +19,8 @@ $G -DLEAF=0 "$SH/expand.comp" -o "$SPV/expand0.inc"
 $G -DLEAF=1 "$SH/expand.comp" -o "$SPV/expand1.inc"
 $G -DLEAF=0 "$SH/expand_fat.comp" -o "$SPV/fat0.inc"
 $G -DLEAF=1 "$SH/expand_fat.comp" -o "$SPV/fat1.inc"
+$G -DLEAF=1 -DCLASS_KEYS=1 "$SH/expand.comp" -o "$SPV/expand1c.inc"
+$G -DLEAF=1 -DCLASS_KEYS=1 "$SH/expand_fat.comp" -o "$SPV/fat1c.inc"
 $G "$SH/audit.comp" -o "$SPV/audit.inc"
 $G "$SH/bound.comp" -o "$SPV/bound.inc"
 for k in 1 2 3 4 5 6 7 8 9 10; do

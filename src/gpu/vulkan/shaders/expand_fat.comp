@@ -12,6 +12,18 @@
 #include "common.glsl"
 #include "expand_push.glsl"
 
+// CLASS_KEYS=1 (leaf build only, chosen by the host in key modes 1-2): the --block join's keys.
+// Mode 1: both classes of every leaf; mode 2: a leaf's class across its move's direction, and
+// each parent's two classes once (emitParentKey), as mbgpu.cu's emitLane does.
+#ifndef CLASS_KEYS
+#define CLASS_KEYS 0
+#endif
+#if CLASS_KEYS
+#define LEAF_KEY(a, b) classKey(g, a, b, kt == 1)
+#else
+#define LEAF_KEY(a, b) mixKey(stateHash(a, b))
+#endif
+
 #if LEAF
 shared uint hist[256];
 #else
@@ -116,6 +128,55 @@ void flushStage(Counters C, uint staged) {
 }
 #endif
 
+#if LEAF && CLASS_KEYS
+// Key mode 2: the parent's class `t` (0 rows, 1 columns), standing for its leaves of that
+// direction; every invocation of the subgroup calls it (LEAF_KEYS has subgroup steps).
+void emitParentKey(Globals g, Counters C, bool has, uint64_t b1, uint64_t b2, int t, uint seed, inout uint inRange) {
+    uint64_t key = has ? classKey(g, b1, b2, t == 1) : 0ul;
+    uint p = uint(key >> 56);
+    if (g.mode == LEAF_KEYS) {
+        uint mine = has && p >= g.pBegin && p < g.pEnd ? 1u : 0u;
+        uint offset = subgroupExclusiveAdd(mine);
+        uint total = subgroupAdd(mine);
+        uint base = 0u;
+        if (subgroupElect() && total != 0u) {
+            base = atomicAdd(C.passed, total);
+        }
+        uint at = subgroupBroadcastFirst(base) + offset;
+        if (mine != 0u) {
+            if (at < g.oCap) {
+                U64Ref(g.okey).v[at] = key;
+            } else {
+                C.overflow = 1u;
+            }
+        }
+        return;
+    }
+    if (!has) {
+        return;
+    }
+    if (g.mode == LEAF_COUNTS) {
+        atomicAdd(hist[p], 1u);
+    } else if (g.mode == LEAF_CHECKSUM) {
+        uint s = pc.seedBase + seed;
+        atomicAdd64(g.cnt, s, 1ul);
+        atomicAdd64(g.sum, s, key);
+        atomicXor64(g.xr, s, key);
+    } else if (p >= g.pBegin && p < g.pEnd) {   // LEAF_FILTER
+        ++inRange;
+        if (leafPasses(g, key)) {
+            uint at = atomicAdd(C.passed, 1u);
+            if (at < g.oCap) {
+                U64Ref(g.ob1).v[at] = b1;
+                U64Ref(g.ob2).v[at] = b2 | CK_PARENT_FLAG;
+                U64Ref(g.okey).v[at] = key;
+                U32Ref(g.oseed).v[at] = pc.seedBase + seed;
+            }
+        }
+    }
+}
+#endif
+
 void main() {
     Globals g = Globals(pc.globals);
     Counters C = Counters(pc.counters);
@@ -152,6 +213,9 @@ void main() {
     int prevNormalCol = prevDir == 1 && prevLane != fatX ? int(prevLane) : -1;
 
     uint staged = 0u, leaves = 0u, inRange = 0u;
+#if LEAF && CLASS_KEYS
+    bool rowLeaves = false, colLeaves = false;   // key mode 2: did any leaf come from a row (column) move
+#endif
     for (uint dl = 0u; dl < THREADS_PER_NODE; ++dl) {
         uint dir = dl < 6u ? 0u : 1u;
         uint lane = dl - 6u * dir;
@@ -193,6 +257,17 @@ void main() {
         staged += total;
 #else
         leaves += bitCount(mask);
+#if CLASS_KEYS
+        if (mask != 0u) {
+            if (dir == 0u) {
+                rowLeaves = true;
+            } else {
+                colLeaves = true;
+            }
+        }
+        for (uint ps = 0u; ps < (g.keyMode == 1u ? 2u : 1u); ++ps) {
+        int kt = g.keyMode == 1u ? int(ps) : (dir == 0u ? 1 : 0);
+#endif
         if (g.mode == LEAF_KEYS) {
             // one subgroup prefix for the lane's in-range keys, then the writes
             uint inMask = 0u;
@@ -200,7 +275,7 @@ void main() {
                 if ((mask & (1u << k)) != 0u) {
                     uint64_t c1, c2;
                     fatChild(b1, b2, dir, lane, k + 1u, c1, c2);
-                    uint p = uint(mixKey(stateHash(c1, c2)) >> 56);
+                    uint p = uint(LEAF_KEY(c1, c2) >> 56);
                     if (p >= g.pBegin && p < g.pEnd) {
                         inMask |= 1u << k;
                     }
@@ -219,7 +294,7 @@ void main() {
                     uint64_t c1, c2;
                     fatChild(b1, b2, dir, lane, k + 1u, c1, c2);
                     if (at < g.oCap) {
-                        U64Ref(g.okey).v[at] = mixKey(stateHash(c1, c2));
+                        U64Ref(g.okey).v[at] = LEAF_KEY(c1, c2);
                     } else {
                         C.overflow = 1u;
                     }
@@ -233,7 +308,7 @@ void main() {
                 }
                 uint64_t c1, c2;
                 fatChild(b1, b2, dir, lane, k + 1u, c1, c2);
-                uint64_t key = mixKey(stateHash(c1, c2));
+                uint64_t key = LEAF_KEY(c1, c2);
                 if (g.mode == LEAF_COUNTS) {
                     atomicAdd(hist[uint(key >> 56)], 1u);
                 } else if (g.mode == LEAF_CHECKSUM) {
@@ -258,8 +333,17 @@ void main() {
                 }
             }
         }
+#if CLASS_KEYS
+        }   // key passes
+#endif
 #endif
     }
+#if LEAF && CLASS_KEYS
+    if (g.keyMode == 2u) {
+        emitParentKey(g, C, live && rowLeaves, b1, b2, 0, seed, inRange);
+        emitParentKey(g, C, live && colLeaves, b1, b2, 1, seed, inRange);
+    }
+#endif
 #if LEAF
     SUBGROUP_ADD_TO(C.leaves, leaves)
     SUBGROUP_ADD_TO(C.inRange, inRange)

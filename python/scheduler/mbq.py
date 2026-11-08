@@ -53,6 +53,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import alarm  # noqa: E402
+import fleet  # noqa: E402
 import run_history  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
@@ -107,8 +108,9 @@ def read_middles_header(path: Path) -> dict:
             break
     seed, stream, table = (int(x) for x in head["split"].split())
     k, n = (int(x) for x in head["shard"].split())
-    return {"puzzle": head["puzzle"], "seed": seed, "stream": stream, "table": table,
-            "moves": seed + stream + table, "shard": k, "shards": n, "count": int(head["count"]),
+    block = int(head.get("block", "0"))   # --block: middles one move further from the start
+    return {"puzzle": head["puzzle"], "seed": seed, "stream": stream, "table": table, "block": block,
+            "moves": seed + stream + table + block, "shard": k, "shards": n, "count": int(head["count"]),
             "d7_groups": int(head.get("d7groups", "1"))}
 
 
@@ -392,6 +394,9 @@ class Scheduler:
         self.last_seen_phase: dict | None = None
         self.alarm = alarm.Alarm(STATE / "alarm-trophy.wav")
         self.alarm.enabled = data.get("alarm_enabled", True)
+        # rented machines running shards of a search (fleet.py, `mbq fleet`)
+        self.fleet = fleet.Fleet(STATE, REPO, lambda p, m, n: SHARD_ROOT / shard_group(p, m, n),
+                                 read_middles_header)
         self._readopt()
 
     # ---- persistence -----------------------------------------------------
@@ -449,8 +454,8 @@ class Scheduler:
             engine = "inram" if moves <= 12 else "ssd"
         if not re.fullmatch(PUZZLE_NAME_RE, puzzle):
             raise ValueError(f"bad puzzle name {puzzle!r}")
-        if engine == "ssd" and not 10 <= moves <= 17:
-            raise ValueError("ssd engine supports 10-17 moves (18 needs recovery at left depth 12: not built yet)")
+        if engine == "ssd" and not 10 <= moves <= 18:
+            raise ValueError("ssd engine supports 10-18 moves")
         if engine == "inram" and not 3 <= moves <= 12:
             raise ValueError("inram engine supports 3-12 moves")
         # Splits <seed, stream, table>: 2x2 boards use the depth-7 goal table from 14 moves (it
@@ -532,6 +537,27 @@ class Scheduler:
                                   f"{merge['moves']} --shards {n} --which {','.join(map(str, sorted(remote)))}`")
         return jobs
 
+    def add_fleet_search(self, spec: dict) -> dict:
+        """`mbq fleet run`: a merge job here (every shard remote) + the fleet's units for it."""
+        n = int(spec["units"])
+        groups = int(spec.get("d7_groups") or 1)
+        fat = puzzle_is_fat(spec["puzzle"])
+        direction = spec.get("direction") or ("forward" if fat else None)
+        if direction not in ("forward", "reverse"):
+            raise ValueError("normal boards: --direction forward or reverse (decide it once, e.g. from a "
+                             "--direction auto run's first lines on this PC)")
+        jobs = self.add_sharded({"puzzle": spec["puzzle"], "moves": spec["moves"], "shards": n, "engine": "ssd",
+                                 "remote": list(range(n)), "d7_groups": groups if groups > 1 else None,
+                                 "gpu": spec.get("gpu") or "5060", "threads": spec.get("threads") or 6,
+                                 "block": spec.get("block"), "promote": not spec.get("no_promote"),
+                                 "until": None})
+        merge = jobs[-1]
+        s = self.fleet.add_search(merge, n, groups, int(spec.get("checks", 2)), direction, bool(spec.get("front")),
+                                  [h.strip() for h in str(spec.get("only") or "").split(",") if h.strip()])
+        merge["notes"].append(f"fleet search {s['id']}: {n} units on rented machines (mbq fleet status)")
+        self.save()
+        return {"merge_job": merge, "search": next(x for x in self.fleet.status()["searches"] if x["id"] == s["id"])}
+
     def shard_files_missing(self, job: dict) -> list[int]:
         n = int(job["merge"])
         d = SHARD_ROOT / shard_group(job["puzzle"], job["moves"], n)
@@ -594,6 +620,10 @@ class Scheduler:
     # ---- worker ----------------------------------------------------------
     def loop(self) -> None:
         while True:
+            try:
+                self.fleet.tick()
+            except Exception as exc:
+                self.fleet.event(f"fleet error: {exc}")
             try:
                 self.tick()
             except Exception as exc:  # keep serving; record the problem
@@ -986,6 +1016,8 @@ def make_handler(sched: Scheduler):
             try:
                 if parts == ["status"]:
                     return self._send(200, sched.status())
+                if parts == ["fleet"]:
+                    return self._send(200, sched.fleet.status())
                 if parts == ["alarm.wav"]:            # the alarm sound, for the dashboard tab
                     data = sched.alarm.ensure_sound().read_bytes()
                     self.send_response(200)
@@ -1020,6 +1052,15 @@ def make_handler(sched: Scheduler):
                 if parts == ["jobs"]:
                     body = self._body()
                     return self._send(200, sched.add_sharded(body) if body.get("shards") else sched.add(body))
+                if parts == ["fleet", "add"]:
+                    b = self._body()
+                    return self._send(200, sched.fleet.add_host(b["name"], b["target"], int(b.get("port") or 22),
+                                                                b.get("price")))
+                if parts == ["fleet", "remove"]:
+                    b = self._body()
+                    return self._send(200, sched.fleet.remove_host(b["name"], bool(b.get("now"))))
+                if parts == ["fleet", "run"]:
+                    return self._send(200, sched.add_fleet_search(self._body()))
                 if len(parts) == 3 and parts[0] == "jobs" and parts[2] == "cancel":
                     return self._send(200, sched.cancel(int(parts[1])))
                 if parts == ["shutdown"]:
@@ -1222,6 +1263,61 @@ def cmd_import(args) -> None:
               f"{h['count']} middles -> {dst}")
 
 
+def cmd_fleet(args) -> None:
+    """Rented machines (fleet.py): key, add, remove, run, status."""
+    if args.action == "key":
+        pub = fleet.make_key()
+        print("Add this public key to the rental site (vast.ai: Account > SSH Keys; RunPod: Settings >\n"
+              "SSH Public Keys) BEFORE renting, so new machines accept it:\n")
+        print(pub)
+        return
+    if args.action == "add":
+        if not args.name or not args.target:
+            raise SystemExit("mbq fleet add NAME user@host -p PORT [--price DOLLARS_PER_HOUR]")
+        h = api("POST", "/fleet/add", {"name": args.name, "target": args.target, "port": args.port,
+                                        "price": args.price})
+        print(f"added {h['name']} ({h['target']} port {h['port']}); setup starts within a minute "
+              f"(build + GPU self-test, ~5-10 min): mbq fleet status")
+        return
+    if args.action == "remove":
+        if not args.name:
+            raise SystemExit("mbq fleet remove NAME [--now]")
+        h = api("POST", "/fleet/remove", {"name": args.name, "now": args.now})
+        print(f"{h['name']}: {'removed' if h.get('removed') else 'leaves after its current unit'}")
+        return
+    if args.action == "run":
+        if not args.name or not args.moves or not args.units:
+            raise SystemExit("mbq fleet run PUZZLE --moves M --units N [--d7-groups G] [--direction D] [--checks C]")
+        r = api("POST", "/fleet/run", {"puzzle": args.name, "moves": args.moves, "units": args.units,
+                                        "d7_groups": args.d7_groups, "direction": args.direction,
+                                        "checks": args.checks, "block": args.block, "front": args.front, "only": args.only,
+                                        "no_promote": args.no_promote})
+        print("queued " + describe(r["merge_job"]))
+        print(f"fleet search {r['search']['id']}: {args.units} units; the machines pick them up within a minute")
+        return
+    s = api("GET", "/fleet")
+    for h in s["hosts"]:
+        if h.get("removed"):
+            continue
+        prog = h.get("progress") or {}
+        pct = f" {prog.get('percent', 0):.0f}% of {prog.get('phase', '')}" if prog.get("percent") is not None else ""
+        unit = f" unit {h['unit']} ({h['unit_minutes']} min{pct})" if h.get("unit") else ""
+        print(f"{h['name']:12} {h['status']:14} {h.get('gpu') or '':38} {h.get('ram_gb') or '?':>4} GB  "
+              f"done {h['units_done']:3}  ${h['cost']:.2f}{unit}"
+              + (f"  [{h['last_error'][:60]}, seen {h['seen_ago_s']} s ago]" if h.get("last_error") else ""))
+    for x in s["searches"]:
+        if x.get("finished") and time.time() - x["finished"] > 86400:
+            continue
+        print(f"search {x['id']}: {x['puzzle']} {x['moves']} moves: {x['done']}/{x['n']} units done, "
+              f"{x['running']} running" + (f", {x['failed']} FAILED" if x["failed"] else "")
+              + (f", ~{x['unit_minutes']} min per unit" if x.get("unit_minutes") else "")
+              + (f", about {x['eta_hours']} h left" if x.get("eta_hours") else "")
+              + f"; checks {x['checks']}; merge job #{x['merge_job']}")
+    print(f"spent so far: ${s['cost']:.2f} (from the prices given to fleet add)")
+    for e in s["events"][-args.events:]:
+        print("  " + e)
+
+
 def cmd_cancel(args) -> None:
     print(describe(api("POST", f"/jobs/{args.id}/cancel", {})))
 
@@ -1319,6 +1415,24 @@ def main() -> None:
     ex.add_argument("--out", default=str(REPO / "workunits"))
     im = sub.add_parser("import", help="file middles results returned from other PCs")
     im.add_argument("files", nargs="+")
+    fl = sub.add_parser("fleet", help="rented machines working on one search (fleet.py)")
+    fl.add_argument("action", choices=["status", "key", "add", "remove", "run"], nargs="?", default="status")
+    fl.add_argument("name", nargs="?", help="add/remove: machine name; run: puzzle")
+    fl.add_argument("target", nargs="?", help="add: user@host")
+    fl.add_argument("-p", "--port", type=int, default=22)
+    fl.add_argument("--price", type=float, help="add: dollars per hour (for the spent-so-far figure)")
+    fl.add_argument("--now", action="store_true", help="remove: at once (its unit goes back to the queue)")
+    fl.add_argument("--moves", type=int)
+    fl.add_argument("--units", type=int, help="run: work units (about an hour each is a good size)")
+    fl.add_argument("--d7-groups", type=int, help="run, 2x2 boards: goal partition groups (units a multiple of it)")
+    fl.add_argument("--direction", choices=["forward", "reverse"], help="run, normal boards: the search direction")
+    fl.add_argument("--checks", type=int, default=2, help="run: units run twice on different machines")
+    fl.add_argument("--block", dest="block", action="store_true", default=None)
+    fl.add_argument("--no-block", dest="block", action="store_false")
+    fl.add_argument("--no-promote", action="store_true", help="run: a rehearsal on a solved puzzle (keep levels_final)")
+    fl.add_argument("--only", help="run: just these machines (comma list) take its units")
+    fl.add_argument("--front", action="store_true", help="run: the machines take these units before earlier searches'")
+    fl.add_argument("--events", type=int, default=12)
     c = sub.add_parser("cancel", help="cancel a queued or running job")
     c.add_argument("id", type=int)
     lg = sub.add_parser("log", help="tail a job's solver log")
@@ -1335,7 +1449,7 @@ def main() -> None:
     {"serve": lambda a: serve(), "daemon": cmd_daemon, "status": cmd_status, "queue": cmd_queue,
      "history": cmd_history, "add": cmd_add, "cancel": cmd_cancel, "log": cmd_log,
      "pause": cmd_pause, "resume": cmd_pause, "hold": cmd_hold, "unhold": cmd_hold, "shutdown": cmd_shutdown,
-     "export": cmd_export, "import": cmd_import, "alarm": cmd_alarm}[args.cmd](args)
+     "export": cmd_export, "import": cmd_import, "alarm": cmd_alarm, "fleet": cmd_fleet}[args.cmd](args)
 
 
 if __name__ == "__main__":
