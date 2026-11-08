@@ -403,7 +403,7 @@
   // small blits a second, not a repaint of everything at the screen's rate.
   const SHEETS = {};
   for (const [name, file] of [['body', 'chuzzles'], ['huge', 'huge'], ['eyes', 'eyes'], ['pupils', 'pupils'],
-    ['fizzy', 'fizzy'], ['arrows', 'arrows'], ['naked', 'naked'], ['wince', 'wince'], ['beauty', 'beauty'],
+    ['fizzy', 'fizzy'], ['hint', 'hint'], ['hintbig', 'hintbig'], ['arrows', 'arrows'], ['naked', 'naked'], ['wince', 'wince'], ['beauty', 'beauty'],
     ['cheeks', 'cheeks'], ['rosy', 'rosy'], ['fuzz', 'fuzz'], ['star', 'star'], ['splode', 'splode'],
     ['shockwave', 'shockwave']]) {
     const img = new Image();
@@ -620,33 +620,107 @@
     return c;
   }
 
-  // The game's match outline (Board::SparkleGroups): fizzy stars on a circle of radius 45
-  // round a chuzzle (90 round the 2x2), one every 20 degrees (10), in the chuzzle's hilite
-  // colour, each a sprite fader spawned one update after the last, at a scale of 0.75-1,
-  // turned up to 45 degrees, a pixel or two off its point. Here the ring keeps running: a
-  // star lights every few updates round the circle and fades over 40, so a bright head trails
-  // round the chuzzle with a fading tail. Centred on (cx, cy) in canvas pixels.
-  const jitter = (i, n) => (Math.sin(i * 12.9898 + n * 78.233) * 43758.5453) % 1;   // -1..1, fixed per star
-  function drawRing(ctx, cx, cy, big, k, s, now) {
-    const img = tinted('fizzy', HILITE[k] ?? HILITE[6]);
+  // The game's match outline (Board::SparkleGroups), the burst it shows round the chuzzles a
+  // drag would match. Its points: a ring 45 game pixels from each marked chuzzle's centre, one
+  // every 20 degrees (90 and 10 round the 2x2), less those inside another marked chuzzle (44;
+  // 89 from a 2x2), crowded by more than three (within 85) or on top of another point (5);
+  // so round neighbours the outline runs in and out between them. The points are chained from
+  // the first to the nearest one left each time, and each gets a fizzy star: a sprite fader
+  // delayed one update (10 ms) per place along the chain, 0.75-1 in scale, turned up to 45
+  // degrees, up to 2 pixels off its point, starting at alpha 0.5 and 0.1 brighter per star up
+  // to 1 (the last 20 of the chain 0.025 dimmer each), fading 0.02 an update. The game's code
+  // tints a white star with the chuzzle's hilite colour, but the game on screen draws them
+  // dark (black over whatever is there); that is the look kept. marks: {r, c, big} in cells.
+  const SPARKLE_RGB = [0, 0, 0];
+  function sparkleGroup(marks) {
+    const cs = marks.map((m) => ({ x: m.c * 80 + (m.big ? 80 : 40), y: m.r * 80 + (m.big ? 80 : 40), big: m.big }));
+    const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+    const pts = [];
+    for (const c of cs) {
+      const rad = c.big ? 90 : 45, step = c.big ? 10 : 20;
+      for (let a = 0; a < 360; a += step) {
+        const t = a * Math.PI / 180;
+        pts.push({ x: c.x + Math.cos(t) * rad, y: c.y + Math.sin(t) * rad });
+      }
+    }
+    for (let i = 0; i < pts.length;) {
+      const p = pts[i];
+      let crowd = 0, inside = false;
+      for (const c of cs) {
+        const d = dist(p, c);
+        if (c.big) {
+          if (d < 89) inside = true;
+        } else {
+          if (d < 44) inside = true;
+          if (d < 85) crowd++;
+        }
+      }
+      if (inside || crowd > 3 || pts.some((q) => q !== p && dist(p, q) < 5)) pts.splice(i, 1);
+      else i++;
+    }
+    const stars = [];
+    let at = pts.shift(), alpha = 0.5;
+    const fadeFrom = pts.length + 1 - 20;
+    while (at) {
+      stars.push({ x: at.x + Math.random() * 2, y: at.y + Math.random() * 2, sc: 0.75 + Math.random() * 0.25,
+        rot: (Math.random() * 90 - 45) * Math.PI / 180, a: alpha, delay: stars.length });
+      alpha = stars.length < fadeFrom ? Math.min(1, alpha + 0.1) : Math.max(0, alpha - 0.025);
+      let best = 9999, next = null;
+      for (const q of pts) {
+        const d = dist(at, q);
+        if (d < best) { best = d; next = q; }
+      }
+      if (next) pts.splice(pts.indexOf(next), 1);
+      at = next;
+    }
+    return stars;
+  }
+
+  // The outline on a board: the game shows the burst once when a drag makes a group; here it
+  // starts again as soon as its last star has gone, so the trail keeps running round the marks
+  // while they stand. A new set of marks starts a new burst. 100 updates a second, whatever
+  // the frame rate.
+  function drawSparkles(ctx, el, marks, dt, s, padPx) {
+    const img = tinted('fizzy', SPARKLE_RGB);
     if (!img) return;
-    const n = big ? 36 : 18, rad = (big ? 90 : 45) * s, P = 90, L = 40, d = P / n, u = now / 10;
-    for (let i = 0; i < n; i++) {
-      const age = ((u - i * d) % P + P) % P;
-      if (age >= L) continue;
-      const ang = i * (2 * Math.PI / n), sc = (0.75 + 0.25 * Math.abs(jitter(i, 1))) * s;
-      const x = cx + Math.sin(ang) * rad + jitter(i, 3) * s, y = cy - Math.cos(ang) * rad + jitter(i, 4) * s;
-      ctx.globalAlpha = Math.min(1, age / 4) * (1 - age / L);
-      ctx.setTransform(sc, 0, 0, sc, x, y);
-      ctx.rotate(jitter(i, 2) * Math.PI / 4);
+    const key = marks.map((m) => `${m.r},${m.c},${m.big ? 1 : 0}`).join(';');
+    let sp = el._spark;
+    if (!sp || sp.key !== key) sp = el._spark = { key, stars: [], acc: 0 };
+    if (!sp.stars.length) sp.stars = sparkleGroup(marks);
+    sp.acc += Math.min(dt, 100);
+    for (; sp.acc >= 10; sp.acc -= 10) {
+      for (const st of sp.stars) {
+        if (st.delay-- > 0) continue;
+        st.delay = 0;
+        st.a -= 0.02;
+      }
+    }
+    sp.stars = sp.stars.filter((st) => st.a > 0);
+    for (const st of sp.stars) {
+      if (st.delay > 0) continue;
+      const sc = st.sc * s;
+      ctx.globalAlpha = st.a;
+      ctx.setTransform(sc, 0, 0, sc, padPx + st.x * s, padPx + st.y * s);
+      ctx.rotate(st.rot);
       ctx.drawImage(img, -10.5, -10);
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
   }
 
-  // A faint chuzzle of the colour a spot will get (a drop's emptied spot; over the goal's
-  // chuzzle under the paint brush), pulsing gently.
+  // The game's hint circle (Animator_Hint): HintCircle (128 px; HintCircleBig, 227 x 225, round
+  // the 2x2) centred on the chuzzle's cell, a black copy 4 pixels down and right under it, yellow
+  // and red by turns every 50 updates. (cx, cy) in canvas pixels.
+  function drawHint(ctx, cx, cy, big, s, now) {
+    const name = big ? 'hintbig' : 'hint';
+    const img = SHEETS[name];
+    if (!img) return;
+    const w = img.width * s, h = img.height * s, lit = Math.floor(now / 500) % 2 ? [1, 0, 0] : [1, 1, 0];
+    ctx.drawImage(tinted(name, [0, 0, 0]), cx - w / 2 + 4 * s, cy - h / 2 + 4 * s, w, h);
+    ctx.drawImage(tinted(name, lit), cx - w / 2, cy - h / 2, w, h);
+  }
+
+  // A faint chuzzle of the colour a drop's emptied spot will get, pulsing gently.
   function drawGhost(ctx, r, c, k, big, s, R, cellPx, padPx, now) {
     ctx.globalAlpha = 0.4 + 0.15 * Math.sin(now / 160);
     const x = padPx + c * cellPx, y = padPx + r * cellPx;
@@ -656,22 +730,14 @@
   }
 
   // What a click on the goal would paint, under the pointer: the cell (or the whole 2x2 it is
-  // part of) in the selected colour, or with the 2x2 tool the block the piece would cover.
-  // k is null when the colour would not change (only the ring shows, in the colour there).
+  // part of), or with the 2x2 tool the block the piece would cover.
   function paintPreview() {
     const h = $('goalBoard')._hover;
     if (!h || state.mode !== 'edit' || state.preset) return null;
     const b = state.goal;
-    if (state.tool === 'piece') {
-      const r = Math.min(h.r, 4), c = Math.min(h.c, 4);
-      return { r, c, big: true, k: pieceColour(b) ?? state.color, cur: pieceColour(b) ?? state.color };
-    }
-    if (inPiece(b.fat, h.r, h.c)) {
-      const cur = pieceColour(b);
-      return { r: b.fat.y, c: b.fat.x, big: true, k: cur === state.color ? null : state.color, cur };
-    }
-    const cur = b.cells[h.r * 6 + h.c];
-    return { r: h.r, c: h.c, big: false, k: cur === state.color ? null : state.color, cur };
+    if (state.tool === 'piece') return { r: Math.min(h.r, 4), c: Math.min(h.c, 4), big: true };
+    if (inPiece(b.fat, h.r, h.c)) return { r: b.fat.y, c: b.fat.x, big: true };
+    return { r: h.r, c: h.c, big: false };
   }
 
   // One board's chuzzles. Only the cells whose pose changed are cleared and drawn again
@@ -711,7 +777,7 @@
       nodes.push(node);
       if (node._piece) piece = node;
       if (node.classList.contains('picked')) {
-        marks.push({ r: node._r, c: node._c, big: node._piece, k: node._k });
+        marks.push({ r: node._r, c: node._c, big: node._piece });
         full = true;
       }
       if (node._off || node._f != null || node._ox || node._oy || node._tx || node._ty || node._sc > 1) full = true;
@@ -747,17 +813,15 @@
     }
     for (const node of top) drawChuzzle(ctx, node, node._pose, now, dt, s, R, cellPx, padPx, false);
     if (!full) return;
-    // the match outline marks a chuzzle: picked, where a drop lands, a spot a drop fills, what
-    // a click on the goal will paint; each in the colour that spot will have
-    if (el._target) marks.push({ r: el._target.r, c: el._target.c, big: el._target.piece, k: dragLayer.node ? dragLayer.node._k : 6 });
-    if (el._fills) for (const f of el._fills) marks.push({ r: f.r, c: f.c, big: false, k: f.k });
+    // the match outline marks the picked chuzzle, where a drop lands and the spots it fills;
+    // the hint circle what a click on the goal will paint
+    if (el._target) marks.push({ r: el._target.r, c: el._target.c, big: el._target.piece });
+    if (el._fills) for (const f of el._fills) marks.push({ r: f.r, c: f.c, big: false });
+    if (marks.length) drawSparkles(ctx, el, marks, dt, s, padPx);
+    else el._spark = null;
     if (hover) {
-      if (hover.k != null) drawGhost(ctx, hover.r, hover.c, hover.k, hover.big, s, R, cellPx, padPx, now);
-      marks.push({ ...hover, k: hover.k ?? hover.cur });
-    }
-    for (const m of marks) {
-      const half = (m.big ? 80 : 40) * s;
-      drawRing(ctx, padPx + m.c * cellPx + half, padPx + m.r * cellPx + half, m.big, m.k, s, now);
+      const half = (hover.big ? 80 : 40) * s;
+      drawHint(ctx, padPx + hover.c * cellPx + half, padPx + hover.r * cellPx + half, hover.big, s, now);
     }
   }
 
