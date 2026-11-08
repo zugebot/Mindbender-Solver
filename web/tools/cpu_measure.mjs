@@ -1,7 +1,7 @@
 // Loads a page in headless Chrome, lets it idle, then measures the CPU time every Chrome
 // process of this instance uses over N seconds (like Task Manager), by process type, as a
 // percentage of one core. usage: node cpu_measure.mjs <url> [seconds] [--js "expr run before measuring"]
-// Serve the page first: python -m http.server 8770 --directory web
+// Serve the page first: web/serve.cmd (or python web/serve.py)
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';

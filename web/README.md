@@ -22,7 +22,9 @@ reload never mixes old CSS with new sprite sheets):
 python web/serve.py
 ```
 
-Then open http://localhost:8770/.
+Then open http://localhost:8770/. To keep it running in the background instead (no window; it
+outlives the terminal that started it), double-click `web/serve.cmd`; a second start does nothing
+while one is already serving. Stop it in Task Manager (`pythonw.exe`).
 
 ## Host it
 
