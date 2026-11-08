@@ -380,22 +380,26 @@
   }
   let tracked = null;           // the chuzzle the mouse is over (its eyes follow the mouse)
   let eyeEls = null;            // the faces on the page, found again after a redraw
-  // The logo's and the palette's chuzzles watch the mouse wherever it is (full travel once it is
-  // past them, less when it is over their face); some seconds after it stops they look about
-  // on their own again.
+  // The logo's and the palette's chuzzles, like the board's: while the mouse is inside the
+  // square a chuzzle fills, its pupils turn to the mouse (from the square's centre); leaving
+  // holds that direction until the next idle look.
   function followMouse(e) {
     if (!eyeEls || !eyeEls.every((el) => el.isConnected)) eyeEls = [...document.querySelectorAll('[data-eye]:not(.cell)')];
     const now = performance.now();
     for (const el of eyeEls) {
-      const eyes = el._eyes || (el._eyes = el.querySelector('.eyes'));
-      if (!eyes) continue;
-      const r = eyes.getBoundingClientRect();
+      const r = el.getBoundingClientRect(), s = eyeState(el.dataset.eye);
+      const inside = e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom;
+      if (!inside) {
+        if (el.classList.contains('track')) {
+          el.classList.remove('track');
+          s.lookAt = now + 5000 + rand(9000);
+        }
+        continue;
+      }
       const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
-      const len = Math.hypot(dx, dy), k = len < 0.5 ? 0 : Math.min(1, len / r.width) / len;
-      const s = eyeState(el.dataset.eye);
-      s.lookAt = now + 4000 + rand(6000);
-      if (Math.abs(dx * k - s.dx) < 0.02 && Math.abs(dy * k - s.dy) < 0.02 && el.classList.contains('track')) continue;
-      [s.dx, s.dy] = [dx * k, dy * k];
+      const len = Math.hypot(dx, dy);
+      [s.dx, s.dy] = len < 0.5 ? [0, 0] : [dx / len, dy / len];
+      s.lookAt = Infinity;                 // no idle look while the mouse is on it
       el.classList.add('track');
       el.style.setProperty('--dx', s.dx.toFixed(3));
       el.style.setProperty('--dy', s.dy.toFixed(3));
