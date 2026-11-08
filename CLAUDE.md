@@ -4,21 +4,30 @@ Optimal solver for Chuzzle's Mind Bender puzzles (100 puzzles, 6x6 boards,
 row/column cyclic shifts, some with a 2x2 piece). It finds every shortest
 solution and proves nothing shorter exists. C++ solver plus Python tools.
 
-Status (2026-11-04): **97/100 solved**, all on this PC (the i7; before its RAM and GPU upgrades for the early ones,
+Status (2026-11-07): **100/100 solved**, all on this PC (the i7; before its RAM and GPU upgrades for the early ones,
 on the RTX 5060 Ti since 2026-11-01) except 18-3 and 14-3, solved on the friend's PC (Ryzen 5
-5600X, three Polaris GPUs over Vulkan). `docs/run_history.csv` starts in 2026-10, so the 61
-earlier answers have no row there. Latest: 15-1, 19-3, 17-3, 12-1 at 16 moves on the 5060 Ti; 6-4 at 16, 68
+5600X, three Polaris GPUs over Vulkan), and 15-3 and 16-3, solved on rented vast.ai RTX 5090s
+(`mbq fleet`; ~18 h of up to nine machines, $131.54 in all, docs/changes-2026-11-05-07.md
+section 10). The last: 16-3 at 18, 3524 solutions, `<5,6,6>` + `--block` reverse, 30 fleet units
+(31.5 machine-hours), recovery split over 5 machines (2026-11-07 12:05 PM).
+`docs/run_history.csv` starts in 2026-10, so the 61
+earlier answers have no row there. Latest: 15-3 at 18, 4384 solutions, `<5,5,7>` + `--block`, 76 fleet
+units on 9 rented 5090s (13 h 37 min wall, 2026-11-07; recovery split over 3 machines, ~1 h);
+all 22 game-accepted placements solved (2026-11-07). Before: 19-2 at 17, 3960 solutions, `<5,4,7>` + `--block`, 5060 Ti, 9 h 50 min (2026-11-05); 15-3 has no 17-move solution (>= 18, 11 h 28 min, 2026-11-06). Earlier: 15-1, 19-3, 17-3, 12-1 at 16 moves on the 5060 Ti; 6-4 at 16, 68
 solutions, `<5,4,7>`, 5060 Ti, 6 h 45 min; 15-4 at 16, 356 solutions, `<5,4,7>`, 5060 Ti,
 9 h 15 min; 18-3 at 17, 896 solutions, `<5,6,6>`, friend's PC, 2 h 50 min; 16-1 at 16, 12
 solutions, `<5,4,7>`, 5060 Ti, 8 h 45 min; 14-3 at 17, 1790 solutions, `<5,6,6>`, friend's PC,
 3 h 39 min; 19-4 at 16, 40 solutions, `<5,4,7>`, 5060 Ti, 9 h 36 min (13 h 15 min with two
 holds) (each run's machine: column `machine` of the run history);
-the unsolved normal board 16-3 >= 18 (no 17-move solution: `<5,6,6>`, friend's PC, 16 h 22 min,
-2026-11-03), the unsolved 2x2 boards 15-3 >= 17, 19-2 >= 17 (none at 16: 5060 Ti, 11 h 46 min).
+16-3 has no 17-move solution (`<5,6,6>`, friend's PC, 16 h 22 min, 2026-11-03); solved at 18 on
+the fleet 2026-11-07.
 19-2 at 17 on the friend's PC was stopped 2026-11-04 (unit 0 of 80 unfinished after 4 h 17 min,
 ~1 month projected); the friend's PC is not available for long runs any more. `build/README.md` lists the unsolved ones with their
 "at least N moves" bounds (updated by the scheduler); `build/levels_final/` holds every answer.
-History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-04.md`, 19-4 solved,
+History of what changed and why: `docs/changes-*.md` (newest: `changes-2026-11-05-07.md`, 19-2 at 17
+and 15-3 at 18 solved, all 22 placements solved, the rented fleet (`mbq fleet`), Linux container
+limits, recovery at left depth 11/12 and split over machines, the GPU output pipe (off);
+`changes-2026-11-04.md`, 19-4 solved,
 a pass's cost measured, the GPU survivor check ~18% faster, a 2x2 split bound (cannot prune),
 2x2 boards at 17 moves: `<5,5,7>`, `--d7-groups` work units, the Vulkan 2-s job limit; `changes-2026-11-03.md`, the Linux port, Vulkan on
 AMD, several GPUs, the friend's-PC runs, game-accepted goals, Chuzzle Suite;
@@ -123,6 +132,13 @@ is paused: the solver runs only when the user asks. A job cut off by a reboot is
   `levels/` = scratch output.
 - `python/scheduler/mbq.py`: job queue + dashboard; `README.md` there documents every command
   (add/`--until`/`--front`, cancel, pause, hold, shards + export/import). Use it for long runs.
+  `mbq fleet` (`fleet.py`, `fleet_worker/*.sh`, 2026-11-06): one search's shards on rented Linux
+  GPU machines over SSH (key `~/.ssh/mindbender_fleet`); they build from source, pass the GPU
+  self-test, run units detached; results come back to `state/shards/`, the merge job runs here.
+  CUDA on Linux: `src/gpu/build.sh`. Used 2026-11-06..07 on 9 vast.ai RTX 5090s (15-3 at 18, the
+  placements, 16-3 at 18); unit logs come home to `docs/run_logs/fleet/`. `--recover-from` needs
+  every shard file once, so a recovery split over machines = full file sets with disjoint middles
+  (docs/changes-2026-11-05-07.md section 6).
 - `docs/run_history.csv` + `docs/run_logs/`: one row and the full log per solver run (written by
   the scheduler via `python/scheduler/run_history.py`). Use it for timings.
 - `web/`: static solver site (board editor, WebAssembly solver in Web Workers, replay). Serve with
@@ -161,8 +177,11 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes), `
   (default; `--no-seed-last-move` turns it off): each state's own last move, of its
   lexicographically smallest path, is passed in as the previous move (`ssd::buildLastMoves`,
   children from `perm_stream_detail::forEachFirstMove`). Exact; ~1.47x fewer streamed states on
-  normal boards (60 first moves -> ~41), ~1.45x on 2x2 boards (48 -> ~33). Suggested by the
-  user's teacher (GitHub issue 1).
+  normal boards (60 first moves -> ~41), ~1.45x on 2x2 boards (48 -> ~33). Proposed, with a
+  patch and the exactness argument, by the user's teacher `algorithm0r` (Chris Marriott) in
+  GitHub issue 1 (also the lane-period `break` in the normal stream); his patch was reworked
+  rather than applied as is, so the credit is in the commit messages (`b5431bc`, `9173a0f`,
+  `ed871d8`), the code comments and docs/changes-2026-10-30.md. The issue is still open.
 - Seeds are visited in a strided order (4096-seed chunks), so the timed ones represent the list.
 - `--block` (2026-11-04, 2x2 boards, depth-7 goal side, CUDA): the free-block join. Leaves at depth
   L - 8 are looked up by row and column class (`src/solver/ssd/class_key.hpp`: rows turned to their
@@ -175,6 +194,10 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes), `
   (`src/solver/ssd/direction.hpp`; 16-2: forward, 15.6x; 16-3 at 18: reverse, 3.3x). `--block` also
   runs on normal boards (depth-6 goal side, bound cut-off one higher); the scheduler turns it on
   with --gpu from 16 moves (2x2) / 15 (normal). docs/changes-2026-11-04.md section 16.
+- 18 moves (2026-11-06): recovery at left depth 12 (normal boards, `<5,6,6>` + block; 5 shared + 7
+  per middle, checked on 18-3 and 14-3's 17-move answers: 2.5 min / 77 min) and 2x2 boards at
+  left depth 11 (`<5,5,7>` + block; 6 per middle unfiltered, ~45 min per middle per thread;
+  19-2's 3960 at 11 + 6). `testExactSolverRegression --recovery 12|11 <file>`.
 - Work units: `--shard k/N`, `--middles-out`, `--recover-from` (exact; see the scheduler README).
   Depth-7 runs: `--d7-groups G` makes unit k = goal partition group k / (N/G) x seed shard
   k % (N/G), so each unit builds one pass's index (`mbq add ... --shards N --d7-groups G`).
@@ -278,13 +301,16 @@ Next:
    less time per 2x2 run, 7x fewer candidates; fewer bits is much slower; docs/changes-2026-11-04.md
    sections 11 and 14). Make it a per-device choice at run start (timed sample, cached) instead of
    the fixed default 10; until then pass `--bloom-bits 14`. More ideas: docs/ideas-2026-11-04.md.
-2. A bound that prunes on 2x2 boards (15-3 and 19-2 need >= 17; 15-4, 16-1, 19-4 took 16): the halved
+2. A bound that prunes on 2x2 boards (no longer blocking: every 2x2 board is solved; 19-2 took 17,
+   15-3 18): the halved
    lane bound tops out at 6 and pruning needs > 7, and no lane bound can do better (cover
    argument in docs/changes-2026-10-12.md section 7). Tables over several lanes do not get there
    either: all-moves pattern databases ~0%, move-type-split tables capped at 4 + 4 (2026-11-04,
    `experimentFatSplitBound`, docs/changes-2026-11-04.md section 13). Open: dissection-type search.
 3. 16 moves on 2x2 boards: done (2026-11-04; 6-4, 15-4, 16-1, 19-4 solved, 15-3 and 19-2 none).
-   17 moves on 2x2 boards: `<5,4,7> --block` (estimated ~8-10 h each on the 5060 Ti; not run yet). Before
+   17 moves on 2x2 boards: `<5,4,7> --block` (19-2 solved, 9 h 50 min; 15-3 none, 11 h 28 min, both
+   on the 5060 Ti). 18 moves on 2x2 boards: `<5,5,7> --block`, 76 fleet units (15-3, 2026-11-07,
+   docs/changes-2026-11-05-07.md). Before
    `--block`: `<5,5,7>`, ~12 days each on the 5060 Ti; run as `--d7-groups` units
    (`mbq add 19-2 --moves 17 --gpu 5060 --threads 6 --shards 80 --d7-groups 5`). 16 moves were
    `<5,4,7>` with `--gpu 5060` (`mbq add ... --gpu 5060 --threads 6`),
