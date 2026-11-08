@@ -86,6 +86,11 @@ the WebAssembly entry points in `src/programs/web/wasmSolver.cpp`.
   is still searched in full, so it is still a shortest solution. Most of a search is its last
   depth, so this ends long searches many times sooner (table below). Settings also holds the
   thread count; both are kept in this browser (`localStorage`, `mb-settings`).
+- The status line says what is settled: "None in 10 or fewer · trying 11 · 40% · about 2 min
+  left" ("up to" with one solution, which may come sooner; "(the limit)" on the last length).
+  A search that finds nothing says how to go further: a higher move limit, or past 12 moves the
+  desktop solver. No timed warning: every normal board can be solved (as in Loopover), so a
+  long search only means many moves, and the depth reached says more than the time taken.
 - One search at a time, and it belongs to the boards it started on: other puzzles can be opened,
   viewed and edited meanwhile. The orb is then the shown puzzle's (View works; Solve waits for
   the search), the status line follows the search ("show it" goes back), and a search that ends

@@ -2583,12 +2583,14 @@
     const threads = settings.threads || hardwareThreads, first = settings.first;
     run = { workers: [], cancelled: false, t0: performance.now(), boards: { start: cloneBoard(state.start), goal: cloneBoard(state.goal) }, follows: state.follows };
     const thisRun = run;
-    let detail = '';
+    // the line: the stage (what is ruled out, what is being tried), the time left, the time
+    // taken, the threads; the most useful first, as a phone cuts off the end
+    let left = '', threadText = '';
     const showStatus = () => {
       const el = $('status'), away = !onBoards(thisRun);
       if (away && el.classList.contains('error')) return;     // about the puzzle shown
       statusLink(away);
-      el.textContent = `${away ? 'Solving your other puzzle: ' : ''}${stage} · ${fmtTime((performance.now() - thisRun.t0) / 1000)}${detail}${away ? ' · show it' : ''}`;
+      el.textContent = `${away ? 'Solving your other puzzle: ' : ''}${stage}${left} · ${fmtTime((performance.now() - thisRun.t0) / 1000)}${threadText}${away ? ' · show it' : ''}`;
       el.title = away ? 'Back to the puzzle being solved' : '';
     };
     const tick = setInterval(showStatus, 200);
@@ -2620,7 +2622,7 @@
       const join = 2 * nJoin >= nPlain;
       if (!join) await w0.call('join', { on: false });
       const n = join ? nJoin : nPlain;
-      detail = ` · ${n} thread${n > 1 ? 's' : ''}`;
+      threadText = ` · ${n} thread${n > 1 ? 's' : ''}`;
       for (let i = 1; i < n; i++) run.workers.push(new SolverWorker());
       await Promise.all(run.workers.slice(1).map((w) => w.call('setup', { ...spec, first }).then(() => w.call('join', { on: join })).then(() => w.call('goal4'))));
       await Promise.all(run.workers.map((w, i) => w.call('start4', { part: i, parts: n })));
@@ -2632,10 +2634,15 @@
           const total = prog.reduce((s, p) => s + p.total, 0);
           const f = total ? done / total : 0;
           const el = (performance.now() - tStart) / 1000;
-          detail = ` · ${n} thread${n > 1 ? 's' : ''}${f > 0.03 && el > 1.5 ? ` · about ${fmtTime(el * (1 - f) / f)} left` : ''}`;
-          setProgress(`${d} moves · ${Math.floor(f * 100)}%`, f);
+          // the whole length's time; one solution may well come sooner
+          const rest = f > 0.03 && el > 1.5 ? el * (1 - f) / f : 0;
+          left = rest >= 1 ? ` · ${first ? 'up to' : 'about'} ${fmtTime(rest)} left` : '';
+          setProgress(`${trying} · ${Math.floor(f * 100)}%`, f);
         };
-        setProgress(`${d} moves`, 0);
+        // every shorter length is already ruled out; the limit is the last length tried
+        const trying = `None in ${d - 1} or fewer · trying ${d}${d === maxDepth ? ' (the limit)' : ''}`;
+        left = '';
+        setProgress(trying, 0);
         // every worker's part, or (one solution) the first worker to find one: the others are
         // stopped with the run
         const res = await new Promise((resolve, reject) => {
@@ -2706,7 +2713,9 @@
     $('results').hidden = false;
     if (res.depth < 0) {
       fontText($('resultTitle'), `No solution in ${res.maxDepth} moves`, { size: 24, fill: ['#fff6b8', '#ffb71e'] });
-      $('resultSub').textContent = `Every sequence of up to ${res.maxDepth} moves was checked.`;
+      $('resultSub').textContent = `Every sequence of up to ${res.maxDepth} moves was checked. `
+        + (res.maxDepth < MAX_DEPTH ? 'Raise the move limit to search further.'
+          : `It needs more than ${MAX_DEPTH} moves, which takes the desktop solver.`);
     } else if (res.depth === 0) {
       fontText($('resultTitle'), 'Already solved', { size: 24, fill: ['#fff6b8', '#ffb71e'] });
       $('resultSub').textContent = 'The start board is the goal board.';
