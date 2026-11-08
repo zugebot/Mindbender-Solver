@@ -212,6 +212,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 }
 /* a palette or logo chuzzle blinking */
 .blink .pupil { visibility: hidden; }
+.track .pupil { transition-duration: .08s; }             /* following the mouse */
 .board.placing .cell { cursor: copy; }
 .board.readonly .cell { cursor: default; }
 /* the start while editing: drag a chuzzle onto another (they swap), or tap two */
@@ -357,8 +358,9 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   .dock { gap: 10px; padding-top: 10px; }
   .dock-inner { width: 100%; gap: 8px; }
   .palette { --sz: min(46px, calc((100vw - 24px - 5 * 10px) / 6)); justify-content: center; }
-  .tools { width: 100%; justify-content: space-between; }
-  .tool { --o: 38px; flex: 1; min-width: 0; }
+  /* kept together and centred (stretched over the width they looked scattered) */
+  .tools { max-width: 100%; justify-content: center; }
+  .tool { --o: 38px; flex: 0 1 56px; min-width: 0; }
   .solve-box { width: 100%; }
   .steps { width: 100%; }
 }

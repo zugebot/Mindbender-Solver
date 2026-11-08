@@ -380,6 +380,28 @@
   }
   let tracked = null;           // the chuzzle the mouse is over (its eyes follow the mouse)
   let eyeEls = null;            // the faces on the page, found again after a redraw
+  // The logo's and the palette's chuzzles watch the mouse wherever it is (full travel once it is
+  // past them, less when it is over their face); some seconds after it stops they look about
+  // on their own again.
+  function followMouse(e) {
+    if (!eyeEls || !eyeEls.every((el) => el.isConnected)) eyeEls = [...document.querySelectorAll('[data-eye]:not(.cell)')];
+    const now = performance.now();
+    for (const el of eyeEls) {
+      const eyes = el._eyes || (el._eyes = el.querySelector('.eyes'));
+      if (!eyes) continue;
+      const r = eyes.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+      const len = Math.hypot(dx, dy), k = len < 0.5 ? 0 : Math.min(1, len / r.width) / len;
+      const s = eyeState(el.dataset.eye);
+      s.lookAt = now + 4000 + rand(6000);
+      if (Math.abs(dx * k - s.dx) < 0.02 && Math.abs(dy * k - s.dy) < 0.02 && el.classList.contains('track')) continue;
+      [s.dx, s.dy] = [dx * k, dy * k];
+      el.classList.add('track');
+      el.style.setProperty('--dx', s.dx.toFixed(3));
+      el.style.setProperty('--dy', s.dy.toFixed(3));
+    }
+  }
+
   function eyeTick() {
     const now = performance.now();
     if (!eyeEls || !eyeEls.every((el) => el.isConnected)) eyeEls = [...document.querySelectorAll('[data-eye]:not(.cell)')];
@@ -402,6 +424,7 @@
           [s.dx, s.dy] = randomLook();
         }
         glances.add(key);
+        el.classList.remove('track');
         el.style.setProperty('--dx', s.dx.toFixed(3));
         el.style.setProperty('--dy', s.dy.toFixed(3));
       }
@@ -1922,7 +1945,7 @@
     requestAnimationFrame(frameLoop);
     let lastMove = null;
     addEventListener('pointermove', (e) => {
-      if (!lastMove) requestAnimationFrame(() => { trackMouse(lastMove); lastMove = null; });
+      if (!lastMove) requestAnimationFrame(() => { trackMouse(lastMove); followMouse(lastMove); lastMove = null; });
       lastMove = e;
     }, { passive: true });
     matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change', redrawFonts);
