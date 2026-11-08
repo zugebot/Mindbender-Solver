@@ -1901,17 +1901,17 @@
       b.setAttribute('aria-checked', String(t === settings.threads));
       fontText(b.firstChild, t ? String(t) : `Auto (${hardwareThreads})`, { size: 19 });
     }
-    $('solsNote').textContent = settings.first
-      ? 'Stops at the first solution of the shortest length. Every shorter length is still searched in full, so it is still the fewest moves, and long searches end many times sooner.'
-      : 'Finds and counts every shortest solution. The last length is searched to the end, so long searches take several times longer.';
+    $('noteFirst').setAttribute('aria-hidden', String(!settings.first));
+    $('noteAll').setAttribute('aria-hidden', String(settings.first));
   }
 
-  // The options star behind the frame: its frame's place (376 x 380 of 600 x 558, centred at
-  // 300, 292) scaled to fit inside the frame, so the frame always covers it.
+  // The options star behind the frame: the place cleared for the frame (the rim, 372 x 377 of
+  // 600 x 558, and 4 pixels round it; centred at 300, 292.5) scaled to fit inside the frame, so
+  // the frame always covers it and the arms meet the rim.
   function sizeOptStar() {
     const f = $('optFrame'), star = $('optStar');
-    const W = f.offsetWidth, H = f.offsetHeight, k = Math.min(W / 376, H / 380);
-    Object.assign(star.style, { width: `${600 * k}px`, height: `${558 * k}px`, left: `${W / 2 - 300 * k}px`, top: `${H / 2 - 292 * k}px` });
+    const W = f.offsetWidth, H = f.offsetHeight, k = Math.min(W / 380, H / 385);
+    Object.assign(star.style, { width: `${600 * k}px`, height: `${558 * k}px`, left: `${W / 2 - 300 * k}px`, top: `${H / 2 - 292.5 * k}px` });
   }
 
   // The move limit beside Solve ("up to / 10 moves", with - and +). A game puzzle longer than

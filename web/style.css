@@ -568,11 +568,11 @@ dialog.opt-dialog {
 }
 .opt {
   position: relative; container-type: inline-size;
-  border-style: solid; border-width: 79px 40px 46px;
-  border-image: url("assets/optframe.webp") 105 54 61 53 fill / 79px 40px 46px stretch;
+  border-style: solid; border-width: 77px 39px 44px 38px;
+  border-image: url("assets/optframe.webp") 103 52 58 51 fill / 77px 39px 44px 38px stretch;
   padding: 6px 8px 8px;
 }
-.opt-title { position: absolute; left: 0; right: 0; top: -66px; margin: 0; display: flex; justify-content: center; line-height: 0; }
+.opt-title { position: absolute; left: 0; right: 0; top: -64px; margin: 0; display: flex; justify-content: center; line-height: 0; }
 .opt-cols { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; }
 .opt-col { display: flex; flex-direction: column; padding-top: 4px; }
 .opt-head { margin-bottom: 4px; }
@@ -596,6 +596,9 @@ dialog.opt-dialog {
 .opt-item:hover { background: rgba(255, 255, 255, .08); }
 .opt-item[aria-checked="true"] { background: rgba(196, 188, 255, .42); }
 .opt-note { margin: 8px 4px 0; font-size: 13px; line-height: 1.4; color: #c9c3ff; }
+.opt-notes { display: grid; }
+.opt-notes > .opt-note { grid-area: 1 / 1; }
+.opt-notes > .opt-note[aria-hidden="true"] { visibility: hidden; }
 .opt-done {
   display: block; margin: 12px auto 0; width: 160px; height: 30px; border: 0; padding: 0;
   background: url("assets/optdone.webp") 0 0 / 300% 100% no-repeat;

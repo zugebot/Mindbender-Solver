@@ -205,7 +205,12 @@
           <span class="opt-head" id="solsHead"></span>
           <button type="button" class="opt-radio" role="radio" id="solsFirst"><span class="opt-dot"></span><span class="opt-text"></span></button>
           <button type="button" class="opt-radio" role="radio" id="solsAll"><span class="opt-dot"></span><span class="opt-text"></span></button>
-          <p class="opt-note" id="solsNote"></p>
+          <div class="opt-notes">
+            <p class="opt-note" id="noteFirst">Stops at the first shortest solution it finds. Every shorter length is
+              still searched in full, so it is still the fewest moves, only much sooner.</p>
+            <p class="opt-note" id="noteAll">Finds and counts every shortest solution. The last length is searched to
+              the end as well, so a long search can take several times longer.</p>
+          </div>
         </div>
         <fieldset class="opt-box" title="How many searches run at once. Auto uses every core; fewer keeps the computer cooler and quieter, at the cost of a slower solve speed.">
           <legend id="threadsHead"></legend>
