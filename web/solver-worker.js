@@ -32,7 +32,12 @@ const handlers = {
 
   goal4() {
     M._mb_build_goal4();
-    return { size: M._mb_layer_size(1, 4), memory: M._mb_memory_bytes(), heap: M.HEAPU8.length };
+    return { size: M._mb_layer_size(1, 4), memory: M._mb_memory_bytes(), classBytes: M._mb_class_bytes(), heap: M.HEAPU8.length };
+  },
+
+  join({ on }) {
+    M._mb_set_join(on ? 1 : 0);
+    return { memory: M._mb_memory_bytes() };
   },
 
   start4({ part, parts }) {

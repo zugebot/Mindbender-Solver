@@ -162,7 +162,7 @@
       </div>
       <p class="fine">Paint the goal, drag the start's Chuzzles to where they begin, then Solve (or open one of the
         game's puzzles). You get every
-        shortest solution of up to 10 moves, and proof that none is shorter. Replay any of them: the wand shows each
+        shortest solution of up to 12 moves, and proof that none is shorter. Replay any of them: the wand shows each
         drag. It runs on your device in WebAssembly; nothing is uploaded.</p>
       <p class="fine">All 100 of the game's puzzles are solved: View shows every shortest solution the desktop solver
         found (up to 18 moves), with the same replay.</p>
@@ -187,8 +187,10 @@
       <h3>The search</h3>
       <p class="fine">The solver builds every board within 4 moves of the start and of the goal, and joins the two in
         the middle. The work is split over several threads, and a lane bound cuts away boards that can't reach the goal in
-        time. It checks every move sequence, so "none shorter" is exact. Up to 8 moves takes about a second, 10 moves
-        seconds to a minute or two. It stops at 10 moves; longer custom puzzles need the desktop solver.</p>
+        time. It checks every move sequence, so "none shorter" is exact. Up to 10 moves takes seconds, 11 moves
+        seconds to a minute, 12 moves from seconds to many minutes: the lane bound cuts away most of the work on boards
+        with several colours, little on boards with two or three colours spread evenly, and nothing with the 2x2
+        Chuzzle. It stops at 12 moves; longer custom puzzles need the desktop solver.</p>
       <button type="button" class="text-btn tour" id="tourBtn">Show the tutorial again</button>
       <label class="setting">
         <span>Threads</span>

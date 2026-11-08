@@ -50,8 +50,8 @@ solver and its speedups; `changes-2026-10-30.md`, the first-move rule, before it
   checks recovery at left depth 11, as 17-move runs use it; `--recovery 10 <2x2 16-move file>`
   left depth 10 on 2x2 boards, as `<5,5,7>` uses it), `testRotations` (112), `testJVec`,
   `testKnownSolutions` (replays every file in `<repo>/levels`; run from `build/`),
-  `testWebSolver` (the web solver vs `build/levels_final`, all puzzles up to 10 moves; run from
-  the repo root),
+  `testWebSolver` (the web solver vs `build/levels_final`, all puzzles up to `--max` moves,
+  12 at most; run from the repo root),
   `experimentBoundSample --check` (bounds admissible on all 1.9 M known-optimal-path states; run
   from the repo root), `python -m unittest discover -s python/chuzzle_suite/tests`.
 - Exactness check for solver changes: run the solver on a solved puzzle with
@@ -103,7 +103,7 @@ is paused: the solver runs only when the user asks. A job cut off by a reboot is
     `pattern_db.hpp` (grouped pattern databases), `parent_prune.hpp` (PermStream hooks),
     `audit.hpp` (run-start safety audits), `calibrate.hpp` (per-run mode timing).
   - `ssd/`: the large solver in parts, `namespace ssd` (its README lists them).
-  - `web/`: `web_solver.hpp`, the browser solver (plain C++, up to 10 moves; see `web/README.md`).
+  - `web/`: `web_solver.hpp`, the browser solver (plain C++, up to 12 moves; see `web/README.md`).
 - `src/programs/`:
   - `solvers/`: `findSolutions` (in-RAM, 3-12 moves, reads `config.json` from cwd) and
     `experimentDiskDepth6` (12-16 moves; `main` + every flag documented at its top). The name is

@@ -3,7 +3,7 @@
 
 (() => {
   const COLORS = ['Red', 'Green', 'Blue', 'Orange', 'Yellow', 'Purple', 'White', 'Cyan'];
-  const MAX_DEPTH = 10;
+  const MAX_DEPTH = 12;
   const LIST_PAGE = 300;
   const $ = (id) => document.getElementById(id);
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -2373,11 +2373,14 @@
   const hardwareThreads = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 32));
 
   // RAM the workers may use together (each holds the 4-move goal table).
+  // Chrome reports the RAM (navigator.deviceMemory, at most 8); Firefox and Safari report
+  // nothing. A machine with 12 or more threads has the RAM to go with them as a rule, and
+  // there the workers' copies of the goal side are what limits 11- and 12-move searches.
   function memoryBudget() {
     const dm = navigator.deviceMemory;
     if (dm && dm <= 2) return 400e6;
     if (dm && dm <= 4) return 800e6;
-    return 1600e6;
+    return hardwareThreads >= 12 ? 2400e6 : 1600e6;
   }
 
   let run = null;
@@ -2487,11 +2490,17 @@
       }
       setProgress('Building tables', null);
       const g = await w0.call('goal4');
-      const perWorker = g.memory * 1.5 + 32e6;
-      const n = Math.max(1, Math.min(threads, Math.floor(memoryBudget() / perWorker)));
+      // Each worker holds the goal side; the join's class indexes about halve a worker's
+      // search time but add to its memory, so they stay only while they still leave room
+      // for at least half as many workers as without them.
+      const fit = (bytes) => Math.max(1, Math.min(threads, Math.floor(memoryBudget() / (bytes * 1.5 + 32e6))));
+      const nJoin = fit(g.memory), nPlain = fit(g.memory - g.classBytes);
+      const join = 2 * nJoin >= nPlain;
+      if (!join) await w0.call('join', { on: false });
+      const n = join ? nJoin : nPlain;
       detail = ` · ${n} thread${n > 1 ? 's' : ''}`;
       for (let i = 1; i < n; i++) run.workers.push(new SolverWorker());
-      await Promise.all(run.workers.slice(1).map((w) => w.call('setup', spec).then(() => w.call('goal4'))));
+      await Promise.all(run.workers.slice(1).map((w) => w.call('setup', spec).then(() => w.call('join', { on: join })).then(() => w.call('goal4'))));
       await Promise.all(run.workers.map((w, i) => w.call('start4', { part: i, parts: n })));
       for (let d = 7; d <= maxDepth; d++) {
         const prog = run.workers.map(() => ({ done: 0, total: 1 }));

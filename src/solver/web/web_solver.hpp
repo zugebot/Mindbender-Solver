@@ -1,7 +1,7 @@
 #pragma once
 // src/solver/web/web_solver.hpp
 //
-// The browser solver (web/): every shortest solution of up to 10 moves, on
+// The browser solver (web/): every shortest solution of up to 12 moves, on
 // normal and 2x2 boards, in a few hundred MB. It is separate from the native
 // solvers because those need BMI2 and threads and WebAssembly has neither, so
 // this is plain C++ (web/build_wasm.ps1 compiles it) and the page runs one copy
@@ -9,16 +9,24 @@
 //
 // Search for D moves: exact distance layers S_0..S_4 from the start and
 // G_0..G_4 from the goal (layer k = the neighbours of layer k-1 that are in
-// neither k-1 nor k-2). D <= 8: S_a meets G_b with a + b = D. D = 9 / 10:
-// every state of S_4 is streamed 1 / 2 more moves and looked up in G_4. Each
-// worker owns a hash partition of S_4 (the work splits with no shared memory)
-// and builds G_4 itself.
+// neither k-1 nor k-2). D <= 8: S_a meets G_b with a + b = D. D = 9 to 12:
+// every state of S_4 is streamed m = D - 8 more moves and looked up in G_4.
+// Each worker owns a hash partition of S_4 (the work splits with no shared
+// memory) and builds G_4 itself.
+// The middle stream visits each state once per canonical order: a run of moves
+// of one orientation (rows, or columns) goes by ascending lane (moves on
+// different rows commute, so every other order of the run reaches the same
+// state), never the same lane twice in a row (it merges into one move, so it is
+// never on a shortest path; the 2x2's lane pair is let through, as before), and a
+// lane stops at its period. On normal boards the rotation lane bound
+// (src/solver/bounds/lane_bound.hpp) prunes every level: a state with r moves
+// still to go and bound > r is dropped. A hit is a pair (s in S_4, y in G_4).
 // Every optimal path crosses S_a at move a and G_b at move D - b, so all of
-// them are listed as: the paths start -> s (walking the S layers back), the
-// middle moves, the paths y -> goal (walking the G layers forward). The 2-move
-// middle stream visits one order of each commuting pair (two rows, or two
-// columns) and lists both orders when it hits. On normal boards the rotation
-// lane bound (src/solver/bounds/lane_bound.hpp) prunes the middle stream.
+// them are listed, once each, as: the paths start -> s (walking the S layers
+// back), every m-move path s -> y (the m / 2 moves from each end, joined), the
+// paths y -> goal (walking the G layers forward). Any D-move path from start to
+// goal is a shortest one when nothing shorter exists, so each is kept; each is
+// replayed against the boards.
 
 #include "src/utils/intrinsics/popcount.hpp"
 #include "src/utils/processor.hpp"
@@ -159,23 +167,30 @@ namespace web_solver {
         return id < FAT_COL_BASE + 5 && moveAmount(id) != 5 - y;
     }
 
-    // f(id, child) for every legal move, each lane read once for its 5 shifts.
-    template<typename F>
+    // f(id, child) for every legal move, each lane read once for its 5 shifts. NO_REPEATS
+    // stops a single lane at its period (1, 2 or 3: the first shift that gives the lane back;
+    // every larger one repeats a smaller one), for streams that only need each state once. A
+    // 2x2 lane always takes its 4 legal shifts: the piece moves even when the cells repeat.
+    template<bool NO_REPEATS = false, typename F>
     FORCEINLINE void forEachChild(const State& s, const bool fat, F&& f) {
         if (!fat) {
             for (u32 r = 0; r < 6; ++r) {
                 const u64 lane = readRow(s, r);
                 for (u32 n = 1; n <= 5; ++n) {
+                    const u64 v = rotateLane(lane, n);
+                    if (NO_REPEATS && v == lane) break;
                     State t = s;
-                    writeRow(t, r, rotateLane(lane, n));
+                    writeRow(t, r, v);
                     f(static_cast<u8>(ROW_BASE + 5 * r + n - 1), t);
                 }
             }
             for (u32 c = 0; c < 6; ++c) {
                 const u64 lane = readCol(s, c);
                 for (u32 n = 1; n <= 5; ++n) {
+                    const u64 v = rotateLane(lane, n);
+                    if (NO_REPEATS && v == lane) break;
                     State t = s;
-                    writeCol(t, c, rotateLane(lane, n));
+                    writeCol(t, c, v);
                     f(static_cast<u8>(COL_BASE + 5 * c + n - 1), t);
                 }
             }
@@ -186,8 +201,10 @@ namespace web_solver {
             if (r == y || r == y + 1) continue;
             const u64 lane = readRow(s, r);
             for (u32 n = 1; n <= 5; ++n) {
+                const u64 v = rotateLane(lane, n);
+                if (NO_REPEATS && v == lane) break;
                 State t = s;
-                writeRow(t, r, rotateLane(lane, n));
+                writeRow(t, r, v);
                 f(static_cast<u8>(ROW_BASE + 5 * r + n - 1), t);
             }
         }
@@ -206,8 +223,10 @@ namespace web_solver {
             if (c == x || c == x + 1) continue;
             const u64 lane = readCol(s, c);
             for (u32 n = 1; n <= 5; ++n) {
+                const u64 v = rotateLane(lane, n);
+                if (NO_REPEATS && v == lane) break;
                 State t = s;
-                writeCol(t, c, rotateLane(lane, n));
+                writeCol(t, c, v);
                 f(static_cast<u8>(COL_BASE + 5 * c + n - 1), t);
             }
         }
@@ -351,11 +370,95 @@ namespace web_solver {
         return out;
     }
 
+    // A lane's class: its smallest rotation (as an 18-bit value), the same for all 6.
+    inline std::vector<u32> buildCanonTable() {
+        std::vector<u32> t(LANE + 1);
+        for (u64 v = 0; v <= LANE; ++v) {
+            u64 best = v;
+            for (u32 k = 1; k < 6; ++k) best = std::min(best, rotateLane(v, k));
+            t[v] = static_cast<u32>(best);
+        }
+        return t;
+    }
+
+    // The states of a layer by a class key (all six rows, or all six columns, turned to
+    // their class, and the 2x2's place): each state's index in the layer, in buckets by the
+    // key's top bits (a counting sort: no temporary array, so building it adds nothing to
+    // the worker's peak memory), with 16 more bits of the key beside it and a bitset on the
+    // key's low bits that turns most misses away. The join checks every state it gets in
+    // full, so two keys that share those bits only cost a compare. 9 bytes a state.
+    struct ClassIndex {
+        std::vector<u16> keys;
+        std::vector<u32> ids;
+        std::vector<u32> offsets;
+        std::vector<u64> filter;
+        u32 bits = 1;
+        u64 filterMask = 0;
+
+        static FORCEINLINE u16 tag(const u64 k) { return static_cast<u16>(k >> 16); }
+
+        // keyOf(i): the key of the layer's state i, for i < n (called twice each).
+        template<typename KeyFn>
+        void build(const std::size_t n, KeyFn&& keyOf) {
+            bits = 1;
+            while (bits < 30 && (1ULL << bits) < n / 2) ++bits;
+            offsets.assign((1ULL << bits) + 1, 0);
+            u32 fbits = 6;
+            while (fbits < 30 && (1ULL << fbits) < n * 8) ++fbits;
+            filterMask = (1ULL << fbits) - 1;
+            filter.assign((1ULL << fbits) / 64, 0);
+            for (std::size_t i = 0; i < n; ++i) {
+                const u64 k = keyOf(i);
+                ++offsets[(k >> (64 - bits)) + 1];
+                filter[(k & filterMask) >> 6] |= 1ULL << (k & 63);
+            }
+            for (std::size_t i = 1; i < offsets.size(); ++i) offsets[i] += offsets[i - 1];
+            keys.resize(n);
+            ids.resize(n);
+            // fill each bucket from its end: offsets[b + 1] counts down to offsets[b]
+            for (std::size_t i = n; i-- > 0;) {
+                const u64 k = keyOf(i);
+                const u32 at = --offsets[(k >> (64 - bits)) + 1];
+                keys[at] = tag(k);
+                ids[at] = static_cast<u32>(i);
+            }
+            // counting down left offsets[b + 1] at bucket b's start: drop the first entry (0)
+            // so offsets[b] is bucket b's start again, and end with the total
+            offsets.erase(offsets.begin());
+            offsets.push_back(static_cast<u32>(n));
+        }
+
+        // f(index into the layer) for every state with this key (and some that share its bits).
+        template<typename F>
+        FORCEINLINE void forEach(const u64 k, F&& f) const {
+            if (!((filter[(k & filterMask) >> 6] >> (k & 63)) & 1)) return;
+            const u64 bucket = k >> (64 - bits);
+            const u16 t = tag(k);
+            for (u32 i = offsets[bucket], e = offsets[bucket + 1]; i < e; ++i) {
+                if (keys[i] == t) f(ids[i]);
+            }
+        }
+
+        MUND u64 bytes() const {
+            return keys.capacity() * 2 + ids.capacity() * 4 + offsets.capacity() * 4 + filter.capacity() * 8;
+        }
+    };
+
+    FORCEINLINE u64 classKey(const u64 l0, const u64 l1, const u64 l2, const u64 l3, const u64 l4, const u64 l5,
+                             const u64 fatBits) {
+        u64 h = (l0 | (l1 << 18) | (l2 << 36)) * 0x9E3779B97F4A7C15ULL;
+        h ^= ((l3 | (l4 << 18) | (l5 << 36)) ^ (fatBits << 54)) * 0xC2B2AE3D27D4EB4FULL;
+        h ^= h >> 31;
+        h *= 0xD6E8FEB86659FD93ULL;
+        h ^= h >> 29;
+        return h;
+    }
+
 
     class Solver {
     public:
         static constexpr int MAX_LAYER = 4;
-        static constexpr int MAX_DEPTH = 10;
+        static constexpr int MAX_DEPTH = 12;
         static constexpr int SMALL_MAX_DEPTH = 6;     // the most layers 0-3 reach
         static constexpr std::size_t MAX_LISTED = 100000;
 
@@ -364,6 +467,7 @@ namespace web_solver {
         std::vector<std::vector<u8>> solutions;       // capped at MAX_LISTED
         u64 invalidSolutions = 0;                     // must stay 0 (each listed path is replayed)
         u64 streamedStates = 0;
+        bool useJoin = true;                          // the last middle move by class lookups
 
         // cells: 36 colours 0-7, row-major. fat: the 2x2 piece's top-left
         // (column x, row y) on each board. Returns "" or the reason it can't be solved.
@@ -400,8 +504,20 @@ namespace web_solver {
             return k < L.size() ? L[k].size() : 0;
         }
 
+        // The join on or off; off frees its indexes (the page turns it off when its indexes
+        // would leave room for too few workers).
+        void setJoin(const bool on) {
+            useJoin = on;
+            if (!on) {
+                rowClass = ClassIndex{};
+                colClass = ClassIndex{};
+                classLayer = -1;
+            }
+        }
+        MUND u64 classBytes() const { return rowClass.bytes() + colClass.bytes(); }
+
         MUND u64 memoryBytes() const {
-            u64 total = rowTab.capacity() + colTab.capacity();
+            u64 total = rowTab.capacity() + colTab.capacity() + canon.capacity() * 4 + rowClass.bytes() + colClass.bytes();
             for (const auto& l : S) total += l.bytes();
             for (const auto& l : G) total += l.bytes();
             return total;
@@ -416,7 +532,7 @@ namespace web_solver {
                 std::vector<Hit> hits;
                 intersect(S[a], G[b], hits);
                 if (!hits.empty()) {
-                    listSolutions(hits, a, b);
+                    listSolutions(hits, a, b, 0);
                     if (solutionCount != 0) return d;
                 }
             }
@@ -427,6 +543,10 @@ namespace web_solver {
         void buildGoal4() {
             ensureGoal(3);
             if (G.size() == 4) G.push_back(buildLayer(G[3], &G[2], fat, 0, 1, true));
+            if (useJoin) {      // here, so the page's memory figure (taken after this) counts them
+                goalLayer = 4;
+                buildClassIndexes();
+            }
         }
 
         void buildStart4(const u32 part, const u32 parts) {
@@ -447,8 +567,9 @@ namespace web_solver {
             solutionCount = 0;
             solutions.clear();
             invalidSolutions = 0;
-            prune = !fat && middle > 0;
+            prune = !fat && middle > 0;   // a 2x2 bound (ceil(R / 2) + ceil(C / 2)) rarely passes 4: it pruned 0.5% on 6-5
             if (prune && !laneTablesBuilt) buildLaneTables();
+            if (useJoin && middle > 0) buildClassIndexes();
             return S[4].size();
         }
 
@@ -460,41 +581,17 @@ namespace web_solver {
             for (; cursor < end; ++cursor) {
                 const State& s = seeds[cursor];
                 if (middle == 0) {
-                    if (target.contains(s)) hits.push_back({s, s, {0, 0}, 0});
+                    if (target.contains(s)) hits.push_back({s, s});
                     continue;
                 }
-                if (prune && bound(s) > middle + 4) continue;
-                if (middle == 1) {
-                    forEachChild(s, fat, [&](const u8 id, const State& t) {
-                        ++streamedStates;
-                        if (target.contains(t)) hits.push_back({s, t, {id, 0}, 1});
-                    });
-                    continue;
-                }
-                forEachChild(s, fat, [&](const u8 id1, const State& t) {
-                    if (prune && bound(t) > 5) return;
-                    const bool col1 = isColMove(id1);
-                    const u32 key1 = laneKey(s, id1);
-                    forEachChild(t, fat, [&](const u8 id2, const State& u) {
-                        bool swapToo = false;
-                        if (isColMove(id2) == col1) {
-                            const u32 key2 = laneKey(t, id2);
-                            if (key2 < key1) return;                       // listed from the other order
-                            if (key2 == key1 && !isFatMove(id1)) return;   // same lane twice: never shortest
-                            swapToo = key2 != key1;
-                        }
-                        ++streamedStates;
-                        if (!target.contains(u)) return;
-                        hits.push_back({s, u, {id1, id2}, 2});
-                        if (swapToo) hits.push_back({s, u, {id2, id1}, 2});
-                    });
-                });
+                if (prune && bound(s) > middle + goalLayer) continue;
+                stream(s, s, middle, NO_ORIENTATION, 0, target);
             }
             return cursor >= seeds.size();
         }
 
         // Lists the solutions found by the stream.
-        void finishDepth() { listSolutions(hits, 4, goalLayer); }
+        void finishDepth() { listSolutions(hits, 4, goalLayer, middle); }
 
         // One solution per line, moves separated by spaces.
         MUND std::string solutionsText(const bool zeroBased) const {
@@ -515,9 +612,10 @@ namespace web_solver {
         struct Hit {
             State s;      // in S_a
             State y;      // in G_b
-            u8 mid[2];
-            u8 midLen;
+            bool operator<(const Hit& o) const { return s < o.s || (s == o.s && y < o.y); }
+            bool operator==(const Hit& o) const { return s == o.s && y == o.y; }
         };
+        static constexpr u32 NO_ORIENTATION = 2;
 
         bool fat = false;
         State start{}, goal{};
@@ -528,6 +626,85 @@ namespace web_solver {
         bool prune = false;
         bool laneTablesBuilt = false;
         std::vector<u8> rowTab, colTab;   // [lane][18-bit value]: fewest wrong cells over the 6 rotations
+        std::vector<u32> canon;           // [18-bit value]: the lane's class
+        ClassIndex rowClass, colClass;    // the goal layer by row class / column class
+        int classLayer = -1;              // the goal layer they index
+
+        FORCEINLINE u64 rowClassKey(const State& s) const {
+            return classKey(canon[readRow(s, 0)], canon[readRow(s, 1)], canon[readRow(s, 2)],
+                            canon[readRow(s, 3)], canon[readRow(s, 4)], canon[readRow(s, 5)], s.a >> FAT_X_SHIFT);
+        }
+        FORCEINLINE u64 colClassKey(const State& s) const {
+            return classKey(canon[readCol(s, 0)], canon[readCol(s, 1)], canon[readCol(s, 2)],
+                            canon[readCol(s, 3)], canon[readCol(s, 4)], canon[readCol(s, 5)], s.a >> FAT_X_SHIFT);
+        }
+
+        void buildClassIndexes() {
+            if (classLayer == goalLayer) return;
+            if (canon.empty()) canon = buildCanonTable();
+            const auto& states = G[goalLayer].states;
+            rowClass.build(states.size(), [&](const std::size_t i) { return rowClassKey(states[i]); });
+            colClass.build(states.size(), [&](const std::size_t i) { return colClassKey(states[i]); });
+            classLayer = goalLayer;
+        }
+
+        // The last middle moves by class (the desktop's free-block join, docs/changes-2026-11-04.md
+        // section 15). A row move turns one row and leaves every row's class as it was, so a
+        // goal-layer state `need` row moves from x (on different rows: the same row twice is
+        // one move) has x's row class key and differs from x in exactly `need` rows, each
+        // turned to another rotation of itself, none of them the 2x2's (its rows only move
+        // together, and that moves the piece). One lookup finds them all, whatever the
+        // order of the moves. Every move is let through here, whatever the order rules say:
+        // a hit is a pair of states, and each real pair is one.
+        void joinRows(const State& seed, const State& x, const u32 need, const StateSet& target) {
+            const u32 fy = fatY(x);
+            const auto& states = target.states;
+            ++streamedStates;
+            rowClass.forEach(rowClassKey(x), [&](const u32 i) {
+                const State& y = states[i];
+                if ((y.a >> FAT_X_SHIFT) != (x.a >> FAT_X_SHIFT)) return;
+                u32 diff = 0;
+                for (u32 r = 0; r < 6; ++r) {
+                    const u64 a = readRow(x, r), b = readRow(y, r);
+                    if (a == b) continue;
+                    if (canon[a] != canon[b] || (fat && (r == fy || r == fy + 1))) return;
+                    ++diff;
+                }
+                if (diff == need) hits.push_back({seed, y});
+            });
+        }
+        void joinCols(const State& seed, const State& x, const u32 need, const StateSet& target) {
+            const u32 fx = fatX(x);
+            const auto& states = target.states;
+            ++streamedStates;
+            colClass.forEach(colClassKey(x), [&](const u32 i) {
+                const State& y = states[i];
+                if ((y.a >> FAT_X_SHIFT) != (x.a >> FAT_X_SHIFT)) return;
+                u32 diff = 0;
+                for (u32 c = 0; c < 6; ++c) {
+                    const u64 a = readCol(x, c), b = readCol(y, c);
+                    if (a == b) continue;
+                    if (canon[a] != canon[b] || (fat && (c == fx || c == fx + 1))) return;
+                    ++diff;
+                }
+                if (diff == need) hits.push_back({seed, y});
+            });
+        }
+        // The 2x2's own moves change its place (part of both class keys): made and looked up.
+        void fatLeaves(const State& seed, const State& x, const StateSet& target) {
+            for (u8 id = FAT_ROW_BASE; id < FAT_COL_BASE + 5; ++id) {
+                if (!moveValid(x, true, id)) continue;
+                ++streamedStates;
+                const State t = applyMove(x, id);
+                if (target.contains(t)) hits.push_back({seed, t});
+            }
+        }
+        // Every last move from x.
+        void joinLast(const State& seed, const State& x, const StateSet& target) {
+            joinRows(seed, x, 1, target);
+            joinCols(seed, x, 1, target);
+            if (fat) fatLeaves(seed, x, target);
+        }
 
         static State makeState(const u8 cells[36]) {
             State s;
@@ -556,7 +733,7 @@ namespace web_solver {
             const StateSet& small = aSmaller ? a : b;
             const StateSet& big = aSmaller ? b : a;
             for (const State& s : small.states) {
-                if (big.contains(s)) out.push_back({s, s, {0, 0}, 0});
+                if (big.contains(s)) out.push_back({s, s});
             }
         }
 
@@ -582,13 +759,102 @@ namespace web_solver {
             laneTablesBuilt = true;
         }
 
-        MUND FORCEINLINE int bound(const State& s) const {
-            int rows = 0, cols = 0;
-            for (u32 i = 0; i < 6; ++i) {
-                rows = std::max<int>(rows, rowTab[i * (LANE + 1) + readRow(s, i)]);
-                cols = std::max<int>(cols, colTab[i * (LANE + 1) + readCol(s, i)]);
+        MUND FORCEINLINE int rowsHalf(const State& s) const {
+            int rows = 0;
+            for (u32 i = 0; i < 6; ++i) rows = std::max<int>(rows, rowTab[i * (LANE + 1) + readRow(s, i)]);
+            return rows;
+        }
+        MUND FORCEINLINE int colsHalf(const State& s) const {
+            int cols = 0;
+            for (u32 i = 0; i < 6; ++i) cols = std::max<int>(cols, colTab[i * (LANE + 1) + readCol(s, i)]);
+            return cols;
+        }
+        MUND FORCEINLINE int bound(const State& s) const { return rowsHalf(s) + colsHalf(s); }
+
+        // The middle stream from x (the seed's descendant), `left` moves still to make on
+        // this side; the previous move was of orientation prevCol (NO_ORIENTATION: none)
+        // on lane prevKey. The leaves are looked up in the goal side's layer.
+        void stream(const State& seed, const State& x, const int left, const u32 prevCol, const u32 prevKey,
+                    const StateSet& target) {
+            const int after = left - 1 + goalLayer;      // moves still to go below a child
+            if (left == 1 && useJoin) {
+                joinLast(seed, x, target);
+                return;
             }
-            return rows + cols;
+            // two moves to go: two rows, or two columns, end in one lookup from here; a child
+            // made by a row move then needs only its column lookup (and the 2x2's moves), one
+            // made by a column move its row lookup
+            if (left == 2 && useJoin) {
+                joinRows(seed, x, 2, target);
+                joinCols(seed, x, 2, target);
+            }
+            const int rx = prune ? rowsHalf(x) : 0, cx = prune ? colsHalf(x) : 0;
+            forEachChild<true>(x, fat, [&](const u8 id, const State& t) {
+                const u32 col = isColMove(id) ? 1 : 0;
+                if (prune && (col ? cx : rx) > after) return;    // every child of this orientation is out
+                const u32 key = laneKey(x, id);
+                if (col == prevCol) {
+                    if (key < prevKey) return;                       // another order of the run
+                    if (key == prevKey && !isFatMove(id)) return;    // the same lane twice
+                }
+                ++streamedStates;
+                if (prune) {
+                    // a row move (or the 2x2's row pair) turns rows, which leaves every row's
+                    // term as it was: only the columns' half changes; columns the same
+                    if (col ? rowsHalf(t) + cx > after : rx + colsHalf(t) > after) return;
+                }
+                if (left == 1) {
+                    if (target.contains(t)) hits.push_back({seed, t});
+                } else if (left == 2 && useJoin) {
+                    if (isFatMove(id)) {
+                        joinLast(seed, t, target);
+                    } else {
+                        if (col) joinRows(seed, t, 1, target);
+                        else joinCols(seed, t, 1, target);
+                        if (fat) fatLeaves(seed, t, target);
+                    }
+                } else {
+                    stream(seed, t, left - 1, col, key, target);
+                }
+            });
+        }
+
+        // Every path of exactly k moves from x, with the state it reaches.
+        void walk(const State& x, const int k, std::vector<u8>& seq,
+                  std::vector<std::pair<State, std::vector<u8>>>& out) const {
+            if (k == 0) {
+                out.emplace_back(x, seq);
+                return;
+            }
+            forEachChild(x, fat, [&](const u8 id, const State& t) {
+                seq.push_back(id);
+                walk(t, k - 1, seq, out);
+                seq.pop_back();
+            });
+        }
+
+        // Every path s -> y of exactly m moves: the first half from s, the second half
+        // walked back from y (each move undone by its inverse), joined on the state between.
+        void midPaths(const State& s, const State& y, const int m, std::vector<std::vector<u8>>& out) const {
+            if (m == 0) {
+                if (s == y) out.emplace_back();
+                return;
+            }
+            const int a = (m + 1) / 2, b = m - a;
+            std::vector<std::pair<State, std::vector<u8>>> fwd, back;
+            std::vector<u8> seq;
+            walk(s, a, seq, fwd);
+            walk(y, b, seq, back);
+            std::sort(fwd.begin(), fwd.end(), [](const auto& p, const auto& q) { return p.first < q.first; });
+            for (const auto& [z, ids] : back) {
+                auto it = std::lower_bound(fwd.begin(), fwd.end(), z,
+                                           [](const auto& p, const State& v) { return p.first < v; });
+                for (; it != fwd.end() && it->first == z; ++it) {
+                    std::vector<u8> line = it->second;
+                    for (std::size_t i = ids.size(); i-- > 0;) line.push_back(inverseMove(ids[i]));
+                    out.push_back(std::move(line));
+                }
+            }
         }
 
         // Every path start -> x of exactly k moves (x in S_k).
@@ -619,28 +885,34 @@ namespace web_solver {
             });
         }
 
-        void listSolutions(const std::vector<Hit>& found, const int a, const int b) {
+        void listSolutions(std::vector<Hit>& found, const int a, const int b, const int m) {
             solutionCount = 0;
             solutions.clear();
             invalidSolutions = 0;
-            std::vector<std::vector<u8>> pre, suf;
+            std::sort(found.begin(), found.end());
+            found.erase(std::unique(found.begin(), found.end()), found.end());
+            std::vector<std::vector<u8>> pre, mid, suf;
             for (const Hit& h : found) {
                 pre.clear();
+                mid.clear();
                 suf.clear();
                 pathsFromStart(h.s, a, pre);
+                midPaths(h.s, h.y, m, mid);
                 pathsToGoal(h.y, b, suf);
-                solutionCount += static_cast<u64>(pre.size()) * suf.size();
+                solutionCount += static_cast<u64>(pre.size()) * mid.size() * suf.size();
                 for (const auto& p : pre) {
-                    for (const auto& q : suf) {
-                        if (solutions.size() >= MAX_LISTED) break;
-                        std::vector<u8> line = p;
-                        line.insert(line.end(), h.mid, h.mid + h.midLen);
-                        line.insert(line.end(), q.begin(), q.end());
-                        if (!replays(line)) {
-                            ++invalidSolutions;
-                            continue;
+                    for (const auto& c : mid) {
+                        for (const auto& q : suf) {
+                            if (solutions.size() >= MAX_LISTED) break;
+                            std::vector<u8> line = p;
+                            line.insert(line.end(), c.begin(), c.end());
+                            line.insert(line.end(), q.begin(), q.end());
+                            if (!replays(line)) {
+                                ++invalidSolutions;
+                                continue;
+                            }
+                            solutions.push_back(std::move(line));
                         }
-                        solutions.push_back(std::move(line));
                     }
                 }
             }

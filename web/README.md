@@ -5,7 +5,7 @@ puzzle: paint the goal (normal or with the 2x2 piece), then make the start, the 
 by dragging its Chuzzles (drop one on another and they swap; tap two to swap; drag the 2x2) or
 with Mix. The start is only ever rearranged, never painted, so it always holds the goal's
 Chuzzles: repainting the goal repaints them on the start too. Solve gives every shortest
-solution of up to 10 moves, with a step-by-step replay. A three-step tutorial in the info bar
+solution of up to 12 moves, with a step-by-step replay. A three-step tutorial in the info bar
 shows the way on a first visit (Help: Show the tutorial again). The game's own 100 puzzles are
 under Game puzzles: there the boards are fixed and View replays every shortest solution, loaded
 from `solutions/` (all 100 are solved). The goal is on the left and the start on the right, as in
@@ -56,33 +56,66 @@ the WebAssembly entry points in `src/programs/web/wasmSolver.cpp`.
 - Exact distance layers from both ends: S_0..S_4 from the start, G_0..G_4 from the goal
   (layer k = neighbours of layer k-1 that are in neither k-1 nor k-2).
 - 0-6 moves: one worker meets layers 0-3 (S_a against G_b, a + b = D).
-- 7-10 moves: every worker builds G_4 and its own hash partition of S_4. 7 and 8 moves meet
-  S_4 with G_3 / G_4; 9 and 10 moves stream each S_4 state 1 or 2 more moves into G_4. Each
+- 7-12 moves: every worker builds G_4 and its own hash partition of S_4. 7 and 8 moves meet
+  S_4 with G_3 / G_4; 9 to 12 moves stream each S_4 state m = 1 to 4 more moves into G_4. Each
   shortest path crosses S_4 exactly once, so the partitions split the work with no shared
   memory, and their solution lists just concatenate.
-- All shortest paths are listed: the paths start -> s (walking the S layers back), the middle
-  moves, and the paths y -> goal (walking the G layers forward). The 2-move middle stream
-  visits one order of each commuting pair (two rows or two columns) and lists both. Every
-  listed path is replayed against the boards.
-- On normal boards the rotation lane bound (as in the desktop solver) prunes the middle stream.
+- The stream visits each state once per canonical order: a run of row moves (or column
+  moves) by ascending lane, never one lane twice in a row, each lane stopping at its period
+  (the first shift that gives it back).
+- On normal boards the rotation lane bound (as in the desktop solver) prunes every level of
+  the stream: a state with r moves still to go is dropped when its bound exceeds r. A row
+  move never changes a row's term (each is the same for all of a lane's rotations), so a
+  row-move child only recomputes the columns' half, and when a node's rows' half alone is
+  over, none of its row-move children is made. A 2x2 bound (ceil(R / 2) + ceil(C / 2)) was
+  tried: it is exact but rarely passes 4, and pruned 0.5% of 6-5 at 10 moves.
+- The last two moves are class lookups (the desktop's free-block join, `--block`): a row
+  move leaves every row's class (its smallest rotation) as it was, so the goal-layer states
+  one or two row moves from a state share its row class key and differ from it in just those
+  rows. G_4 is indexed by row class and by column class (a counting sort into buckets, 9 bytes
+  a state each), so one lookup finds every row-move finish, one every column-move finish; the
+  2x2's own moves change its place and are made one by one. Each worker builds the indexes;
+  the page drops them when they would leave room for less than half as many workers.
+- A hit is a pair (s in S_4, y in G_4). All shortest paths are listed, once each: the paths
+  start -> s (walking the S layers back), every m-move path s -> y (half from each end,
+  joined), and the paths y -> goal (walking the G layers forward). Any D-move path is a
+  shortest one when nothing shorter exists, so each is kept; every one is replayed against
+  the boards.
 - Worker count = the thread count, capped so that the workers' tables fit a RAM budget
-  (about 1.6 GB on desktops, less where `navigator.deviceMemory` is small).
+  (1.6 GB on desktops, 2.4 GB with 12 or more threads, less where `navigator.deviceMemory`
+  is small; a worker's heap is about 1.5 times what its tables hold).
 
 ## Checking it
 
 `testWebSolver` (CMake target, run from the repo root) runs the same C++ on every solved
-puzzle up to 10 moves and compares the solution set with `build/levels_final/`:
+puzzle up to `--max` moves and compares the solution set with `build/levels_final/`
+(`--join 0` turns the class lookups off):
 
 ```bash
-build/testWebSolver.exe --max 10 --parts 3
+build/testWebSolver.exe --max 12 --parts 3
 ```
 
-On 2026-10-13 all 45 puzzles of 10 moves or fewer matched exactly (normal and 2x2, split into
-3 partitions as the workers do).
+On 2026-11-08 all 45 puzzles of 10 moves or fewer matched exactly split into 3 partitions as
+the workers do, and so did every 11-move puzzle and the 12-move 9-2, 11-1, 14-2 and 13-1.
+`tools/wasm_bench.mjs` runs the WebAssembly build itself in Node and checks the counts.
 
-Measured in Chrome on the i7-10700F (with a 16-thread solver job running alongside):
-up to 8 moves under ~2 s; 4-2 (2x2, 9 moves) 1.2 s; 8-1 (10 moves) 11 s on 12 workers;
-6-5 (2x2, 10 moves, the slowest kind: the bound is off on 2x2 boards) 19 s on 16 workers.
+One native thread on the i7-10700F, the whole search (every depth up to the answer):
+
+| Puzzle | Moves | Before 2026-11-08 | Now |
+|---|---|---|---|
+| 8-1 | 10 | 13 s | 4.1 s |
+| 6-5 (2x2) | 10 | 51 s | 21 s |
+| 15-5 | 11 | - | 29 s |
+| 7-5 | 11 | - | 197 s (477 s without the class lookups) |
+| 9-2 | 12 | - | 27 s before the class lookups |
+| 14-2 | 12 | - | 74 s before the class lookups |
+| 13-1 | 12 | - | 1347 s |
+
+In the page (Chrome, 16 threads, a quiet machine): 4-2 (2x2, 9 moves) 0.8 s; 8-1 (10) 8.1 s on
+11 workers; 6-5 (2x2, 10) 8.2 s (19 s before); 11-2 (11) 4.0 s; 15-5 (11) 10 s; 7-5 (11) 46 s
+on 10 workers; 9-2 (12) 7.5 s (Firefox 7.9 s); 14-2 (12) 20 s on 11 workers. 12 moves depends on
+how much the bound prunes: 13-1 (four colours, one of them 16 cells) would take minutes.
+2x2 boards at 12 moves are out of reach: nothing prunes them, and each move costs ~33x.
 
 ## Look
 

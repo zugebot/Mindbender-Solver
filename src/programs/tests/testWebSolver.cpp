@@ -6,7 +6,8 @@
 // --parts N the depth 7-10 search runs as N partitions (as the page's workers
 // do) and their results are merged. Run from the repo root.
 //
-//   testWebSolver [--max 10] [--parts 1] [--only 4-2,9-1] [--levels build/levels_final]
+//   testWebSolver [--max 12] [--parts 1] [--only 4-2,9-1] [--levels build/levels_final] [--join 0|1]
+//   (--join 0: the last middle move made and looked up one by one, as before 2026-11-08)
 
 #include "src/chuzzles/levels.hpp"
 #include "src/solver/web/web_solver.hpp"
@@ -52,6 +53,7 @@ static std::set<std::string> splitLines(const std::string& text) {
 
 int main(int argc, char** argv) {
     int maxMoves = 10;
+    bool useJoin = true;
     unsigned parts = 1;
     std::string only;
     fs::path levelsDir = "build/levels_final";
@@ -61,6 +63,7 @@ int main(int argc, char** argv) {
         else if (k == "--parts") parts = static_cast<unsigned>(std::stoul(v));
         else if (k == "--only") only = "," + v + ",";
         else if (k == "--levels") levelsDir = v;
+        else if (k == "--join") useJoin = v != "0";
     }
 
     // Shortest file per puzzle: <p>_c<moves>_<count>.txt
@@ -99,6 +102,7 @@ int main(int argc, char** argv) {
         std::set<std::string> got;
         {
             web_solver::Solver first;
+            first.useJoin = useJoin;
             const std::string err = first.setup(sc, gc, fat, start.getFatX(), start.getFatY(),
                                                 goal.getFatX(), goal.getFatY());
             if (!err.empty()) {
@@ -115,6 +119,7 @@ int main(int argc, char** argv) {
             } else if (maxMoves >= 7) {
                 std::vector<web_solver::Solver> workers(parts);
                 for (unsigned p = 0; p < parts; ++p) {
+                    workers[p].useJoin = useJoin;
                     workers[p].setup(sc, gc, fat, start.getFatX(), start.getFatY(), goal.getFatX(), goal.getFatY());
                     workers[p].buildGoal4();
                     workers[p].buildStart4(p, parts);
