@@ -15,7 +15,8 @@ if (mode === 'hover' || mode === 'gone') {
   if (mode === 'gone') { fire('goal', 'pointerleave', 0, 0); fire('goal', 'pointermove', 0, 0); fire('start', 'pointerdown', px, py); fire('start', 'pointerup', px, py); await sleep(1500); }
 } else if (mode === 'drag') {
   fire('start', 'pointerdown', px, py);
-  for (let i = 1; i <= 8; i++) { fire('start', 'pointermove', px + cw * 0.125 * i, py + (q.get('dy') ? cw * 0.125 * i : 0)); await sleep(20); }
+  const far = +(q.get('far') || 1);
+  for (let i = 1; i <= 8; i++) { fire('start', 'pointermove', px + cw * far * 0.125 * i, py + (q.get('dy') ? cw * far * 0.125 * i : 0)); await sleep(20); }
   await sleep(t);
 }
 return { mode, hover: document.getElementById('goalBoard')._hover, picked: !!document.querySelector('#startBoard .cell.picked') };

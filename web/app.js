@@ -664,13 +664,13 @@
   // the same corner, so they run in step. A lone chuzzle's ring starts top left.
   // marks: {r, c, big, fat, k} in cells, k the colour the spot will have; fat: the 2x2
   // chuzzle itself. The points are in board game pixels.
-  const markKey = (m) => `${m.r},${m.c},${m.big ? 1 : 0}${m.fat ? 'f' : ''},${m.k}`;
+  const markKey = (m) => `${m.r},${m.c},${m.big ? 1 : 0}${m.fat ? 'f' : ''},${m.cells ? m.cells.map((q) => q.join('')).join('/') : m.k}`;
   const sparkleKey = (marks) => marks.map(markKey).join(';');
   function sparkleChains(marks) {
     const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
     const groups = marks.map((m) => {
       const cs = m.fat ? [{ x: m.c * 80 + 80, y: m.r * 80 + 80, big: true, k: m.k }]
-        : (m.big ? [[0, 0], [0, 1], [1, 1], [1, 0]] : [[0, 0]]).map(([dr, dc]) => ({ x: (m.c + dc) * 80 + 40, y: (m.r + dr) * 80 + 40, big: false, k: m.k }));
+        : (m.cells || (m.big ? [[0, 0], [0, 1], [1, 1], [1, 0]] : [[0, 0]])).map(([dr, dc, k]) => ({ x: (m.c + dc) * 80 + 40, y: (m.r + dr) * 80 + 40, big: false, k: k ?? m.k }));
       return { key: markKey(m), cs, pts: [] };
     });
     const all = groups.flatMap((g) => g.cs), kept = [];
@@ -842,11 +842,20 @@
     // the match outline marks the picked chuzzle, where a drop lands, the spots it fills and
     // what a click on the goal will paint
     const marks = [];
+    const held = dragLayer.node && dragLayer.node.parentNode === el ? dragLayer.node : null;
     if (el._target) marks.push({ r: el._target.r, c: el._target.c, big: el._target.piece, k: dragLayer.node ? dragLayer.node._k : 6 });
-    if (el._fills) for (const f of el._fills) marks.push({ r: f.r, c: f.c, big: false, k: f.k });
+    if (el._fills) {
+      if (held && held._piece) {   // the 2x2's emptied spot: one chain round the cells it leaves, each in the colour it gets
+        const cells = [];
+        for (const [dr, dc] of [[0, 0], [0, 1], [1, 1], [1, 0]]) {
+          const f = el._fills.find((q) => q.r === held._r + dr && q.c === held._c + dc);
+          if (f) cells.push([dr, dc, f.k]);
+        }
+        if (cells.length) marks.push({ r: held._r, c: held._c, big: true, cells, k: cells[0][2] });
+      } else for (const f of el._fills) marks.push({ r: f.r, c: f.c, big: false, k: f.k });
+    }
     const hover = el.id === 'goalBoard' ? paintPreview() : null;
     if (hover) marks.push(hover);
-    const held = dragLayer.node && dragLayer.node.parentNode === el ? dragLayer.node : null;
     if (held !== el._heldWas) full = true;
     el._heldWas = held;
     const nodes = [], dirty = [], moving = [];
