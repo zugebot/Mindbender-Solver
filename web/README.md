@@ -46,7 +46,7 @@ nothing (see below).
 | `serve.py` | local server with caching off |
 | `gen_sprites.py` | regenerates `assets/` from the game textures in `python/deluxe_clone/textures/`, the way `python/deluxe_clone/engine/textures.py` builds them: grey body x colour + 60 x highlight, cut by the alpha mask (yellow has its own sheet), then eyes and pupils |
 | `gen_puzzles.py` | regenerates `puzzles.js` and `solutions/` from `src/chuzzles/levels*.hpp`, `build/levels_final/`, `build/README.md` (run it after a new solve) |
-| `tools/` | CPU measurement: `cpu_measure.mjs` (headless Chrome, CDP) and `ff_eval.mjs` (headless Firefox, WebDriver BiDi) load the served page, optionally run a scene script (`t_scrub.js` a lane sliding every frame, `t_dragloop.js` a chuzzle dragged round), then report the browser's CPU over N seconds as a share of one core; `JS=...` flips the `MB_DEBUG` switches first, `PROF=<file>` records a Gecko profile of the Firefox run |
+| `tools/` | CPU measurement: `cpu_measure.mjs` (headless Chrome, CDP) and `ff_eval.mjs` (headless Firefox, WebDriver BiDi) load the served page, optionally run a scene script (`t_scrub.js` a lane sliding every frame, `t_dragloop.js` a chuzzle dragged round), then report the browser's CPU over N seconds as a share of one core; `JS=...` flips the `MB_DEBUG` switches first, `PROF=<file>` records a Gecko profile of the Firefox run; `cdp_eval.mjs` runs a scene in headless Chrome and screenshots it (`--shot`; `WIN=`, `EXTRA=` set the window and other Chrome flags), with `t_stars.js` (the outline on a hovered goal cell, `?m=drag` a 2x2 dragged, `?m=gone` the marks taken away), `t_dir.js` (a replay's first move: a 2x2 lane's direction) and `t_thumb.js` (the tabs' little boards) |
 
 The solver itself is `src/solver/web/web_solver.hpp` (plain C++, no BMI2, no threads), with
 the WebAssembly entry points in `src/programs/web/wasmSolver.cpp`.
@@ -114,9 +114,11 @@ cheeks, and on the 11th click puts on its beauty show with stars, a shockwave an
 right click pokes one (a squash and a note). The voices are the game's (`assets/sounds`). A
 picked Chuzzle, a drop's target and the spots it empties, and what a click on the goal would
 paint (the whole 2x2 footprint with the 2x2 tool) are marked with the game's match outline
-(`Board::SparkleGroups`): a chain of dark fizzy stars running round them, 45 pixels out, dropping
-the points inside or crowded by a neighbour so it runs in and out between them, starting again
-each time it has faded. The palette item in use wears the game's hint circle (`Animator_Hint`:
+(`Board::SparkleGroups`): a chain of fizzy stars in the Chuzzle's colour running clockwise round
+them, 45 pixels out, dropping the points inside or crowded by a neighbour so it runs in and out
+between them (round a 2x2 footprint a cloverleaf, the four cells in clockwise order; round the
+2x2 Chuzzle itself a circle). Each mark's chain is a loop that its stars run round for as long as
+the mark stands, a trail of some 27 fading stars behind the runner, every mark's loop at once. The palette item in use wears the game's hint circle (`Animator_Hint`:
 `HintCircle`, black shadow 4 pixels off, yellow and red by turns). The Solve candy carries the
 Scrambulator's two arrows, out and back as in the game's no-moves panel.
 Text above the boards uses the game's Bauhaus 93 bitmap font (`textures/fonts`), drawn on canvases.

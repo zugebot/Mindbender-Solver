@@ -144,9 +144,7 @@ select option, select optgroup { background: #0f1650; color: #fff; text-shadow: 
 .seg-btn + .seg-btn { box-shadow: inset 1px 0 0 var(--line); }
 .seg-btn[aria-selected="true"] { background: var(--glass-2); color: var(--text); }
 .seg-btn[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: linear-gradient(90deg, var(--gold-2), var(--gold)); }
-.thumb { --t: 7px; display: grid; grid-template-columns: repeat(6, var(--t)); grid-auto-rows: var(--t); gap: 1px; padding: 3px; border-radius: 6px; background: #06050f; box-shadow: 0 0 0 2px rgba(255, 140, 40, .6); flex: none; }
-.thumb i { border-radius: 50%; background: var(--col); }
-.thumb i.p { margin: 1px; }
+.thumb { display: block; width: 50px; height: 50px; border-radius: 6px; background: #06050f; box-shadow: 0 0 0 2px rgba(255, 140, 40, .6); flex: none; }
 .seg-btn:not([aria-selected="true"]) .thumb { opacity: .7; }
 
 .boards { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 18px; padding: 8px; }

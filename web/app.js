@@ -236,17 +236,18 @@
 
   // How to make a move by hand: drag the short way round (right 5 = left 1), d cells along
   // the lane from position s, across the lane at `cross`. A 2x2 lane is grabbed by the big
-  // chuzzle itself when the drag fits.
+  // chuzzle itself, and goes the way that keeps it on the board: the 2x2 never crosses an
+  // edge, so of right n and left 6 - n exactly one fits (right 4 from column 1, not left 2).
   function dragOf(mv, board) {
-    const d = mv.n <= 3 ? mv.n : mv.n - 6;
+    const f = mv.lanes.length === 2 ? board.fat : null;
+    const at = f ? (mv.col ? f.y : f.x) : 0;
+    const d = f ? (at + mv.n <= 4 ? mv.n : mv.n - 6) : (mv.n <= 3 ? mv.n : mv.n - 6);
     const lo = d > 0 ? 0 : -d, hi = d > 0 ? 5 - d : 5;
     let s = Math.max(lo, Math.min(hi, Math.round((5 - d) / 2)));
     let cross = mv.lanes[0];
     if (mv.lanes.length === 2) {
       cross += 0.5;
-      const f = board.fat;
-      const along = f ? (mv.col ? f.y : f.x) + 0.5 : -1;
-      if (f && along >= lo && along <= hi) s = along;
+      if (f) s = at + 0.5;
     }
     return { d, s, cross };
   }
@@ -347,6 +348,7 @@
   let tracked = null;           // the board cell the mouse is over (its eyes follow the mouse)
   let trackedKey = null;
   let lastPointer = -1e9;       // when the mouse last moved: the eyes then follow at full rate
+  let starsAlive = false;       // a board drew the match outline's stars this frame: no idling
   let actorEls = null;          // the logo's and the palette's chuzzles, found again after a redraw
   function actors() {
     if (!actorEls || !actorEls.every((el) => el.isConnected)) actorEls = [...document.querySelectorAll('.chz')];
@@ -647,109 +649,135 @@
     return c;
   }
 
-  // The game's match outline (Board::SparkleGroups), the burst it shows round the chuzzles a
+  // The game's match outline (Board::SparkleGroups), the stars it runs round the chuzzles a
   // drag would match. Its points: a ring 45 game pixels from each marked chuzzle's centre, one
   // every 20 degrees (90 and every 10 round a 2x2 chuzzle), less those inside another marked
   // chuzzle (44; 89 for a 2x2), crowded by more than three (within 85) or on top of another
   // point (5); so round neighbours the outline runs in and out between them. A 2x2 footprint
   // over single chuzzles (the 2x2 tool's spot, a 2x2's drop target) is its four cells, so
-  // the chain goes round each and dips into the middle. The chain runs clockwise round each
-  // chuzzle, then on to the nearest chuzzle left, from the point nearest to where it was.
-  // Each point gets a fizzy star in the chuzzle's hilite colour (half of them up to a quarter
-  // darker): a sprite fader delayed per place along the chain (the game: one update of 10
-  // ms; here two, slower), 0.75-1 in scale, turned up to 45 degrees, up to 2 pixels off its
-  // point, starting at alpha 0.5 and 0.1 brighter per star up to 1 (the last 20 of the chain
-  // 0.025 dimmer each), fading 0.015 an update (the game: 0.02). marks: {r, c, big, fat, k}
-  // in cells, k the colour the spot will have; fat: the 2x2 chuzzle itself.
-  function sparkleGroup(marks) {
-    const cs = [];
-    for (const m of marks) {
-      if (m.fat) cs.push({ x: m.c * 80 + 80, y: m.r * 80 + 80, big: true, k: m.k });
-      else for (const [dr, dc] of m.big ? [[0, 0], [0, 1], [1, 0], [1, 1]] : [[0, 0]]) {
-        cs.push({ x: (m.c + dc) * 80 + 40, y: (m.r + dr) * 80 + 40, big: false, k: m.k });
-      }
-    }
+  // the chain goes round each and dips in between them. Each mark is a chain of its own,
+  // and every chain runs at once: clockwise round each chuzzle, the four of a footprint in
+  // clockwise order (top left, top right, bottom right, bottom left), each ring starting at
+  // its first point past the direction of the next ring, so it ends beside where the next
+  // one starts and the last ring beside the first: a loop the stars can run round for ever.
+  // Two marks side by side (a 2x2 lifted next to where it would land) start their loops at
+  // the same corner, so they run in step. A lone chuzzle's ring starts top left.
+  // marks: {r, c, big, fat, k} in cells, k the colour the spot will have; fat: the 2x2
+  // chuzzle itself. The points are in board game pixels.
+  const markKey = (m) => `${m.r},${m.c},${m.big ? 1 : 0}${m.fat ? 'f' : ''},${m.k}`;
+  const sparkleKey = (marks) => marks.map(markKey).join(';');
+  function sparkleChains(marks) {
     const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
-    // each chuzzle's ring, clockwise (angles up, y down on the canvas)
-    const rings = cs.map((c) => {
-      const pts = [], rad = c.big ? 90 : 45, step = c.big ? 10 : 20;
-      for (let a = 0; a < 360; a += step) {
-        const t = a * Math.PI / 180;
-        pts.push({ x: c.x + Math.cos(t) * rad, y: c.y + Math.sin(t) * rad, k: c.k, keep: true });
-      }
-      return pts;
+    const groups = marks.map((m) => {
+      const cs = m.fat ? [{ x: m.c * 80 + 80, y: m.r * 80 + 80, big: true, k: m.k }]
+        : (m.big ? [[0, 0], [0, 1], [1, 1], [1, 0]] : [[0, 0]]).map(([dr, dc]) => ({ x: (m.c + dc) * 80 + 40, y: (m.r + dr) * 80 + 40, big: false, k: m.k }));
+      return { key: markKey(m), cs, pts: [] };
     });
-    const all = rings.flat();
-    for (const p of all) {
-      let crowd = 0, inside = false;
-      for (const c of cs) {
-        const d = dist(p, c);
-        if (c.big) {
-          if (d < 89) inside = true;
-        } else {
-          if (d < 44) inside = true;
-          if (d < 85) crowd++;
+    const all = groups.flatMap((g) => g.cs), kept = [];
+    for (const g of groups) {
+      g.cs.forEach((c, i) => {
+        const rad = c.big ? 90 : 45, step = c.big ? 10 : 20;
+        const nx = g.cs[(i + 1) % g.cs.length];
+        const to = g.cs.length > 1 ? Math.atan2(nx.y - c.y, nx.x - c.x) * 180 / Math.PI : 225;
+        const a0 = Math.ceil(to / step) * step;     // angles clockwise (y down on the canvas)
+        for (let j = 0; j < 360 / step; j++) {
+          const t = (a0 + j * step) * Math.PI / 180;
+          const p = { x: c.x + Math.cos(t) * rad, y: c.y + Math.sin(t) * rad, k: c.k };
+          let crowd = 0, inside = false;
+          for (const o of all) {
+            const d = dist(p, o);
+            if (o.big) {
+              if (d < 89) inside = true;
+            } else {
+              if (d < 44) inside = true;
+              if (d < 85) crowd++;
+            }
+          }
+          if (inside || crowd > 3 || kept.some((q) => dist(p, q) < 5)) continue;
+          kept.push(p);
+          g.pts.push(p);
         }
+      });
+      // the box the stars can reach (a star is 21 pixels across, turned, up to 2 off its point)
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const p of g.pts) {
+        x0 = Math.min(x0, p.x - 18);
+        y0 = Math.min(y0, p.y - 18);
+        x1 = Math.max(x1, p.x + 20);
+        y1 = Math.max(y1, p.y + 20);
       }
-      if (inside || crowd > 3 || all.some((q) => q !== p && q.keep && dist(p, q) < 5)) p.keep = false;
+      g.box = [x0, y0, x1, y1];
     }
-    const chain = [], left = rings.map((r) => r.filter((p) => p.keep)).filter((r) => r.length);
-    let last = null;
-    while (left.length) {
-      let ri = 0, si = 0;
-      if (last) {
-        let best = Infinity;
-        left.forEach((r, i) => r.forEach((p, j) => {
-          const d = dist(last, p);
-          if (d < best) { best = d; ri = i; si = j; }
-        }));
-      }
-      const r = left.splice(ri, 1)[0];
-      for (let i = 0; i < r.length; i++) chain.push(r[(si + i) % r.length]);
-      last = chain[chain.length - 1];
-    }
-    // (the game dims the last 20 of a chain that is always 40 or more points; a single
-    // chuzzle's 18 would all be dim, so at most the second half is)
-    const stars = [], n = chain.length, fadeFrom = n - Math.min(20, n >> 1);
-    let alpha = 0.5;
-    chain.forEach((p, i) => {
-      const dark = Math.random() < 0.5 ? 1 - 0.25 * Math.floor(Math.random() * 4) / 3 : 1;   // four shades, so few tinted stars
-      stars.push({ x: p.x + Math.random() * 2, y: p.y + Math.random() * 2, sc: 0.75 + Math.random() * 0.25,
-        rot: (Math.random() * 90 - 45) * Math.PI / 180, a: alpha, delay: 2 * i,
-        rgb: (HILITE[p.k] ?? HILITE[6]).map((v) => Math.round(v * dark * 100) / 100) });
-      alpha = i + 1 < fadeFrom ? Math.min(1, alpha + 0.1) : Math.max(0, alpha - 0.025);
-    });
-    return stars;
+    return groups.filter((g) => g.pts.length);
   }
 
-  // The outline on a board: as in the game, one burst when the marks appear (a drag holding
-  // a match in one spot), one turn round them, then gone; while the same marks stand it comes
-  // round again every 4 s. 100 updates a second, whatever the frame rate.
-  function drawSparkles(ctx, el, marks, now, dt, s, padPx) {
-    if (!SHEETS.fizzy) return;
+  // The stars on a board: a runner per chain, 100 updates a second whatever the frame rate,
+  // 2.5 updates a point (the game: one; slower here, the outline being on for as long as a
+  // mark stands, not one burst), lighting a fizzy star in the chuzzle's hilite colour (half
+  // of them up to a quarter darker) at each point it passes: 0.75-1 in scale, turned up to
+  // 45 degrees, up to 2 pixels off its point, the first of a chain at alpha 0.5 and 0.1
+  // brighter each up to 1 (the game's ramp), fading 0.015 an update (the game: 0.02), so a
+  // trail of some 27 points follows the runner round and round. A mark that goes stops its
+  // runner and its trail fades out. Returns the chains with stars alive.
+  const STAR_STEP = 2.5;
+  function stepSparkles(el, marks, now, dt) {
+    if (!SHEETS.fizzy) return [];
     const key = sparkleKey(marks);
     let sp = el._spark;
-    if (!sp || sp.key !== key) sp = el._spark = { key, stars: [], at: -Infinity, acc: 0 };
-    if (now - sp.at >= 4000) {
-      sp.at = now;
-      sp.stars.push(...sparkleGroup(marks));
+    if (!sp) {
+      if (!marks.length) return [];
+      sp = el._spark = { key: null, groups: [], acc: 0, ticks: 0, drawn: 0 };
+    }
+    if (sp.key !== key) {
+      sp.key = key;
+      const old = new Map(sp.groups.map((g) => [g.key, g]));
+      const groups = [];
+      for (const ch of sparkleChains(marks)) {
+        let g = old.get(ch.key);
+        if (g) old.delete(ch.key);
+        else g = { key: ch.key, pos: 0, spawned: 0, stars: [] };
+        g.live = true;
+        g.pts = ch.pts;
+        g.box = ch.box;
+        groups.push(g);
+      }
+      for (const g of old.values()) {
+        g.live = false;
+        if (g.stars.length) groups.push(g);
+      }
+      sp.groups = groups;
     }
     sp.acc += Math.min(dt, 100);
     for (; sp.acc >= 10; sp.acc -= 10) {
-      for (const st of sp.stars) {
-        if (st.delay-- > 0) continue;
-        st.delay = 0;
-        st.a -= 0.015;
+      sp.ticks++;
+      for (const g of sp.groups) {
+        for (const st of g.stars) st.a -= 0.015;
+        if (!g.live) continue;
+        g.pos += 1 / STAR_STEP;
+        for (; g.spawned < g.pos; g.spawned++) {
+          const p = g.pts[g.spawned % g.pts.length];
+          const dark = Math.random() < 0.5 ? 1 - 0.25 * Math.floor(Math.random() * 4) / 3 : 1;   // four shades, so few tinted stars
+          g.stars.push({ x: p.x + Math.random() * 2, y: p.y + Math.random() * 2, sc: 0.75 + Math.random() * 0.25,
+            rot: (Math.random() * 90 - 45) * Math.PI / 180, a: Math.min(1, 0.5 + 0.1 * g.spawned),
+            rgb: (HILITE[p.k] ?? HILITE[6]).map((v) => Math.round(v * dark * 100) / 100) });
+        }
       }
     }
-    sp.stars = sp.stars.filter((st) => st.a > 0);
-    for (const st of sp.stars) {
-      if (st.delay > 0) continue;
-      const sc = st.sc * s;
-      ctx.globalAlpha = st.a;
-      ctx.setTransform(sc, 0, 0, sc, padPx + st.x * s, padPx + st.y * s);
-      ctx.rotate(st.rot);
-      ctx.drawImage(tinted('fizzy', st.rgb), -10.5, -10);
+    for (const g of sp.groups) g.stars = g.stars.filter((st) => st.a > 0);
+    sp.groups = sp.groups.filter((g) => g.live || g.stars.length);
+    if (!sp.groups.length) el._spark = null;
+    return sp.groups.filter((g) => g.stars.length);
+  }
+
+  function drawStars(ctx, groups, s, padPx) {
+    for (const g of groups) {
+      for (const st of g.stars) {
+        const sc = st.sc * s;
+        ctx.globalAlpha = st.a;
+        ctx.setTransform(sc, 0, 0, sc, padPx + st.x * s, padPx + st.y * s);
+        ctx.rotate(st.rot);
+        ctx.drawImage(tinted('fizzy', st.rgb), -10.5, -10);
+      }
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
@@ -792,8 +820,6 @@
     if (inPiece(b.fat, h.r, h.c)) return { r: b.fat.y, c: b.fat.x, big: true, fat: true, k: state.color };
     return { r: h.r, c: h.c, big: false, k: state.color };
   }
-
-  const sparkleKey = (marks) => marks.map((m) => `${m.r},${m.c},${m.big ? 1 : 0}${m.fat ? 'f' : ''},${m.k}`).join(';');
 
   // One board's chuzzles. Only what changed is cleared and drawn again: the cells whose pose
   // changed (the 2x2's sprite reaches into the cells round it, so it and they go together), a
@@ -846,9 +872,16 @@
     }
     if (el._movingWas && !moving.length) full = true;    // the slid sprites' last positions
     el._movingWas = moving.length > 0;
-    const key = sparkleKey(marks), sp = el._spark;
-    if (marks.length ? !sp || sp.key !== key || sp.stars.length || now - sp.at >= 4000 : !!sp) full = true;
-    if (!full && !moving.length && (!dirty.length || maySkip)) return;
+    // the outline's stars run on whatever the frame rate, drawn at most every second update
+    // (50 a second: a composite per frame is the cost, and a star only fades between frames);
+    // a mark set that changes (or whose last stars go) means a whole redraw, the stars' own
+    // boxes are cleared and redrawn while they are alive
+    const keyWas = el._spark ? el._spark.key : null;
+    const stars = stepSparkles(el, marks, now, dt);
+    if ((el._spark ? el._spark.key : null) !== keyWas) full = true;
+    if (stars.length) starsAlive = true;
+    const fresh = stars.length > 0 && el._spark.ticks - el._spark.drawn >= 2;
+    if (!full && !moving.length && !fresh && (!dirty.length || maySkip)) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingQuality = 'high';
     const rectOf = (n) => {
@@ -856,11 +889,12 @@
       return n._piece ? [padPx + n._c * cellPx - 9.5 * s + dx, padPx + n._r * cellPx - 8.5 * s + dy, 179 * s, 179 * s]
         : [padPx + n._c * cellPx + dx, padPx + n._r * cellPx + dy, cellPx, cellPx];
     };
+    const hits = (a, b) => a[0] < b[0] + b[2] && a[0] + a[2] > b[0] && a[1] < b[1] + b[3] && a[1] + a[3] > b[1];
     let draw = nodes, set = null;
+    const zones = [];
     if (full) ctx.clearRect(0, 0, size, size);
     else {
       set = new Set(dirty);
-      let strip = null;
       if (moving.length) {
         const col = moving[0]._col;
         let lo = Infinity, hi = -Infinity;
@@ -870,11 +904,12 @@
           hi = Math.max(hi, i + (n._piece ? 1 : 0));
         }
         const a = padPx + lo * cellPx - 10 * s, b = padPx + (hi + 1) * cellPx + 10 * s;
-        strip = col ? [a, 0, b - a, size] : [0, a, size, b - a];
-        for (const n of nodes) {
-          const [x, y, w, h] = rectOf(n);
-          if (col ? x < b && x + w > a : y < b && y + h > a) set.add(n);
-        }
+        zones.push(col ? [a, 0, b - a, size] : [0, a, size, b - a]);
+      }
+      for (const g of stars) zones.push([padPx + g.box[0] * s, padPx + g.box[1] * s, (g.box[2] - g.box[0]) * s, (g.box[3] - g.box[1]) * s]);
+      if (zones.length) for (const n of nodes) {
+        const q = rectOf(n);
+        if (zones.some((z) => hits(q, z))) set.add(n);
       }
       if (piece) {
         const near = (n) => n !== piece && Math.abs(n._r - piece._r - 0.5) <= 1.5 && Math.abs(n._c - piece._c - 0.5) <= 1.5;
@@ -883,13 +918,14 @@
           for (const n of nodes) if (near(n)) set.add(n);
         }
       }
-      if (strip) ctx.clearRect(...strip.map(R));
+      for (const z of zones) ctx.clearRect(...z.map(R));
       for (const n of set) ctx.clearRect(...rectOf(n).map(R));
       draw = nodes.filter((n) => set.has(n));
     }
     if (el._fills) {
       for (const f of el._fills) {
-        if (full || [...set].some((n) => n._r === f.r && n._c === f.c)) drawGhost(ctx, f.r, f.c, f.k, false, s, R, cellPx, padPx);
+        const q = [padPx + f.c * cellPx, padPx + f.r * cellPx, cellPx, cellPx];
+        if (full || zones.some((z) => hits(q, z)) || [...set].some((n) => n._r === f.r && n._c === f.c)) drawGhost(ctx, f.r, f.c, f.k, false, s, R, cellPx, padPx);
       }
     }
     const top = [];
@@ -899,9 +935,10 @@
       node._sig = node._pose.sig;
     }
     for (const node of top) drawChuzzle(ctx, node, node._pose, now, dt, s, R, cellPx, padPx, false);
-    if (!full) return;
-    if (marks.length) drawSparkles(ctx, el, marks, now, dt, s, padPx);
-    else el._spark = null;
+    if (stars.length) {
+      drawStars(ctx, stars, s, padPx);
+      el._spark.drawn = el._spark.ticks;
+    }
   }
 
   // The logo's and the palette's chuzzles, each on its own canvas inside its element (the
@@ -1397,9 +1434,13 @@
     // idle: every canvas waits for the same 80 ms tick, so the page composes 12 frames a
     // second at most, not one per canvas that changed (a body frame lasts ~87 ms anyway; in
     // Firefox each composite, not the drawing, is what the idle page costs)
+    // (with the match outline's stars running, idle still, but a tick every 20 ms: the stars
+    // at 50 frames a second, the rest of the page with them, not one frame per screen refresh)
     const idle = !dragLayer.node && !fx.length && now - lastPointer > 400 && (DEBUG.idleMs == null || DEBUG.idleMs > 0);
-    const tick = !idle || now - lastTick >= (DEBUG.idleMs ?? 80);
+    const tick = !idle || now - lastTick >= (starsAlive ? 20 : (DEBUG.idleMs ?? 80));
     if (tick) lastTick = now;
+    const rest = starsAlive ? 16 : 40;
+    starsAlive = false;
     if (!DEBUG.noBoards) for (const id of ['goalBoard', 'startBoard']) {
       if (layout.two || state.side === (id === 'goalBoard' ? 'goal' : 'start')) drawBoard($(id), now, dt, !tick);
     }
@@ -1412,7 +1453,7 @@
     else if (app.style.translate) app.style.translate = '';
     // idle, the loop itself rests between ticks (a frame callback every vsync is not free);
     // the held chuzzle is drawn by the pointer events, so a drag never waits for it
-    if (idle) setTimeout(() => requestAnimationFrame(frameLoop), 40);
+    if (idle) setTimeout(() => requestAnimationFrame(frameLoop), rest);
     else requestAnimationFrame(frameLoop);
   }
 
@@ -1511,6 +1552,10 @@
   // --u (one game pixel) follows; a board is 535 of them.
   const layout = { u: 0.6, two: false };
   function layoutStage() {
+    for (const id of ['thumbGoal', 'thumbStart']) {   // the tabs' little boards, in the new zoom's pixels
+      const el = $(id);
+      if (el._board && el._dpr !== (window.devicePixelRatio || 1)) renderThumb(el, el._board);
+    }
     const st = $('stage');
     const W = st.clientWidth, H = st.clientHeight;
     if (!W || !H) return;
@@ -1613,20 +1658,36 @@
   }
 
   // The tab's little board: a dot per chuzzle, the 2x2 as one big dot over its four cells.
+  // Drawn on a canvas in whole device pixels (7 px dots a pixel apart at 1:1), because at a
+  // fractional zoom a grid of 7 px elements lands on different device pixels row by row.
+  let dotTints = null;
   function renderThumb(el, board) {
-    const frag = document.createDocumentFragment();
+    const dpr = window.devicePixelRatio || 1;
+    const t = Math.round(7 * dpr), gap = Math.max(1, Math.round(dpr)), pad = Math.round(3 * dpr), pitch = t + gap;
+    const size = 2 * pad + 6 * pitch - gap;
+    if (el.width !== size) {
+      el.width = el.height = size;
+      el.style.width = el.style.height = `${size / dpr}px`;
+    }
+    el._board = board;
+    el._dpr = dpr;
+    if (!dotTints) {
+      const cs = getComputedStyle(document.documentElement);
+      dotTints = COLORS.map((name, k) => cs.getPropertyValue(`--c${k}`).trim());
+    }
+    const ctx = el.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
     const f = board.fat;
     board.cells.forEach((v, k) => {
       const r = Math.floor(k / 6), c = k % 6;
       const piece = inPiece(f, r, c);
       if (piece && (r !== f.y || c !== f.x)) return;
-      const i = document.createElement('i');
-      i.style.setProperty('--col', `var(--c${v})`);
-      i.style.gridArea = `${r + 1} / ${c + 1} / span ${piece ? 2 : 1} / span ${piece ? 2 : 1}`;
-      if (piece) i.className = 'p';
-      frag.appendChild(i);
+      const w = piece ? 2 * pitch - gap : t, m = piece ? gap : 0;   // the big dot a pixel in from its cells
+      ctx.fillStyle = dotTints[v];
+      ctx.beginPath();
+      ctx.arc(pad + c * pitch + w / 2, pad + r * pitch + w / 2, w / 2 - m, 0, 2 * Math.PI);
+      ctx.fill();
     });
-    el.replaceChildren(frag);
   }
 
   const colourCounts = (board) => {
