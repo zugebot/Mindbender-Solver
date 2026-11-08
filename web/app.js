@@ -106,8 +106,8 @@
 
   // The start is the goal's chuzzles rearranged (dragged, swapped or mixed, never painted):
   // start.ids[k] = the goal cell whose chuzzle sits in start cell k. Painting the goal repaints
-  // that chuzzle on the start too, so the two always hold the same chuzzles. Placing, moving or
-  // removing the goal's 2x2 starts the start again from a copy of the goal.
+  // that chuzzle on the start too, so the two always hold the same chuzzles. Placing or moving
+  // the goal's 2x2 keeps the start's arrangement (relinkPiece).
   const copyOfGoal = () => {
     const b = cloneBoard(state.goal);
     b.ids = b.cells.map((_, k) => k);
@@ -121,12 +121,25 @@
       linkStart();
       return;
     }
+    if (!state.follows && s.fat && state.goal.fat && !pieceLinked(s, state.goal)) relinkPiece(s, state.goal);
     if (state.follows || !pieceLinked(s, state.goal)) {
       state.start = copyOfGoal();
       state.follows = true;
       return;
     }
     s.cells = s.ids.map((i) => state.goal.cells[i]);
+  }
+  // The goal's 2x2 placed or moved under an arranged start: the start's 2x2 takes the goal's
+  // new 2x2 cells, and the start chuzzles that were those goal chuzzles take the ones its 2x2
+  // had. Everything else keeps its place.
+  function relinkPiece(s, g) {
+    const gp = pieceCells(g.fat), sp = pieceCells(s.fat);
+    const inPieceWrong = sp.filter((k) => !gp.includes(s.ids[k]));
+    const outsideTaken = s.ids.map((id, k) => (!sp.includes(k) && gp.includes(id) ? k : -1)).filter((k) => k >= 0);
+    inPieceWrong.forEach((a, n) => {
+      const b = outsideTaken[n];
+      [s.ids[a], s.ids[b]] = [s.ids[b], s.ids[a]];
+    });
   }
   // A start from a link (or saved before the start was only rearranged): which goal chuzzle
   // is which. The 2x2's cells go to the goal's 2x2, the rest to goal chuzzles of their colour
@@ -480,6 +493,7 @@
     ctx.imageSmoothingQuality = 'high';
     const R = Math.round, cellPx = 80 * s, padPx = 10 * s;
     let lifted = null;
+    const top = [];
     for (const node of el.children) {
       if (node._k === undefined) {
         if (!node.classList.contains('cell')) continue;
@@ -491,8 +505,10 @@
       }
       if (node._k !== node._k) continue;     // not a chuzzle
       if (node.classList.contains('lifted')) lifted = node;
+      else if (node._sc > 1) top.push(node);
       else drawChuzzle(ctx, node, now, dt, s, R, cellPx, padPx, false);
     }
+    for (const node of top) drawChuzzle(ctx, node, now, dt, s, R, cellPx, padPx, false);
     if (lifted) drawChuzzle(ctx, lifted, now, dt, s, R, cellPx, padPx, true);
   }
 
@@ -515,15 +531,31 @@
       if (node._col) y += node._off * dpr;
       else x += node._off * dpr;
     }
+    // easing (a swap's preview while dragging, a chuzzle settling into its cell after a drop
+    // or swap): the offset _ox/_oy moves to _tx/_ty, the size _sc back to 1
+    if (node._ox || node._oy || node._tx || node._ty) {
+      const k = 1 - Math.exp(-dt / 55), tx = node._tx || 0, ty = node._ty || 0;
+      node._ox = Math.abs(tx - (node._ox || 0)) < 0.2 ? tx : (node._ox || 0) + (tx - (node._ox || 0)) * k;
+      node._oy = Math.abs(ty - (node._oy || 0)) < 0.2 ? ty : (node._oy || 0) + (ty - (node._oy || 0)) * k;
+      x += node._ox * dpr;
+      y += node._oy * dpr;
+    }
+    let sc = 1;
     if (lifted) {
       x += (node._dx || 0) * dpr;
       y += (node._dy || 0) * dpr;
+      sc = 1.12;
+    } else if (node._sc > 1) {
+      node._sc = node._sc < 1.002 ? 1 : 1 + (node._sc - 1) * Math.exp(-dt / 55);
+      sc = node._sc;
+    }
+    if (sc > 1) {
       const half = (piece ? 80 : 40) * s;
       ctx.save();
       ctx.translate(x + half, y + half);
-      ctx.scale(1.12, 1.12);
+      ctx.scale(sc, sc);
       ctx.translate(-x - half, -y - half);
-      ctx.shadowColor = 'rgba(0, 0, 0, .55)';
+      ctx.shadowColor = `rgba(0, 0, 0, ${(0.55 * (sc - 1) / 0.12).toFixed(3)})`;
       ctx.shadowBlur = 8 * dpr;
       ctx.shadowOffsetY = 6 * dpr;
     }
@@ -532,7 +564,7 @@
     } else {
       ctx.drawImage(SHEETS.body, frame * 80, node._k * 80, 80, 80, R(x), R(y), R(cellPx), R(cellPx));
     }
-    if (lifted) ctx.shadowColor = 'transparent';
+    if (sc > 1) ctx.shadowColor = 'transparent';
     const [ex, ey0] = EYES_AT[piece ? 'piece' : 'normal'];
     const fx = x + ex * s, fy = y + (ey0 + f.oy + bob) * s;
     ctx.drawImage(SHEETS.eyes, f.es * 85, 0, 85, 88, R(fx), R(fy), R(85 * s), R(88 * s));
@@ -543,7 +575,16 @@
           R(fx + (cx - 7 + st.px * tx) * s), R(fy + (cy - 7 + st.py * ty) * s), ps, ps);
       }
     }
-    if (lifted) ctx.restore();
+    if (sc > 1) ctx.restore();
+  }
+
+  // Chuzzles easing into their cells after a board is redrawn: [r, c, dx, dy, size], the
+  // offset (CSS pixels) and size each starts from.
+  function glide(el, list) {
+    for (const [r, c, dx, dy, sc] of list) {
+      const n = el.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+      if (n) Object.assign(n, { _ox: dx, _oy: dy, _sc: sc || 1 });
+    }
   }
 
   // One loop draws both boards every frame (a board out of sight, on a phone, is skipped).
@@ -997,7 +1038,17 @@
         g.cell._dx = dx;
         g.cell._dy = dy;
         const t = dropTarget(e);
-        if (!g.target !== !t || (t && (t.r !== g.target.r || t.c !== g.target.c))) showTarget(t);
+        if (!g.target !== !t || (t && (t.r !== g.target.r || t.c !== g.target.c))) {
+          showTarget(t);
+          if (g.preview) Object.assign(g.preview, { _tx: 0, _ty: 0 });
+          g.preview = null;
+          if (t && !t.piece) {
+            const n = el.querySelector(`.cell[data-r="${t.r}"][data-c="${t.c}"]`);
+            const P = 80 * layout.u;
+            if (n) Object.assign(n, { _tx: (g.c - t.c) * P, _ty: (g.r - t.r) * P });
+            g.preview = n;
+          }
+        }
         g.target = t;
       }
     });
@@ -1012,7 +1063,10 @@
       if (gesture.drag) {
         el.classList.remove('dragging');
         if (e.type === 'pointerup' && gesture.target) dropOn(which, gesture, gesture.target);
-        else renderBoard(el, state[which]);
+        else {
+          renderBoard(el, state[which]);
+          glide(el, [[gesture.r, gesture.c, gesture.cell._dx || 0, gesture.cell._dy || 0, 1.12]]);
+        }
         return;
       }
       if (e.type === 'pointerup') tapOn(which, gesture.cell);
@@ -1049,6 +1103,8 @@
     const b = cloneBoard(old);
     const ids = old.ids || old.cells.map((_, k) => k);
     b.ids = ids.slice();
+    const el = $(`${which}Board`), P = 80 * layout.u;
+    const glides = [[to.r, to.c, (from.c - to.c) * P + (from.cell._dx || 0), (from.r - to.r) * P + (from.cell._dy || 0), 1.12]];
     if (to.piece) {
       const nf = { x: to.c, y: to.r };
       const was = pieceCells(old.fat), now = pieceCells(nf);
@@ -1056,6 +1112,7 @@
       freed.forEach((k, n) => {
         b.cells[k] = old.cells[taken[n]];
         b.ids[k] = ids[taken[n]];
+        glides.push([Math.floor(k / 6), k % 6, (taken[n] % 6 - k % 6) * P, (Math.floor(taken[n] / 6) - Math.floor(k / 6)) * P]);
       });
       now.forEach((k, m) => {
         b.cells[k] = old.cells[was[m]];
@@ -1066,8 +1123,12 @@
       const i = from.r * 6 + from.c, j = to.r * 6 + to.c;
       [b.cells[i], b.cells[j]] = [b.cells[j], b.cells[i]];
       [b.ids[i], b.ids[j]] = [b.ids[j], b.ids[i]];
+      // the swapped one was already sliding over (the preview): it carries on from there
+      const n = el.querySelector(`.cell[data-r="${to.r}"][data-c="${to.c}"]`);
+      glides.push([from.r, from.c, (to.c - from.c) * P + ((n && n._ox) || 0), (to.r - from.r) * P + ((n && n._oy) || 0)]);
     }
     moved(which, b);
+    glide(el, glides);
   }
 
   // A tap on the start: the first chuzzle is picked, a second one swaps with it.
@@ -1087,6 +1148,8 @@
     [b.cells[i], b.cells[p.i]] = [b.cells[p.i], b.cells[i]];
     [b.ids[i], b.ids[p.i]] = [b.ids[p.i], b.ids[i]];
     moved(which, b);
+    const P = 80 * layout.u, r1 = Math.floor(i / 6), c1 = i % 6, r2 = Math.floor(p.i / 6), c2 = p.i % 6;
+    glide($(`${which}Board`), [[r1, c1, (c2 - c1) * P, (r2 - r1) * P], [r2, c2, (c1 - c2) * P, (r1 - r2) * P]]);
   }
 
   function changed({ keepPreset = false } = {}) {
