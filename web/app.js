@@ -1490,7 +1490,20 @@
   // (no drag, no particles, the mouse still) the canvases are let change only every 80 ms.
   let lastFrame = 0, updates = 0, lastTick = 0;
   const DEBUG = self.MB_DEBUG = {};        // switches for measuring (the console / tests)
+  // Animations (the replay's wand and lanes) run as hooks at the start of a frame, before the
+  // boards are drawn, so the wand and the lane it drags show the same moment; while any runs,
+  // or a lane slides, the loop runs every frame (idle, it rests between ticks).
+  const frameHooks = new Set();
+  let sliding = 0, loopTimer = 0;
+  let laneHeld = null;                     // a replay lane the user holds (bindReplayDrag)
+  function wakeLoop() {
+    if (!loopTimer) return;
+    clearTimeout(loopTimer);
+    loopTimer = 0;
+    requestAnimationFrame(frameLoop);
+  }
   function frameLoop(now) {
+    for (const hook of [...frameHooks]) hook(now);
     const dt = lastFrame ? Math.min(100, now - lastFrame) : 16;
     lastFrame = now;
     eyeStamp++;
@@ -1508,8 +1521,9 @@
     // in another window (playing the game beside the page, say), the Chuzzles hold still, as
     // the game's own do when it loses the focus: no tick, so no pose changes and no composites;
     // what moves (a replay's lanes, particles, a drag) still draws
-    const away = !dragLayer.node && !fx.length && (DEBUG.away ?? !document.hasFocus());
-    const idle = away || (!dragLayer.node && !fx.length && now - lastPointer > 400 && (DEBUG.idleMs == null || DEBUG.idleMs > 0));
+    const still = !dragLayer.node && !fx.length && !sliding && !frameHooks.size;
+    const away = still && (DEBUG.away ?? !document.hasFocus());
+    const idle = away || (still && now - lastPointer > 400 && (DEBUG.idleMs == null || DEBUG.idleMs > 0));
     const tick = !away && (!idle || now - lastTick >= (starsAlive ? 20 : (DEBUG.idleMs ?? 80)));
     if (tick) lastTick = now;
     const rest = away ? 100 : starsAlive ? 16 : 40;
@@ -1526,7 +1540,7 @@
     else if (app.style.translate) app.style.translate = '';
     // idle, the loop itself rests between ticks (a frame callback every vsync is not free);
     // the held chuzzle is drawn by the pointer events, so a drag never waits for it
-    if (idle) setTimeout(() => requestAnimationFrame(frameLoop), rest);
+    if (idle) loopTimer = setTimeout(() => { loopTimer = 0; requestAnimationFrame(frameLoop); }, rest);
     else requestAnimationFrame(frameLoop);
   }
 
@@ -1664,7 +1678,7 @@
     if (moved) {
       fontText($('startCap'), state.mode === 'replay' ? 'Replay' : 'Start', captionStyle());
       fontText($('goalCap'), 'Goal', captionStyle());
-      if (state.mode === 'replay' && result && result.replay && !result.playing) showStep(result.step);
+      if (state.mode === 'replay' && result && result.replay && !result.playing && !laneHeld) showStep(result.step);
     }
   }
 
@@ -1708,6 +1722,8 @@
       }
     }
     for (const [node] of moving) node.classList.add('mv');
+    sliding++;
+    let done = false;
     // chuzzle.py _get_frame_surface: frame = sway count + direction x speed count + speed
     // index, the speed index from sqrt(speed / (10% of a cell per frame)), the 2x2 at half speed
     let lastP = 0, lastT = performance.now(), smooth = 0;
@@ -1732,6 +1748,8 @@
     return {
       set,
       finish() {
+        if (!done) sliding--;
+        done = true;
         el.querySelectorAll('.ghost').forEach((g) => g.remove());
         for (const [node] of moving) {
           node._off = 0;
@@ -1830,6 +1848,7 @@
       b.classList.toggle('placing', edit && side === 'goal' && state.tool === 'piece');
       b.classList.toggle('readonly', !edit);
       b.classList.toggle('mover', edit && side === 'start');
+      b.classList.toggle('lanes', replay && side === 'start');
     }
     $('customBtn').setAttribute('aria-pressed', String(!game));
     $('puzzlesBtn').setAttribute('aria-pressed', String(game));
@@ -2948,17 +2967,21 @@
         return;
       }
       const t0 = performance.now();
-      const frame = (now) => {
+      const hook = (now) => {
         if (token !== animToken) {
+          frameHooks.delete(hook);
           resolve(false);
           return;
         }
-        const p = Math.min(1, (now - t0) / ms);
+        const p = Math.max(0, Math.min(1, (now - t0) / ms));
         fn(p);
-        if (p < 1) requestAnimationFrame(frame);
-        else resolve(true);
+        if (p >= 1) {
+          frameHooks.delete(hook);
+          resolve(true);
+        }
       };
-      requestAnimationFrame(frame);
+      frameHooks.add(hook);
+      wakeLoop();
     });
   }
   const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -3078,6 +3101,165 @@
     return ok;
   }
 
+  // A lane dragged by hand: every chuzzle in it (both lanes with the 2x2) follows the pointer,
+  // o cells along, wrapping round the board (a copy of each comes in at the far edge as it
+  // goes out); the 2x2 itself stops at the edges (the caller clamps o). set(o), finish().
+  function laneDrag(el, col, lanes) {
+    const any = el.querySelector('.cell:not(.piece)') || el.querySelector('.cell');
+    const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
+    const pitch = (any.classList.contains('piece') ? (any.offsetWidth - gap) / 2 : any.offsetWidth) + gap;
+    const moving = [];
+    for (const cell of [...el.querySelectorAll('.cell:not(.ghost)')]) {
+      const r = +cell.dataset.r, c = +cell.dataset.c;
+      const piece = cell.classList.contains('piece');
+      const own = col ? (piece ? [c, c + 1] : [c]) : (piece ? [r, r + 1] : [r]);
+      if (!own.some((l) => lanes.includes(l))) continue;
+      const ghost = cell.cloneNode(true);
+      ghost.classList.add('ghost');
+      ghost.removeAttribute('role');
+      el.appendChild(ghost);
+      cell.classList.add('mv');
+      ghost.classList.add('mv');
+      moving.push([cell, ghost, col ? r : c, piece]);
+    }
+    sliding++;
+    // the game's sliding frames (as prepareSlide): direction from the motion, speed smoothed
+    let done = false, lastO = 0, lastT = performance.now(), smooth = 0, seg = col ? 0 : 2;
+    const set = (o) => {
+      const now = performance.now();
+      const frames = Math.max(0.25, (now - lastT) / (1000 / 60));
+      const v = (o - lastO) * 80 / frames;                        // game pixels per frame
+      if (Math.abs(v) > 0.2) seg = col ? (v > 0 ? 0 : 3) : (v > 0 ? 2 : 1);
+      smooth = smooth * 0.5 + Math.abs(v) * 0.5;
+      lastO = o;
+      lastT = now;
+      for (const [cell, ghost, j, piece] of moving) {
+        const m = ((j + o) % 6 + 6) % 6;
+        const t = Math.sqrt(Math.min(1, (piece ? smooth * 0.5 : smooth) / 8));
+        const f = piece ? 10 + seg * 5 + Math.round(t * 4) : 20 + seg * 10 + Math.round(t * 9);
+        cell._off = (m - j) * pitch;
+        ghost._off = ((m > 3 ? m - 6 : m + 6) - j) * pitch;
+        cell._col = ghost._col = col;
+        cell._f = ghost._f = f;
+      }
+    };
+    set(0);
+    return {
+      pitch,
+      set,
+      finish() {
+        if (!done) sliding--;
+        done = true;
+        for (const [cell, ghost] of moving) {
+          ghost.remove();
+          cell._off = 0;
+          cell._f = null;
+          cell.classList.remove('mv');
+        }
+      },
+    };
+  }
+
+  // The replay's next move, by hand: between the wand's drags (it stops a playing replay), any
+  // row or column of the replay board can be dragged as in the game. The shown move (or any
+  // drag that makes the same board) settles in and the replay steps on; anything else slides back.
+  function bindReplayDrag() {
+    const el = $('startBoard');
+    const sameBoard = (a, b) => a.cells.every((v, i) => v === b.cells[i])
+      && JSON.stringify(a.fat || null) === JSON.stringify(b.fat || null);
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || state.mode !== 'replay' || !result || !result.replay || laneHeld || sliding) return;
+      const k = result.step, n = result.moves.length;
+      if (k >= n) return;
+      const b = el.getBoundingClientRect(), u = b.width / 500, pitch = 80 * u;
+      const c = Math.floor((e.clientX - b.left - 10 * u) / pitch), r = Math.floor((e.clientY - b.top - 10 * u) / pitch);
+      if (r < 0 || r > 5 || c < 0 || c > 5) return;
+      e.preventDefault();
+      try { el.setPointerCapture(e.pointerId); } catch { /* synthetic events */ }
+      const token = interrupt();
+      showStep(k, true);
+      laneHeld = { x: e.clientX, y: e.clientY, r, c, k, token, drag: null, o: 0 };
+    });
+    const cancel = () => {
+      if (!laneHeld) return;
+      if (laneHeld.drag) laneHeld.drag.finish();
+      el.classList.remove('dragging');
+      laneHeld = null;
+    };
+    const release = async () => {
+      const h = laneHeld;
+      if (!h || h.settling) return;
+      if (!h.drag || h.token !== animToken) {
+        cancel();
+        if (h.token === animToken) showStep(h.k);
+        return;
+      }
+      h.settling = true;
+      el.classList.remove('dragging');
+      const d = Math.round(h.o), want = result.replay[h.k + 1];
+      const made = d ? laneMove(result.replay[h.k], h.col, h.lane, d) : null;
+      const token = h.token;
+      if (made && sameBoard(made, want)) {
+        // the move: the board after it, slid in from where the lane was let go
+        h.drag.finish();
+        renderBoard(el, want, { band: result.moves[h.k] });
+        const slide = prepareSlide(el, { col: h.col, lanes: h.lanes }, d);
+        const p0 = h.o / d;
+        slide.set(p0);
+        await tween(90 + 120 * Math.abs(h.o - d), (p) => slide.set(p0 + (1 - p0) * easeOut(p)), token);
+        slide.finish();
+        laneHeld = null;
+        if (token === animToken) {
+          guide.at = null;
+          showStep(h.k + 1);
+        }
+      } else {
+        const o0 = h.o;
+        await tween(140 + 70 * Math.min(3, Math.abs(o0)), (p) => h.drag.set(o0 * (1 - easeOut(p))), token);
+        h.drag.finish();
+        laneHeld = null;
+        if (token === animToken) showStep(h.k);
+      }
+    };
+    el.addEventListener('pointermove', (e) => {
+      const h = laneHeld;
+      if (!h || h.settling) return;
+      if (h.token !== animToken) return cancel();
+      if (!(e.buttons & 1)) return release();
+      const dx = e.clientX - h.x, dy = e.clientY - h.y;
+      if (!h.drag) {
+        if (Math.hypot(dx, dy) < 6) return;
+        // the lane goes the way the pointer went first; one through the 2x2 takes both of its
+        // lanes, and then the 2x2 stops at the edges (laneMove's rule)
+        h.col = Math.abs(dy) > Math.abs(dx);
+        const f = result.replay[h.k].fat;
+        h.lane = h.col ? h.c : h.r;
+        h.lanes = [h.lane];
+        h.lo = -Infinity;
+        h.hi = Infinity;
+        if (f) {
+          const a = h.col ? f.x : f.y;
+          if (h.lane === a || h.lane === a + 1) {
+            h.lanes = [a, a + 1];
+            const along = h.col ? f.y : f.x;
+            h.lo = -along;
+            h.hi = 4 - along;
+          }
+        }
+        $('guideArrow').classList.add('off');
+        $('guideCursor').hidden = true;
+        el.classList.add('dragging');
+        h.drag = laneDrag(el, h.col, h.lanes);
+      }
+      h.o = Math.max(h.lo, Math.min(h.hi, (h.col ? dy : dx) / h.drag.pitch));
+      h.drag.set(h.o);
+    });
+    el.addEventListener('pointerup', release);
+    el.addEventListener('pointercancel', release);
+    el.addEventListener('lostpointercapture', release);
+    addEventListener('blur', release);
+  }
+
   async function next() {
     if (!result || result.step >= result.moves.length) return;
     const token = interrupt();
@@ -3127,6 +3309,7 @@
     document.querySelectorAll('[data-icon]').forEach((el) => setIcon(el, el.dataset.icon));
     fillPresets();
     skinScroll($('pzGrid'));
+    bindReplayDrag();
     document.querySelectorAll('[data-label]:not([data-mode])').forEach((el) =>
       fontText(el, el.dataset.label, 'gold' in el.dataset ? { ...GOLD_TEXT, size: 17 } : LABEL_TEXT));
     setProgress('', 0);

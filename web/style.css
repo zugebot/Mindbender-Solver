@@ -211,6 +211,8 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .board.readonly .cell { cursor: default; }
 /* the start while editing: drag a chuzzle onto another (they swap), or tap two */
 .board.mover .cell { cursor: grab; }
+/* the replay: drag a row or column, as in the game (the next move steps the replay on) */
+.board.lanes .cell { cursor: grab; }
 .board.dragging, .board.dragging .cell { cursor: grabbing; }
 /* the held chuzzle, over everything (app.js drawDragLayer) */
 .drag-layer { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 50; }

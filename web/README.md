@@ -163,7 +163,13 @@ The boards use the game's own art: each ball is a Chuzzle sprite with the idle s
 each Chuzzle through a replay. The board sits in the game's rainbow frame, and the page background is
 the backdrop pattern of the puzzle's world. The replay is guided: the game's wand cursor glides to a Chuzzle in the lane, presses, and drags
 the lane the short way round (right 5 = drag left 1) while it slides along; between moves an arrow on
-the board shows the next drag. The art is PopCap's (from the game files), so a public
+the board shows the next drag. The wand's motion and the lane's slide run as hooks at the start of
+the page's one frame loop (`frameHooks` in `app.js`), before the boards are drawn, and the loop runs
+every frame while one does (idle, it rested 40-100 ms between frames, so a slide drew ~9 frames a
+second). Between the wand's drags the next move can be made by hand: any row or column of the
+replay board drags as in the game (chuzzles wrap round the edges, the 2x2 stops at them); the shown
+move, or a drag that makes the same board (left 5 for right 1), settles in and the replay steps on,
+anything else slides back. A press stops a playing replay. The art is PopCap's (from the game files), so a public
 host redistributes it.
 
 ## Layout
@@ -235,7 +241,8 @@ changed every 80 ms cost 9% (600 pixels: 12%); taking away the header, dock, bac
 filter changed nothing measurable. So the one lever left is how often the page changes: while the
 window does not have the focus (the game played beside it, say) the Chuzzles hold still, as the
 game's own do, and the page costs what it costs with nothing animated (1.7% of a core); a
-replay's lanes, particles and a drag still move, and a click on the page wakes it.
+replay's lanes, particles and a drag still move (the loop runs every frame while anything
+slides or a frame hook runs), and a click on the page wakes it.
 Nothing on the page animates endlessly in CSS, and no CSS filter wraps a canvas that changes (the
 palette's shadows are baked into the canvases, the Scrambulator arrows sit beside the candy, not
 inside its drop-shadow), because a filter is redone every time what is under it changes. The held
