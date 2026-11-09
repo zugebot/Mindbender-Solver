@@ -344,7 +344,7 @@ class AppButtons(unittest.TestCase):
 
     def test_every_view_draws(self):
         self.app.queue.poll_once()
-        for tab in ("launcher", "solutions", "speed", "saves", "queue"):
+        for tab in ("launcher", "solutions", "tas", "speed", "saves", "queue"):
             self.app.set_tab(tab)
             self.app.draw()
         self.fake.status["running"] = None
@@ -352,6 +352,36 @@ class AppButtons(unittest.TestCase):
         self.app.draw()
         self.app.set_view("mini")
         self.app.draw()
+
+    def test_tas_tab_options(self):
+        app = self.app
+        app.set_tab("tas")
+        def press(label):
+            b = next(b for b in app.buttons["tas"] if b.text().endswith(label) or b.text() == label)
+            self.assertTrue(b.enabled(), label)
+            app.handle_click(b.rect.center)
+        press("PUZZLER: level 10")
+        self.assertEqual(app.tas_current_plan().puzzles, 27)
+        press("all 5")
+        self.assertEqual(app.tas_current_plan().puzzles, 45)
+        press("PSYCHIC: all of 1-10")
+        plan = app.tas_current_plan()
+        self.assertEqual((plan.puzzles, plan.popups), (50, [21, 22]))
+        self.assertFalse(next(b for b in app.buttons["tas"] if b.text() == "3 fastest").enabled())
+        press("] PUZZLER")                                   # the profile has PUZZLER
+        self.assertEqual(app.tas_current_plan().popups, [22])
+        self.assertEqual(settings.get("tas")["owned"], [21])
+        press("+")                                          # one level further than the target's
+        self.assertEqual(app.tas_current_plan().options.last_level, 11)
+        press("Default")
+        self.assertIsNone(app.tas_last_level)
+        app.draw()
+        # without a game nothing can start; Start asks for a second click
+        start = next(b for b in app.buttons["tas"] if b.text() == "Start run")
+        self.assertFalse(start.enabled())
+        press("] PUZZLER")
+        press("PUZZLER: level 10")
+        press("3 fastest")
 
     def test_title_bar_close_goes_through_quit_and_pin_is_saved(self):
         pg, app = self.pg, self.app

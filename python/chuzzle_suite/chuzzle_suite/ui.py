@@ -16,7 +16,7 @@ from typing import Callable
 import pygame as pg
 
 from . import board_sim, game_window as gw, launcher, levels as lv, queue_client as qc, routes, saves, settings
-from . import paths, title_bar as tb, window_frame as wf
+from . import paths, tas_plan as tp, tas_runner as tr, title_bar as tb, window_frame as wf
 
 W, H = 1200, 840                        # content; the window is W x (TB + H)
 TB = tb.HEIGHT                          # the app's own title bar above the content
@@ -147,8 +147,28 @@ class App:
         self.queue = qc.QueuePoller().start()
         self.confirm_pause_until = 0.0
 
+        # Mind Bender TAS (tas_plan.py, tas_runner.py); options kept in settings.json "tas"
+        saved = settings.get("tas", {}) or {}
+        self.tas_target = int(saved.get("target", tp.PUZZLER))
+        self.tas_per_level = int(saved.get("per_level", 3))
+        self.tas_last_level = saved.get("last_level")             # None: the target's default
+        self.tas_owned = set(saved.get("owned", []))
+        self.tas_others = bool(saved.get("others_owned", False))
+        self.tas_livesplit = bool(saved.get("livesplit", True))
+        self.tas_check = bool(saved.get("check_solves", True))
+        self.tas_runner: tr.TasRunner | None = None
+        self.tas_step = -1
+        self.tas_status = ""
+        self.tas_scroll = 0
+        self.tas_max_scroll = 0
+        self.tas_timing = tr.load_timing(None)
+        self.tas_confirm_until = 0.0
+        self._tas_confirm_what = ""
+        self.tas_last_result = ""
+        self.tas_plan: tp.TasPlan | None = None
+
         self.buttons: dict[str, list[Button]] = {"solutions": [], "saves": [], "speed": [], "launcher": [],
-                                                 "queue": [], "mini": [], "all": []}
+                                                 "queue": [], "tas": [], "mini": [], "all": []}
         self._speed_cache: tuple[float, dict] | None = None
         self._build_buttons()
         self.select_level(self.selected)
@@ -196,7 +216,8 @@ class App:
         return len(self.level.solutions)
 
     def playing(self) -> bool:
-        return self.player is not None and self.player.running
+        """Is anything driving the game (auto-play, or a TAS run or measurement)?"""
+        return (self.player is not None and self.player.running) or self.tas_running()
 
     # ------------------------------------------------------------------
     # buttons
@@ -204,11 +225,17 @@ class App:
 
     def _build_buttons(self) -> None:
         b = self.buttons
-        tabs = [("solutions", "Solutions"), ("queue", "Queue"), ("speed", "Speed Chuzzle"),
+        tabs = [("solutions", "Solutions"), ("tas", "TAS"), ("queue", "Queue"), ("speed", "Speed Chuzzle"),
                 ("saves", "Saves"), ("launcher", "Launcher")]
-        for i, (tab, label) in enumerate(tabs):
-            b["all"].append(Button(pg.Rect(W - 128 - 122 * (len(tabs) - 1 - i), 8, 115, 30), label,
+        widths = {"tas": 64, "speed": 122}
+        x = W - 12
+        for tab, label in reversed(tabs):
+            w_ = widths.get(tab, 102)
+            x -= w_
+            b["all"].append(Button(pg.Rect(x, 8, w_, 30), label,
                                    lambda tab=tab: self.set_tab(tab), active=lambda tab=tab: self.tab == tab))
+            x -= 6
+        self._build_tas_buttons()
         b["solutions"].append(
             Button(pg.Rect(12 + 410 - 10 - 96, 58, 96, 26), lambda: "Loading..." if self.refreshing else "Refresh",
                    self.refresh_levels, lambda: not self.refreshing))
@@ -598,6 +625,7 @@ class App:
         self.log(f"Found '{self.window.title}' ({cw}x{ch}){' - calibrated' if self.geometry.calibrated else ''}",
                  GOOD)
         self._update_active_location()
+        self._tas_use_window_timing()
 
     def _update_active_location(self) -> None:
         exe = self.window.exe if self.window else None
@@ -1166,6 +1194,321 @@ class App:
         if not stashed:
             self.text("No resets yet.", (x, y + 28), self.small, DIM)
 
+    # ------------------------------------------------------------------
+    # TAS tab: a tool-assisted Mind Bender run for its trophies (tas_plan.py, tas_runner.py)
+    # ------------------------------------------------------------------
+
+    TAS_TARGETS = [(tp.PUZZLER, "PUZZLER: level 10"), (tp.PSYCHIC, "PSYCHIC: all of 1-10"),
+                   (tp.MENTALIST_MASTER, "MENTALIST MASTER: level 20"),
+                   (tp.MENTALIST_SUPREMO, "SUPREMO: all 100")]
+    TAS_HINT = ("Plays Mind Bender in the real game with your real mouse, as fast as the game takes "
+                "the inputs. Start it on the Mind Bender screen of a profile that has solved nothing "
+                "(level 1, puzzle 1). Hands off the mouse; hold Esc to stop.")
+
+    def _build_tas_buttons(self) -> None:
+        b = self.buttons["tas"]
+        x0, idle = 24, lambda: not self.tas_running()
+        for i, (trophy, label) in enumerate(self.TAS_TARGETS):
+            b.append(Button(pg.Rect(x0 + (i % 2) * 229, 170 + (i // 2) * 36, 217, 30), label,
+                            lambda t=trophy: self.tas_set(target=t, last_level=None), idle,
+                            lambda t=trophy: self.tas_target == t))
+        fixed5 = lambda: self.tas_target in (tp.PSYCHIC, tp.MENTALIST_SUPREMO)
+        b += [
+            Button(pg.Rect(x0 + 206, 246, 116, 28), "3 fastest", lambda: self.tas_set(per_level=3),
+                   lambda: idle() and not fixed5(), lambda: self.tas_options().resolved().per_level == 3),
+            Button(pg.Rect(x0 + 330, 246, 116, 28), "all 5", lambda: self.tas_set(per_level=5),
+                   lambda: idle() and not fixed5(), lambda: self.tas_options().resolved().per_level == 5),
+            Button(pg.Rect(x0 + 206, 282, 36, 28), "-",
+                   lambda: self.tas_set(last_level=self.tas_options().resolved().last_level - 1), idle),
+            Button(pg.Rect(x0 + 306, 282, 36, 28), "+",
+                   lambda: self.tas_set(last_level=self.tas_options().resolved().last_level + 1), idle),
+            Button(pg.Rect(x0 + 350, 282, 96, 28), "Default", lambda: self.tas_set(last_level=None),
+                   lambda: idle() and self.tas_last_level is not None),
+            Button(pg.Rect(x0 + 330, 320, 116, 24), "Read profile", self.tas_read_profile,
+                   lambda: idle() and self._tas_profile() is not None, small=True),
+        ]
+        for i, (trophy, label) in enumerate(self.TAS_TARGETS):
+            name = tp.TROPHY_NAMES[trophy]
+            b.append(Button(pg.Rect(x0 + (i % 2) * 229, 350 + (i // 2) * 34, 217, 28),
+                            lambda t=trophy, n=name: ("[x] " if t in self.tas_owned else "[ ] ") + n,
+                            lambda t=trophy: self.tas_toggle_owned(t), idle,
+                            lambda t=trophy: t in self.tas_owned, small=True))
+        b += [
+            Button(pg.Rect(x0, 418, 446, 28),
+                   lambda: ("[x] " if self.tas_others else "[ ] ") + "every other trophy too (then TROPHY COLLECTOR pops)",
+                   lambda: self.tas_set(others_owned=not self.tas_others), idle, lambda: self.tas_others, small=True),
+            Button(pg.Rect(x0, 478, 446, 28),
+                   lambda: ("[x] " if self.tas_livesplit else "[ ] ") + "LiveSplit key (numpad 1) at the start and the end",
+                   lambda: self.tas_set(livesplit=not self.tas_livesplit), idle, lambda: self.tas_livesplit,
+                   small=True),
+            Button(pg.Rect(x0, 510, 446, 28),
+                   lambda: ("[x] " if self.tas_check else "[ ] ") + "check the board on screen (stops on a miss)",
+                   lambda: self.tas_set(check_solves=not self.tas_check), idle, lambda: self.tas_check, small=True),
+            Button(pg.Rect(x0 + 296, 544, 150, 24),
+                   lambda: "Click again to stash" if self._tas_confirming("stash") else "Stash the save",
+                   self.tas_stash_save, lambda: idle() and self._tas_mb_save_path() is not None, small=True),
+            Button(pg.Rect(x0, 634, 217, 28),
+                   lambda: "Click again to measure" if self._tas_confirming("measure") else "Measure speed",
+                   self.tas_measure, lambda: idle() and self._tas_game_ok()),
+            Button(pg.Rect(x0 + 229, 634, 217, 28), "Reset timing", self.tas_reset_timing,
+                   lambda: idle() and self.tas_timing.measured),
+            Button(pg.Rect(x0, 670, 217, 36),
+                   lambda: "Click again to start" if self._tas_confirming("start") else "Start run",
+                   self.tas_start, lambda: idle() and self._tas_game_ok() and self.tas_current_plan().ok),
+            Button(pg.Rect(x0 + 229, 670, 217, 36), "Stop (or hold Esc)", self.tas_stop, self.tas_running),
+        ]
+
+    def _tas_profile(self):
+        """The current profile of the save location in use (the game's, after Find game)."""
+        loc = self.active_loc
+        name = loc.current_profile if loc else None
+        return loc.profile(name) if loc and name else None
+
+    def _tas_mb_save_path(self):
+        profile = self._tas_profile()
+        if profile is None:
+            return None
+        path = profile.path / saves.MINDBENDER_SAVE
+        return path if path.is_file() else None
+
+    def tas_read_profile(self) -> None:
+        """Set the "already has" toggles from the profile's INFO.CFG."""
+        profile = self._tas_profile()
+        if profile is None:
+            return
+        owned = saves.owned_trophies(profile.path)
+        self.tas_owned = owned & set(tp.MB_TROPHIES)
+        others = set(range(1, 27)) - set(tp.MB_TROPHIES) - {tp.TROPHY_COLLECTOR}
+        self.tas_set(others_owned=others <= owned)
+        names = ", ".join(tp.TROPHY_NAMES[t] for t in sorted(self.tas_owned)) or "no Mind Bender trophy"
+        self.log(f"TAS: profile {profile.name} has {names}"
+                 f"{' and every other trophy' if self.tas_others else ''}.", GOOD)
+
+    def tas_stash_save(self) -> None:
+        """Move the profile's Mind Bender save into the stash (like the Speed Chuzzle reset), so
+        Mind Bender starts again at 1-1. The game writes the save when it leaves Mind Bender, so
+        this is for the main menu (or with the game closed)."""
+        path = self._tas_mb_save_path()
+        if path is None or not self._tas_confirm("stash"):
+            return
+        profile = self._tas_profile()
+        moved = saves.stash_file(path, f"{self.active_loc.label}_{profile.name}")
+        if moved is not None:
+            self.log(f"TAS: Mind Bender save of {profile.name} moved to the stash ({moved.name}); "
+                     "Mind Bender now starts at 1-1.", GOOD)
+
+    def _tas_save_info(self) -> tuple[str, tuple]:
+        """The profile's Mind Bender save, for the tab (re-read at most once a second)."""
+        now = time.time()
+        cached = getattr(self, "_tas_save_cache", None)
+        if cached and now - cached[0] < 1.0:
+            return cached[1]
+        profile = self._tas_profile()
+        if profile is None:
+            info = ("Mind Bender save: no profile (Find game first)", DIM)
+        else:
+            path = profile.path / saves.MINDBENDER_SAVE
+            s = saves.read_mindbender_save(path)
+            if not path.is_file():
+                info = (f"{profile.name}: no Mind Bender save, starts at 1-1", GOOD)
+            elif s is None:
+                info = (f"{profile.name}: Mind Bender save in another format", WARN)
+            elif not s.solved and s.level == 1:
+                info = (f"{profile.name}: Mind Bender at 1-1, nothing solved", GOOD)
+            else:
+                info = (f"{profile.name}: Mind Bender at level {s.level}, {len(s.solved)} solved", WARN)
+        self._tas_save_cache = (now, info)
+        return info
+
+    def tas_options(self) -> tp.TasOptions:
+        return tp.TasOptions(self.tas_target, self.tas_per_level, self.tas_last_level,
+                             frozenset(self.tas_owned), self.tas_others)
+
+    def tas_current_plan(self) -> tp.TasPlan:
+        if self.tas_plan is None:
+            self.tas_plan = tp.build_plan(self.levels, self.tas_options(), self.tas_livesplit,
+                                          self.tas_timing.cost_model())
+        return self.tas_plan
+
+    def tas_set(self, **changes) -> None:
+        names = {"target": "tas_target", "per_level": "tas_per_level", "last_level": "tas_last_level",
+                 "others_owned": "tas_others", "livesplit": "tas_livesplit", "check_solves": "tas_check"}
+        for key, value in changes.items():
+            if key == "last_level" and value is not None:
+                value = max(1, min(tp.LEVELS, int(value)))
+            setattr(self, names[key], value)
+        self.tas_plan = None
+        self.tas_scroll = 0
+        try:
+            settings.put("tas", {"target": self.tas_target, "per_level": self.tas_per_level,
+                                 "last_level": self.tas_last_level, "owned": sorted(self.tas_owned),
+                                 "others_owned": self.tas_others, "livesplit": self.tas_livesplit,
+                                 "check_solves": self.tas_check})
+        except OSError as exc:
+            self.log(f"Could not save settings: {exc}", WARN)
+
+    def tas_toggle_owned(self, trophy: int) -> None:
+        self.tas_owned ^= {trophy}
+        self.tas_set()
+
+    def tas_running(self) -> bool:
+        return self.tas_runner is not None and self.tas_runner.running
+
+    def _tas_game_ok(self) -> bool:
+        return self.window is not None and self.window.alive() and not self.playing()
+
+    def _tas_confirming(self, what: str) -> bool:
+        return self._tas_confirm_what == what and time.time() < self.tas_confirm_until
+
+    def _tas_confirm(self, what: str) -> bool:
+        """Moving the real mouse takes over the PC: the first click arms, a second within 3 s goes."""
+        if self._tas_confirming(what):
+            self.tas_confirm_until = 0.0
+            return True
+        self._tas_confirm_what = what
+        self.tas_confirm_until = time.time() + 3.0
+        return False
+
+    def _tas_use_window_timing(self) -> None:
+        self.tas_timing = tr.load_timing(self.window)
+        self.tas_plan = None
+
+    def tas_start(self) -> None:
+        if not self._tas_confirm("start"):
+            return
+        self._tas_use_window_timing()
+        plan = self.tas_current_plan()
+        self.tas_step = -1
+        self.tas_last_result = ""
+        self.log(f"TAS: {tp.TROPHY_NAMES[plan.options.target]} run, {plan.puzzles} puzzles, {plan.moves} moves")
+        self.tas_runner = tr.TasRunner(
+            self.window, self.geometry, self.levels, plan, self.tas_timing, check_solves=self.tas_check,
+            livesplit_vk=tr.VK_NUMPAD1 if self.tas_livesplit else 0,
+            on_step=lambda i: self.post(lambda: setattr(self, "tas_step", i)),
+            on_status=lambda s: self.post(lambda: setattr(self, "tas_status", s)),
+            on_done=lambda msg, secs: self.post(lambda: self._tas_done(msg, secs)))
+        self.tas_runner.start()
+
+    def _tas_done(self, message: str, seconds: float | None) -> None:
+        self.tas_status = ""
+        when = f" in {self._tas_clock(seconds)}" if seconds is not None and message == "done" else ""
+        self.tas_last_result = f"{message}{when}"
+        self.log(f"TAS: {self.tas_last_result}", GOOD if message == "done" else WARN)
+
+    def tas_stop(self) -> None:
+        if self.tas_runner is not None:
+            self.tas_runner.stop()
+
+    def tas_measure(self) -> None:
+        if not self._tas_confirm("measure"):
+            return
+        self._tas_use_window_timing()
+        self.tas_last_result = ""
+        self.tas_step = -1
+        self.log("TAS: measuring the input timing (hands off the mouse; Esc stops)")
+        self.tas_runner = tr.SpeedMeasure(
+            self.window, self.geometry, self.levels, self.tas_timing,
+            on_status=lambda s: self.post(lambda: setattr(self, "tas_status", s)),
+            on_done=lambda msg, timing: self.post(lambda: self._tas_measured(msg, timing)))
+        self.tas_runner.start()
+
+    def _tas_measured(self, message: str, timing: tr.TasTiming | None) -> None:
+        self.tas_status = ""
+        if timing is not None:
+            self.tas_timing = timing
+            tr.save_timing(self.window, timing)
+            self.tas_plan = None
+        self.tas_last_result = message
+        self.log(f"TAS: {message}", GOOD if timing is not None else WARN)
+
+    def tas_reset_timing(self) -> None:
+        tr.clear_timing(self.window)
+        self._tas_use_window_timing()
+        self.log("TAS: back to the default timing.")
+
+    @staticmethod
+    def _tas_clock(seconds: float) -> str:
+        minutes, secs = divmod(seconds, 60)
+        return f"{int(minutes)}:{secs:06.3f}" if minutes else f"{secs:.3f} s"
+
+    def draw_tas(self, mouse) -> None:
+        left = pg.Rect(12, 52, 470, 716)
+        self.panel(left, "Mind Bender TAS")
+        x = left.x + 12
+        self.wrap(self.TAS_HINT, x, 86, left.width - 24, self.small, DIM, 16)
+        self.text("Trophy to earn", (x, 144), self.bold)
+        options = self.tas_options().resolved()
+        self.text("Puzzles per level", (x, 250), self.font)
+        self.text("Last level played", (x, 286), self.font)
+        self.text(str(options.last_level), (x + 274, 296), self.bold, center=True)
+        self.text("The profile already has (no pop-up)", (x, 320), self.bold)
+        self.text("Run", (x, 454), self.bold)
+        save = self._tas_save_info()
+        self.text(self._elide_end(save[0], self.small, 282), (x, 548), self.small, save[1])
+        self.text("Timing", (x, 578), self.bold)
+        t = self.tas_timing
+        source = "measured" if t.measured else "default, not measured"
+        apart = "an F24 press" if t.key_break else f"a {t.gap * 1000:.1f} ms wait"
+        self.text(f"drags: {apart} mid-drag, {t.pace * 1000:.0f} ms after ({source})",
+                  (x, 600), self.small, GOOD if t.measured else WARN)
+        self.text(f"trophy: pop-up {tr.POPUP_AFTER_SOLVE_S:.2f}-{tr.POPUP_AFTER_ARROW_S:.2f} s, room "
+                  f"{tr.ROOM_IN_S:.2f} + {tr.ROOM_OUT_S:.2f} s (+{t.margin:.2f} s each)", (x, 616), self.small, DIM)
+        if not self._tas_game_ok() and not self.tas_running():
+            self.text("Find the game first (bottom bar).", (x, 716), self.small, WARN)
+
+        right = pg.Rect(494, 52, 694, 716)
+        plan = self.tas_current_plan()
+        self.panel(right, f"Plan: {tp.TROPHY_NAMES[options.target]} ({tp.TROPHY_GOALS[options.target]})")
+        rx = right.x + 12
+        pops = ", ".join(tp.TROPHY_NAMES[t] for t in plan.popups) or "none"
+        earned = ", ".join(tp.TROPHY_NAMES[t] for t in plan.earned) or "none new"
+        self.text(f"Levels 1-{options.last_level}, {options.per_level} per level: {plan.puzzles} puzzles, "
+                  f"{plan.moves} moves, {plan.clicks} clicks", (rx, 84), self.font)
+        self.text(f"Earns: {earned}.  Pop-ups to click away: {pops}", (rx, 106), self.small, DIM)
+        if plan.missing:
+            self.text(f"No solution known for {', '.join(plan.missing)}", (rx, 126), self.small, BAD)
+        else:
+            self.text(f"Estimated time: {self._tas_clock(plan.estimate_s())}", (rx, 126), self.small, DIM)
+        running = self.tas_running()
+        r = self.tas_runner
+        if running or self.tas_last_result:
+            status = self.tas_status if running else self.tas_last_result
+            elapsed = ""
+            if running and getattr(r, "started_at", None) is not None:
+                elapsed = f"  {self._tas_clock(time.perf_counter() - r.started_at)}"
+            color = ACCENT if running else (GOOD if self.tas_last_result.startswith(("done", "measured")) else WARN)
+            self.text(self._elide_end(f"{'Running' if running else 'Last'}: {status}{elapsed}", self.font,
+                                      right.width - 24), (rx, 148), self.font, color)
+            if running and isinstance(r, tr.TasRunner):
+                done = max(0, self.tas_step)
+                self.progress_bar(pg.Rect(rx, 172, right.width - 24, 10), 100.0 * done / max(1, len(plan.steps)))
+        # the steps
+        inner = pg.Rect(rx, 192, right.width - 24, right.bottom - 202)
+        pg.draw.line(self.screen, PANEL_LINE, (right.x + 8, inner.y - 6), (right.right - 8, inner.y - 6))
+        clip = self.screen.get_clip()
+        self.screen.set_clip(inner)
+        row_h = 18
+        playing_plan = running and isinstance(r, tr.TasRunner)
+        if playing_plan and self.tas_step >= 0:     # keep the current step in view
+            self.tas_scroll = max(0, self.tas_step * row_h - inner.height // 3)
+        self.tas_max_scroll = max(0, len(plan.steps) * row_h - inner.height)
+        self.tas_scroll = min(self.tas_scroll, self.tas_max_scroll)
+        y = inner.y - self.tas_scroll
+        for i, step in enumerate(plan.steps):
+            if y > inner.bottom:
+                break
+            if y + row_h >= inner.y:
+                color = {"split": ACCENT, "arrow": ACCENT, "trophy": WARN}.get(step.kind, TEXT)
+                if playing_plan and i == self.tas_step:
+                    pg.draw.rect(self.screen, (60, 66, 84), pg.Rect(inner.x - 4, y - 1, inner.width + 8, row_h))
+                elif playing_plan and i < self.tas_step:
+                    color = DIM
+                label = self._elide_end(step.describe(), self.small, inner.width - 110)
+                self.text(f"{i + 1:>3}", (inner.x, y), self.small, DIM)
+                self.text(label + ("   <- target" if step.final else ""), (inner.x + 36, y), self.small, color)
+            y += row_h
+        self.screen.set_clip(clip)
+
     def _elide(self, s: str, font, width: int) -> str:
         if font.size(s)[0] <= width:
             return s
@@ -1683,6 +2026,8 @@ class App:
             self.draw_launcher(mouse)
         elif self.tab == "queue":
             self.draw_queue(mouse)
+        elif self.tab == "tas":
+            self.draw_tas(mouse)
         else:
             self.draw_saves(mouse)
         self.draw_game_bar()
@@ -1731,6 +2076,7 @@ class App:
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     self.stop_player()
+                    self.tas_stop()
                     self.queue.stop()
                     pg.quit()
                     return
@@ -1744,6 +2090,8 @@ class App:
                     self.title_release(event.pos)
                 elif event.type == pg.MOUSEWHEEL and full and self.tab == "saves":
                     self.save_scroll = max(0, min(getattr(self, "max_scroll", 0), self.save_scroll - event.y * 40))
+                elif event.type == pg.MOUSEWHEEL and full and self.tab == "tas":
+                    self.tas_scroll = max(0, min(self.tas_max_scroll, self.tas_scroll - event.y * 54))
                 elif event.type == pg.MOUSEWHEEL and full and self.tab == "launcher":
                     self.launcher_scroll = max(0, min(self.launcher_max_scroll, self.launcher_scroll - event.y * 40))
                 elif event.type == pg.KEYDOWN and full and self.tab == "solutions":

@@ -3,8 +3,8 @@
 One pygame window that combines the old Chuzzle 1 tools: launch any Chuzzle
 exe on the PC, browse every
 mindbender and its optimal solutions, play a solution in the **real game**,
-reset Speed Chuzzle, track every place the game keeps save files, and watch
-the solver queue (with a small always-on-top view).
+run a tool-assisted speedrun of Mind Bender for its trophies, reset Speed
+Chuzzle, track every place the game keeps save files, and watch the solver queue (with a small always-on-top view).
 
 ```bash
 python python/chuzzle_suite/run_suite.py
@@ -105,6 +105,83 @@ bar, auto-play) as soon as its window opens.
   saved per game exe in `user_data/calibration.json`. Without calibration
   the app uses the 800x600 layout from `python/deluxe_clone` (board at
   (255, 60), 80 px chuzzles), scaled to the window's client area.
+## TAS tab
+
+A tool-assisted speedrun of Mind Bender in the **real game**, for its four trophies, with the
+real mouse (the successor of the 2023 PUZZLER run, `python/automation/legacy/mindbender_macro`).
+
+1. Make a new profile in the game (or use one whose Mind Bender save is stashed, below), open
+   Mind Bender: level 1, puzzle 1 shows, scrambled. Press *Find game* in the bottom bar.
+2. Pick the trophy, the puzzles per level and how far it goes; tick the trophies the profile
+   already has (or *Read profile*).
+3. *Start run*, then once more within 3 s (it takes over the mouse). Hands off; holding **Esc**
+   stops it at once (also Stop, the game window closing or losing the foreground), and the button
+   is always released.
+
+Options:
+
+- **Trophy to earn**: PUZZLER (reach level 10: levels 1-9, ends with the slide into 10), PSYCHIC
+  (all 5 puzzles of levels 1-10), MENTALIST MASTER (reach level 20: levels 1-19), MENTALIST
+  SUPREMO (all 100). The trophy sets the defaults of the next two.
+- **Puzzles per level**: the 3 fastest (3 solved open the next level) or all 5. PSYCHIC and
+  SUPREMO need all 5.
+- **Last level played**: shorter practice runs (no target trophy; the timer stops at the end).
+- **The profile already has**: those trophies do not pop up (the game skips them). A pop-up costs
+  about 5.6 s: it takes a click only after 4.0-4.3 s, the click opens the trophy room, then
+  "Return to Game". On the way, PSYCHIC also earns PUZZLER, MENTALIST MASTER earns PUZZLER (and
+  PSYCHIC with all 5), SUPREMO earns all four. *every other trophy too*: the profile has all 21
+  others, so the last Mind Bender trophy also brings TROPHY COLLECTOR. *Read profile* sets these
+  from the profile's `INFO.CFG` (`T<n>` keys).
+- **LiveSplit key**: numpad 1 before the first input, and again when the target trophy is earned
+  (when the slide into level 10/20 ends, or at the last solve), before its pop-up.
+- **Check the board on screen** (on by default; off for record attempts): before the start the
+  board must be 1-1 scrambled, and before each level arrow every puzzle played on the level must
+  show its solved star (the green check). Otherwise the run stops instead of playing on a wrong
+  board. It costs a screen capture per level.
+- **Mind Bender save**: the profile's `SAVEGAME-MINDBENDER.DAT` (level shown, puzzles solved).
+  The game resumes it, so a run needs a profile without one. *Stash the save* (two clicks) moves
+  it into `user_data/save_backups/stashed` like the Speed Chuzzle reset. The game writes it when
+  it leaves Mind Bender, so stash it from the main menu.
+
+Both versions, with and without pop-ups: run on a new profile (all pop-ups), go to the main menu,
+*Stash the save*, *Read profile* (it now has them), run again (no pop-ups).
+
+**Puzzle choice** (`tas_plan.py`): the cursor jumps, so mouse travel costs nothing; what costs
+time is drags and clicks. Each level plays the puzzles with the fewest moves; on a tie the set
+with puzzle 1 wins, because entering a level loads puzzle 1 by itself. Each puzzle uses its
+shortest goal, including a 2x2 piece placement the game also accepts (4-4 in 6 moves instead of
+7). The PUZZLER run is 27 puzzles, 178 moves (the 2023 picks on levels 5, 8 and 9 were 10 moves
+and a click more). A solved puzzle's banner opens the next puzzle when that is the next one
+played; otherwise its star is clicked.
+
+**Input** (`tas_runner.py`): every input goes through one `SendInput` stream (absolute cursor
+moves, button and key events) so the press, moves and release reach the game in the order sent;
+`SetCursorPos` is synchronous while button events are queued, so mixing them (as in 2023) needs
+waits. A drag is: press on the lane, a 4 px nudge along it (the game starts a drag after 2 px and
+counts the offset from that move), the jump to one nudge past the target cell, release.
+
+**Speed**: the game handles every queued message at the start of each 10 ms update, and nothing
+in a run waits for an animation (no scramble animation, the banner is live at the solve, input
+works during the level slide). The only limit is Windows merging cursor moves the game has not
+read yet: the nudge and the jump must arrive as two messages. *Measure speed* (two clicks; the
+game must show a scrambled puzzle of 2+ moves) replays that puzzle's solution over and over,
+reading the board after each try: first with an F24 key press between nudge and jump and no wait,
+else the shortest wait that solves every try (plus a third). The result is kept per game exe in
+`user_data/tas_timing.json`; *Reset timing* goes back to the default (a 25 ms wait).
+
+The game's behaviour was read in the decomp of the 2008 Christmas exe (`X:/chuzzle-decomp`; the
+Mind Bender logic is the same in the 2005 and 2007 builds) and checked there with its replay
+harness (the original exe, scripted input at exact frames, a sandboxed profile): whole PUZZLER,
+PSYCHIC and MENTALIST MASTER runs of the runner's inputs, and these timings:
+
+| After | Until | Updates |
+|---|---|---|
+| arrow click into level 10 / 20 | the pop-up takes a press | 432 |
+| the solve that earns 22 / 24 | the pop-up takes a press | ~400 |
+| that press | "Return to Game" works (pointer on it an update before) | ~62 |
+| "Return to Game" | the board takes drags | ~62 |
+| a solving release | the star's green check is drawn | 4 |
+
 ## Speed Chuzzle tab
 
 Shows the current profile of the game folder in use, its
@@ -187,13 +264,16 @@ content keeps its 1200x840 layout below the 32 px bar.
 | `chuzzle_suite/game_window.py` | window lookup by process, DPI-aware client coords, calibration, mouse input |
 | `chuzzle_suite/player.py` | worker thread that performs drags with the safety stops |
 | `chuzzle_suite/cursor_overlay.py` | the cursor sprite: a click-through layered window that shows the posted pointer |
-| `chuzzle_suite/saves.py` | save-location discovery, watcher, backup / restore / stash |
+| `chuzzle_suite/saves.py` | save-location discovery, watcher, backup / restore / stash; a profile's trophies and Mind Bender save |
 | `chuzzle_suite/launcher.py` | finds every Chuzzle exe (drive scan + cache), version / build date / DRM wrapper, launching |
 | `chuzzle_suite/queue_client.py` | the scheduler's HTTP API: status poller, commands, `mbq status` wording |
 | `chuzzle_suite/title_bar.py` | the app's own title bar (drawing, hit-testing, icons) |
 | `chuzzle_suite/window_frame.py` | Win32 for the borderless window: pin on top, dragging, taskbar styles, placement |
-| `chuzzle_suite/settings.py` | `user_data/settings.json` (the pin) |
+| `chuzzle_suite/tas_plan.py` | the TAS plan: puzzle choice, step order, trophy pop-ups, straight drags |
+| `chuzzle_suite/tas_runner.py` | plays a plan with SendInput, screen checks, speed measurement, timing per exe |
+| `chuzzle_suite/settings.py` | `user_data/settings.json` (the pin, the TAS options) |
 | `chuzzle_suite/ui.py` | the pygame window |
 
-Tests: `python -m unittest discover -s python/chuzzle_suite/tests`.
+Tests: `python -m unittest discover -s python/chuzzle_suite/tests` (`test_tas.py`: the planner,
+and the runner against a fake game that follows the decomp's input rules).
 `user_data/` is git-ignored.

@@ -219,6 +219,43 @@ def read_config(path: Path) -> dict[str, str]:
     return config
 
 
+def owned_trophies(profile_dir: Path) -> set[int]:
+    """The trophies a profile has: INFO.CFG keys T<n> ("T21=Received <date> at <time>")."""
+    config = read_config(profile_dir / "INFO.CFG")
+    return {int(key[1:]) for key in config if key[:1] == "T" and key[1:].isdigit()}
+
+
+MINDBENDER_SAVE = "SAVEGAME-MINDBENDER.DAT"
+
+
+@dataclass
+class MindBenderSave:
+    level: int                  # the level shown when Mind Bender resumes (1-20)
+    solved: set[str]            # "4-2", ...
+    unlocked: int               # levels open
+
+
+def read_mindbender_save(path: Path) -> MindBenderSave | None:
+    """Mind Bender's save (GameInterface::Save, GameInterface_Mindbender::SaveExtra in the decomp
+    of the 2008 exe): int 0xBEAD, string "1.24" (int length with the NUL, bytes), then the level at
+    byte 46, the solved flags at 132 (100 bools, slot-major: slot 0's levels 1-20, then slot 1...)
+    and the unlocked level count at 236. None when the file is missing or not that format."""
+    import struct
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    if len(data) < 240 or struct.unpack_from("<I", data, 0)[0] != 0xBEAD:
+        return None
+    if struct.unpack_from("<i", data, 4)[0] != 5 or data[8:13] != b"1.24\x00":
+        return None
+    level = struct.unpack_from("<i", data, 46)[0]
+    flags = data[132:232]
+    solved = {f"{lvl + 1}-{slot + 1}" for slot in range(5) for lvl in range(20) if flags[slot * 20 + lvl]}
+    unlocked = struct.unpack_from("<i", data, 236)[0]
+    return MindBenderSave(level, solved, unlocked)
+
+
 def scan_location(location: SaveLocation) -> SaveLocation:
     location.profiles = []
     location.shared_files = []
