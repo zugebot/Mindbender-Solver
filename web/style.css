@@ -507,7 +507,9 @@ dialog.fit .skin { display: flex; flex-direction: column; flex: 0 1 auto; min-he
 dialog.fit .skinned { flex: 0 1 auto; min-height: 0; }
 .help-body { overflow-y: auto; overscroll-behavior: contain; }
 .help-body > :first-child { margin-top: 0; }
-.pz-grid { display: grid; gap: 6px; max-height: min(62vh, 640px); overflow-y: auto; padding-right: 4px; container-type: inline-size; }
+/* (no height of its own: the fit dialog gives it the window's room, so a tall screen shows all 20
+   worlds and a short one scrolls) */
+.pz-grid { display: grid; gap: 6px; overflow-y: auto; padding-right: 4px; container-type: inline-size; }
 .pz-row { display: grid; grid-template-columns: 30px repeat(5, minmax(0, 1fr)); gap: 6px; align-items: center; }
 dialog.wide .skin { margin-top: 14px; }
 .pz-world { font-weight: 800; color: var(--gold); text-align: right; padding-right: 4px; }
