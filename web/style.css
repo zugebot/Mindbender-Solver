@@ -477,6 +477,26 @@ dialog::backdrop { background: rgba(6, 4, 16, .7); }
 
 /* ------------------------------------------------------------------ the game's puzzles */
 dialog.wide { width: min(640px, calc(100vw - 24px)); }
+/* From a screenshot: two big choices, the file one also a drop target */
+.pic-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.pic-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 10px 14px; border-radius: 14px;
+  border: 2px solid rgba(255, 201, 58, .45); background: rgba(255, 255, 255, .04); color: var(--muted); font: inherit;
+  font-size: 13px; cursor: pointer;
+}
+.pic-tile.drop { border-style: dashed; }
+.pic-tile:hover, .pic-tile:focus-visible, .pic-tile.over { border-color: var(--gold); background: rgba(255, 201, 58, .1); outline: none; }
+.pic-tile:disabled { cursor: default; opacity: .55; }
+.pic-tile .orb { --o: 52px; margin-bottom: 4px; }
+.pic-name { min-height: 22px; }
+.pic-msg { min-height: 1.4em; margin-top: 12px; text-align: center; }
+.pic-msg.error { color: #ff9f8a; }
+@media (max-width: 420px) {
+  .pic-tiles { grid-template-columns: 1fr; }
+  .pic-tile { flex-direction: row; gap: 12px; padding: 12px 14px; }
+  .pic-tile .orb { --o: 42px; margin: 0; }
+  .pic-sub { margin-left: auto; }
+}
 /* a fit dialog (the puzzles, How it works) never scrolls itself: its head stays, and the box
    under it (with the game's scrollbar) shrinks to the room left (a scrollbar on the dialog would
    take width from the puzzle list, flip its cells' layout, and with it the scrollbar: it

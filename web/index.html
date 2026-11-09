@@ -86,8 +86,7 @@
           <button type="button" class="tool" id="fillBtn"><span class="orb" data-icon="bucket"></span><span class="tool-text" data-label="Fill"></span></button>
           <button type="button" class="tool" id="scrambleBtn" title="Scramble the start with 30 random moves"><span class="orb" data-icon="shuffle"></span><span class="tool-text" data-label="Mix"></span></button>
           <button type="button" class="tool" id="resetBtn" title="Put the start back to the goal"><span class="orb" data-icon="reset"></span><span class="tool-text" data-label="Reset"></span></button>
-          <button type="button" class="tool" id="pictureBtn" title="Read both boards from a screenshot of the game (or drop or paste one here)"><span class="orb" data-icon="picture"></span><span class="tool-text" data-label="Picture"></span></button>
-          <input type="file" id="pictureFile" accept="image/*" hidden>
+          <button type="button" class="tool" id="pictureBtn" title="Fill both boards from a screenshot of the game"><span class="orb" data-icon="picture"></span><span class="tool-text" data-label="Picture"></span></button>
           <button type="button" class="tool" id="shareBtn" title="Copy a link to this puzzle"><span class="orb" data-icon="link" id="shareOrb"></span><span class="tool-text" data-label="Link"></span></button>
           <button type="button" class="tool" id="unfatBtn" title="Remove the 2x2 Chuzzle"><span class="orb" data-icon="unpiece"></span><span class="tool-text" data-label="No 2x2"></span></button>
         </div>
@@ -156,6 +155,31 @@
     </form>
   </dialog>
 
+  <dialog id="pictureDialog" aria-labelledby="picTitle">
+    <form method="dialog" class="dlg">
+      <div class="dlg-head">
+        <h2 id="picTitle"><span id="picTitleText">From a screenshot</span></h2>
+        <button class="icon-btn" value="close" data-icon="x" aria-label="Close"></button>
+      </div>
+      <p class="fine">A screenshot of Mind Bender, from Chuzzle, Chuzzle 2 or the phone game, with the board and the
+        goal beside it, fills both boards. It is read on this device; nothing is uploaded.</p>
+      <div class="pic-tiles">
+        <button type="button" class="pic-tile drop" id="picFileBtn">
+          <span class="orb" data-icon="picture"></span>
+          <span class="pic-name" id="picFileName"></span>
+          <span class="pic-sub" id="picFileSub">or drop it here</span>
+        </button>
+        <button type="button" class="pic-tile" id="picPasteBtn">
+          <span class="orb" data-icon="clipboard"></span>
+          <span class="pic-name" id="picPasteName"></span>
+          <span class="pic-sub" id="picPasteSub"></span>
+        </button>
+      </div>
+      <p class="fine pic-msg" id="picMsg" aria-live="polite"></p>
+      <input type="file" id="pictureFile" accept="image/*" hidden>
+    </form>
+  </dialog>
+
   <dialog id="helpDialog" class="fit" aria-labelledby="helpTitle">
     <form method="dialog" class="dlg">
       <div class="dlg-head">
@@ -185,8 +209,9 @@
         on the start too). Tapping two swaps them as well, and the 2x2 is dragged the same way. Mix scrambles the
         start for you; Reset copies the goal again.</p>
       <p class="fine">Picture fills both boards from a screenshot of the game: Chuzzle, Chuzzle 2 or the phone
-        game, the board with its goal beside it. Pick the file, drop it on the page or paste it. The picture is read
-        on your device and goes nowhere. Check the boards against the game before solving.</p>
+        game, the board with its goal beside it. Choose the file, paste it from the clipboard (Ctrl+V works anywhere
+        on the page) or drop it on the page. The picture is read on your device and goes nowhere. Check the boards
+        against the game before solving.</p>
       <p class="fine">Right-click a Chuzzle to pick its colour. Keys 1-8 choose a colour, 9 the 2x2, Ctrl+Z
         undoes.</p>
       <h3>The search</h3>

@@ -2694,16 +2694,33 @@
     });
   }
 
+  // While From a screenshot is open its own line says how the reading goes (and a picture that
+  // can't be read leaves it open for another try); otherwise the status line does.
+  function pictureSay(text, error = false) {
+    if ($('pictureDialog').open) {
+      const m = $('picMsg');
+      m.textContent = text;
+      m.classList.toggle('error', error);
+      return;
+    }
+    if (error) {
+      showError(text);
+      return;
+    }
+    showError('');
+    statusLink(false);
+    $('status').textContent = text;
+    $('status').title = text;
+  }
+
   let reading = 0;
   async function readScreenshot(file) {
     if (!file || !/^image\//.test(file.type)) {
-      if (file) showError('That file is not a picture.');
+      if (file) pictureSay('That file is not a picture.', true);
       return;
     }
     const ticket = ++reading;
-    showError('');
-    statusLink(false);
-    $('status').textContent = 'Reading the picture...';
+    pictureSay('Reading the picture...');
     let r;
     try {
       r = await readPixels(await pixelsOf(file));
@@ -2712,9 +2729,10 @@
     }
     if (ticket !== reading) return;
     if (r.problem) {
-      showError(r.problem);
+      pictureSay(r.problem, true);
       return;
     }
+    if ($('pictureDialog').open) $('pictureDialog').close();
     const start = { cells: r.start.cells, fat: r.start.fat }, goal = { cells: r.goal.cells, fat: r.goal.fat };
     endCoach();
     const known = PUZZLES.find((p) => sameBoard(presetBoard(p, 'goal'), goal) && sameBoard(presetBoard(p, 'start'), start));
@@ -2738,8 +2756,88 @@
     let text = known ? `Read puzzle ${known.name} from the picture`
       : goalOf ? `Read from the picture: puzzle ${goalOf.name}'s goal, with your own start` : 'Read from the picture';
     if (unsure) text += `. ${unsure} Chuzzle${unsure > 1 ? 's were' : ' was'} hard to make out: check the boards against the game`;
-    $('status').textContent = text;
-    $('status').title = text;
+    pictureSay(text);
+  }
+
+  // The keys and the screenshot shortcut people know on their system.
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const touchOnly = matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches;
+  const canReadClipboard = !!(navigator.clipboard && navigator.clipboard.read);
+  const pasteKeys = `${isMac ? 'Cmd' : 'Ctrl'}+V`;
+
+  async function pasteFromClipboard() {
+    let items;
+    try {
+      items = await navigator.clipboard.read();
+    } catch {
+      pictureSay(touchOnly ? 'The browser didn\'t allow reading the clipboard.'
+        : `The browser didn't allow reading the clipboard: press ${pasteKeys} instead.`, true);
+      return;
+    }
+    for (const item of items) {
+      const type = item.types.find((t) => t.startsWith('image/'));
+      if (!type) continue;
+      const blob = await item.getType(type);
+      readScreenshot(new File([blob], 'clipboard', { type }));
+      return;
+    }
+    pictureSay(touchOnly ? 'No picture on the clipboard: copy a screenshot first.'
+      : isMac ? 'No picture on the clipboard: copy a screenshot first (Cmd+Ctrl+Shift+4).'
+        : 'No picture on the clipboard: copy a screenshot first (Win+Shift+S, or Print Screen).', true);
+  }
+
+  function setupPictureDialog() {
+    const d = $('pictureDialog');
+    fontText($('picTitleText'), 'From a screenshot', { ...GOLD_TEXT, size: 26 });
+    fontText($('picFileName'), touchOnly ? 'Choose a photo' : 'Choose a file', { ...GOLD_TEXT, size: 18 });
+    $('picFileSub').hidden = touchOnly;
+    $('picFileBtn').classList.toggle('drop', !touchOnly);     // the dashed edge of a drop target
+    fontText($('picPasteName'), 'Paste', { ...GOLD_TEXT, size: 18 });
+    $('picPasteSub').textContent = touchOnly ? 'a copied screenshot' : `or press ${pasteKeys}`;
+    // a browser that can't read the clipboard (older Firefox): the keys still paste; a phone
+    // has no keys, so the choice goes
+    if (!canReadClipboard) {
+      if (touchOnly) $('picPasteBtn').hidden = true;
+      else {
+        $('picPasteBtn').disabled = true;
+        $('picPasteSub').textContent = `press ${pasteKeys}`;
+      }
+    }
+    $('pictureBtn').addEventListener('click', () => {
+      $('picMsg').textContent = '';
+      $('picMsg').classList.remove('error');
+      d.showModal();
+    });
+    d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+    $('picFileBtn').addEventListener('click', () => $('pictureFile').click());
+    $('picPasteBtn').addEventListener('click', pasteFromClipboard);
+    $('pictureFile').addEventListener('change', (e) => {
+      readScreenshot(e.target.files[0]);
+      e.target.value = '';
+    });
+    // a picture dropped anywhere on the page (the file choice lights up under it), or pasted
+    // with the keys
+    const hasFile = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+    const tile = $('picFileBtn');
+    addEventListener('dragover', (e) => {
+      if (!hasFile(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      tile.classList.toggle('over', tile.contains(e.target));
+    });
+    addEventListener('dragleave', (e) => { if (!e.relatedTarget) tile.classList.remove('over'); });
+    addEventListener('drop', (e) => {
+      tile.classList.remove('over');
+      if (!hasFile(e)) return;
+      e.preventDefault();
+      readScreenshot(e.dataTransfer.files[0]);
+    });
+    addEventListener('paste', (e) => {
+      const file = e.clipboardData && [...e.clipboardData.files].find((f) => /^image\//.test(f.type));
+      if (!file) return;
+      e.preventDefault();
+      readScreenshot(file);
+    });
   }
 
   function problemSpec() {
@@ -3508,29 +3606,7 @@
       state.side = 'start';
       changed();
     });
-    $('pictureBtn').addEventListener('click', () => $('pictureFile').click());
-    $('pictureFile').addEventListener('change', (e) => {
-      readScreenshot(e.target.files[0]);
-      e.target.value = '';
-    });
-    // a picture dropped anywhere on the page, or pasted (Ctrl+V)
-    const hasFile = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
-    addEventListener('dragover', (e) => {
-      if (!hasFile(e)) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    });
-    addEventListener('drop', (e) => {
-      if (!hasFile(e)) return;
-      e.preventDefault();
-      readScreenshot(e.dataTransfer.files[0]);
-    });
-    addEventListener('paste', (e) => {
-      const file = e.clipboardData && [...e.clipboardData.files].find((f) => /^image\//.test(f.type));
-      if (!file) return;
-      e.preventDefault();
-      readScreenshot(file);
-    });
+    setupPictureDialog();
     $('shareBtn').addEventListener('click', async () => {
       writeHash();
       try {

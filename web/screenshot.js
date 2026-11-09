@@ -299,9 +299,9 @@
     if (goal.cells.every((k) => k === 1) && start.cells.some((k) => k !== 1)) {
       out.problem = 'This picture shows the puzzle solved (its goal turns green). Use one from before the last move.';
     } else if (!!start.fat !== !!goal.fat) {
-      out.problem = 'Only one of the two boards seems to have the 2x2 Chuzzle.';
+      out.problem = 'This doesn\'t read as a Mind Bender puzzle: only one of its two boards seems to have a 2x2 Chuzzle.';
     } else if (a.some((n, k) => n !== b[k])) {
-      out.problem = 'The board and the goal don\'t have the same Chuzzles in this picture.';
+      out.problem = 'This doesn\'t read as a Mind Bender puzzle: the board and the goal don\'t hold the same Chuzzles.';
     }
     return out;
   }

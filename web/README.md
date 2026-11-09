@@ -159,8 +159,11 @@ how much the bound prunes: 13-1 (four colours, one of them 16 cells) would take 
 
 ## Screenshots
 
-Picture (or a picture dropped on the page, or pasted) fills both boards from a screenshot of
-the game. `app.js` draws the file into a canvas (at most ~6 MP) and hands the pixels to
+Picture opens From a screenshot: Choose a file (Choose a photo on a phone; a picture can also be
+dropped on it, or anywhere on the page) or Paste (`navigator.clipboard.read`; the browser may ask
+first, and Ctrl+V works anywhere on the page, dialog open or not). While the dialog is open its
+own line reports the reading, and a picture that can't be read leaves it open with the reason;
+a good one closes it. It fills both boards from a screenshot of the game. `app.js` draws the file into a canvas (at most ~6 MP) and hands the pixels to
 `screenshot.js` in a worker; nothing leaves the device. It assumes no layout, since the games
 place things differently (Chuzzle 1's fixed 800x600 screen; Chuzzle 2 moves its goal circle with
 the window's shape; the phone game is portrait), and finds the two 6x6 grids instead:
