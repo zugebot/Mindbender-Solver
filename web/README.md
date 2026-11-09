@@ -30,7 +30,7 @@ while one is already serving. Stop it in Task Manager (`pythonw.exe`).
 
 Copy the `web/` folder's files to any static host (GitHub Pages, Netlify, Cloudflare Pages,
 or a plain web server): `index.html`, `style.css`, `app.js`, `solver-worker.js`,
-`mb_solver.js`, `puzzles.js`, `font.js`, `solutions/` and `assets/`. No special headers are needed, because the workers share
+`mb_solver.js`, `puzzles.js`, `font.js`, `screenshot.js`, `solutions/` and `assets/`. No special headers are needed, because the workers share
 nothing (see below).
 
 ## Files
@@ -39,6 +39,7 @@ nothing (see below).
 |---|---|
 | `index.html`, `style.css`, `app.js` | the page: board editor, presets, solve orchestration, results and replay |
 | `solver-worker.js` | one solver per Web Worker; talks to `app.js` by messages (the page fetches it and `mb_solver.js` once and starts every worker from one blob, so 16 workers cost no extra downloads; one worker is kept warm between solves) |
+| `screenshot.js` | reads a puzzle from a screenshot of the game (the Picture button, a dropped or pasted picture); run as a Web Worker by `app.js`, and loadable in Node (`module.exports`) for tests |
 | `mb_solver.js` | the solver as WebAssembly, embedded in one JS file (built, but committed so the folder is deployable) |
 | `puzzles.js` | the game's 100 boards with their known optimum or lower bound (generated) |
 | `solutions/` | `<puzzle>.txt`: every shortest solution of each of the game's 100 puzzles, 1-indexed (generated from `build/levels_final/`, 5.6 MB; one is loaded when its puzzle is viewed) |
@@ -155,6 +156,38 @@ In the page, all solutions (Chrome, 16 threads, a quiet machine): 4-2 (2x2, 9 mo
 on 10 workers; 9-2 (12) 7.5 s (Firefox 7.9 s); 14-2 (12) 20 s on 11 workers. 12 moves depends on
 how much the bound prunes: 13-1 (four colours, one of them 16 cells) would take minutes.
 2x2 boards at 12 moves are out of reach: nothing prunes them, and each move costs ~33x.
+
+## Screenshots
+
+Picture (or a picture dropped on the page, or pasted) fills both boards from a screenshot of
+the game. `app.js` draws the file into a canvas (at most ~6 MP) and hands the pixels to
+`screenshot.js` in a worker; nothing leaves the device. It assumes no layout, since the games
+place things differently (Chuzzle 1's fixed 800x600 screen; Chuzzle 2 moves its goal circle with
+the window's shape; the phone game is portrait), and finds the two 6x6 grids instead:
+
+- every pixel gets a class: one of the eight colours by hue (bright and saturated enough, so
+  Chuzzle 1's navy goal glass and Chuzzle 2's dim red space are no colour), white (bright, little
+  saturation), or none; and a dark flag;
+- a grid of pitch p at (x, y) scores (mean over the 36 cells of the share of the cell's middle in
+  its most common colour) x (0.25 + 0.75 x the dark share where four cells meet);
+- the search runs on the picture halved again and again, pitches 12-24 pixels on each (8-24 on
+  the full size of pictures up to 1.2 MP), in steps of p/4, then the best few to the pixel;
+- the board is the best grid, the goal the best one 2.5-6 times smaller beside it (grids only
+  knock each other out at about the same pitch: a grid at half the goal's pitch, each tile cut in
+  four, can outscore the goal);
+- each cell is read at full size: its most common colour if that covers 18% of the cell's
+  middle, else white (Chuzzles have white eyes); unsure when a second colour comes close. The
+  2x2 is four cells of one colour whose meeting point is that colour too. Chuzzle 2's flashing
+  "MATCH THIS" over the goal's bottom row is pale pink, so it hides pixels without voting.
+
+A reading whose two boards don't hold the same Chuzzles is refused with a reason (also a solved
+Chuzzle 1 board: its goal turns green). A picture of one of the 100 puzzles' starts opens that
+puzzle. Checked on 2026-11-08: Chuzzle 2 (Steam) at five window shapes, 960x540 to 1280x720,
+with and without "MATCH THIS", every cell right; Chuzzle 1 captures of 18-1 (the decomp harness's
+`base_mindbender` shots) exactly 18-1, 2x2 included; both at 0.6x-2x, as JPEG at quality 60,
+inside a 1920x1080 desktop and stretched fullscreen. About 0.5 s for 960x540 and 1.2 s for
+1920x1080 in Node on the i7. Not yet checked: the phone game, and Chuzzle 2 puzzles in colours
+other than orange, blue and white. The test pictures are the games' art, so they are not in git.
 
 ## Look
 

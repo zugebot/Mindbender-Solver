@@ -86,6 +86,8 @@
           <button type="button" class="tool" id="fillBtn"><span class="orb" data-icon="bucket"></span><span class="tool-text" data-label="Fill"></span></button>
           <button type="button" class="tool" id="scrambleBtn" title="Scramble the start with 30 random moves"><span class="orb" data-icon="shuffle"></span><span class="tool-text" data-label="Mix"></span></button>
           <button type="button" class="tool" id="resetBtn" title="Put the start back to the goal"><span class="orb" data-icon="reset"></span><span class="tool-text" data-label="Reset"></span></button>
+          <button type="button" class="tool" id="pictureBtn" title="Read both boards from a screenshot of the game (or drop or paste one here)"><span class="orb" data-icon="picture"></span><span class="tool-text" data-label="Picture"></span></button>
+          <input type="file" id="pictureFile" accept="image/*" hidden>
           <button type="button" class="tool" id="shareBtn" title="Copy a link to this puzzle"><span class="orb" data-icon="link" id="shareOrb"></span><span class="tool-text" data-label="Link"></span></button>
           <button type="button" class="tool" id="unfatBtn" title="Remove the 2x2 Chuzzle"><span class="orb" data-icon="unpiece"></span><span class="tool-text" data-label="No 2x2"></span></button>
         </div>
@@ -182,6 +184,9 @@
         places with the one there, so the start always holds the goal's Chuzzles (repainting the goal repaints them
         on the start too). Tapping two swaps them as well, and the 2x2 is dragged the same way. Mix scrambles the
         start for you; Reset copies the goal again.</p>
+      <p class="fine">Picture fills both boards from a screenshot of the game: Chuzzle, Chuzzle 2 or the phone
+        game, the board with its goal beside it. Pick the file, drop it on the page or paste it. The picture is read
+        on your device and goes nowhere. Check the boards against the game before solving.</p>
       <p class="fine">Right-click a Chuzzle to pick its colour. Keys 1-8 choose a colour, 9 the 2x2, Ctrl+Z
         undoes.</p>
       <h3>The search</h3>

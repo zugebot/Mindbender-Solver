@@ -141,7 +141,8 @@ is paused: the solver runs only when the user asks. A job cut off by a reboot is
   (docs/changes-2026-11-05-07.md section 6).
 - `docs/run_history.csv` + `docs/run_logs/`: one row and the full log per solver run (written by
   the scheduler via `python/scheduler/run_history.py`). Use it for timings.
-- `web/`: static solver site (board editor, WebAssembly solver in Web Workers, replay). Serve with
+- `web/`: static solver site (board editor, WebAssembly solver in Web Workers, replay, a screenshot of
+  the game read into both boards by `screenshot.js`). Serve with
   `web/serve.cmd` (background, no caching; `python web/serve.py` in a terminal); rebuild the wasm with `web/build_wasm.ps1`.
 - `python/chuzzle_suite/`: Chuzzle Suite, the pygame app (the demo app before 2026-11-03; Start menu
   shortcut from `install_shortcut.py`, icon from `assets/make_icon.py`; solutions, real-game playback via posted window messages, saves).

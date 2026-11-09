@@ -44,6 +44,7 @@
     minus: '<path d="M6 12h12"/>',
     gear: '<path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/>',
     plus: '<path d="M12 6v12M6 12h12"/>',
+    picture: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 15.5-4.5-4.5L7 20"/>',
   };
   // White symbols over a dark outline, the way the game letters its buttons.
   const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><g class="ol">${ICONS[name]}</g><g class="fg">${ICONS[name]}</g></svg>`;
@@ -2660,6 +2661,87 @@
     }
   }
 
+  // ---------------------------------------------------------------- a screenshot of the game
+  // A screenshot (picked, dropped or pasted) fills both boards: screenshot.js finds the board
+  // and the goal picture beside it, in a worker so the page keeps drawing. The picture stays on
+  // the device. A picture of one of the 100 puzzles' starts opens that puzzle.
+  async function pixelsOf(file) {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, Math.sqrt(6e6 / (bmp.width * bmp.height)));   // at most ~6 MP
+    const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    return ctx.getImageData(0, 0, w, h);
+  }
+
+  function readPixels(img) {
+    return new Promise((resolve, reject) => {
+      const w = new Worker('screenshot.js');
+      w.onmessage = (e) => {
+        w.terminate();
+        resolve(e.data);
+      };
+      w.onerror = (e) => {
+        e.preventDefault();
+        w.terminate();
+        reject(new Error(e.message));
+      };
+      w.postMessage({ w: img.width, h: img.height, buf: img.data.buffer }, [img.data.buffer]);
+    });
+  }
+
+  let reading = 0;
+  async function readScreenshot(file) {
+    if (!file || !/^image\//.test(file.type)) {
+      if (file) showError('That file is not a picture.');
+      return;
+    }
+    const ticket = ++reading;
+    showError('');
+    statusLink(false);
+    $('status').textContent = 'Reading the picture...';
+    let r;
+    try {
+      r = await readPixels(await pixelsOf(file));
+    } catch {
+      r = { problem: 'Could not open that picture.' };
+    }
+    if (ticket !== reading) return;
+    if (r.problem) {
+      showError(r.problem);
+      return;
+    }
+    const start = { cells: r.start.cells, fat: r.start.fat }, goal = { cells: r.goal.cells, fat: r.goal.fat };
+    endCoach();
+    const known = PUZZLES.find((p) => sameBoard(presetBoard(p, 'goal'), goal) && sameBoard(presetBoard(p, 'start'), start));
+    if (known) {
+      loadPreset(known.name);
+    } else {
+      if (!state.preset) state.custom = null;
+      pushUndo();
+      state.start = start;
+      state.goal = goal;
+      state.preset = '';
+      state.picked = null;
+      state.follows = sameBoard(start, goal);
+      if (state.follows) state.start = copyOfGoal();
+      else linkStart();
+      leaveReplay();
+      changed({ keepPreset: true });
+    }
+    const goalOf = PUZZLES.find((p) => sameBoard(presetBoard(p, 'goal'), goal));
+    const unsure = r.start.unsure.length + r.goal.unsure.length;
+    let text = known ? `Read puzzle ${known.name} from the picture`
+      : goalOf ? `Read from the picture: puzzle ${goalOf.name}'s goal, with your own start` : 'Read from the picture';
+    if (unsure) text += `. ${unsure} Chuzzle${unsure > 1 ? 's were' : ' was'} hard to make out: check the boards against the game`;
+    $('status').textContent = text;
+    $('status').title = text;
+  }
+
   function problemSpec() {
     const a = colourCounts(state.start), b = colourCounts(state.goal);
     const diff = [];
@@ -3425,6 +3507,29 @@
       syncStart();
       state.side = 'start';
       changed();
+    });
+    $('pictureBtn').addEventListener('click', () => $('pictureFile').click());
+    $('pictureFile').addEventListener('change', (e) => {
+      readScreenshot(e.target.files[0]);
+      e.target.value = '';
+    });
+    // a picture dropped anywhere on the page, or pasted (Ctrl+V)
+    const hasFile = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+    addEventListener('dragover', (e) => {
+      if (!hasFile(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    addEventListener('drop', (e) => {
+      if (!hasFile(e)) return;
+      e.preventDefault();
+      readScreenshot(e.dataTransfer.files[0]);
+    });
+    addEventListener('paste', (e) => {
+      const file = e.clipboardData && [...e.clipboardData.files].find((f) => /^image\//.test(f.type));
+      if (!file) return;
+      e.preventDefault();
+      readScreenshot(file);
     });
     $('shareBtn').addEventListener('click', async () => {
       writeHash();
