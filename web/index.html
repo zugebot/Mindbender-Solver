@@ -143,7 +143,7 @@
     <button type="button" class="text-btn more" id="moreBtn" hidden></button>
   </section>
 
-  <dialog id="puzzlesDialog" class="wide" aria-labelledby="pzTitle">
+  <dialog id="puzzlesDialog" class="wide fit" aria-labelledby="pzTitle">
     <form method="dialog" class="dlg">
       <div class="dlg-head">
         <h2 id="pzTitle"><span id="pzTitleText">Game puzzles</span></h2>
@@ -154,12 +154,13 @@
     </form>
   </dialog>
 
-  <dialog id="helpDialog" aria-labelledby="helpTitle">
+  <dialog id="helpDialog" class="fit" aria-labelledby="helpTitle">
     <form method="dialog" class="dlg">
       <div class="dlg-head">
         <h2 id="helpTitle"><span id="helpTitleText">How it works</span></h2>
         <button class="icon-btn" value="close" data-icon="x" aria-label="Close"></button>
       </div>
+      <div class="help-body" id="helpBody">
       <p class="fine">Paint the goal, drag the start's Chuzzles to where they begin, then Solve (or open one of the
         game's puzzles). You get a shortest solution of up to 12 moves (or every one: see Settings),
         and proof that none is shorter. Replay it: the wand shows each drag. It runs on your device in WebAssembly; nothing is uploaded.</p>
@@ -192,6 +193,7 @@
         with several colours, little on boards with two or three colours spread evenly, and nothing with the 2x2
         Chuzzle. It stops at 12 moves; longer custom puzzles need the desktop solver.</p>
       <button type="button" class="text-btn tour" id="tourBtn">Show the tutorial again</button>
+      </div>
     </form>
   </dialog>
 

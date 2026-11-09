@@ -475,13 +475,16 @@ dialog::backdrop { background: rgba(6, 4, 16, .7); }
 
 /* ------------------------------------------------------------------ the game's puzzles */
 dialog.wide { width: min(640px, calc(100vw - 24px)); }
-/* the puzzles dialog never scrolls itself: the list shrinks to the room left (a scrollbar on
-   the dialog would take width from the list, flip its cells' layout, and with it the scrollbar:
-   it flickered when the star was dragged to the bottom) */
-dialog.wide[open] { display: flex; flex-direction: column; overflow: hidden; }
-dialog.wide .dlg { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
-dialog.wide .skin { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
-dialog.wide .pz-grid { flex: 0 1 auto; min-height: 0; }
+/* a fit dialog (the puzzles, How it works) never scrolls itself: its head stays, and the box
+   under it (with the game's scrollbar) shrinks to the room left (a scrollbar on the dialog would
+   take width from the puzzle list, flip its cells' layout, and with it the scrollbar: it
+   flickered when the star was dragged to the bottom) */
+dialog.fit[open] { display: flex; flex-direction: column; overflow: hidden; }
+dialog.fit .dlg { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+dialog.fit .skin { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+dialog.fit .skinned { flex: 0 1 auto; min-height: 0; }
+.help-body { overflow-y: auto; overscroll-behavior: contain; }
+.help-body > :first-child { margin-top: 0; }
 .pz-grid { display: grid; gap: 6px; max-height: min(62vh, 640px); overflow-y: auto; padding-right: 4px; container-type: inline-size; }
 .pz-row { display: grid; grid-template-columns: 30px repeat(5, minmax(0, 1fr)); gap: 6px; align-items: center; }
 dialog.wide .skin { margin-top: 14px; }

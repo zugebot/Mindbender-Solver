@@ -3210,7 +3210,11 @@
       }
     });
     fontText($('helpTitleText'), 'How it works', { ...GOLD_TEXT, size: 26 });
-    $('helpBtn').addEventListener('click', () => $('helpDialog').showModal());
+    skinScroll($('helpBody'));
+    $('helpBtn').addEventListener('click', () => {
+      $('helpDialog').showModal();
+      $('helpBody').scrollTop = 0;
+    });
     fontText($('setTitleText'), 'Settings', { size: 40, fill: ['#ffb4ea', '#fff6a0', '#b4ffcf'], outline: 'rgba(20, 6, 18, .95)' });
     $('settingsBtn').addEventListener('click', () => $('settingsDialog').showModal());
     new ResizeObserver(sizeOptStar).observe($('optFrame'));

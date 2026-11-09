@@ -206,7 +206,8 @@ pointer, pink pressed) with white symbols in a dark outline, labelled in Bauhaus
 Scrambulator's candy wrapper (`ScrambulatorButtonBG.png`) holding a button that fills from the
 bottom while the solver runs; the move limit is a - / + stepper; moves, drop-downs and the help
 dialog use the navy-and-gold of the game's `DialogBox.png`.
-The puzzle list scrolls with the game's own scrollbar (`skinScroll` in `app.js`): its
+The puzzle list and the How it works text scroll with the game's own scrollbar (`skinScroll` in
+`app.js`; the dialog itself never scrolls, its head stays put): its
 `ScrollUp` / `ScrollDown` arrows, and the options screen's slider (`OptionSliderBar`, stood
 upright) with its star (`SliderThumb`) as the thumb; the list still scrolls natively underneath
 (wheel, keys, touch). Its cells put the moves under the puzzle's name when the list is too narrow
