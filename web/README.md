@@ -187,7 +187,10 @@ shapes (960x540 to 1280x720) and a yellow-green one (17 pictures, 960x540 to 160
 its par of 5; its goal is Chuzzle 1's 5-4), with and without "MATCH THIS", every cell right; Chuzzle 1 captures of 18-1 (the decomp harness's
 `base_mindbender` shots) exactly 18-1, 2x2 included; both at 0.6x-2x, as JPEG at quality 60,
 inside a 1920x1080 desktop and stretched fullscreen. About 0.5 s for 960x540 and 1.2 s for
-1920x1080 in Node on the i7. Not yet checked: the phone game, and Chuzzle 2's red, purple and cyan. The test pictures are the games' art, so they are not in git.
+1920x1080 in Node on the i7. Chuzzle 2's colours, from a Chuzzle Mama board with all eight and a 2x2 (`readBoard` on its one
+grid): every cell and the 2x2 right; each colour is one pure hue (red 0, orange 26-38, yellow
+60, green 120, cyan 180, blue 240, purple 300), well inside its range. Not yet checked: the phone
+game. The test pictures are the games' art, so they are not in git.
 
 ## Look
 

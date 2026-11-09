@@ -315,7 +315,7 @@
     return { cells, corners, s: score(m, w, x0, y0, p) };
   }
 
-  const api = { read, findGrids, scoreParts, LUT, lutIndex };
+  const api = { read, findGrids, readBoard, scoreParts, LUT, lutIndex };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.MBScreenshot = api;
   // started as a worker (app.js): one picture in ({ w, h, buf } of RGBA bytes), its reading out
