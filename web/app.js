@@ -1786,10 +1786,10 @@
       const r = Math.floor(k / 6), c = k % 6;
       const piece = inPiece(f, r, c);
       if (piece && (r !== f.y || c !== f.x)) return;
-      const w = piece ? 2 * pitch - gap : t, m = piece ? gap : 0;   // the big dot a pixel in from its cells
+      const w = piece ? 2 * pitch - gap : t;   // the 2x2's dot spans its four cells' dots edge to edge
       ctx.fillStyle = dotTints[v];
       ctx.beginPath();
-      ctx.arc(pad + c * pitch + w / 2, pad + r * pitch + w / 2, w / 2 - m, 0, 2 * Math.PI);
+      ctx.arc(pad + c * pitch + w / 2, pad + r * pitch + w / 2, w / 2, 0, 2 * Math.PI);
       ctx.fill();
     });
   }
@@ -3253,6 +3253,7 @@
     pulseAt(p0);
     if (!(await wait(220, token))) return false;
     renderBoard($('startBoard'), result.replay[k + 1], { band: mv });
+    renderThumb($('thumbStart'), result.replay[k + 1]);
     const slide = prepareSlide($('startBoard'), mv, g.d);
     const ok = await tween(260 * Math.abs(g.d) + 240, (p) => {
       const e = easeInOut(p);
@@ -3274,6 +3275,7 @@
     const g = dragOf(mv, result.replay[k - 1]);
     $('guideArrow').classList.add('off');
     renderBoard($('startBoard'), result.replay[k - 1], { band: mv });
+    renderThumb($('thumbStart'), result.replay[k - 1]);
     const slide = prepareSlide($('startBoard'), mv, -g.d);
     const ok = await tween(140 * Math.abs(g.d) + 160, (p) => slide.set(easeInOut(p)), token);
     slide.finish();
@@ -3420,6 +3422,7 @@
         // the move: the board after it, slid in from where the lane was let go
         h.drag.finish();
         renderBoard(el, want, { band: result.moves[h.k] });
+        renderThumb($('thumbStart'), want);
         const slide = prepareSlide(el, { col: h.col, lanes: h.lanes }, d);
         const p0 = off / 80 / d;
         slide.set(p0);
