@@ -3161,24 +3161,59 @@
   }
 
   // The replay's next move, by hand: between the wand's drags (it stops a playing replay), any
-  // row or column of the replay board can be dragged as in the game. The shown move (or any
-  // drag that makes the same board) settles in and the replay steps on; anything else slides back.
+  // row or column of the replay board drags as in the game (Gadget::MouseDrag, Board::OnDragStart,
+  // OnDrag, Board_Mindbender::OnDragEnd; game pixels, a cell 80):
+  // - a press becomes a drag once the mouse is more than 2 pixels from it; then a row if it went
+  //   further across than down, else a column (a tie: a column), the lane under the mouse;
+  // - each mouse step moves the lane by that step, a 2x2 lane only until the 2x2 meets an edge;
+  // - while the lane is less than 25 pixels from its cells, a step mostly the other way (along
+  //   less than a third of across) drops it and takes the other lane through the press instead;
+  // - let go, it snaps to the nearest cell (half a cell or more rounds away from zero).
+  // The shown move, or a drag that makes the same board, settles in and the replay steps on;
+  // anything else slides back as the game's cancelled drags do (10% closer every 10 ms).
   function bindReplayDrag() {
     const el = $('startBoard');
     const sameBoard = (a, b) => a.cells.every((v, i) => v === b.cells[i])
       && JSON.stringify(a.fat || null) === JSON.stringify(b.fat || null);
+    // a pointer position in the board's game pixels, from the first cell's corner
+    const local = (e) => {
+      const b = el.getBoundingClientRect(), u = b.width / 500;
+      return { x: (e.clientX - b.left) / u - 10, y: (e.clientY - b.top) / u - 10 };
+    };
+    const lineAt = (v) => Math.max(0, Math.min(5, Math.trunc(v / 80)));
+    // Board::BeginRowDrag / BeginColumnDrag: the lane, the 2x2's other lane with it, and how far
+    // the 2x2 may go
+    const begin = (h, col, at) => {
+      if (h.drag) h.drag.finish();
+      const f = result.replay[h.k].fat;
+      h.col = col;
+      h.lane = lineAt(col ? at.x : at.y);
+      h.lanes = [h.lane];
+      h.lo = -Infinity;
+      h.hi = Infinity;
+      if (f) {
+        const a = col ? f.x : f.y;
+        if (h.lane === a || h.lane === a + 1) {
+          h.lanes = [a, a + 1];
+          const along = col ? f.y : f.x;
+          h.lo = -along * 80;
+          h.hi = (4 - along) * 80;
+        }
+      }
+      h.off = 0;
+      h.drag = laneDrag(el, col, h.lanes);
+    };
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || state.mode !== 'replay' || !result || !result.replay || laneHeld || sliding) return;
-      const k = result.step, n = result.moves.length;
-      if (k >= n) return;
-      const b = el.getBoundingClientRect(), u = b.width / 500, pitch = 80 * u;
-      const c = Math.floor((e.clientX - b.left - 10 * u) / pitch), r = Math.floor((e.clientY - b.top - 10 * u) / pitch);
-      if (r < 0 || r > 5 || c < 0 || c > 5) return;
+      const k = result.step;
+      if (k >= result.moves.length) return;
+      const p = local(e);
+      if (p.x < 0 || p.x >= 480 || p.y < 0 || p.y >= 480) return;
       e.preventDefault();
       try { el.setPointerCapture(e.pointerId); } catch { /* synthetic events */ }
       const token = interrupt();
       showStep(k, true);
-      laneHeld = { x: e.clientX, y: e.clientY, r, c, k, token, drag: null, o: 0 };
+      laneHeld = { press: p, mouse: p, k, token, drag: null, off: 0 };
     });
     const cancel = () => {
       if (!laneHeld) return;
@@ -3196,7 +3231,9 @@
       }
       h.settling = true;
       el.classList.remove('dragging');
-      const d = Math.round(h.o), want = result.replay[h.k + 1];
+      const off = h.off, i = Math.trunc(off);
+      const d = off > 0 ? Math.trunc((i + 40) / 80) : off < 0 ? Math.trunc((i - 40) / 80) : 0;
+      const want = result.replay[h.k + 1];
       const made = d ? laneMove(result.replay[h.k], h.col, h.lane, d) : null;
       const token = h.token;
       if (made && sameBoard(made, want)) {
@@ -3204,9 +3241,9 @@
         h.drag.finish();
         renderBoard(el, want, { band: result.moves[h.k] });
         const slide = prepareSlide(el, { col: h.col, lanes: h.lanes }, d);
-        const p0 = h.o / d;
+        const p0 = off / 80 / d;
         slide.set(p0);
-        await tween(90 + 120 * Math.abs(h.o - d), (p) => slide.set(p0 + (1 - p0) * easeOut(p)), token);
+        await tween(90 + 1.5 * Math.abs(off - d * 80), (p) => slide.set(p0 + (1 - p0) * easeOut(p)), token);
         slide.finish();
         laneHeld = null;
         if (token === animToken) {
@@ -3214,8 +3251,20 @@
           showStep(h.k + 1);
         }
       } else {
-        const o0 = h.o;
-        await tween(140 + 70 * Math.min(3, Math.abs(o0)), (p) => h.drag.set(o0 * (1 - easeOut(p))), token);
+        // Board::SlideBack: 0.9 of the offset each update (100 a second) until under a pixel
+        await new Promise((resolve) => {
+          const t0 = performance.now();
+          const hook = (now) => {
+            const o = off * 0.9 ** (Math.max(0, now - t0) / 10);
+            const over = Math.abs(o) < 1 || token !== animToken;
+            h.drag.set(over ? 0 : o / 80);
+            if (!over) return;
+            frameHooks.delete(hook);
+            resolve();
+          };
+          frameHooks.add(hook);
+          wakeLoop();
+        });
         h.drag.finish();
         laneHeld = null;
         if (token === animToken) showStep(h.k);
@@ -3226,33 +3275,27 @@
       if (!h || h.settling) return;
       if (h.token !== animToken) return cancel();
       if (!(e.buttons & 1)) return release();
-      const dx = e.clientX - h.x, dy = e.clientY - h.y;
+      const at = local(e);
       if (!h.drag) {
-        if (Math.hypot(dx, dy) < 6) return;
-        // the lane goes the way the pointer went first; one through the 2x2 takes both of its
-        // lanes, and then the 2x2 stops at the edges (laneMove's rule)
-        h.col = Math.abs(dy) > Math.abs(dx);
-        const f = result.replay[h.k].fat;
-        h.lane = h.col ? h.c : h.r;
-        h.lanes = [h.lane];
-        h.lo = -Infinity;
-        h.hi = Infinity;
-        if (f) {
-          const a = h.col ? f.x : f.y;
-          if (h.lane === a || h.lane === a + 1) {
-            h.lanes = [a, a + 1];
-            const along = h.col ? f.y : f.x;
-            h.lo = -along;
-            h.hi = 4 - along;
-          }
-        }
+        // Gadget::MouseDrag: more than 2 pixels from the press starts it
+        const dx = at.x - h.press.x, dy = at.y - h.press.y;
+        if (Math.hypot(dx, dy) <= 2) return;
         $('guideArrow').classList.add('off');
         $('guideCursor').hidden = true;
         el.classList.add('dragging');
-        h.drag = laneDrag(el, h.col, h.lanes);
+        begin(h, !(Math.abs(dx) > Math.abs(dy)), at);
+        h.mouse = at;
+        return;
       }
-      h.o = Math.max(h.lo, Math.min(h.hi, (h.col ? dy : dx) / h.drag.pitch));
-      h.drag.set(h.o);
+      // Board::OnDrag
+      const dx = at.x - h.mouse.x, dy = at.y - h.mouse.y;
+      if (Math.abs(h.off) < 25) {
+        if (!h.col && Math.abs(dx) < Math.abs(dy / 3)) begin(h, true, h.press);
+        else if (h.col && Math.abs(dy) < Math.abs(dx / 3)) begin(h, false, h.press);
+      }
+      h.off = Math.max(h.lo, Math.min(h.hi, h.off + (h.col ? dy : dx)));
+      h.mouse = at;
+      h.drag.set(h.off / 80);
     });
     el.addEventListener('pointerup', release);
     el.addEventListener('pointercancel', release);

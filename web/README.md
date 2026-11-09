@@ -167,9 +167,16 @@ the board shows the next drag. The wand's motion and the lane's slide run as hoo
 the page's one frame loop (`frameHooks` in `app.js`), before the boards are drawn, and the loop runs
 every frame while one does (idle, it rested 40-100 ms between frames, so a slide drew ~9 frames a
 second). Between the wand's drags the next move can be made by hand: any row or column of the
-replay board drags as in the game (chuzzles wrap round the edges, the 2x2 stops at them); the shown
-move, or a drag that makes the same board (left 5 for right 1), settles in and the replay steps on,
-anything else slides back. A press stops a playing replay. The art is PopCap's (from the game files), so a public
+replay board drags by the game's own rules (`bindReplayDrag`, from the decomp's `Gadget::MouseDrag`,
+`Board::OnDragStart` / `OnDrag` and `Board_Mindbender::OnDragEnd`, in game pixels): a press becomes
+a drag past 2 pixels, a row if the mouse went further across than down, else a column (a tie is a
+column), the lane under the mouse; each mouse step moves the lane by that step (a 2x2 lane stops
+when the 2x2 meets an edge, and comes back as soon as the mouse does); while the lane is under 25
+pixels from its cells, a step mostly the other way (along less than a third of across) switches to
+the other lane through the press; let go, it snaps to the nearest cell (a half rounds away from
+zero). The shown move, or a drag that makes the same board (left 5 for right 1), settles in and the
+replay steps on; anything else slides back as the game's cancelled drags do (`Board::SlideBack`,
+0.9 of the offset every 10 ms). A press stops a playing replay. The art is PopCap's (from the game files), so a public
 host redistributes it.
 
 ## Layout
