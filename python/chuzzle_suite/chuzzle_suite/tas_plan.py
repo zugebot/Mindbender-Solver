@@ -84,6 +84,7 @@ class CostModel:
     puzzle_s: float = 0.0       # per puzzle (the same for every pick; the game has no scramble wait)
     slide_s: float = 0.3        # the level slide, when the run ends with it (21/23)
     trophy_s: float = 4.8       # a trophy pop-up, the trophy room and back
+    check_s: float = 0.0        # per level arrow: the screen check of the level's stars (if on)
 
 
 @dataclass(frozen=True)
@@ -170,7 +171,7 @@ class TasPlan:
             elif s.kind == "solve":
                 total += s.pick.move_count * c.move_s + c.puzzle_s
             elif s.kind == "arrow":
-                total += c.click_s + (c.slide_s if s.final else 0.0)
+                total += c.click_s + c.check_s + (c.slide_s if s.final else 0.0)
             elif s.kind == "trophy":
                 total += c.trophy_s
         return total

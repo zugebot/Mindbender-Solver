@@ -137,7 +137,9 @@ Options:
 - **Check the board on screen** (on by default; off for record attempts): before the start the
   board must be 1-1 scrambled, and before each level arrow every puzzle played on the level must
   show its solved star (the green check). Otherwise the run stops instead of playing on a wrong
-  board. It costs a screen capture per level.
+  board. It costs about 0.05 s per level (the newest check is drawn a few updates after the
+  solve). The board is read by the hue of each chuzzle's fur at its sides, so it works on both
+  editions and with Deluxe's colour-blind symbols.
 - **Mind Bender save**: the profile's `SAVEGAME-MINDBENDER.DAT` (level shown, puzzles solved).
   The game resumes it, so a run needs a profile without one. *Stash the save* (two clicks) moves
   it into `user_data/save_backups/stashed` like the Speed Chuzzle reset. The game writes it when
@@ -166,13 +168,34 @@ works during the level slide). The only limit is Windows merging cursor moves th
 read yet: the nudge and the jump must arrive as two messages. *Measure speed* (two clicks; the
 game must show a scrambled puzzle of 2+ moves) replays that puzzle's solution over and over,
 reading the board after each try: first with an F24 key press between nudge and jump and no wait,
-else the shortest wait that solves every try (plus a third). The result is kept per game exe in
-`user_data/tas_timing.json`; *Reset timing* goes back to the default (a 25 ms wait).
+else the shortest wait that solves every try (plus a third); then whether the 2 ms pause after
+each drag can go too. It ends with the puzzle scrambled again, so measuring on 1-1 of a new
+profile can be followed by a run. The result is kept per game exe in `user_data/tas_timing.json`;
+*Reset timing* goes back to the default (a 25 ms wait). On this PC (2026-11-08) both editions
+measured: F24 press, no wait, no pause; a 15-move puzzle's drags go out in ~60 ms and the board
+shows it solved ~15 ms later.
+
+Real-mouse runs (2026-11-08; the Christmas Edition as the decomp's sandboxed copy, Deluxe 1.0 as
+a copy of `E:\Games\Chuzzle Editions\Chuzzle.Deluxe`, both on a new profile), timer from the
+first input to the target trophy:
+
+| Run | Edition | Checks | Time |
+|---|---|---|---|
+| PUZZLER, pop-up | Christmas | on | 1.73 s |
+| PUZZLER, no pop-up | Christmas | on / off | 1.84 s / 1.10 s (2 ms pause) |
+| PUZZLER, no pop-up, from the Suite's buttons | Christmas | off | 0.81 s |
+| SUPREMO (PSYCHIC, MASTER pop-ups mid-run) | Christmas | on | 13.83 s |
+| PUZZLER, pop-up | Deluxe | on | 1.46 s |
+| SUPREMO (PSYCHIC, MASTER pop-ups mid-run) | Deluxe | on | 13.95 s |
+| MENTALIST MASTER, no pop-ups | Deluxe | on | 2.41 s |
+
+The game's saves afterwards held exactly the planned puzzles and the trophies.
 
 The game's behaviour was read in the decomp of the 2008 Christmas exe (`X:/chuzzle-decomp`; the
 Mind Bender logic is the same in the 2005 and 2007 builds) and checked there with its replay
 harness (the original exe, scripted input at exact frames, a sandboxed profile): whole PUZZLER,
-PSYCHIC and MENTALIST MASTER runs of the runner's inputs, and these timings:
+PSYCHIC and MENTALIST MASTER runs of the runner's inputs, SUPREMO in two parts (the first saves
+at level 10, the second resumes from that save), and these timings:
 
 | After | Until | Updates |
 |---|---|---|
@@ -181,6 +204,7 @@ PSYCHIC and MENTALIST MASTER runs of the runner's inputs, and these timings:
 | that press | "Return to Game" works (pointer on it an update before) | ~62 |
 | "Return to Game" | the board takes drags | ~62 |
 | a solving release | the star's green check is drawn | 4 |
+| "Return to Game" | the arrow takes a click | <= 64 (the Menu button needs ~100) |
 
 ## Speed Chuzzle tab
 

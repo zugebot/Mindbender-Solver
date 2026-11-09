@@ -1327,7 +1327,7 @@ class App:
     def tas_current_plan(self) -> tp.TasPlan:
         if self.tas_plan is None:
             self.tas_plan = tp.build_plan(self.levels, self.tas_options(), self.tas_livesplit,
-                                          self.tas_timing.cost_model())
+                                          self.tas_timing.cost_model(self.tas_check))
         return self.tas_plan
 
     def tas_set(self, **changes) -> None:

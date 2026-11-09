@@ -451,12 +451,13 @@ class FakeGame:
         buf = bytearray(800 * 600 * 4)
         for i, colour in enumerate(self.board.cells):
             r, c = divmod(i, 6)
-            cx, cy = 295 + 80 * c, 97 + 80 * r - 20
+            cx, cy = 295 + 80 * c, 97 + 80 * r
             red, green, blue = tr.PALETTE[colour]
-            for dx in (-4, 0, 4):
-                for dy in (-4, 0, 4):
-                    k = ((cy + dy) * 800 + cx + dx) * 4
-                    buf[k:k + 3] = bytes((blue, green, red))
+            for px, py in tr.FUR_PATCHES:
+                for dx in (-2, 0, 2):
+                    for dy in (-2, 0, 2):
+                        k = ((cy + py + dy) * 800 + cx + px + dx) * 4
+                        buf[k:k + 3] = bytes((blue, green, red))
         for n, (cx, cy) in enumerate(tr.STARS):
             colour = (61, 173, 36) if f"{self.level}-{n + 1}" in self.solved else (74, 63, 54)   # BGR
             for dx, dy in tr.STAR_SAMPLES:
@@ -598,6 +599,16 @@ class FakeGameRuns(unittest.TestCase):
         self.assertFalse(timing.key_break)
         self.assertTrue(0.008 <= timing.gap <= 0.04, msg)
         self.assertIn("2-3", msg)
+
+
+class ScreenReading(unittest.TestCase):
+    def test_fur_colours_by_hue(self):
+        # the Christmas Edition's fur, Deluxe's more saturated fur, and what is no chuzzle
+        self.assertEqual([tr.fur_colour(c) for c in tr.PALETTE], list(range(8)))
+        self.assertEqual(tr.fur_colour((12, 178, 12)), 1)
+        self.assertEqual(tr.fur_colour((218, 37, 37)), 0)
+        self.assertIsNone(tr.fur_colour((20, 20, 30)))           # the dark board between chuzzles
+        self.assertIsNone(tr.fur_colour((120, 140, 120)))        # greyish: no colour
 
 
 class ProfileFiles(unittest.TestCase):

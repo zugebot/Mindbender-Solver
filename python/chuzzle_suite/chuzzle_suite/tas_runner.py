@@ -72,12 +72,34 @@ ROOM_IN_S = 0.63                # that press -> the trophy room's "Return to Gam
 ROOM_OUT_S = 0.62               # "Return to Game" -> the board takes drags again (60-62)
 HOVER_S = 0.02                  # trophy screens: the pointer must rest a frame before the press
 SOLVE_CHECK_GRACE_S = 0.6       # how long a board check waits for the screen to show the result
+LEVEL_CHECK_S = 0.05            # what a level's star check costs (the newest check is drawn ~4
+                                # updates after the solve, then a capture)
 
-# Fur colours (levels.hpp order: red, green, blue, orange, yellow, purple, white, cyan), sampled
-# 20 px above each chuzzle's centre on the game's own screenshots.
+# Fur colours as the Christmas Edition draws them (levels.hpp order: red, green, blue, orange,
+# yellow, purple, white, cyan). The reader goes by hue, since Deluxe's fur is more saturated
+# (green 12,178,12) and its colour-blind option draws a symbol on each chuzzle.
 PALETTE = [(167, 64, 64), (65, 166, 65), (67, 67, 250), (249, 130, 4), (249, 249, 67), (203, 69, 203),
            (247, 247, 247), (85, 192, 216)]
-PALETTE_MAX_DIST2 = 45 ** 2 * 3
+# hue ranges (degrees) of the coloured ones; white is any bright colour with little saturation
+HUES = [(0, 15, 0), (15, 45, 3), (45, 90, 4), (90, 160, 1), (160, 215, 7), (215, 270, 2), (270, 330, 5),
+        (330, 361, 0)]
+# four patches on each chuzzle's fur: its sides, clear of the eyes (below the centre) and of the
+# colour-blind symbol (above it)
+FUR_PATCHES = [(-24, -2), (24, -2), (-20, -16), (20, -16)]
+
+
+def fur_colour(rgb) -> int | None:
+    import colorsys
+    r, g, b = (v / 255 for v in rgb)
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    if v < 0.3:
+        return None
+    if s < 0.25:
+        return 6 if v > 0.6 else None
+    if s < 0.4:
+        return None
+    deg = h * 360
+    return next(colour for lo, hi, colour in HUES if lo <= deg < hi)
 
 
 @dataclass
@@ -92,11 +114,13 @@ class TasTiming:
     measured: bool = False
 
     def drag_s(self) -> float:
-        return (0.0 if self.key_break else self.gap) + self.pace + 0.0005
+        """One drag: the waits plus ~2.5 ms of SendInput and checks (a real PUZZLER run: 178 drags
+        and 28 clicks in ~0.5 s)."""
+        return (0.0 if self.key_break else self.gap) + self.pace + 0.0025
 
-    def cost_model(self) -> tp.CostModel:
-        return tp.CostModel(move_s=self.drag_s(), click_s=self.pace + 0.0005, puzzle_s=0.0,
-                            slide_s=SLIDE_S + self.margin,
+    def cost_model(self, checks: bool = False) -> tp.CostModel:
+        return tp.CostModel(move_s=self.drag_s(), click_s=self.pace + 0.001, puzzle_s=0.0,
+                            slide_s=SLIDE_S, check_s=LEVEL_CHECK_S if checks else 0.0,
                             trophy_s=POPUP_AFTER_SOLVE_S + ROOM_IN_S + ROOM_OUT_S + 3 * self.margin
                             + 2 * HOVER_S)
 
@@ -213,16 +237,24 @@ def _pixel(shot, lx: float, ly: float) -> tuple[int, int, int]:
 
 
 def board_from_shot(shot) -> list[int | None]:
-    """36 colour indices (None where the fur matches no colour, e.g. under the SOLVED! band)."""
+    """36 colour indices (None where the fur matches no colour, and for the two rows under the
+    SOLVED! band while it shows: its green tint turns some of them into false greens)."""
     cells: list[int | None] = []
+    band = band_from_shot(shot)
     for r in range(6):
         for c in range(6):
-            cx, cy = BOARD_X + 40 + CELL * c, BOARD_Y + 40 + CELL * r - 20
-            pts = [_pixel(shot, cx + dx, cy + dy) for dx in (-4, 0, 4) for dy in (-4, 0, 4)]
-            rgb = [sum(p[i] for p in pts) / len(pts) for i in range(3)]
-            dists = [sum((rgb[i] - pal[i]) ** 2 for i in range(3)) for pal in PALETTE]
-            best = min(range(len(PALETTE)), key=dists.__getitem__)
-            cells.append(best if dists[best] <= PALETTE_MAX_DIST2 else None)
+            if band and r in (2, 3):
+                cells.append(None)
+                continue
+            cx, cy = BOARD_X + 40 + CELL * c, BOARD_Y + 40 + CELL * r
+            votes: dict[int, int] = {}
+            for px, py in FUR_PATCHES:
+                pts = [_pixel(shot, cx + px + dx, cy + py + dy) for dx in (-2, 0, 2) for dy in (-2, 0, 2)]
+                colour = fur_colour([sum(p[i] for p in pts) / len(pts) for i in range(3)])
+                if colour is not None:
+                    votes[colour] = votes.get(colour, 0) + 1
+            best = max(votes, key=votes.get) if votes else None
+            cells.append(best if best is not None and votes[best] >= 3 else None)
     return cells
 
 
@@ -422,16 +454,19 @@ class _Driver:
             time.sleep(0.005)
 
     def wait_stars(self, numbers: list[int], timeout: float = SOLVE_CHECK_GRACE_S) -> list[int] | None:
-        """Poll until the stars `numbers` (1-5) all show solved. Returns the ones that never did
-        ([] = all fine), or None when the window cannot be captured."""
+        """Poll until the stars `numbers` (1-5) have each shown solved. Returns the ones that never
+        did ([] = all fine), or None when the window cannot be captured. A star counts once it has
+        been seen with its check: the newest one glints for 25 updates, hiding it now and then."""
         give_up = time.perf_counter() + timeout
+        seen: set[int] = set()
         while True:
             self._check()
             shot = gw.capture_client(self.window)
             if shot is None:
                 return None
             solved = stars_from_shot(shot)
-            missing = [n for n in numbers if not solved[n - 1]]
+            seen |= {n for n in numbers if solved[n - 1]}
+            missing = [n for n in numbers if n not in seen]
             if not missing or time.perf_counter() > give_up:
                 return missing
             time.sleep(0.005)
@@ -453,6 +488,7 @@ class TasRunner(_Driver):
         self.on_step = on_step or (lambda i: None)
         self.on_done = on_done or (lambda msg, secs: None)
         self.finished_at: float | None = None
+        self._after_room = False        # the first click after a trophy room rests on its target first
 
     def _run(self) -> None:
         message, elapsed = "done", None
@@ -506,9 +542,11 @@ class TasRunner(_Driver):
                 self.started_at = time.perf_counter()
             if step.kind == "open":
                 if step.how == "star":
-                    self.click(*STARS[step.puzzle - 1])
+                    self.click(*STARS[step.puzzle - 1], hover=self._after_room)
+                    self._after_room = False
                 elif step.how == "next":
-                    self.click(*BANNER)
+                    self.click(*BANNER, hover=self._after_room)
+                    self._after_room = False
             elif step.kind == "solve":
                 self.on_status(f"{step.pick.puzzle}: {step.pick.move_count} moves")
                 for d in tp.drags_for(self.levels, step.pick):
@@ -516,7 +554,8 @@ class TasRunner(_Driver):
                 event_at = time.perf_counter()
             elif step.kind == "arrow":
                 self._check_level(step.level - 1)
-                self.click(*NEXT_ARROW)
+                self.click(*NEXT_ARROW, hover=self._after_room)
+                self._after_room = False
                 event_at = time.perf_counter()
                 if step.final:
                     self._wait(SLIDE_S)          # the trophy comes as the slide ends
@@ -527,6 +566,7 @@ class TasRunner(_Driver):
                 self.click(*TROPHY_CLICK, hover=True)   # into the trophy room
                 self._wait(ROOM_IN_S + t.margin - HOVER_S)
                 self.click(*TROPHY_BACK, hover=True)    # and back to the game
+                self._after_room = True
                 event_at = time.perf_counter()          # a chained pop-up (25) counts from here
                 self._wait(ROOM_OUT_S + t.margin)
         if not any(s.final for s in self.plan.steps) and self.plan.picks:
@@ -632,18 +672,28 @@ class SpeedMeasure(_Driver):
         if pick.move_count < 2:
             raise Stopped(f"{pick.puzzle} has only {pick.move_count} move; open a puzzle with 3 or more")
         base = replace(self.timing, pace=0.002)
+        found, how = None, ""
         # 1) the game's own speed limit: none. With an F24 press between nudge and jump, no wait.
         keyed = replace(base, key_break=True, gap=0.0)
-        if self._all_solve(pick, keyed, self.TRIES, "F24 between nudge and jump, no wait") and \
-                self._all_solve(pick, keyed, self.CONFIRM, "confirming F24, no wait"):
-            return replace(keyed, measured=True), \
-                f"measured on {pick.puzzle}: an F24 press keeps the moves apart, no wait needed ({self.tries} tries)"
-        # 2) else the shortest wait between them that always works, plus a third for safety
-        for gap in self.GAPS:
-            t = replace(base, key_break=False, gap=gap)
-            if self._all_solve(pick, t, self.TRIES, f"gap {gap * 1000:.0f} ms"):
-                safe = replace(t, gap=round(gap * 1.34 + 0.002, 4), measured=True)
-                if self._all_solve(pick, safe, self.CONFIRM, f"confirming gap {safe.gap * 1000:.1f} ms"):
-                    return safe, (f"measured on {pick.puzzle}: {gap * 1000:.0f} ms between nudge and jump works; "
-                                  f"using {safe.gap * 1000:.1f} ms ({self.tries} tries)")
-        return None, f"no setting solved {pick.puzzle} reliably ({self.tries} tries); timing unchanged"
+        if self._all_solve(pick, keyed, self.TRIES, "F24 between nudge and jump, no wait") and                 self._all_solve(pick, keyed, self.CONFIRM, "confirming F24, no wait"):
+            found, how = keyed, "an F24 press keeps the moves apart, no wait needed"
+        else:
+            # 2) else the shortest wait between them that always works, plus a third for safety
+            for gap in self.GAPS:
+                t = replace(base, key_break=False, gap=gap)
+                if self._all_solve(pick, t, self.TRIES, f"gap {gap * 1000:.0f} ms"):
+                    safe = replace(t, gap=round(gap * 1.34 + 0.002, 4))
+                    if self._all_solve(pick, safe, self.CONFIRM, f"confirming gap {safe.gap * 1000:.1f} ms"):
+                        found = safe
+                        how = f"{gap * 1000:.0f} ms between nudge and jump works, using {safe.gap * 1000:.1f} ms"
+                        break
+        if found is None:
+            return None, f"no setting solved {pick.puzzle} reliably ({self.tries} tries); timing unchanged"
+        # 3) no pause between drags either?
+        quick = replace(found, pace=0.0)
+        if self._all_solve(pick, quick, self.TRIES + self.CONFIRM, "no pause between drags"):
+            found, how = quick, how + ", no pause between drags"
+        else:
+            how += f", {found.pace * 1000:.0f} ms between drags"
+        self._reset(pick)       # leave it scrambled: measuring on 1-1 of a new profile, a run can follow
+        return replace(found, measured=True), f"measured on {pick.puzzle}: {how} ({self.tries} tries)"
