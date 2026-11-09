@@ -182,12 +182,12 @@ the window's shape; the phone game is portrait), and finds the two 6x6 grids ins
 
 A reading whose two boards don't hold the same Chuzzles is refused with a reason (also a solved
 Chuzzle 1 board: its goal turns green). A picture of one of the 100 puzzles' starts opens that
-puzzle. Checked on 2026-11-08: Chuzzle 2 (Steam) at five window shapes, 960x540 to 1280x720,
-with and without "MATCH THIS", every cell right; Chuzzle 1 captures of 18-1 (the decomp harness's
+puzzle. Checked on 2026-11-08: Chuzzle 2 (Steam), an orange-blue-white puzzle at five window
+shapes (960x540 to 1280x720) and a yellow-green one (17 pictures, 960x540 to 1600x900, solved in
+its par of 5; its goal is Chuzzle 1's 5-4), with and without "MATCH THIS", every cell right; Chuzzle 1 captures of 18-1 (the decomp harness's
 `base_mindbender` shots) exactly 18-1, 2x2 included; both at 0.6x-2x, as JPEG at quality 60,
 inside a 1920x1080 desktop and stretched fullscreen. About 0.5 s for 960x540 and 1.2 s for
-1920x1080 in Node on the i7. Not yet checked: the phone game, and Chuzzle 2 puzzles in colours
-other than orange, blue and white. The test pictures are the games' art, so they are not in git.
+1920x1080 in Node on the i7. Not yet checked: the phone game, and Chuzzle 2's red, purple and cyan. The test pictures are the games' art, so they are not in git.
 
 ## Look
 
