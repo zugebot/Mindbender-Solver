@@ -122,6 +122,8 @@ is paused: the solver runs only when the user asks. A job cut off by a reboot is
 - `src/utils/`: `progress_reporter.hpp` (cheap progress JSON), `parallel_for.hpp`, `timer.hpp`,
   `intrinsics/` (`my_clz`, `my_ctz64`, `my_pext_u64`, `my_popcount`).
 - `old/`: code that no longer builds or is unreferenced, kept for history (not built; README).
+  `old/early_versions/`: the solvers before this repo (Java 2023 to 2024-01, the 2x2 prototype,
+  the 2023 C++ port) with their answer files; its README compares them with the proven answers.
 - `build/levels_final/`: canonical answers `<p>_c<moves>_<count>.txt` (tracked, 0-indexed moves).
   `build/levels_final/game_accepts/`: placements the game also accepts. The game counts a board
   as solved when every colour matches, so the 2x2 piece may also end on another 2x2 block of its

@@ -28,6 +28,11 @@ Moved here on 2026-10-12, when `src/` was reorganized:
 "No longer compiles" was checked with the Release build on 2026-10-12 before
 the move (MinGW g++, C++23).
 
+Added on 2026-11-10: `early_versions/`, the solvers from before this
+repository (Java 2023 to January 2024, the 2x2 move-table prototype, the 2023
+C++ port), copied from backups. Its README lists where each came from, how
+they worked, and how their answers compare with the proven ones.
+
 Moved here on 2026-11-02:
 
 | File | Why |
