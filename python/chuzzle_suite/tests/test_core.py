@@ -54,8 +54,9 @@ class LevelsAndSimulator(unittest.TestCase):
         import re
         text = lv.paths.BUILD_README.read_text(errors="replace")
         bounds = {n: int(b) for n, b in re.findall(r"^\s*(\d+-\d+): at least (\d+) moves", text, re.M)}
-        self.assertTrue(bounds)                                    # 8 unsolved on 2026-11-02 (6-4 was solved)
-        self.assertGreaterEqual(min(bounds.values()), 16)          # every puzzle up to 15 moves is settled
+        # every puzzle has been solved since 2026-11-07, so the file may list none
+        if bounds:
+            self.assertGreaterEqual(min(bounds.values()), 16)      # every puzzle up to 15 moves is settled
         for name, bound in bounds.items():
             self.assertEqual(self.levels[name].lower_bound, bound, name)
         self.assertIsNone(self.levels["10-2"].lower_bound)        # solved
