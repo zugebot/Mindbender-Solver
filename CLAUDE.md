@@ -210,7 +210,7 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes), `
   depth 7 on 2x2 boards: counts and each pass's index on the GPU, no spill file) and confirms
   candidates by regenerating it. A pass's Bloom blocks must also fit the VRAM (2x2 depth-7
   runs: 5-6 passes).
-  Large pages are off with --gpu. The GTX 1660 drives the desktop and is never used.
+  Large pages are off with --gpu. The GTX 1660 is never used.
 - Recovery keeps only start-side paths that can still reach a middle (rotation lane bound to
   each middle; normal boards, <= 64 middles): 16-2 at 15 moves 58 s -> 6.3 s, exact. Each
   middle's own start half keeps only states the start root can still reach (any number of
@@ -241,9 +241,9 @@ depth-7 goal side is ~800 GB on normal boards: 18-3 at `<5,4,7>` = 86 passes), `
   login are the user's), the MuMu emulator (it costs ~6% CPU; it stays on).
 - The solver runs only when the user asks (no autostart, queue paused). Test runs on solved
   puzzles for exactness checks are fine.
-- GPU work only on the RTX 5060 Ti (`--gpu 5060`), at most 12.5 GB of its VRAM; the GTX 1660
-  drives the desktop. CPU parts of GPU runs use `--threads 6` (the user's
-  choice, 4-6: 16 threads took the i7 to 100 C, 8 kept it at 85-90 C).
+- GPU work only on the RTX 5060 Ti (`--gpu 5060`), at most 12.5 GB of its VRAM. Since
+  2026-11-13 the screen is plugged into the 5060 Ti too (the desktop takes ~1 GB of it; the GTX
+  1660 sits idle), so the desktop can stutter during GPU runs.
 
 ## Measured facts (2026-10)
 
@@ -251,7 +251,8 @@ Machine: i7-10700F (8 cores / 16 threads), 96 GB DDR4 (2 x 16 GB Crucial 3200 + 
 Corsair, all at JEDEC 2133; the Lenovo BIOS has no XMP; don't flash a modded BIOS), X: = Team
 T253 1 TB SATA SSD (32-70 MB/s sustained writes once its cache fills, recovers when idle).
 GPUs (driver 610.88 on both): RTX 5060 Ti 16 GB (PCIe bus 1, x8, CUDA device 0, sm_120, 36 SMs)
-for the solver; GTX 1660 SUPER 6 GB (bus 4, x4, CUDA device 1) for the desktop.
+for the solver and, since 2026-11-13, the screen; GTX 1660 SUPER 6 GB (bus 4, x4, CUDA device 1),
+idle (it drove the desktop until then).
 
 | Run | Time |
 |---|---|
