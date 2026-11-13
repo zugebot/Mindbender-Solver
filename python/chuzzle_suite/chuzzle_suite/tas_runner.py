@@ -325,6 +325,7 @@ class _Driver:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._down = False
         self.started_at: float | None = None
+        self._buffer: list[tuple] | None = None     # None: every input goes out at once
 
     def start(self) -> None:
         self._thread.start()
@@ -352,6 +353,7 @@ class _Driver:
             raise Stopped("the game window lost the foreground")
 
     def _until(self, deadline: float) -> None:
+        self._flush()                   # what is queued goes out before any wait
         while True:
             self._check()
             left = deadline - time.perf_counter()
@@ -384,17 +386,31 @@ class _Driver:
         if buttons and buttons[-1] == "up":
             self._down = False
 
+    def _emit(self, events: list[tuple]) -> None:
+        """Send now, or add to the burst being collected (TasRunner.burst)."""
+        if self._buffer is None:
+            self._send(events)
+        else:
+            self._buffer.extend(events)
+
+    def _flush(self) -> None:
+        if self._buffer:
+            events = list(self._buffer)
+            self._buffer.clear()
+            self._send(events)
+
     def click(self, lx: float, ly: float, hover: bool = False) -> None:
         """Move there, press, release. The Mind Bender screen's buttons take all three in one
         update; the trophy room's button only counts a press after an update with the pointer
         on it (hover=True: a frame's rest first)."""
         x, y = self._screen(lx, ly)
         if hover:
+            self._flush()
             self._send([("move", x, y)])
             self._wait(HOVER_S)
             self._send([("down",), ("up",)])
         else:
-            self._send([("move", x, y), ("down",), ("up",)])
+            self._emit([("move", x, y), ("down",), ("up",)])
         self._wait(self.timing.pace)
 
     def drag(self, d: tp.TasDrag, t: TasTiming | None = None) -> None:
@@ -408,8 +424,9 @@ class _Driver:
         first = [("move",) + self._screen(px, py), ("down",), ("move",) + self._screen(nx, ny)]
         second = [("move",) + self._screen(tx, ty), ("up",)]
         if t.key_break:
-            self._send(first + [("key", VK_F24)] + second)
+            self._emit(first + [("key", VK_F24)] + second)
         else:
+            self._flush()
             self._send(first)
             self._wait(t.gap)
             self._send(second)
@@ -472,11 +489,21 @@ class _Driver:
             time.sleep(0.005)
 
 
+BURSTS = ("drag", "puzzle", "level", "run")
+
+
 class TasRunner(_Driver):
-    """Plays `plan`. Callbacks run on the worker thread: post them to the UI."""
+    """Plays `plan`. Callbacks run on the worker thread: post them to the UI.
+
+    burst: how many inputs go out in one SendInput call: each drag or click on its own
+    ("drag"), each puzzle's drags with the click that opened it ("puzzle"), a whole level up to
+    and with its arrow ("level"), or everything until something must wait ("run"). The events
+    and their order are the same; anything that waits (a pop-up, the last slide, a screen check)
+    sends what is queued first. Esc and Stop are checked between bursts only. Bursts need the
+    F24 key break and no pause after drags (else every drag goes out on its own)."""
 
     def __init__(self, window, geometry, levels, plan: tp.TasPlan, timing: TasTiming,
-                 check_solves: bool = True, livesplit_vk: int = VK_NUMPAD1,
+                 check_solves: bool = True, livesplit_vk: int = VK_NUMPAD1, burst: str = "drag",
                  on_step: Callable[[int], None] | None = None,
                  on_status: Callable[[str], None] | None = None,
                  on_done: Callable[[str, float | None], None] | None = None):
@@ -489,6 +516,8 @@ class TasRunner(_Driver):
         self.on_done = on_done or (lambda msg, secs: None)
         self.finished_at: float | None = None
         self._after_room = False        # the first click after a trophy room rests on its target first
+        self.burst = burst if burst in BURSTS else "drag"
+        self.bursts_sent = 0
 
     def _run(self) -> None:
         message, elapsed = "done", None
@@ -525,12 +554,19 @@ class TasRunner(_Driver):
             shows = f"{seen[0]} ({'solved' if seen[1] == 'goal' else 'scrambled'})" if seen else "something else"
             raise Stopped(f"the game should show {first.pick.puzzle} scrambled, but shows {shows}")
 
+    def _send(self, events: list[tuple]) -> None:
+        super()._send(events)
+        self.bursts_sent += 1
+
     def _play(self) -> None:
         t = self.timing
+        if self.burst != "drag" and t.key_break and t.pace == 0:
+            self._buffer = []
         event_at = time.perf_counter()      # when the last trophy-earning input went out
         for i, step in enumerate(self.plan.steps):
             self.on_step(i)
             if step.kind == "split":
+                self._flush()
                 if self.started_at is None:
                     self.started_at = time.perf_counter()
                 else:
@@ -548,14 +584,19 @@ class TasRunner(_Driver):
                     self.click(*BANNER, hover=self._after_room)
                     self._after_room = False
             elif step.kind == "solve":
-                self.on_status(f"{step.pick.puzzle}: {step.pick.move_count} moves")
+                if self._buffer is None:
+                    self.on_status(f"{step.pick.puzzle}: {step.pick.move_count} moves")
                 for d in tp.drags_for(self.levels, step.pick):
                     self.drag(d)
+                if self.burst == "puzzle":
+                    self._flush()
                 event_at = time.perf_counter()
             elif step.kind == "arrow":
                 self._check_level(step.level - 1)
                 self.click(*NEXT_ARROW, hover=self._after_room)
                 self._after_room = False
+                if self.burst in ("puzzle", "level"):
+                    self._flush()
                 event_at = time.perf_counter()
                 if step.final:
                     self._wait(SLIDE_S)          # the trophy comes as the slide ends
@@ -569,6 +610,7 @@ class TasRunner(_Driver):
                 self._after_room = True
                 event_at = time.perf_counter()          # a chained pop-up (25) counts from here
                 self._wait(ROOM_OUT_S + t.margin)
+        self._flush()
         if not any(s.final for s in self.plan.steps) and self.plan.picks:
             self._check_level(max(self.plan.picks))      # a practice run: its last level too
         if self.finished_at is None:
@@ -580,6 +622,7 @@ class TasRunner(_Driver):
         and the rest of the run would play on the wrong board."""
         if not self.check_solves or level not in self.plan.picks:
             return
+        self._flush()
         numbers = [p.number for p in self.plan.picks[level]]
         missing = self.wait_stars(numbers)
         if missing:

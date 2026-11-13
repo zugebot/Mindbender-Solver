@@ -156,6 +156,11 @@ class App:
         self.tas_others = bool(saved.get("others_owned", False))
         self.tas_livesplit = bool(saved.get("livesplit", True))
         self.tas_check = bool(saved.get("check_solves", True))
+        self.tas_keep_awake = bool(saved.get("keep_awake", False))
+        self.tas_burst = saved.get("burst", "drag") if saved.get("burst") in tr.BURSTS else "drag"
+        self.focus_keeper = gw.FocusKeeper(lambda: getattr(self, "window", None))
+        self.focus_keeper.enabled = self.tas_keep_awake
+        self.focus_keeper.start()
         self.tas_runner: tr.TasRunner | None = None
         self.tas_step = -1
         self.tas_status = ""
@@ -1244,19 +1249,29 @@ class App:
             Button(pg.Rect(x0, 510, 446, 28),
                    lambda: ("[x] " if self.tas_check else "[ ] ") + "check the board on screen (stops on a miss)",
                    lambda: self.tas_set(check_solves=not self.tas_check), idle, lambda: self.tas_check, small=True),
-            Button(pg.Rect(x0 + 296, 544, 150, 24),
+            Button(pg.Rect(x0, 542, 446, 28),
+                   lambda: ("[x] " if self.tas_keep_awake else "[ ] ") + "keep the game running when it loses the focus",
+                   lambda: self.tas_set(keep_awake=not self.tas_keep_awake), lambda: True, lambda: self.tas_keep_awake,
+                   small=True),
+            Button(pg.Rect(x0 + 296, 576, 150, 24),
                    lambda: "Click again to stash" if self._tas_confirming("stash") else "Stash the save",
                    self.tas_stash_save, lambda: idle() and self._tas_mb_save_path() is not None, small=True),
-            Button(pg.Rect(x0, 634, 217, 28),
+            Button(pg.Rect(x0, 694, 217, 28),
                    lambda: "Click again to measure" if self._tas_confirming("measure") else "Measure speed",
                    self.tas_measure, lambda: idle() and self._tas_game_ok()),
-            Button(pg.Rect(x0 + 229, 634, 217, 28), "Reset timing", self.tas_reset_timing,
+            Button(pg.Rect(x0 + 229, 694, 217, 28), "Reset timing", self.tas_reset_timing,
                    lambda: idle() and self.tas_timing.measured),
-            Button(pg.Rect(x0, 670, 217, 36),
+            Button(pg.Rect(x0, 730, 217, 34),
                    lambda: "Click again to start" if self._tas_confirming("start") else "Start run",
                    self.tas_start, lambda: idle() and self._tas_game_ok() and self.tas_current_plan().ok),
-            Button(pg.Rect(x0 + 229, 670, 217, 36), "Stop (or hold Esc)", self.tas_stop, self.tas_running),
+            Button(pg.Rect(x0 + 229, 730, 217, 34), "Stop (or hold Esc)", self.tas_stop, self.tas_running),
         ]
+
+        for i, (burst, label) in enumerate((("drag", "per drag"), ("puzzle", "per puzzle"),
+                                            ("level", "per level"), ("run", "whole run"))):
+            b.append(Button(pg.Rect(x0 + i * 114, 664, 104, 24), label,
+                            lambda v=burst: self.tas_set(burst=v), idle, lambda v=burst: self.tas_burst == v,
+                            small=True))
 
     def _tas_profile(self):
         """The current profile of the save location in use (the game's, after Find game)."""
@@ -1332,18 +1347,21 @@ class App:
 
     def tas_set(self, **changes) -> None:
         names = {"target": "tas_target", "per_level": "tas_per_level", "last_level": "tas_last_level",
-                 "others_owned": "tas_others", "livesplit": "tas_livesplit", "check_solves": "tas_check"}
+                 "others_owned": "tas_others", "livesplit": "tas_livesplit", "check_solves": "tas_check",
+                 "keep_awake": "tas_keep_awake", "burst": "tas_burst"}
         for key, value in changes.items():
             if key == "last_level" and value is not None:
                 value = max(1, min(tp.LEVELS, int(value)))
             setattr(self, names[key], value)
+        self.focus_keeper.enabled = self.tas_keep_awake
         self.tas_plan = None
         self.tas_scroll = 0
         try:
             settings.put("tas", {"target": self.tas_target, "per_level": self.tas_per_level,
                                  "last_level": self.tas_last_level, "owned": sorted(self.tas_owned),
                                  "others_owned": self.tas_others, "livesplit": self.tas_livesplit,
-                                 "check_solves": self.tas_check})
+                                 "check_solves": self.tas_check, "keep_awake": self.tas_keep_awake,
+                                 "burst": self.tas_burst})
         except OSError as exc:
             self.log(f"Could not save settings: {exc}", WARN)
 
@@ -1383,7 +1401,7 @@ class App:
         self.log(f"TAS: {tp.TROPHY_NAMES[plan.options.target]} run, {plan.puzzles} puzzles, {plan.moves} moves")
         self.tas_runner = tr.TasRunner(
             self.window, self.geometry, self.levels, plan, self.tas_timing, check_solves=self.tas_check,
-            livesplit_vk=tr.VK_NUMPAD1 if self.tas_livesplit else 0,
+            livesplit_vk=tr.VK_NUMPAD1 if self.tas_livesplit else 0, burst=self.tas_burst,
             on_step=lambda i: self.post(lambda: setattr(self, "tas_step", i)),
             on_status=lambda s: self.post(lambda: setattr(self, "tas_status", s)),
             on_done=lambda msg, secs: self.post(lambda: self._tas_done(msg, secs)))
@@ -1392,6 +1410,9 @@ class App:
     def _tas_done(self, message: str, seconds: float | None) -> None:
         self.tas_status = ""
         when = f" in {self._tas_clock(seconds)}" if seconds is not None and message == "done" else ""
+        r = self.tas_runner
+        if isinstance(r, tr.TasRunner):
+            when += f" ({r.bursts_sent} input bursts)"
         self.tas_last_result = f"{message}{when}"
         self.log(f"TAS: {self.tas_last_result}", GOOD if message == "done" else WARN)
 
@@ -1444,17 +1465,17 @@ class App:
         self.text("The profile already has (no pop-up)", (x, 320), self.bold)
         self.text("Run", (x, 454), self.bold)
         save = self._tas_save_info()
-        self.text(self._elide_end(save[0], self.small, 282), (x, 548), self.small, save[1])
-        self.text("Timing", (x, 578), self.bold)
+        self.text(self._elide_end(save[0], self.small, 282), (x, 580), self.small, save[1])
+        self.text("Timing", (x, 610), self.bold)
         t = self.tas_timing
         source = "measured" if t.measured else "default, not measured"
         apart = "an F24 press" if t.key_break else f"a {t.gap * 1000:.1f} ms wait"
         self.text(f"drags: {apart} mid-drag, {t.pace * 1000:.0f} ms after ({source})",
-                  (x, 600), self.small, GOOD if t.measured else WARN)
+                  (x, 632), self.small, GOOD if t.measured else WARN)
         self.text(f"trophy: pop-up {tr.POPUP_AFTER_SOLVE_S:.2f}-{tr.POPUP_AFTER_ARROW_S:.2f} s, room "
-                  f"{tr.ROOM_IN_S:.2f} + {tr.ROOM_OUT_S:.2f} s (+{t.margin:.2f} s each)", (x, 616), self.small, DIM)
+                  f"{tr.ROOM_IN_S:.2f} + {tr.ROOM_OUT_S:.2f} s (+{t.margin:.2f} s each)", (x, 648), self.small, DIM)
         if not self._tas_game_ok() and not self.tas_running():
-            self.text("Find the game first (bottom bar).", (x, 716), self.small, WARN)
+            self.text("Find the game first (bottom bar).", (x + 200, 613), self.small, WARN)
 
         right = pg.Rect(494, 52, 694, 716)
         plan = self.tas_current_plan()

@@ -175,6 +175,22 @@ profile can be followed by a run. The result is kept per game exe in `user_data/
 measured: F24 press, no wait, no pause; a 15-move puzzle's drags go out in ~60 ms and the board
 shows it solved ~15 ms later.
 
+**Bursts** (Timing: *per drag*, *per puzzle*, *per level*, *whole run*): how many inputs go out in
+one `SendInput` call. The events and their order are the same in every mode; anything that must
+wait (a trophy pop-up, the last level slide, a screen check) sends what is queued first. The game
+copies every waiting Windows message into its own list and handles the whole list at the start
+of its next 10 ms update (`App::PumpMessages`, `QueueMessage`, `HandleQueuedMessages` in the
+decomp), so one burst of a whole run is played in one long update and drawn once at the end.
+Esc and Stop are checked between bursts only. Bursts need the F24 break and no pause after drags.
+A SUPREMO run with every trophy owned and no LiveSplit keys is 1,168 bursts per drag, 1 as a
+whole run (1,067 drags, 99 clicks, 7,770 events).
+
+**Keep the game running when it loses the focus** (Run): the game stops updating without the
+focus and, in a game mode, opens its "GAME PAUSED" overlay (`App::SetActive`,
+`ChuzzleApp::SetActive`). The Suite posts it `WM_ACTIVATEAPP(TRUE)` / `WM_ACTIVATE(WA_ACTIVE)`
+whenever it loses the foreground and clicks the overlay's band away (`game_window.FocusKeeper`),
+so it keeps running while OBS or the Suite is in front. Keys still go to the window in front.
+
 Real-mouse runs (2026-11-08; the Christmas Edition as the decomp's sandboxed copy, Deluxe 1.0 as
 a copy of `E:\Games\Chuzzle Editions\Chuzzle.Deluxe`, both on a new profile), timer from the
 first input to the target trophy:
@@ -188,6 +204,17 @@ first input to the target trophy:
 | PUZZLER, pop-up | Deluxe | on | 1.46 s |
 | SUPREMO (PSYCHIC, MASTER pop-ups mid-run) | Deluxe | on | 13.95 s |
 | MENTALIST MASTER, no pop-ups | Deluxe | on | 2.41 s |
+
+SUPREMO with every Mind Bender trophy already owned (2026-11-13, Christmas Edition, measured
+timing, new profiles given T21-T24 in `INFO.CFG`), timed from 60 fps OBS recordings: from the first
+frame the game reacts to the first frame showing level 20 solved. The game draws nothing while it
+works through a burst, so the last two runs jump from 1-1 to the end.
+
+| Bursts | Checks | Frames | Time |
+|---|---|---|---|
+| per drag | on | 156 | 2.600 s |
+| per drag | off | 65 | 1.083 s |
+| whole run (no LiveSplit keys) | off | 28 | 0.467 s |
 
 The game's saves afterwards held exactly the planned puzzles and the trophies.
 

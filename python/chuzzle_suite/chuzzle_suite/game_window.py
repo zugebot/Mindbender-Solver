@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import threading
 import time
 from ctypes import wintypes
 from dataclasses import dataclass
@@ -265,7 +266,8 @@ def clear_geometry(window: GameWindow) -> None:
 # never moved and the game does not need focus. Coordinates are client pixels.
 # --------------------------------------------------------------------------
 
-WM_ACTIVATE, WM_SETFOCUS = 0x0006, 0x0007
+WM_ACTIVATE, WM_SETFOCUS, WM_ACTIVATEAPP = 0x0006, 0x0007, 0x001C
+WA_ACTIVE = 1
 WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP = 0x0200, 0x0201, 0x0202
 MK_LBUTTON = 0x0001
 PAUSE_BANNER_CLICK = (60, 250)      # logical px: left end of the "GAME PAUSED" band
@@ -362,6 +364,63 @@ def resume_if_paused(window: GameWindow) -> bool:
     post_button(window, False, x, y)
     time.sleep(0.5)
     return True
+
+
+class FocusKeeper:
+    """Keeps the game running while another window has the focus (to start OBS, say).
+
+    The game stops updating when it gets WM_ACTIVATEAPP(FALSE) / WM_ACTIVATE(WA_INACTIVE), and
+    inside a game mode it also opens the "GAME PAUSED" overlay (decomp: App::SetActive,
+    ChuzzleApp::SetActive, PauseOverlay). When the game loses the foreground this posts
+    WM_ACTIVATEAPP(TRUE) and WM_ACTIVATE(WA_ACTIVE), which make it run again, and clicks the
+    overlay's band away if it is up. Keys still go to the window in front; the mouse reaches the
+    game only when it is over it."""
+
+    POLL_S = 0.025
+    RECHECK_S = 0.5             # while in the background: look for the pause overlay this often
+
+    def __init__(self, get_window):
+        self.get_window = get_window
+        self.enabled = False
+        self.wakes = 0
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def _wake(self, window: GameWindow) -> None:
+        user32.PostMessageW(window.hwnd, WM_ACTIVATEAPP, 1, 0)
+        user32.PostMessageW(window.hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
+        self.wakes += 1
+        time.sleep(0.15)        # let it draw a frame, then look for the overlay
+        if looks_paused(window):
+            _, _, cw, ch = window.client_rect()
+            x, y = PAUSE_BANNER_CLICK[0] * cw / LOGICAL_W, PAUSE_BANNER_CLICK[1] * ch / LOGICAL_H
+            post_move(window, x, y, False)
+            post_button(window, True, x, y)
+            post_button(window, False, x, y)
+
+    def _loop(self) -> None:
+        was_front, last = True, 0.0
+        while True:
+            time.sleep(self.POLL_S)
+            try:
+                window = self.get_window()
+                if not self.enabled or window is None or not window.alive() or window.is_foreground():
+                    was_front = True
+                    continue
+                now = time.monotonic()
+                if was_front:                   # it has just lost the focus
+                    was_front = False
+                    time.sleep(0.03)            # after the game has handled the real deactivation
+                    self._wake(window)
+                    last = now
+                elif now - last > self.RECHECK_S:
+                    last = now
+                    if looks_paused(window):
+                        self._wake(window)
+            except Exception:
+                was_front = True
 
 
 # --------------------------------------------------------------------------

@@ -479,6 +479,7 @@ class FakeGameRuns(unittest.TestCase):
         with self.patched(game):
             runner = tr.TasRunner(FakeWindow(), gw.Geometry(), self.levels, plan, timing,
                                   on_done=lambda msg, secs: done.append(msg), **kw)
+            self.last_runner = runner
             runner._run()
         game.read()
         return done[0]
@@ -518,6 +519,35 @@ class FakeGameRuns(unittest.TestCase):
         game = FakeGame(self.levels, owned=owned)
         self.assertEqual(self.run_plan(plan, game), "done")
         self.assertEqual((len(game.solved), game.popups), (50, []))
+
+    def test_bursts_play_the_same_run(self):
+        owned = frozenset({PUZZLER, PSYCHIC})
+        plan = tp.build_plan(self.levels, tp.TasOptions(target=PSYCHIC, owned=owned))
+        sent = {}
+        for burst in tr.BURSTS:
+            game = FakeGame(self.levels, owned=owned)
+            self.assertEqual(self.run_plan(plan, game, burst=burst, check_solves=False), "done", burst)
+            self.assertEqual((len(game.solved), game.level, game.splits, game.popups), (50, 10, 2, []), burst)
+            sent[burst] = self.last_runner.bursts_sent
+        clicks = sum(1 for st in plan.steps if st.kind == "arrow" or (st.kind == "open" and st.how != "auto"))
+        self.assertEqual(sent["drag"], plan.moves + clicks + 2)        # + the two LiveSplit keys
+        self.assertEqual(sent["puzzle"], plan.puzzles + 9 + 2)          # each puzzle, the 9 arrows
+        self.assertEqual(sent["level"], 10 + 2)                         # levels 1-9 with their arrows, 10
+        self.assertEqual(sent["run"], 1 + 2)                            # one burst between the splits
+
+    def test_whole_run_burst_still_waits_for_pop_ups(self):
+        plan = tp.build_plan(self.levels, tp.TasOptions(target=PSYCHIC))
+        game = FakeGame(self.levels)
+        self.assertEqual(self.run_plan(plan, game, burst="run"), "done")
+        self.assertEqual((len(game.solved), game.popups, game.ignored_while_modal), (50, [PUZZLER, PSYCHIC], 0))
+
+    def test_bursts_need_the_key(self):
+        # with a gap between nudge and jump every drag goes out on its own
+        plan = tp.build_plan(self.levels, tp.TasOptions(last_level=2))
+        game = FakeGame(self.levels, keys_separate=False)
+        timing = tr.TasTiming(key_break=False, gap=0.0, pace=0.0)
+        self.assertEqual(self.run_plan(plan, game, timing, burst="run"), "done")
+        self.assertEqual(len(game.solved), 6)
 
     def test_gap_instead_of_the_key(self):
         plan = tp.build_plan(self.levels, tp.TasOptions(last_level=2))
