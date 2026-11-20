@@ -11,7 +11,8 @@
   // The Settings dialog's choices, kept in this browser. first: stop at the first shortest
   // solution (the default; every shorter length is still searched in full) or list them all.
   // threads: 0 = auto.
-  const settings = { first: true, threads: 0 };
+  // speed: the guided replay's pace (SPEEDS, the button beside Play).
+  const settings = { first: true, threads: 0, speed: 'normal' };
   try { Object.assign(settings, JSON.parse(localStorage.getItem('mb-settings') || '{}')); } catch { /* storage blocked */ }
   const saveSettings = () => {
     try { localStorage.setItem('mb-settings', JSON.stringify(settings)); } catch { /* storage blocked */ }
@@ -3140,6 +3141,29 @@
   // drags the lane (which slides with it) the short way round, and lets go. Between moves
   // an arrow on the board shows the next drag.
   const HOT = { x: 12, y: 11 };               // the star's tip in the 52 px wand sprite
+  // The replay's three paces. Mostly the idle time changes (the pause between moves, the press
+  // before a drag and the hold after it); the glide and the drag only a little, so a lane never
+  // jumps. pause, press, hold: ms; motion: the glide's and the drag's time, x.
+  const SPEEDS = [
+    { key: 'relaxed', label: '1x', name: 'Relaxed', pause: 600, press: 220, hold: 160, motion: 1 },
+    { key: 'normal', label: '1.5x', name: 'Normal', pause: 300, press: 150, hold: 100, motion: 0.85 },
+    { key: 'fast', label: '2.5x', name: 'Fast', pause: 100, press: 80, hold: 60, motion: 0.65 },
+  ];
+  const pace = () => SPEEDS.find((s) => s.key === settings.speed) || SPEEDS[1];
+
+  function renderSpeed() {
+    const s = pace(), btn = $('speedBtn');
+    fontText(btn.querySelector('[data-speed]'), s.label, { ...GOLD_TEXT, size: 17 });
+    btn.setAttribute('aria-label', `Replay speed: ${s.name}`);
+    btn.title = `Replay speed: ${s.name} (click to change)`;
+  }
+
+  function cycleSpeed() {
+    const i = SPEEDS.indexOf(pace());
+    settings.speed = SPEEDS[(i + 1) % SPEEDS.length].key;
+    saveSettings();
+    renderSpeed();
+  }
   const guide = { at: null };                 // where the wand is, in the start figure's pixels
   let animToken = 0;
   const interrupt = () => {
@@ -3275,15 +3299,16 @@
     const from = guide.at || { x: p0.x + 30, y: p0.y + 70 };
     $('guideCursor').hidden = false;
     const dist = Math.hypot(p0.x - from.x, p0.y - from.y);
-    if (dist > 2 && !(await tween(Math.min(700, 280 + dist * 1.6), (p) => placeCursor(lerp(from, p0, easeOut(p))), token))) return false;
+    const sp = pace();
+    if (dist > 2 && !(await tween(Math.min(700, 280 + dist * 1.6) * sp.motion, (p) => placeCursor(lerp(from, p0, easeOut(p))), token))) return false;
     $('guideArrow').classList.add('off');
     placeCursor(p0, true);
     pulseAt(p0);
-    if (!(await wait(220, token))) return false;
+    if (!(await wait(sp.press, token))) return false;
     renderBoard($('startBoard'), result.replay[k + 1], { band: mv });
     renderThumb($('thumbStart'), result.replay[k + 1]);
     const slide = prepareSlide($('startBoard'), mv, g.d);
-    const ok = await tween(260 * Math.abs(g.d) + 240, (p) => {
+    const ok = await tween((260 * Math.abs(g.d) + 240) * sp.motion, (p) => {
       const e = easeInOut(p);
       slide.set(e);
       placeCursor(lerp(p0, p1, e), true);
@@ -3291,7 +3316,7 @@
     slide.finish();
     if (!ok) return false;
     placeCursor(p1, true);
-    if (!(await wait(160, token))) return false;
+    if (!(await wait(sp.hold, token))) return false;
     placeCursor(p1, false);
     showStep(k + 1, true);
     return true;
@@ -3550,7 +3575,7 @@
     while (token === animToken && result.step < result.moves.length) {
       if (!(await untilReplayShown(token))) break;      // looking at the goal: hold, then go on
       if (!(await animateMove(result.step, token))) break;
-      if (!(await wait(600, token))) break;
+      if (!(await wait(pace().pause, token))) break;
     }
     if (token === animToken) interrupt();
   }
@@ -3710,6 +3735,8 @@
     $('nextBtn').addEventListener('click', next);
     $('lastBtn').addEventListener('click', () => { interrupt(); showStep(Infinity); });
     $('playBtn').addEventListener('click', togglePlay);
+    $('speedBtn').addEventListener('click', cycleSpeed);
+    renderSpeed();
     $('copyAllBtn').addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(result.lines.join('\n') + '\n');

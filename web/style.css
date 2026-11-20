@@ -290,6 +290,11 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .step .nm { color: var(--faint); font-size: 12px; }
 .track { display: flex; align-items: center; justify-content: center; gap: 12px; max-width: 100%; }
 .track .play { --o: 54px; }
+/* the replay's pace (1x, 1.5x, 2.5x): a small plaque that cycles on click; a fixed width, so
+   the row stays put as its label changes */
+.speed { justify-content: center; min-width: 58px; height: 40px; padding: 0 10px; cursor: pointer; flex: none; }
+.speed:hover .ftext { filter: brightness(1.15); }
+.speed:active { transform: translateY(1px); }
 .line { min-width: 0; border-radius: 24px; padding: 4px; }
 .line .icon-btn { --o: 34px; }
 .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; min-width: 0; padding: 0 4px; }
@@ -381,6 +386,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   .track .play { grid-area: 2 / 4; }
   #nextBtn { grid-area: 2 / 5; }
   #lastBtn { grid-area: 2 / 6; }
+  .speed { grid-area: 2 / 7; justify-self: start; height: 38px; min-width: 52px; padding: 0 8px; }
 }
 
 /* ------------------------------------------------------------------ the solutions, below the app */
