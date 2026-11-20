@@ -2457,7 +2457,7 @@
     let text, warn = false;
     $('info').hidden = !!state.coach || state.mode === 'replay';
     if (startMismatch()) {
-      text = 'Start and goal need the same Chuzzles: press Reset';
+      text = 'Start and goal need the same Chuzzles: press Clear';
       warn = true;
     } else if (!p) {
       text = customInfo();
@@ -2863,7 +2863,7 @@
     const diff = [];
     for (let k = 0; k < 8; k++) if (a[k] !== b[k]) diff.push(`${COLORS[k].toLowerCase()} ${a[k]} vs ${b[k]}`);
     if (diff.length || !!state.start.fat !== !!state.goal.fat) {
-      return { error: 'The start and the goal need the same Chuzzles: press Reset to copy the goal to the start again.' };
+      return { error: 'The start and the goal need the same Chuzzles: press Clear to copy the goal to the start again.' };
     }
     const fat = state.start.fat
       ? { start: [state.start.fat.x, state.start.fat.y], goal: [state.goal.fat.x, state.goal.fat.y] } : null;
