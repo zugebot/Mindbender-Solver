@@ -850,7 +850,7 @@
   // body reaches 38 game pixels from its centre, the 2x2's 84) and in the chuzzle's own colour.
   // (cx, cy) in canvas pixels.
   function drawHint(ctx, cx, cy, big, k, s) {
-    const rad = (big ? 90 : 44) * s, w = (big ? 5 : 4) * s;
+    const rad = (big ? 86 : 41) * s, w = (big ? 5 : 4) * s;
     ctx.lineWidth = w;
     for (const [style, o] of [['rgba(0, 0, 0, 0.6)', 2 * s], [`rgb(${BODY[k].map((v) => Math.round(v * 255)).join(',')})`, 0]]) {
       ctx.strokeStyle = style;
@@ -1645,7 +1645,7 @@
   const ORB_TEXT = { size: 22, fill: ['#ffffff', '#ffe9a8'], outline: 'rgba(60, 10, 0, .95)' };
   const captionStyle = () => ({ ...GOLD_TEXT, size: Math.round(Math.max(18, Math.min(30, 34 * layout.u))) });
   // (the bar's own width: phones turned sideways give it a column, not the window)
-  const infoSize = () => Math.round(Math.max(15, Math.min(22, (document.querySelector('.subbar').clientWidth || innerWidth) / 42)));
+  const infoSize = () => Math.round(Math.max(13, Math.min(22, (document.querySelector('.subbar').clientWidth || innerWidth) / 42)));
 
   // ---------------------------------------------------------------- layout
   // The boards fill the space between the info bar and the dock: two side by side when that
@@ -1666,7 +1666,7 @@
     const st = $('stage');
     const W = st.clientWidth, H = st.clientHeight;
     if (!W || !H) return;
-    const pad = 16, caption = 36, tabs = 56;
+    const pad = 16, caption = 36, tabs = 44;
     const arrow = Math.max(46, Math.min(72, 64 * layout.u)) + 36;
     const u2 = Math.min((W - pad - arrow) / 1070, (H - pad - caption) / 535);
     const u1 = Math.min((W - pad) / 535, (H - pad - tabs) / 535);
@@ -1781,7 +1781,7 @@
   let dotTints = null;
   function renderThumb(el, board) {
     const dpr = window.devicePixelRatio || 1;
-    const t = Math.round(7 * dpr), gap = Math.max(1, Math.round(dpr)), pad = Math.round(3 * dpr), pitch = t + gap;
+    const t = Math.round(5 * dpr), gap = Math.max(1, Math.round(dpr)), pad = Math.round(2 * dpr), pitch = t + gap;
     const size = 2 * pad + 6 * pitch - gap;
     if (el.width !== size) {
       el.width = el.height = size;
