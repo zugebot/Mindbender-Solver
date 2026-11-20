@@ -1679,7 +1679,13 @@
     if (moved) {
       fontText($('startCap'), state.mode === 'replay' ? 'Replay' : 'Start', captionStyle());
       fontText($('goalCap'), 'Goal', captionStyle());
-      if (state.mode === 'replay' && result && result.replay && !result.playing && !laneHeld) showStep(result.step);
+      if (state.mode === 'replay' && result && result.replay && !laneHeld) {
+        if (!result.playing) showStep(result.step);
+        else if (!result.moving) {              // playing, between moves: the wand's old spot is
+          guide.at = null;                      // in the old size's pixels, so start it afresh
+          showStep(result.step, true);
+        }
+      }
     }
   }
 
@@ -1901,6 +1907,11 @@
   function setSide(side) {
     state.side = side;
     render();
+    // back on the replay: its arrow and wand were last placed while it was hidden, so place
+    // them again for the move it is on (a move still sliding places its own as it goes)
+    if (side === 'start' && state.mode === 'replay' && result && result.replay && !result.moving && !laneHeld) {
+      showStep(result.step, true);
+    }
   }
 
   // The Settings dialog: the solutions switch (the choice in gold, as in the header's switch)
@@ -3179,7 +3190,15 @@
     return { x: ox + c * pitch, y: oy + r * pitch };
   }
 
+  // Is the replay board on screen? On a narrow window only one board shows (the tabs switch
+  // them), and a hidden board measures 0 x 0, so nothing measured on it may be kept.
+  const replayShown = () => $('startBoard').offsetWidth > 0;
+
   function placeCursor(p, down = false) {
+    if (!replayShown()) {                     // a point measured on a hidden board is (0, 0)-ish:
+      guide.at = null;                        // forget it; showStep places the wand on return
+      return;
+    }
     guide.at = p;
     const el = $('guideCursor');
     const k = (el.offsetWidth || 52) / 52;
@@ -3241,6 +3260,15 @@
 
   // Plays move k with the wand: glide to the lane, press, drag (the lane follows), let go.
   async function animateMove(k, token) {
+    result.moving = true;
+    try {
+      return await animateMoveSteps(k, token);
+    } finally {
+      result.moving = false;
+    }
+  }
+
+  async function animateMoveSteps(k, token) {
     const mv = result.moves[k];
     const g = dragOf(mv, result.replay[k]);
     const p0 = boardPoint(mv, g.s, g.cross), p1 = boardPoint(mv, g.s + g.d, g.cross);
@@ -3498,6 +3526,15 @@
     if (!(await animateBack(result.step, token)) && token === animToken) showStep(result.step);
   }
 
+  // Waits while the replay board is hidden (the Goal tab on a narrow window). False if the
+  // playback was stopped meanwhile.
+  async function untilReplayShown(token) {
+    while (!replayShown()) {
+      if (!(await new Promise((res) => setTimeout(() => res(token === animToken), 120)))) return false;
+    }
+    return true;
+  }
+
   async function togglePlay() {
     if (!result || !result.replay) return;
     if (result.playing) {
@@ -3511,6 +3548,7 @@
     setIcon($('playBtn'), 'pause');
     $('playBtn').setAttribute('aria-label', 'Pause');
     while (token === animToken && result.step < result.moves.length) {
+      if (!(await untilReplayShown(token))) break;      // looking at the goal: hold, then go on
       if (!(await animateMove(result.step, token))) break;
       if (!(await wait(600, token))) break;
     }
