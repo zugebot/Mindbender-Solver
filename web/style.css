@@ -253,8 +253,17 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 }
 .dock-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px 24px; }
 /* 6 x 2: the 8 colours as 4 x 2, the 2x2 chuzzle as a 2 x 2 block on the right */
-/* the chuzzles sit close, as on a board (the 2x2 spans two of them and the gap between) */
-.palette { --pg: 3px; display: grid; grid-template-columns: repeat(6, var(--sz)); grid-template-rows: repeat(2, var(--sz)); gap: var(--pg); --sz: 42px; }
+/* a little 2 x 6 board: the chuzzles side by side in the game's board frame (Border.png, 9-sliced:
+   its rim is 28 of its 535 units, the corners round at 41; --pu is one unit at the palette's
+   scale, a chuzzle being 80) on the board's dark ground */
+.palette {
+  --pg: 0px; --sz: 42px; --pu: calc(var(--sz) / 80);
+  display: grid; grid-template-columns: repeat(6, var(--sz)); grid-template-rows: repeat(2, var(--sz)); gap: var(--pg);
+  border: calc(28 * var(--pu)) solid transparent; border-radius: calc(41 * var(--pu));
+  border-image: url("assets/frame.webp") 44 / calc(44 * var(--pu)) stretch;
+  background: radial-gradient(130% 100% at 50% 0%, rgba(40, 34, 90, .8), rgba(4, 3, 14, .95));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+}
 .swatch {
   --u: calc(var(--sz) / 80);
   position: relative; width: var(--sz); height: var(--sz); flex: none; border: 0; padding: 0; border-radius: 50%;
@@ -365,7 +374,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 @media (max-width: 719px) and (min-height: 561px), (max-width: 719px) and (max-aspect-ratio: 4/3) {
   .dock { gap: 10px; padding-top: 10px; }
   .dock-inner { width: 100%; gap: 16px 8px; }
-  .palette { --sz: min(46px, calc((100vw - 24px - 5 * var(--pg)) / 6)); justify-content: center; }
+  .palette { --sz: min(46px, calc((100vw - 24px) / 6.7)); }       /* 6 chuzzles and the frame's rims */
   /* kept together and centred (stretched over the width they looked scattered) */
   .tools { max-width: 100%; justify-content: center; }
   .tool { --o: 38px; flex: 0 1 56px; min-width: 0; }
@@ -577,7 +586,9 @@ dialog.wide .skin { margin-top: 14px; }
 }
 @keyframes lit { from { opacity: 1; } to { opacity: .35; } }
 .board-wrap.lit { border-radius: calc(41 * var(--u)); }
-.palette.lit::after { inset: -9px; border-radius: 20px; }
+/* on the palette the glow rings its frame (the pseudo-element sits inside the frame's border) */
+.palette.lit { border-radius: calc(41 * var(--pu)); }
+.palette.lit::after { inset: calc(-28 * var(--pu)); border-radius: calc(41 * var(--pu)); }
 @media (max-width: 600px) {
   .subbar { height: 50px; }
   .coach { gap: 6px; }
