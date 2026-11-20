@@ -1705,7 +1705,8 @@
     if (!s) return;
     const px = (v) => `${Math.max(1, Math.floor(v * dpr)) / dpr}px`;
     pal.style.setProperty('--sz', px(parseFloat(getComputedStyle(s).width)));
-    pal.style.setProperty('--pg', px(parseFloat(getComputedStyle(pal).getPropertyValue('--pg')) || 10));
+    const gap = parseFloat(getComputedStyle(pal).getPropertyValue('--pg'));   // 0: side by side, as on a board
+    pal.style.setProperty('--pg', Number.isFinite(gap) && gap > 0 ? px(gap) : '0px');
   }
 
   // Sets up a lane slide on a board already showing the state after the move: every moved
