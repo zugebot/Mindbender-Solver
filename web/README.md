@@ -28,10 +28,23 @@ while one is already serving. Stop it in Task Manager (`pythonw.exe`).
 
 ## Host it
 
-Copy the `web/` folder's files to any static host (GitHub Pages, Netlify, Cloudflare Pages,
-or a plain web server): `index.html`, `style.css`, `app.js`, `solver-worker.js`,
-`mb_solver.js`, `puzzles.js`, `font.js`, `screenshot.js`, `solutions/` and `assets/`. No special headers are needed, because the workers share
-nothing (see below).
+The page is published at https://jerrin.org/mindbender/, from the jerrin.org site
+(github.com/zugebot/jerrin.org-website, a Vite app on GitHub Pages: everything under its `public/`
+is served as is, and a push to master rebuilds the site). To update it:
+
+```bash
+python web/gen_puzzles.py          # after a new solve
+python web/deploy_site.py          # mirrors the files below into <site>/public/mindbender/
+```
+
+then commit and push the site. `deploy_site.py` takes the site checkout's path as an argument
+(default `~/WebstormProjects/jerrin.org-website`) and removes files that are gone.
+
+Any other static host works the same way (Netlify, Cloudflare Pages, a plain web server): copy
+`index.html`, `style.css`, `app.js`, `solver-worker.js`, `mb_solver.js`, `puzzles.js`, `font.js`,
+`screenshot.js`, `solutions/` and `assets/`. Every path is relative, so the page works from a
+subfolder. No special headers are needed, because the workers share nothing (see below).
+`assets/` holds the game's art, which Raptisoft allowed for the site (2026-11).
 
 ## Files
 
