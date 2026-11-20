@@ -1652,10 +1652,11 @@
   // gives at least ~3/4 of the size one board would get, else one with Start / Goal tabs.
   // --u (one game pixel) follows; a board is 535 of them.
   const layout = { u: 0.6, two: false };
-  // Phones always show one board with the Goal / Start tabs: a touch-only screen whose short
-  // side is at most 600 CSS px (either way up; tablets are bigger). Elsewhere the layout follows
-  // the boards' sizes (layoutStage).
-  const isPhone = () => matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches &&
+  // Phones always show one board with the Goal / Start tabs: a touchscreen whose short side is
+  // at most 600 CSS px (either way up; tablets and touch laptops are bigger). Any touch counts:
+  // phones with a stylus (Samsung's S Pen) report a fine pointer too. Elsewhere the layout
+  // follows the boards' sizes (layoutStage).
+  const isPhone = () => (navigator.maxTouchPoints > 0 || matchMedia('(any-pointer: coarse)').matches) &&
     Math.min(screen.width, screen.height) <= 600;
   function layoutStage() {
     for (const id of ['thumbGoal', 'thumbStart']) {   // the tabs' little boards, in the new zoom's pixels
