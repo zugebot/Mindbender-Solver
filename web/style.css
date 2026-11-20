@@ -147,11 +147,11 @@ select option, select optgroup { background: #0f1650; color: #fff; text-shadow: 
 .stage { position: relative; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .seg { display: none; grid-template-columns: 1fr 1fr; background: var(--band); border-bottom: 1px solid var(--line); flex: none; }
 .stage.one .seg { display: grid; }
-.seg-btn { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; border: 0; background: transparent; font-weight: 700; font-size: 15px; color: var(--muted); }
+.seg-btn { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; height: 38px; border: 0; background: transparent; font-weight: 700; font-size: 15px; color: var(--muted); }
 .seg-btn + .seg-btn { box-shadow: inset 1px 0 0 var(--line); }
 .seg-btn[aria-selected="true"] { background: var(--glass-2); color: var(--text); }
 .seg-btn[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: linear-gradient(90deg, var(--gold-2), var(--gold)); }
-.thumb { display: block; width: 39px; height: 39px; border-radius: 5px; background: #06050f; box-shadow: 0 0 0 2px rgba(255, 140, 40, .6); flex: none; }
+.thumb { display: block; width: 33px; height: 33px; border-radius: 4px; background: #06050f; box-shadow: 0 0 0 2px rgba(255, 140, 40, .6); flex: none; }
 .seg-btn:not([aria-selected="true"]) .thumb { opacity: .7; }
 
 .boards { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 18px; padding: 8px; }
@@ -374,7 +374,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 @media (max-width: 719px) and (min-height: 561px), (max-width: 719px) and (max-aspect-ratio: 4/3) {
   .dock { gap: 10px; padding-top: 10px; }
   .dock-inner { width: 100%; gap: 16px 8px; }
-  .palette { --sz: min(46px, calc((100vw - 24px) / 6.7)); }       /* 6 chuzzles and the frame's rims */
+  .palette { --sz: min(40px, calc((100vw - 24px) / 6.7)); }       /* 6 chuzzles and the frame's rims */
   /* kept together and centred (stretched over the width they looked scattered) */
   .tools { max-width: 100%; justify-content: center; }
   .tool { --o: 38px; flex: 0 1 56px; min-width: 0; }

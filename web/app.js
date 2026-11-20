@@ -1666,7 +1666,7 @@
     const st = $('stage');
     const W = st.clientWidth, H = st.clientHeight;
     if (!W || !H) return;
-    const pad = 16, caption = 36, tabs = 44;
+    const pad = 16, caption = 36, tabs = 38;
     const arrow = Math.max(46, Math.min(72, 64 * layout.u)) + 36;
     const u2 = Math.min((W - pad - arrow) / 1070, (H - pad - caption) / 535);
     const u1 = Math.min((W - pad) / 535, (H - pad - tabs) / 535);
@@ -1781,7 +1781,7 @@
   let dotTints = null;
   function renderThumb(el, board) {
     const dpr = window.devicePixelRatio || 1;
-    const t = Math.round(5 * dpr), gap = Math.max(1, Math.round(dpr)), pad = Math.round(2 * dpr), pitch = t + gap;
+    const t = Math.round(4 * dpr), gap = Math.max(1, Math.round(dpr)), pad = Math.round(2 * dpr), pitch = t + gap;
     const size = 2 * pad + 6 * pitch - gap;
     if (el.width !== size) {
       el.width = el.height = size;
