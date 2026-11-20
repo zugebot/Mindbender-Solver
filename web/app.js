@@ -1641,7 +1641,8 @@
   const redrawFonts = () => { for (const el of fontJobs.keys()) if (el.isConnected) drawFontText(el); };
   fontReady.then(redrawFonts);
   const GOLD_TEXT = { size: 20, fill: ['#fff6b8', '#ffb71e'] };
-  const LABEL_TEXT = { size: 14 };                                   // under the dock's buttons
+  // under the dock's buttons (smaller on phones, where the dock takes the boards' room)
+  const LABEL_TEXT = { size: matchMedia('(max-width: 719px) and (min-height: 561px), (max-width: 719px) and (max-aspect-ratio: 4/3)').matches ? 12 : 14 };
   const ORB_TEXT = { size: 22, fill: ['#ffffff', '#ffe9a8'], outline: 'rgba(60, 10, 0, .95)' };
   const captionStyle = () => ({ ...GOLD_TEXT, size: Math.round(Math.max(18, Math.min(30, 34 * layout.u))) });
   // (the bar's own width: phones turned sideways give it a column, not the window)

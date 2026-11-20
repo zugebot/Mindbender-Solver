@@ -372,12 +372,15 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 
 /* phones: the dock stacks, full width */
 @media (max-width: 719px) and (min-height: 561px), (max-width: 719px) and (max-aspect-ratio: 4/3) {
-  .dock { gap: 10px; padding-top: 10px; }
-  .dock-inner { width: 100%; gap: 16px 8px; }
+  /* tight on phones: every pixel here is one the boards don't get */
+  .dock { gap: 8px; padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); }
+  .dock-inner { width: 100%; gap: 8px; }
   .palette { --sz: min(40px, calc((100vw - 24px) / 6.7)); }       /* 6 chuzzles and the frame's rims */
   /* kept together and centred (stretched over the width they looked scattered) */
   .tools { max-width: 100%; justify-content: center; }
-  .tool { --o: 38px; flex: 0 1 56px; min-width: 0; }
+  .tool { --o: 34px; flex: 0 1 56px; min-width: 0; padding-top: 0; gap: 1px; }
+  .tool-text { min-height: 13px; }
+  .solve { --sh: 62px; }
   .solve-box { width: 100%; }
   .status:empty { display: none; }
 }
