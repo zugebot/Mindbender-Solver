@@ -1652,6 +1652,11 @@
   // gives at least ~3/4 of the size one board would get, else one with Start / Goal tabs.
   // --u (one game pixel) follows; a board is 535 of them.
   const layout = { u: 0.6, two: false };
+  // Phones always show one board with the Goal / Start tabs: a touch-only screen whose short
+  // side is at most 600 CSS px (either way up; tablets are bigger). Elsewhere the layout follows
+  // the boards' sizes (layoutStage).
+  const isPhone = () => matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches &&
+    Math.min(screen.width, screen.height) <= 600;
   function layoutStage() {
     for (const id of ['thumbGoal', 'thumbStart']) {   // the tabs' little boards, in the new zoom's pixels
       const el = $(id);
@@ -1664,7 +1669,7 @@
     const arrow = Math.max(46, Math.min(72, 64 * layout.u)) + 36;
     const u2 = Math.min((W - pad - arrow) / 1070, (H - pad - caption) / 535);
     const u1 = Math.min((W - pad) / 535, (H - pad - tabs) / 535);
-    const two = u2 >= u1 * 0.72;
+    const two = !isPhone() && u2 >= u1 * 0.72;
     // Snapped so 20 game pixels are a whole number of screen pixels: then every frame of the
     // sprite strips (80 and 180 units) starts on a pixel, and the chuzzles sway in place
     // instead of jittering sideways as the frame offsets round differently.
