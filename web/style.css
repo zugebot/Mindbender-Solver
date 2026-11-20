@@ -383,6 +383,27 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   .solve { --sh: 62px; }
   .solve-box { width: 100%; }
   .status:empty { display: none; }
+  /* editing: the move limit over Solve, beside the palette, the tools under both; one row
+     fewer, so the board can be as big as in a replay */
+  .dock.editing {
+    display: grid; grid-template-columns: auto auto; justify-content: center; align-items: center; gap: 4px 8px;
+    grid-template-areas: "pal depth" "pal solve" "tools tools";
+  }
+  .dock.editing > #editDock:not([hidden]), .dock.editing > #solveBox:not([hidden]) { display: contents; }
+  .dock.editing .palette { grid-area: pal; --sz: min(38px, calc((100vw - 24px - 8px - 110px) / 6.7)); }
+  .dock.editing .tools { grid-area: tools; margin-top: 4px; }
+  .dock.editing .depth { grid-area: depth; justify-self: center; align-self: end; gap: 0; padding: 2px; }
+  .dock.editing .depth .icon-btn { --o: 26px; }
+  .dock.editing .depth-text { padding: 0 2px; }
+  .dock.editing .depth.busy { visibility: hidden; }
+  .dock.editing .cancel { --o: 32px; grid-area: depth; justify-self: center; align-self: end; }
+  .dock.editing .solve-wrap { grid-area: solve; justify-self: center; align-self: start; }
+  /* the status floats just over the dock, so a message coming and going never moves the board */
+  .dock.editing { position: relative; }
+  .dock.editing .status {
+    position: absolute; bottom: calc(100% + 1px); left: 50%; transform: translateX(-50%); z-index: 3;
+    max-width: calc(100% - 24px); margin: 0; padding: 0 10px; border-radius: 10px; background: rgba(8, 6, 28, .88);
+  }
 }
 /* narrow docks (phones, and the side column of phones turned sideways): the moves get the
    width, the buttons go under them */

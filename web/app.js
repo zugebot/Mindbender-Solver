@@ -1642,7 +1642,9 @@
   fontReady.then(redrawFonts);
   const GOLD_TEXT = { size: 20, fill: ['#fff6b8', '#ffb71e'] };
   // under the dock's buttons (smaller on phones, where the dock takes the boards' room)
-  const LABEL_TEXT = { size: matchMedia('(max-width: 719px) and (min-height: 561px), (max-width: 719px) and (max-aspect-ratio: 4/3)').matches ? 12 : 14 };
+  const phoneDock = matchMedia('(max-width: 719px) and (min-height: 561px), (max-width: 719px) and (max-aspect-ratio: 4/3)');
+  const LABEL_TEXT = { size: phoneDock.matches ? 12 : 14 };
+  phoneDock.addEventListener('change', () => renderDepth());
   const ORB_TEXT = { size: 22, fill: ['#ffffff', '#ffe9a8'], outline: 'rgba(60, 10, 0, .95)' };
   const captionStyle = () => ({ ...GOLD_TEXT, size: Math.round(Math.max(18, Math.min(30, 34 * layout.u))) });
   // (the bar's own width: phones turned sideways give it a column, not the window)
@@ -1882,6 +1884,7 @@
     fontText($('startCap'), replay ? 'Replay' : 'Start', captionStyle());
     fontText($('goalCap'), 'Goal', captionStyle());
     $('editDock').hidden = !!replay || game;
+    document.querySelector('.dock').classList.toggle('editing', !replay && !game);   // phones: one grid
     // a game puzzle's Solve is View alone, centred (the info bar gives its moves and solutions)
     $('solveBox').classList.toggle('known', game);
     $('replayDock').hidden = !replay;
@@ -1954,12 +1957,14 @@
 
   // The move limit beside Solve ("up to / 10 moves", with - and +). A game puzzle longer than
   // the page's search has no limit to set: Solve shows the desktop solver's answer.
+  // On phones the plaque sits over Solve, beside the palette, and says only "≤ 10".
   function renderDepth() {
     const d = state.maxDepth;
     $('depthBox').hidden = !!knownPreset();
-    fontText($('depthText'), `≤ ${d} move${d > 1 ? 's' : ''}`, { size: 17 });
-    const widest = fontWidth(`≤ ${MAX_DEPTH} moves`, 17);    // the plaque keeps one width
-    $('depthText').parentElement.style.minWidth = widest ? `${widest + 12}px` : '';
+    const short = phoneDock.matches, size = short ? 16 : 17;
+    fontText($('depthText'), short ? `≤ ${d}` : `≤ ${d} move${d > 1 ? 's' : ''}`, { size });
+    const widest = fontWidth(short ? `≤ ${MAX_DEPTH}` : `≤ ${MAX_DEPTH} moves`, size);    // the plaque keeps one width
+    $('depthText').parentElement.style.minWidth = widest ? `${widest + (short ? 4 : 12)}px` : '';
     $('depthDown').disabled = d <= 1;
     $('depthUpBtn').disabled = d >= MAX_DEPTH;
   }
