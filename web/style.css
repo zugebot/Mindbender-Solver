@@ -172,7 +172,9 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 /* objects/board.py: Border.png (535 x 535) at (229, 29), the board at (255, 60), so the cells
    start 26 / 31 units inside the frame; chuzzles are drawn on a surface padded by 10 units
    (that is the clip), and the border goes on top. */
-.board-frame { position: relative; width: calc(535 * var(--u)); height: calc(535 * var(--u)); flex: none; }
+/* --n is the board's size (6, or 5 for Chuzzle 2's 5x5 boards; app.js layoutStage): the frame
+   is 55 + 80n units (535), the clip box 20 + 80n (500) */
+.board-frame { position: relative; width: calc((55 + 80 * var(--n, 6)) * var(--u)); height: calc((55 + 80 * var(--n, 6)) * var(--u)); flex: none; }
 .board-frame::before {
   content: ""; position: absolute; inset: calc(22 * var(--u)); border-radius: calc(22 * var(--u));
   background: radial-gradient(130% 100% at 50% 0%, rgba(40, 34, 90, .55), rgba(4, 3, 14, .9));
@@ -182,13 +184,19 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
   background: url("assets/frame.webp") 0 0 / 100% 100% no-repeat;
 }
+/* a 5x5 board's frame: the same picture 9-sliced (its corners and rim kept, only the straight
+   runs shorter), as the palette's frame */
+.board5 .board-frame::after {
+  background: none; border: calc(44 * var(--u)) solid transparent;
+  border-image: url("assets/frame.webp") 44 / calc(44 * var(--u)) stretch;
+}
 .board {
   contain: layout paint;
   position: absolute; left: calc(16 * var(--u)); top: calc(21 * var(--u));
-  width: calc(500 * var(--u)); height: calc(500 * var(--u)); padding: calc(10 * var(--u));
+  width: calc((20 + 80 * var(--n, 6)) * var(--u)); height: calc((20 + 80 * var(--n, 6)) * var(--u)); padding: calc(10 * var(--u));
   display: grid;
-  grid-template-columns: repeat(6, var(--cell));
-  grid-template-rows: repeat(6, var(--cell));
+  grid-template-columns: repeat(var(--n, 6), var(--cell));
+  grid-template-rows: repeat(var(--n, 6), var(--cell));
   overflow: hidden;
   z-index: 1;
   touch-action: none;

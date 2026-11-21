@@ -56,7 +56,14 @@
   }
 
   // ---------------------------------------------------------------- model
-  const blank = () => ({ cells: Array(36).fill(6), fat: null });
+  // A board is 36 cells (6x6, Chuzzle 1) or 25 (5x5, Chuzzle 2: no 2x2 chuzzle); its size
+  // follows from the cells, and the start and goal always share it.
+  const blank = (n = 6) => ({ cells: Array(n * n).fill(6), fat: null });
+  const sizeOf = (b) => (b.cells.length === 25 ? 5 : 6);
+  const boardN = () => sizeOf(state.goal);          // the boards' size now (start and goal share it)
+  // a board's clip box (the cells and 10 units round them) and its frame, in game pixels
+  const clipUnits = (n = boardN()) => 20 + 80 * n;
+  const frameUnits = (n = boardN()) => 55 + 80 * n;
   const state = {
     start: blank(),
     goal: blank(),
@@ -92,7 +99,7 @@
     if (inPiece(board.fat, r, c)) {
       for (const i of pieceCells(board.fat)) board.cells[i] = color;
     } else {
-      board.cells[r * 6 + c] = color;
+      board.cells[r * sizeOf(board) + c] = color;
     }
   }
 
@@ -164,16 +171,16 @@
       state.follows = true;
       return;
     }
-    const ids = Array(36).fill(-1);
+    const ids = Array(g.cells.length).fill(-1);
     const gp = g.fat ? pieceCells(g.fat) : [], sp = s.fat ? pieceCells(s.fat) : [];
     sp.forEach((k, m) => { ids[k] = gp[m]; });
     const free = g.cells.map((col, k) => (gp.includes(k) ? -1 : k)).filter((k) => k >= 0);
-    for (let k = 0; k < 36; k++) {
+    for (let k = 0; k < g.cells.length; k++) {
       if (sp.includes(k)) continue;
       const n = free.findIndex((j) => g.cells[j] === s.cells[k]);
       if (n >= 0) ids[k] = free.splice(n, 1)[0];
     }
-    for (let k = 0; k < 36; k++) if (ids[k] < 0) ids[k] = free.shift();
+    for (let k = 0; k < g.cells.length; k++) if (ids[k] < 0) ids[k] = free.shift();
     s.ids = ids;
     s.cells = ids.map((i) => g.cells[i]);
     state.follows = ids.every((v, k) => v === k);
@@ -183,7 +190,8 @@
   // (right / down); a lane through the 2x2 takes the piece's other lane with it, and the
   // piece never ends straddling the edge (the solver's moveValid). null if not allowed.
   function laneMove(board, col, lane, n) {
-    n = ((n % 6) + 6) % 6;
+    const size = sizeOf(board);
+    n = ((n % size) + size) % size;
     const f = board.fat;
     let lanes = [lane];
     if (f) {
@@ -199,15 +207,16 @@
 
   // 30 random moves (no lane twice in a row), the game's Scrambulator in spirit.
   function scrambled(board) {
+    const n = sizeOf(board);
     let b = cloneBoard(board), last = -1;
     for (let k = 0; k < 30; k++) {
       let col, lane;
       do {
         col = Math.random() < 0.5;
-        lane = Math.floor(Math.random() * 6);
-      } while ((col ? 6 : 0) + lane === last);
-      last = (col ? 6 : 0) + lane;
-      const next = laneMove(b, col, lane, 1 + Math.floor(Math.random() * 5));
+        lane = Math.floor(Math.random() * n);
+      } while ((col ? n : 0) + lane === last);
+      last = (col ? n : 0) + lane;
+      const next = laneMove(b, col, lane, 1 + Math.floor(Math.random() * (n - 1)));
       if (next) b = next;
       else k--;
     }
@@ -226,10 +235,11 @@
     const out = cloneBoard(board);
     const ids = board.ids || board.cells.map((_, i) => i);
     out.ids = ids.slice();
+    const n = sizeOf(board);
     for (const lane of mv.lanes) {
-      for (let i = 0; i < 6; i++) {
-        const j = (i + mv.n) % 6;
-        const to = mv.col ? j * 6 + lane : lane * 6 + j, from = mv.col ? i * 6 + lane : lane * 6 + i;
+      for (let i = 0; i < n; i++) {
+        const j = (i + mv.n) % n;
+        const to = mv.col ? j * n + lane : lane * n + j, from = mv.col ? i * n + lane : lane * n + i;
         out.cells[to] = board.cells[from];
         out.ids[to] = ids[from];
       }
@@ -251,11 +261,12 @@
   // chuzzle itself, and goes the way that keeps it on the board: the 2x2 never crosses an
   // edge, so of right n and left 6 - n exactly one fits (right 4 from column 1, not left 2).
   function dragOf(mv, board) {
+    const n = sizeOf(board);
     const f = mv.lanes.length === 2 ? board.fat : null;
     const at = f ? (mv.col ? f.y : f.x) : 0;
-    const d = f ? (at + mv.n <= 4 ? mv.n : mv.n - 6) : (mv.n <= 3 ? mv.n : mv.n - 6);
-    const lo = d > 0 ? 0 : -d, hi = d > 0 ? 5 - d : 5;
-    let s = Math.max(lo, Math.min(hi, Math.round((5 - d) / 2)));
+    const d = f ? (at + mv.n <= 4 ? mv.n : mv.n - 6) : (mv.n <= n / 2 ? mv.n : mv.n - n);
+    const lo = d > 0 ? 0 : -d, hi = d > 0 ? n - 1 - d : n - 1;
+    let s = Math.max(lo, Math.min(hi, Math.round((n - 1 - d) / 2)));
     let cross = mv.lanes[0];
     if (mv.lanes.length === 2) {
       cross += 0.5;
@@ -283,17 +294,18 @@
       band.style.gridColumn = mv.col ? span : '1 / -1';
       frag.appendChild(band);
     }
-    for (let r = 0; r < 6; r++) {
-      for (let c = 0; c < 6; c++) {
+    const n = sizeOf(board);
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
         const piece = inPiece(f, r, c);
         if (piece && (r !== f.y || c !== f.x)) continue;
-        const color = board.cells[r * 6 + c];
+        const color = board.cells[r * n + c];
         const d = document.createElement('div');
         d.className = piece ? 'cell piece' : 'cell';
-        if (state.picked && el.id === `${state.picked.side}Board` && state.mode === 'edit' && state.picked.i === r * 6 + c) d.classList.add('picked');
+        if (state.picked && el.id === `${state.picked.side}Board` && state.mode === 'edit' && state.picked.i === r * n + c) d.classList.add('picked');
         d.dataset.r = r;
         d.dataset.c = c;
-        const id = board.ids ? board.ids[r * 6 + c] : r * 6 + c;
+        const id = board.ids ? board.ids[r * n + c] : r * n + c;
         d.dataset.k = color;            // drawn on the board's canvas
         d.dataset.eye = `c:${id}`;
         d.style.gridRow = `${r + 1} / span ${piece ? 2 : 1}`;
@@ -892,7 +904,7 @@
   function drawBoard(el, now, dt, maySkip) {
     const cv = boardCanvas(el), ctx = el._ctx;
     const dpr = window.devicePixelRatio || 1, s = layout.u * dpr;
-    const size = Math.round(500 * s);
+    const size = Math.round(clipUnits() * s);
     let full = false;
     if (cv.width !== size) {
       cv.width = size;
@@ -1656,7 +1668,7 @@
   // The boards fill the space between the info bar and the dock: two side by side when that
   // gives at least ~3/4 of the size one board would get, else one with Start / Goal tabs.
   // --u (one game pixel) follows; a board is 535 of them.
-  const layout = { u: 0.6, two: false };
+  const layout = { u: 0.6, two: false, n: 6 };
   // Phones always show one board with the Goal / Start tabs: a touchscreen whose short side is
   // at most 600 CSS px (either way up; tablets and touch laptops are bigger). Any touch counts:
   // phones with a stylus (Samsung's S Pen) report a fine pointer too. Elsewhere the layout
@@ -1673,8 +1685,9 @@
     if (!W || !H) return;
     const pad = 16, caption = 36, tabs = 38;
     const arrow = Math.max(46, Math.min(72, 64 * layout.u)) + 36;
-    const u2 = Math.min((W - pad - arrow) / 1070, (H - pad - caption) / 535);
-    const u1 = Math.min((W - pad) / 535, (H - pad - tabs) / 535);
+    const F = frameUnits();             // the frame: 535 game pixels on 6x6, 455 on 5x5
+    const u2 = Math.min((W - pad - arrow) / (2 * F), (H - pad - caption) / F);
+    const u1 = Math.min((W - pad) / F, (H - pad - tabs) / F);
     const two = !isPhone() && u2 >= u1 * 0.72;
     // Snapped so 20 game pixels are a whole number of screen pixels: then every frame of the
     // sprite strips (80 and 180 units) starts on a pixel, and the chuzzles sway in place
@@ -1682,12 +1695,16 @@
     const dpr = window.devicePixelRatio || 1;
     const u = Math.floor(Math.max(0.25, Math.min(1.6, two ? u2 : u1)) * 20 * dpr) / (20 * dpr);
     snapPalette(dpr);
-    const moved = Math.abs(u - layout.u) > 0.002 || two !== layout.two;
+    const n = boardN();
+    const moved = Math.abs(u - layout.u) > 0.002 || two !== layout.two || n !== layout.n;
     layout.u = u;
     layout.two = two;
+    layout.n = n;
     st.classList.toggle('two', two);
     st.classList.toggle('one', !two);
     document.documentElement.style.setProperty('--u', `${u.toFixed(4)}px`);
+    document.documentElement.style.setProperty('--n', String(n));      // style.css sizes the boards by it
+    document.documentElement.classList.toggle('board5', n === 5);
     if (moved) {
       fontText($('startCap'), state.mode === 'replay' ? 'Replay' : 'Start', captionStyle());
       fontText($('goalCap'), 'Goal', captionStyle());
@@ -1723,7 +1740,7 @@
     const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
     const pitch = (any.classList.contains('piece') ? (any.offsetWidth - gap) / 2 : any.offsetWidth) + gap;
     const seg = mv.col ? (d > 0 ? 0 : 3) : (d > 0 ? 2 : 1);      // down, left, right, up
-    const u = pitch / 80;
+    const u = pitch / 80, n = boardN();
     const moving = [];
     for (const cell of [...el.querySelectorAll('.cell')]) {
       const r = +cell.dataset.r, c = +cell.dataset.c;
@@ -1733,12 +1750,12 @@
       const j = mv.col ? r : c;
       const w = piece ? 2 : 1;
       moving.push([cell, -d, 0]);
-      if (d > 0 ? j - d < 0 : j - d + w - 1 > 5) {
+      if (d > 0 ? j - d < 0 : j - d + w - 1 > n - 1) {
         const ghost = cell.cloneNode(true);
         ghost.classList.add('ghost');
         ghost.removeAttribute('role');
         el.appendChild(ghost);
-        moving.push([ghost, d > 0 ? 6 - d : -6 - d, d > 0 ? 6 : -6]);
+        moving.push([ghost, d > 0 ? n - d : -n - d, d > 0 ? n : -n]);
       }
     }
     for (const [node] of moving) node.classList.add('mv');
@@ -1787,7 +1804,7 @@
   function renderThumb(el, board) {
     const dpr = window.devicePixelRatio || 1;
     const t = Math.round(4 * dpr), gap = Math.max(1, Math.round(dpr)), pad = Math.round(2 * dpr), pitch = t + gap;
-    const size = 2 * pad + 6 * pitch - gap;
+    const n = sizeOf(board), size = 2 * pad + n * pitch - gap;
     if (el.width !== size) {
       el.width = el.height = size;
       el.style.width = el.style.height = `${size / dpr}px`;
@@ -1802,7 +1819,7 @@
     ctx.clearRect(0, 0, size, size);
     const f = board.fat;
     board.cells.forEach((v, k) => {
-      const r = Math.floor(k / 6), c = k % 6;
+      const r = Math.floor(k / n), c = k % n;
       const piece = inPiece(f, r, c);
       if (piece && (r !== f.y || c !== f.x)) return;
       const w = piece ? 2 * pitch - gap : t;   // the 2x2's dot spans its four cells' dots edge to edge
@@ -1850,11 +1867,13 @@
     const big = $('fatSwatch');
     setChuzzle(big, pieceColour(state.goal) ?? state.color);
     big.setAttribute('aria-checked', String(state.tool === 'piece'));
+    big.disabled = boardN() === 5;
     big.setAttribute('aria-label', '2x2 Chuzzle: tap a cell to place it');
     big.title = state.goal.fat ? '2x2 Chuzzle: tap the goal to move it (key 9)' : '2x2 Chuzzle: tap the goal to place it (key 9)';
   }
 
   function render() {
+    if (boardN() !== layout.n) layoutStage();         // a 5x5 board came or went: its frame is smaller
     const replay = state.mode === 'replay' && result && result.replay;
     for (const wrap of document.querySelectorAll('.board-wrap')) {
       wrap.classList.toggle('active', wrap.dataset.side === state.side);
@@ -1894,6 +1913,14 @@
     $('info').hidden = !!replay || !!state.coach;
     $('guide').hidden = !replay;
     $('unfatBtn').disabled = !state.goal.fat;
+    // the size: 6x6 (Chuzzle 1) or 5x5 (Chuzzle 2), the label the size shown
+    const n = boardN(), sizeText = `${n}x${n}`;
+    if ($('sizeLabel').dataset.label !== sizeText) {
+      $('sizeLabel').dataset.label = sizeText;
+      fontText($('sizeLabel'), sizeText, LABEL_TEXT);
+    }
+    $('sizeBtn').title = n === 6 ? 'Board size 6x6 (Chuzzle). Click for a 5x5 board (Chuzzle 2)'
+      : 'Board size 5x5 (Chuzzle 2). Click for a 6x6 board (Chuzzle)';
     $('resetBtn').disabled = state.follows;
     renderDepth();
     $('fillBtn').title = `Fill the goal with ${COLORS[state.color].toLowerCase()}`;
@@ -1913,6 +1940,7 @@
   }
 
   function selectFatTool() {
+    if (boardN() === 5) return;     // Chuzzle 2's 5x5 boards have no 2x2 chuzzle
     state.tool = 'piece';          // (a colour swatch takes the brush back; a second click here
     if (state.mode === 'edit') state.side = 'goal';   // keeps it, so clicking on counts as pokes)
     render();
@@ -2006,7 +2034,8 @@
     const spotAt = (x, y) => {
       const b = el.getBoundingClientRect(), pitch = 80 * layout.u;
       const c = Math.floor((x - b.left - 10 * layout.u) / pitch), r = Math.floor((y - b.top - 10 * layout.u) / pitch);
-      return r >= 0 && r < 6 && c >= 0 && c < 6 ? { r, c } : null;
+      const n = boardN();
+      return r >= 0 && r < n && c >= 0 && c < n ? { r, c } : null;
     };
     // Where a drag would drop: a cell for a chuzzle, a top-left for the 2x2 (it moves by the
     // drag, kept inside the board). null where nothing would change.
@@ -2027,7 +2056,7 @@
     const fillsFor = (t) => {
       if (!t) return null;
       const b = state[which];
-      if (!t.piece) return [{ r: g.r, c: g.c, k: b.cells[t.r * 6 + t.c] }];
+      if (!t.piece) return [{ r: g.r, c: g.c, k: b.cells[t.r * sizeOf(b) + t.c] }];
       const was = pieceCells(b.fat), now = pieceCells({ x: t.c, y: t.r });
       const freed = was.filter((k) => !now.includes(k)), taken = now.filter((k) => !was.includes(k));
       return freed.map((k, n) => ({ r: Math.floor(k / 6), c: k % 6, k: b.cells[taken[n]] }));
@@ -2139,7 +2168,7 @@
       if (!cell) return;
       e.preventDefault();
       const b = which === 'start' && state.mode === 'replay' ? result.replay[result.step] : state[which];
-      selectColour(b.cells[+cell.dataset.r * 6 + +cell.dataset.c]);
+      selectColour(b.cells[+cell.dataset.r * sizeOf(b) + +cell.dataset.c]);
     });
   }
 
@@ -2181,7 +2210,7 @@
       });
       b.fat = nf;
     } else {
-      const i = from.r * 6 + from.c, j = to.r * 6 + to.c;
+      const n = sizeOf(b), i = from.r * n + from.c, j = to.r * n + to.c;
       [b.cells[i], b.cells[j]] = [b.cells[j], b.cells[i]];
       [b.ids[i], b.ids[j]] = [b.ids[j], b.ids[i]];
       // the one it swaps with flies over to fill the spot the held one left
@@ -2194,7 +2223,7 @@
   // A tap on the start: the first chuzzle is picked, a second one swaps with it.
   // The 2x2 is dragged, never swapped.
   function tapOn(which, cell) {
-    const i = +cell.dataset.r * 6 + +cell.dataset.c;
+    const n = boardN(), i = +cell.dataset.r * n + +cell.dataset.c;
     const p = state.picked;
     clearPick();
     if (cell.classList.contains('piece') || (p && p.side === which && p.i === i)) return;
@@ -2208,7 +2237,7 @@
     [b.cells[i], b.cells[p.i]] = [b.cells[p.i], b.cells[i]];
     [b.ids[i], b.ids[p.i]] = [b.ids[p.i], b.ids[i]];
     moved(which, b);
-    const P = 80 * layout.u, r1 = Math.floor(i / 6), c1 = i % 6, r2 = Math.floor(p.i / 6), c2 = p.i % 6;
+    const P = 80 * layout.u, r1 = Math.floor(i / n), c1 = i % n, r2 = Math.floor(p.i / n), c2 = p.i % n;
     glide($(`${which}Board`), [[r1, c1, (c2 - c1) * P, (r2 - r1) * P], [r2, c2, (c1 - c2) * P, (r1 - r2) * P]]);
   }
 
@@ -2448,8 +2477,9 @@
     }
     const s = state.start, g = state.goal;
     let off = s.fat && g.fat && (s.fat.x !== g.fat.x || s.fat.y !== g.fat.y) ? 1 : 0;
-    for (let i = 0; i < 36; i++) {
-      const r = Math.floor(i / 6), c = i % 6;
+    const n = sizeOf(g);
+    for (let i = 0; i < g.cells.length; i++) {
+      const r = Math.floor(i / n), c = i % n;
       if (inPiece(s.fat, r, c)) continue;
       if (inPiece(g.fat, r, c) || s.cells[i] !== g.cells[i]) off++;
     }
@@ -2493,8 +2523,8 @@
   function readHash() {
     const q = new URLSearchParams(location.hash.slice(1));
     const s = q.get('s'), g = q.get('g'), f = q.get('f');
-    const ok = (t) => t && /^[0-7]{36}$/.test(t);
-    if (ok(s) && ok(g)) {
+    const ok = (t) => t && /^([0-7]{25}|[0-7]{36})$/.test(t);
+    if (ok(s) && ok(g) && s.length === g.length && !(f && s.length === 25)) {
       state.start = { cells: [...s].map(Number), fat: null };
       state.goal = { cells: [...g].map(Number), fat: null };
       if (f && /^[0-4]{4}$/.test(f)) {
@@ -2521,16 +2551,17 @@
   // ---------------------------------------------------------------- solver workers
   class Cancelled extends Error {}
 
-  // Workers start from one blob of mb_solver.js + solver-worker.js, fetched once,
-  // so starting 16 of them costs no network. One worker is kept warm for the next solve.
+  // Workers start from one blob of mb_solver.js + mb5_solver.js (5x5 boards) +
+  // solver-worker.js, fetched once, so starting 16 of them costs no network. One worker is
+  // kept warm for the next solve.
   let workerUrl = 'solver-worker.js';
-  const workerUrlReady = Promise.all(['mb_solver.js', 'solver-worker.js'].map((f) =>
+  const workerUrlReady = Promise.all(['mb_solver.js', 'mb5_solver.js', 'solver-worker.js'].map((f) =>
     fetch(f).then((r) => {
       if (!r.ok) throw new Error(f);
       return r.text();
     })))
-    .then(([solver, worker]) => {
-      workerUrl = URL.createObjectURL(new Blob([solver, '\n', worker], { type: 'text/javascript' }));
+    .then(([solver, solver5, worker]) => {
+      workerUrl = URL.createObjectURL(new Blob([solver, '\n', solver5, '\n', worker], { type: 'text/javascript' }));
     })
     .catch(() => {});
   let warm = null;
@@ -2932,6 +2963,14 @@
       run.workers.push(w0);
       setProgress('Starting', null);
       showStatus();
+      if (spec.start.length === 25) {
+        // 5x5 (chuzzle2_5x5/): one search from both ends, every solution, a second or two
+        setProgress(`Searching up to ${maxDepth} moves`, null);
+        const r5 = await w0.call('solve5', { start: spec.start, goal: spec.goal, maxDepth, list: 100000 });
+        finish(thisRun, r5.depth < 0 ? { depth: -1, threads: 1, maxDepth }
+          : { depth: r5.depth, count: r5.count, text: r5.text, threads: 1, maxDepth, first: false });
+        return;
+      }
       await w0.call('setup', { ...spec, first });
       setProgress(`Up to ${Math.min(6, maxDepth)} moves`, null);
       const small = await w0.call('small', { maxDepth });
@@ -3245,7 +3284,7 @@
   // pixels of the board's figure, where the guide layer sits.
   function boardPoint(mv, along, cross) {
     const b = $('startBoard');
-    const u = b.offsetWidth / 500;                 // the board's clip box is 500 game pixels
+    const u = b.offsetWidth / clipUnits();         // the board's clip box (500 game pixels on 6x6)
     const pitch = 80 * u;
     const ox = b.offsetLeft + 10 * u + pitch / 2, oy = b.offsetTop + 10 * u + pitch / 2;
     const r = mv.col ? along : cross, c = mv.col ? cross : along;
@@ -3406,12 +3445,13 @@
       smooth = smooth * 0.5 + Math.abs(v) * 0.5;
       lastO = o;
       lastT = now;
+      const n = boardN();
       for (const [cell, ghost, j, piece] of moving) {
-        const m = ((j + o) % 6 + 6) % 6;
+        const m = ((j + o) % n + n) % n;
         const t = Math.sqrt(Math.min(1, (piece ? smooth * 0.5 : smooth) / 8));
         const f = piece ? 10 + seg * 5 + Math.round(t * 4) : 20 + seg * 10 + Math.round(t * 9);
         cell._off = (m - j) * pitch;
-        ghost._off = ((m > 3 ? m - 6 : m + 6) - j) * pitch;
+        ghost._off = ((m > n / 2 ? m - n : m + n) - j) * pitch;   // its copy round the other side
         cell._col = ghost._col = col;
         cell._f = ghost._f = f;
       }
@@ -3450,10 +3490,10 @@
       && JSON.stringify(a.fat || null) === JSON.stringify(b.fat || null);
     // a pointer position in the board's game pixels, from the first cell's corner
     const local = (e) => {
-      const b = el.getBoundingClientRect(), u = b.width / 500;
+      const b = el.getBoundingClientRect(), u = b.width / clipUnits();
       return { x: (e.clientX - b.left) / u - 10, y: (e.clientY - b.top) / u - 10 };
     };
-    const lineAt = (v) => Math.max(0, Math.min(5, Math.trunc(v / 80)));
+    const lineAt = (v) => Math.max(0, Math.min(boardN() - 1, Math.trunc(v / 80)));
     // Board::BeginRowDrag / BeginColumnDrag: the lane, the 2x2's other lane with it, and how far
     // the 2x2 may go
     const begin = (h, col, at) => {
@@ -3481,7 +3521,8 @@
       const k = result.step;
       if (k >= result.moves.length) return;
       const p = local(e);
-      if (p.x < 0 || p.x >= 480 || p.y < 0 || p.y >= 480) return;
+      const edge = 80 * boardN();
+      if (p.x < 0 || p.x >= edge || p.y < 0 || p.y >= edge) return;
       e.preventDefault();
       try { el.setPointerCapture(e.pointerId); } catch { /* synthetic events */ }
       const token = interrupt();
@@ -3678,6 +3719,19 @@
     $('tabStart').addEventListener('click', () => setSide('start'));
     $('tabGoal').addEventListener('click', () => setSide('goal'));
     $('unfatBtn').addEventListener('click', removeFat);
+    // 6x6 <-> 5x5: a blank goal of the other size to paint (Undo brings the old boards back)
+    $('sizeBtn').addEventListener('click', () => {
+      pushUndo();
+      const n = boardN() === 6 ? 5 : 6;
+      state.goal = blank(n);
+      state.follows = true;
+      state.picked = null;
+      if (n === 5 && state.tool === 'piece') state.tool = 'paint';
+      syncStart();
+      state.side = 'goal';
+      leaveReplay();
+      changed();
+    });
     $('undoBtn').addEventListener('click', undo);
     $('fillBtn').addEventListener('click', () => {
       pushUndo();

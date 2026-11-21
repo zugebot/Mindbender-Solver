@@ -3,16 +3,30 @@
 // posts {id, progress: {done, total}} while it runs. Cancelling = terminate().
 // app.js usually starts workers from a blob holding mb_solver.js + this file, so
 // they need no network; loaded on its own, the worker fetches the solver.
+// 5x5 boards (Chuzzle 2) have their own solver, mb5_solver.js (chuzzle2_5x5/), in the same
+// worker: "solve5" does the whole search in one call.
 if (typeof createMbSolver === 'undefined') importScripts('mb_solver.js');
+if (typeof createMb5Solver === 'undefined') importScripts('mb5_solver.js');
 
-let M = null;
-const ready = createMbSolver().then((m) => { M = m; });
+let M = null, M5 = null;
+const ready = Promise.all([createMbSolver().then((m) => { M = m; }), createMb5Solver().then((m) => { M5 = m; })]);
 
 function solutionsText() {
   return M.UTF8ToString(M._mb_solutions_text());
 }
 
 const handlers = {
+  // a 5x5 puzzle: every shortest solution (up to `list` of them written out), or none
+  solve5({ start, goal, maxDepth, list }) {
+    const p = M5._malloc(50);
+    M5.HEAPU8.set(start, p);
+    M5.HEAPU8.set(goal, p + 25);
+    const depth = M5._mb5_solve(p, p + 25, maxDepth, list);
+    M5._free(p);
+    if (depth === -2) throw new Error('the start and goal need the same Chuzzles');
+    return { depth, count: M5._mb5_count(), text: depth >= 0 ? M5.UTF8ToString(M5._mb5_text()) : '' };
+  },
+
   setup({ start, goal, fat, first }) {
     const p = M._malloc(72);
     M.HEAPU8.set(start, p);

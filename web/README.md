@@ -41,7 +41,7 @@ then commit and push the site. `deploy_site.py` takes the site checkout's path a
 (default `~/WebstormProjects/jerrin.org-website`) and removes files that are gone.
 
 Any other static host works the same way (Netlify, Cloudflare Pages, a plain web server): copy
-`index.html`, `style.css`, `app.js`, `solver-worker.js`, `mb_solver.js`, `puzzles.js`, `font.js`,
+`index.html`, `style.css`, `app.js`, `solver-worker.js`, `mb_solver.js`, `mb5_solver.js`, `puzzles.js`, `font.js`,
 `screenshot.js`, `solutions/` and `assets/`. Every path is relative, so the page works from a
 subfolder. No special headers are needed, because the workers share nothing (see below).
 `assets/` holds the game's art, which Raptisoft allowed for the site (2026-11).
@@ -54,6 +54,7 @@ subfolder. No special headers are needed, because the workers share nothing (see
 | `solver-worker.js` | one solver per Web Worker; talks to `app.js` by messages (the page fetches it and `mb_solver.js` once and starts every worker from one blob, so 16 workers cost no extra downloads; one worker is kept warm between solves) |
 | `screenshot.js` | reads a puzzle from a screenshot of the game (the Picture button, a dropped or pasted picture); run as a Web Worker by `app.js`, and loadable in Node (`module.exports`) for tests |
 | `mb_solver.js` | the solver as WebAssembly, embedded in one JS file (built, but committed so the folder is deployable) |
+| `mb5_solver.js` | the 5x5 solver (Chuzzle 2's 5x5 boards) as WebAssembly, from `chuzzle2_5x5/` (its `build_wasm.ps1`); the same workers load it and answer `solve5` with every shortest solution in one call. The size tool (6x6 / 5x5) switches a custom puzzle's boards; links carry 25 or 36 cells; 5x5 boards have no 2x2 chuzzle |
 | `puzzles.js` | the game's 100 boards with their known optimum or lower bound (generated) |
 | `solutions/` | `<puzzle>.txt`: every shortest solution of each of the game's 100 puzzles, 1-indexed (generated from `build/levels_final/`, 5.6 MB; one is loaded when its puzzle is viewed) |
 | `build_wasm.ps1` | rebuilds `mb_solver.js` with Emscripten (`emcc` on PATH) |
