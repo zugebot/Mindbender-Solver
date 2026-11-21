@@ -1429,7 +1429,9 @@
       d.cv.className = 'drag-layer';
       d.cv.setAttribute('aria-hidden', 'true');
       document.body.appendChild(d.cv);
-      d.ctx = d.cv.getContext('2d', { desynchronized: true });
+      // not desynchronized: Android shows a low-latency canvas as an opaque overlay, so the
+      // whole screen went black while the fuzz flew
+      d.ctx = d.cv.getContext('2d');
     }
     const dpr = window.devicePixelRatio || 1;
     const W = Math.round(innerWidth * dpr), H = Math.round(innerHeight * dpr);
@@ -3133,15 +3135,38 @@
       b.addEventListener('click', () => { interrupt(); showStep(k); });
       chips.appendChild(b);
     });
-    // the plaque keeps the width of its longest label, so its arrows stay put
-    const all = result.lines.length.toLocaleString(), label = $('solLabel');
-    const widest = result.first ? 0 : fontWidth(`Solution ${all.replace(/\d/g, '8')} of ${all}`, infoSize());
-    label.style.minWidth = widest ? `${widest + 16}px` : '';
-    fontText(label, result.first ? 'Shortest solution' : `Solution ${(i + 1).toLocaleString()} of ${all}`, { size: infoSize() });
     $('prevSol').disabled = $('nextSol').disabled = result.lines.length < 2;
     state.mode = 'replay';
     state.side = 'start';
     render();
+    renderSolLabel();
+  }
+
+  // "Solution 12 of 3,456" between the arrows. The plaque keeps the width of its longest label,
+  // so its arrows stay put; on a narrow bar (phones) the label drops words, then shrinks, so the
+  // switcher never runs off the page: "12 of 3,456", then "12/3,456".
+  function renderSolLabel() {
+    if (!result || !result.lines || !result.lines.length || $('solSwitch').hidden) return;
+    const label = $('solLabel'), all = result.lines.length.toLocaleString();
+    const now = ((result.selected || 0) + 1).toLocaleString(), eights = all.replace(/\d/g, '8');
+    // the room left for the label: the bar, less Edit, All, the arrows and the gaps
+    const bar = $('solSwitch'), nav = label.parentElement;
+    const others = $('editBtn').offsetWidth + $('listBtn').offsetWidth + 2 * (parseFloat(getComputedStyle(bar).columnGap) || 0)
+      + nav.offsetWidth - label.offsetWidth;
+    const room = bar.clientWidth - others - 4;
+    const forms = result.first ? [() => 'Shortest solution', () => 'Shortest']
+      : [(n) => `Solution ${n} of ${all}`, (n) => `${n} of ${all}`, (n) => `${n}/${all}`];
+    let size = infoSize(), form = forms[forms.length - 1], widest = 0;
+    for (const f of forms) {
+      widest = fontWidth(f(eights), size);
+      if (widest + 16 <= room) { form = f; break; }
+    }
+    if (form === forms[forms.length - 1]) {             // still too wide: a smaller font
+      while (size > 10 && fontWidth(form(eights), size) + 16 > room) size--;
+      widest = fontWidth(form(eights), size);
+    }
+    label.style.minWidth = widest ? `${widest + 16}px` : '';
+    fontText(label, form(now), { size });
   }
 
   function leaveReplay() {
@@ -3768,7 +3793,8 @@
       if (location.hash !== before) history.replaceState(null, '', before);
     });
     new ResizeObserver(() => layoutStage()).observe($('stage'));
-    addEventListener('resize', renderInfo);
+    addEventListener('resize', () => { renderInfo(); renderSolLabel(); });
+    fontReady.then(() => renderSolLabel());
 
     document.addEventListener('keydown', (e) => {
       if (e.target.closest('select, input, textarea, dialog')) return;

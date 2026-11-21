@@ -141,6 +141,7 @@ select option, select optgroup { background: #0f1650; color: #fff; text-shadow: 
 .sol-nav { gap: 2px; }
 /* a narrow bar keeps Edit and All as their orbs (the switcher needs the width) */
 @container (max-width: 560px) { .sol-switch .text-btn .ftext { display: none; } }
+@container (max-width: 400px) { .sol-switch { gap: 4px; } .sol-nav .icon-btn { --o: 32px; } }
 .sol-label { display: flex; justify-content: center; padding: 0 8px; }
 
 /* ------------------------------------------------------------------ the board area */
@@ -215,7 +216,7 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
 .board.lanes .cell { cursor: grab; }
 .board.dragging, .board.dragging .cell { cursor: grabbing; }
 /* the held chuzzle, over everything (app.js drawDragLayer) */
-.drag-layer { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 50; }
+.drag-layer { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; }
 /* held: drawn by the canvas under the pointer, enlarged, with a shadow */
 .cell.lifted { pointer-events: none; }
 /* the pick and the drop target are marked on the canvas (the game's match outline) */
@@ -423,6 +424,8 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   #lastBtn { grid-area: 2 / 6; }
   .speed { grid-area: 2 / 7; justify-self: start; height: 38px; min-width: 52px; padding: 0 8px; }
 }
+/* the narrowest phones (320-360 px): the buttons closer, so the speed fits beside them */
+@media (max-width: 360px) { .track { column-gap: 6px; } }
 
 /* ------------------------------------------------------------------ the solutions, below the app */
 .results { max-width: 1000px; margin: 0 auto; padding: 16px 12px 40px; scroll-margin-top: 0; }
