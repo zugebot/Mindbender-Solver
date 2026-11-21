@@ -18,7 +18,9 @@
 // drag would run off the board (every move keeps one that fits).
 //
 // Points are in cells, (column, row), integers at the cells' centres.
-// plan(moves, { size, fat, onBoard }) -> { cost, steps: [{ d, lane, free, press, lock, release }] }
+// `diagonal`: the free drags (the library's own behaviour); off, every drag goes straight along
+// its lane and lets go at its end.
+// plan(moves, { size, fat, onBoard, diagonal }) -> { cost, steps: [{ d, lane, free, press, lock, release }] }
 //   moves: [{ col, lanes, n }] (lanes 0-indexed; two lanes = the 2x2's), fat: the 2x2's
 //   top-left at the start { x, y } or null; cost: the mouse travel in cells, the drags plus the
 //   moves between them. null if no route exists (never, for a valid solution).
@@ -28,14 +30,14 @@
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-  function candidates(mv, N, onBoard) {
+  function candidates(mv, N, onBoard, diagonal) {
     const a = ((mv.n % N) + N) % N;
     const ds = a === 0 ? [0] : [a, -(N - a)];
     const out = [];
     for (const lane of mv.lanes) {
       for (let anchor = 0; anchor < N; anchor++) {
         for (const d of ds) {
-          const free = Math.abs(d) >= FREE_MIN && Math.abs(d) > LOCK;
+          const free = diagonal && Math.abs(d) >= FREE_MIN && Math.abs(d) > LOCK;
           const sign = Math.sign(d);
           const relAlong = anchor + d, lockAlong = free ? anchor + sign * LOCK : relAlong;
           if (onBoard && (relAlong < 0 || relAlong > N - 1 || lockAlong < 0 || lockAlong > N - 1)) continue;
@@ -68,10 +70,10 @@
     return { release, drag, move, total: drag + move };
   }
 
-  function plan(moves, { size = 6, fat = null, onBoard = true } = {}) {
+  function plan(moves, { size = 6, fat = null, onBoard = true, diagonal = true } = {}) {
     const N = size, M = moves.length;
     if (!M) return { cost: 0, steps: [] };
-    const layers = moves.map((mv) => candidates(mv, N, onBoard));
+    const layers = moves.map((mv) => candidates(mv, N, onBoard, diagonal));
     if (layers.some((l) => !l.length)) return null;
     const F = fat ? (N - 1) * (N - 1) : 1;
     // the 2x2's spot after candidate c of move i from spot f (-1: it would cross an edge)

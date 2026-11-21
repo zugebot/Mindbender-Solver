@@ -20,7 +20,9 @@
   // speed: the guided replay's pace (SPEEDS, the button beside Play).
   // onBoard: the wand's routes (mouse-route.js) keep the mouse on the board, as a phone must;
   // off, a drag may run past the edge when that is shorter.
-  const settings = { first: true, threads: 0, speed: 'normal', onBoard: true };
+  // diagonal: a drag of 2 or more may, once its lane locks, head off the lane towards the next
+  // press (the library's free drags); off (the default), every drag goes straight along its lane.
+  const settings = { first: true, threads: 0, speed: 'normal', onBoard: true, diagonal: false };
   try { Object.assign(settings, JSON.parse(localStorage.getItem('mb-settings') || '{}')); } catch { /* storage blocked */ }
   const saveSettings = () => {
     try { localStorage.setItem('mb-settings', JSON.stringify(settings)); } catch { /* storage blocked */ }
@@ -2006,6 +2008,8 @@
     fontText($('mouseHead'), 'Mouse:', OPT_TEXT);
     $('mouseOnBoard').setAttribute('aria-checked', String(settings.onBoard));
     fontText($('mouseOnBoard').querySelector('.opt-text'), 'Stays on the board', OPT_TEXT);
+    $('mouseDiagonal').setAttribute('aria-checked', String(settings.diagonal));
+    fontText($('mouseDiagonal').querySelector('.opt-text'), 'Diagonal drags', OPT_TEXT);
     $('noteFirst').setAttribute('aria-hidden', String(!settings.first));
     $('noteAll').setAttribute('aria-hidden', String(settings.first));
   }
@@ -3122,7 +3126,7 @@
   // The wand's route for a solution (mouse-route.js, the port of the mouse library): where to
   // press, which way to drag and where to let go, for the least mouse travel.
   const planRoute = (moves, start) => (self.MB_ROUTE
-    ? self.MB_ROUTE.plan(moves, { size: sizeOf(start), fat: start.fat ? { ...start.fat } : null, onBoard: settings.onBoard })
+    ? self.MB_ROUTE.plan(moves, { size: sizeOf(start), fat: start.fat ? { ...start.fat } : null, onBoard: settings.onBoard, diagonal: settings.diagonal })
     : null);
 
   // The solutions by mouse travel, least first (ties by name): [cost, line]. In slices of
@@ -3891,12 +3895,14 @@
     fontText($('setTitleText'), 'Settings', { size: 40, fill: ['#ffb4ea', '#fff6a0', '#b4ffcf'], outline: 'rgba(20, 6, 18, .95)' });
     $('settingsBtn').addEventListener('click', () => $('settingsDialog').showModal());
     new ResizeObserver(sizeOptStar).observe($('optFrame'));
-    $('mouseOnBoard').addEventListener('click', () => {
-      settings.onBoard = !settings.onBoard;
-      saveSettings();
-      renderSettings();
-      rerankShown();
-    });
+    for (const [id, key] of [['mouseOnBoard', 'onBoard'], ['mouseDiagonal', 'diagonal']]) {
+      $(id).addEventListener('click', () => {
+        settings[key] = !settings[key];
+        saveSettings();
+        renderSettings();
+        rerankShown();
+      });
+    }
     for (const [id, on] of [['solsFirst', true], ['solsAll', false]]) {
       $(id).addEventListener('click', () => {
         settings.first = on;

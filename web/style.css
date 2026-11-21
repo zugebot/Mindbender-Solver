@@ -661,8 +661,11 @@ dialog.opt-dialog {
 .opt-title { position: absolute; left: 0; right: 0; top: -64px; margin: 0; display: flex; justify-content: center; line-height: 0; }
 .opt-cols { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; }
 .opt-col { display: flex; flex-direction: column; padding-top: 4px; }
-/* a choice under both columns (the replay mouse's route), its heading and box on one line */
-.opt-row { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+/* choices under both columns (the replay mouse's route): the heading, its boxes in a column
+   beside it */
+.opt-row { grid-column: 1 / -1; display: grid; grid-template-columns: auto auto; justify-content: start; align-items: center; gap: 0 10px; }
+.opt-row > .opt-head { grid-column: 1; grid-row: 1; margin: 0; }
+.opt-row > .opt-radio { grid-column: 2; }
 .opt-head { margin-bottom: 4px; }
 /* the rows as close as the game's (a text canvas is taller than its letters: its box is cut
    to the row, the letters drawn over the edge) */
