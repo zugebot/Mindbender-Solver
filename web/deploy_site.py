@@ -20,7 +20,7 @@ from pathlib import Path
 
 WEB = Path(__file__).resolve().parent
 DEFAULT_SITE = Path.home() / "WebstormProjects" / "jerrin.org-website"
-FILES = ["index.html", "style.css", "app.js", "solver-worker.js", "mb_solver.js", "mb5_solver.js", "puzzles.js", "font.js",
+FILES = ["index.html", "style.css", "app.js", "solver-worker.js", "mb_solver.js", "mb5_solver.js", "puzzles.js", "font.js", "mouse-route.js",
          "screenshot.js"]
 FOLDERS = ["solutions", "assets"]
 

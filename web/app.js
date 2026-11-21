@@ -18,7 +18,9 @@
   // solution (the default; every shorter length is still searched in full) or list them all.
   // threads: 0 = auto.
   // speed: the guided replay's pace (SPEEDS, the button beside Play).
-  const settings = { first: true, threads: 0, speed: 'normal' };
+  // onBoard: the wand's routes (mouse-route.js) keep the mouse on the board, as a phone must;
+  // off, a drag may run past the edge when that is shorter.
+  const settings = { first: true, threads: 0, speed: 'normal', onBoard: true };
   try { Object.assign(settings, JSON.parse(localStorage.getItem('mb-settings') || '{}')); } catch { /* storage blocked */ }
   const saveSettings = () => {
     try { localStorage.setItem('mb-settings', JSON.stringify(settings)); } catch { /* storage blocked */ }
@@ -2001,6 +2003,9 @@
       // the count first, so Auto's sits in the column with the numbers under it
       fontText(b.firstChild, t ? String(t) : `(${hardwareThreads}) Auto`, { size: 19 });
     }
+    fontText($('mouseHead'), 'Mouse:', OPT_TEXT);
+    $('mouseOnBoard').setAttribute('aria-checked', String(settings.onBoard));
+    fontText($('mouseOnBoard').querySelector('.opt-text'), 'Stays on the board', OPT_TEXT);
     $('noteFirst').setAttribute('aria-hidden', String(!settings.first));
     $('noteAll').setAttribute('aria-hidden', String(settings.first));
   }
@@ -3088,18 +3093,63 @@
   }
 
   // ---------------------------------------------------------------- results
-  function finish(r, res) {
+  async function finish(r, res) {
     if (r.cancelled) return;
     const secs = (performance.now() - r.t0) / 1000;
-    const lines = res.text ? res.text.split('\n').filter(Boolean).sort() : [];
+    let lines = res.text ? res.text.split('\n').filter(Boolean).sort() : [];
     const threads = `${res.threads} thread${res.threads > 1 ? 's' : ''}`;
     const summary = res.known ? '' : `${res.depth < 0 ? 'Searched' : 'Solved'} in ${fmtTime(secs)} on ${threads}`;
-    const done = { ...res, lines, secs, summary, boards: r.boards, follows: r.follows };
+    let costs = null;
+    if (lines.length > 1) {
+      const ranked = await rankByMouse(lines, r.boards.start, (f) => {
+        if (!onBoards(r)) return;
+        $('status').textContent = `Sorting ${lines.length.toLocaleString()} solutions by mouse travel · ${Math.floor(f * 100)}%`;
+      });
+      if (r.cancelled) return;
+      lines = ranked.map((x) => x[1]);
+      costs = ranked.map((x) => x[0]);
+    }
+    const done = { ...res, lines, costs, secs, summary, boards: r.boards, follows: r.follows };
     if (!onBoards(r)) {
       awayResult = done;                // shown when its puzzle is (status line: "show it")
+      if (!run) idleStatus();
       return;
     }
     showResult(done);
+    if (!run) idleStatus();             // the sorting's progress gives way to the summary
+  }
+
+  // The wand's route for a solution (mouse-route.js, the port of the mouse library): where to
+  // press, which way to drag and where to let go, for the least mouse travel.
+  const planRoute = (moves, start) => (self.MB_ROUTE
+    ? self.MB_ROUTE.plan(moves, { size: sizeOf(start), fat: start.fat ? { ...start.fat } : null, onBoard: settings.onBoard })
+    : null);
+
+  // The solutions by mouse travel, least first (ties by name): [cost, line]. In slices of
+  // ~40 ms so the page keeps drawing (11-1 has 6,877 solutions, ~0.3 ms each).
+  async function rankByMouse(lines, start, onProgress) {
+    if (!self.MB_ROUTE) return lines.map((l) => [0, l]);
+    const out = [];
+    let t = performance.now();
+    for (let i = 0; i < lines.length; i++) {
+      const r = planRoute(lines[i].split(' ').map(parseMove), start);
+      out.push([r ? r.cost : Infinity, lines[i]]);
+      if (performance.now() - t > 40) {
+        onProgress(i / lines.length);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        t = performance.now();
+      }
+    }
+    return out.sort((a, b) => (Math.abs(a[0] - b[0]) > 1e-9 ? a[0] - b[0] : a[1] < b[1] ? -1 : 1));
+  }
+
+  // The setting changed: the routes change, so the order may too.
+  async function rerankShown() {
+    if (!result || !result.lines || !result.lines.length) return;
+    const keep = result;
+    const ranked = await rankByMouse(keep.lines, keep.boards.start, () => {});
+    if (result !== keep) return;
+    showResult({ ...keep, lines: ranked.map((x) => x[1]), costs: ranked.map((x) => x[0]) });
   }
 
   function showResult(done) {
@@ -3124,6 +3174,7 @@
       $('resultSub').textContent = (res.first ? 'The first shortest solution found (Settings can list all) · none shorter'
         : `${n.toLocaleString()} shortest solution${n > 1 ? 's' : ''} · none shorter`)
         + (lines.length < n ? ` · ${lines.length.toLocaleString()} listed` : '')
+        + (lines.length > 1 && self.MB_ROUTE ? ' · least mouse travel first' : '')
         + (res.known ? '' : ` · ${fmtTime(secs)}`);
     }
     $('copyAllBtn').hidden = $('downloadBtn').hidden = lines.length === 0;
@@ -3190,6 +3241,7 @@
     result.selected = i;
     result.moves = moves;
     result.replay = boards;
+    result.route = planRoute(moves, result.boards.start);
     result.step = 0;
     guide.at = null;
     const chips = $('replayChips');
@@ -3345,13 +3397,33 @@
     ring.classList.add('pulse');
   }
 
-  function drawArrow(p0, p1) {
+  // The drag's arrow: from the press, through the lock when the route turns there (a free
+  // drag's release off the lane's line), to the release.
+  function drawArrow(p0, p1, mid = null) {
     const path = $('guidePath');
-    const len = Math.hypot(p1.x - p0.x, p1.y - p0.y) || 1;
+    const bend = mid && Math.hypot(mid.x - p0.x, mid.y - p0.y) > 1 && Math.hypot(p1.x - mid.x, p1.y - mid.y) > 1;
+    const from = bend ? mid : p0;
+    const len = Math.hypot(p1.x - from.x, p1.y - from.y) || 1;
     const back = Math.min(10, len / 3);       // leave room for the arrowhead
-    const e = { x: p1.x - (p1.x - p0.x) / len * back, y: p1.y - (p1.y - p0.y) / len * back };
-    path.setAttribute('d', `M${p0.x} ${p0.y}L${e.x} ${e.y}`);
+    const e = { x: p1.x - (p1.x - from.x) / len * back, y: p1.y - (p1.y - from.y) / len * back };
+    path.setAttribute('d', `M${p0.x} ${p0.y}${bend ? `L${mid.x} ${mid.y}` : ''}L${e.x} ${e.y}`);
     $('guideArrow').classList.remove('off');
+  }
+
+  // A cell's centre (column x, row y, fractions allowed) on the start board's figure.
+  const cellPoint = (x, y) => boardPoint({ col: false }, x, y);
+
+  // Move k as the wand makes it: the route's press, lock and release (screen points) and the
+  // drag d in cells (signed); without a route, dragOf's drag in the middle of the lane.
+  function wandDrag(k) {
+    const mv = result.moves[k], st = result.route && result.route.steps[k];
+    if (st) {
+      const P = (p) => cellPoint(p.x, p.y);
+      return { d: st.d, p0: P(st.press), lock: P(st.lock), p1: P(st.release) };
+    }
+    const g = dragOf(mv, result.replay[k]);
+    const p0 = boardPoint(mv, g.s, g.cross), p1 = boardPoint(mv, g.s + g.d, g.cross);
+    return { d: g.d, p0, lock: p1, p1 };
   }
 
   // The still view of step k: the board, the next lane lit, the arrow and the wand on it.
@@ -3364,12 +3436,11 @@
     renderBoard($('startBoard'), result.replay[k], { band: next });
     renderThumb($('thumbStart'), result.replay[k]);
     if (next) {
-      const g = dragOf(next, result.replay[k]);
-      const p0 = boardPoint(next, g.s, g.cross), p1 = boardPoint(next, g.s + g.d, g.cross);
-      drawArrow(p0, p1);
-      if (!keepCursor || !guide.at) placeCursor(p0);
+      const w = wandDrag(k);
+      drawArrow(w.p0, w.p1, w.lock);
+      if (!keepCursor || !guide.at) placeCursor(w.p0);
       $('guideCursor').hidden = false;
-      $('stepText').innerHTML = `Move ${k + 1} of ${n}: <b>${dragText(next, g)}</b>${next.n > 3 ? ` <span class="nm">(${next.name})</span>` : ''}`;
+      $('stepText').innerHTML = `Move ${k + 1} of ${n}: <b>${dragText(next, w)}</b>${next.n > 3 ? ` <span class="nm">(${next.name})</span>` : ''}`;
     } else {
       $('guideArrow').classList.add('off');
       $('guideCursor').hidden = !keepCursor;
@@ -3400,8 +3471,8 @@
 
   async function animateMoveSteps(k, token) {
     const mv = result.moves[k];
-    const g = dragOf(mv, result.replay[k]);
-    const p0 = boardPoint(mv, g.s, g.cross), p1 = boardPoint(mv, g.s + g.d, g.cross);
+    const g = wandDrag(k);
+    const p0 = g.p0, p1 = g.p1, mid = g.lock;
     const from = guide.at || { x: p0.x + 30, y: p0.y + 70 };
     $('guideCursor').hidden = false;
     const dist = Math.hypot(p0.x - from.x, p0.y - from.y);
@@ -3414,10 +3485,17 @@
     renderBoard($('startBoard'), result.replay[k + 1], { band: mv });
     renderThumb($('thumbStart'), result.replay[k + 1]);
     const slide = prepareSlide($('startBoard'), mv, g.d);
-    const ok = await tween((260 * Math.abs(g.d) + 240) * sp.motion, (p) => {
-      const e = easeInOut(p);
-      slide.set(e);
-      placeCursor(lerp(p0, p1, e), true);
+    // the route: press -> lock (the lane takes the drag's direction) -> release, which on a
+    // drag of 2 or more may sit off the lane's line (only the motion along it moves the lane)
+    const seg1 = Math.hypot(mid.x - p0.x, mid.y - p0.y), seg2 = Math.hypot(p1.x - mid.x, p1.y - mid.y);
+    const along = (q) => (mv.col ? q.y : q.x), span = along(p1) - along(p0);
+    const pitch = Math.abs(cellPoint(1, 0).x - cellPoint(0, 0).x) || 1;
+    const cells = Math.max(Math.abs(g.d), (seg1 + seg2) / pitch);
+    const ok = await tween((260 * cells + 240) * sp.motion, (p) => {
+      const s = easeInOut(p) * (seg1 + seg2);
+      const at = s <= seg1 ? lerp(p0, mid, seg1 ? s / seg1 : 1) : lerp(mid, p1, seg2 ? (s - seg1) / seg2 : 1);
+      slide.set(span ? Math.max(0, Math.min(1, (along(at) - along(p0)) / span)) : easeInOut(p));
+      placeCursor(at, true);
     }, token);
     slide.finish();
     if (!ok) return false;
@@ -3431,7 +3509,7 @@
   // Undoes move k-1 with a quick slide back (no wand).
   async function animateBack(k, token) {
     const mv = result.moves[k - 1];
-    const g = dragOf(mv, result.replay[k - 1]);
+    const g = wandDrag(k - 1);
     $('guideArrow').classList.add('off');
     renderBoard($('startBoard'), result.replay[k - 1], { band: mv });
     renderThumb($('thumbStart'), result.replay[k - 1]);
@@ -3813,6 +3891,12 @@
     fontText($('setTitleText'), 'Settings', { size: 40, fill: ['#ffb4ea', '#fff6a0', '#b4ffcf'], outline: 'rgba(20, 6, 18, .95)' });
     $('settingsBtn').addEventListener('click', () => $('settingsDialog').showModal());
     new ResizeObserver(sizeOptStar).observe($('optFrame'));
+    $('mouseOnBoard').addEventListener('click', () => {
+      settings.onBoard = !settings.onBoard;
+      saveSettings();
+      renderSettings();
+      rerankShown();
+    });
     for (const [id, on] of [['solsFirst', true], ['solsAll', false]]) {
       $(id).addEventListener('click', () => {
         settings.first = on;
