@@ -3,6 +3,10 @@
 
 (() => {
   const COLORS = ['Red', 'Green', 'Blue', 'Orange', 'Yellow', 'Purple', 'White', 'Cyan'];
+  // Chuzzle 2's rainbow chuzzle: colour 8, on 5x5 boards only (the 6x6 solver packs 8 colours
+  // in 3 bits); it takes the 2x2's place in the palette, which 5x5 boards never have
+  const RAINBOW = 8;
+  const colourName = (k) => (k === RAINBOW ? 'Rainbow' : COLORS[k]);
   const MAX_DEPTH = 12;
   const LIST_PAGE = 300;
   const $ = (id) => document.getElementById(id);
@@ -311,7 +315,7 @@
         d.style.gridRow = `${r + 1} / span ${piece ? 2 : 1}`;
         d.style.gridColumn = `${c + 1} / span ${piece ? 2 : 1}`;
         d.setAttribute('role', 'gridcell');
-        d.setAttribute('aria-label', `${piece ? '2x2 chuzzle, ' : ''}row ${r + 1}, column ${c + 1}: ${COLORS[color]}`);
+        d.setAttribute('aria-label', `${piece ? '2x2 chuzzle, ' : ''}row ${r + 1}, column ${c + 1}: ${colourName(color)}`);
         frag.appendChild(d);
       }
     }
@@ -434,14 +438,42 @@
     ['shockwave', 'shockwave']]) {
     const img = new Image();
     img.src = `assets/${file}.webp`;
-    img.decode().then(() => { SHEETS[name] = img; }, () => {});
+    img.decode().then(() => { SHEETS[name] = name === 'body' ? withRainbow(img) : img; }, () => {});
   }
   // Board::InitColors: the hilite tints (mColors2; the match outline's colour) and the 2x2's
   // hilite, also the cheeks' (mColors3); and the page's own body tints (gen_sprites.py), for
   // the shut lids and the fuzz
-  const HILITE = [[1, 0.4, 0.4], [0.45, 0.9, 0.45], [0.55, 0.55, 1], [1, 0.85, 0.3], [1, 1, 0.55], [1, 0.65, 1], [1, 1, 1], [0.5, 1, 1]];
-  const HILITE3 = [[1, 0.45, 0.45], [0.25, 0.9, 0.5], [0.55, 0.55, 1], [1, 0.85, 0.55], [1, 1, 0.75], [1, 0.6, 1], [1, 1, 1], [0.65, 1, 1]];
-  const BODY = [[0.7, 0.03, 0.03], [0.03, 0.68, 0.03], [0.03, 0.03, 1], [1, 0.41, 0.01], [1, 1, 0], [0.81, 0.03, 0.81], [1, 1, 1], [0.34, 0.77, 0.87]];
+  const HILITE = [[1, 0.4, 0.4], [0.45, 0.9, 0.45], [0.55, 0.55, 1], [1, 0.85, 0.3], [1, 1, 0.55], [1, 0.65, 1], [1, 1, 1], [0.5, 1, 1], [1, 0.75, 1]];
+  const HILITE3 = [[1, 0.45, 0.45], [0.25, 0.9, 0.5], [0.55, 0.55, 1], [1, 0.85, 0.55], [1, 1, 0.75], [1, 0.6, 1], [1, 1, 1], [0.65, 1, 1], [1, 0.7, 1]];
+  const BODY = [[0.7, 0.03, 0.03], [0.03, 0.68, 0.03], [0.03, 0.03, 1], [1, 0.41, 0.01], [1, 1, 0], [0.81, 0.03, 0.81], [1, 1, 1], [0.34, 0.77, 0.87], [0.85, 0.35, 1]];
+  const RAINBOW_STOPS = ['#ff2d2d', '#ff9a1a', '#ffe81a', '#2fd62f', '#2fcfff', '#3a52ff', '#c23cff'];
+
+  // The body sheet (a row of 80 x 80 frames per colour) with a ninth row: the rainbow chuzzle,
+  // the white one's frames tinted by a rainbow running corner to corner across each frame.
+  function withRainbow(img) {
+    const W = img.width, H = img.height, white = 6 * 80;
+    const t = document.createElement('canvas');
+    t.width = W;
+    t.height = 80;
+    const tg = t.getContext('2d');
+    for (let x = 0; x < W; x += 80) {
+      const gr = tg.createLinearGradient(x + 12, 8, x + 68, 72);
+      RAINBOW_STOPS.forEach((c, i) => gr.addColorStop(i / (RAINBOW_STOPS.length - 1), c));
+      tg.fillStyle = gr;
+      tg.fillRect(x, 0, 80, 80);
+    }
+    tg.globalCompositeOperation = 'multiply';          // the white fur's shading over the hues
+    tg.drawImage(img, 0, white, W, 80, 0, 0, W, 80);
+    tg.globalCompositeOperation = 'destination-in';    // and its outline
+    tg.drawImage(img, 0, white, W, 80, 0, 0, W, 80);
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H + 80;
+    const g = c.getContext('2d');
+    g.drawImage(img, 0, 0);
+    g.drawImage(t, 0, H);
+    return c;
+  }
 
   function boardCanvas(el) {
     if (!el._cv) {
@@ -1823,7 +1855,13 @@
       const piece = inPiece(f, r, c);
       if (piece && (r !== f.y || c !== f.x)) return;
       const w = piece ? 2 * pitch - gap : t;   // the 2x2's dot spans its four cells' dots edge to edge
-      ctx.fillStyle = dotTints[v];
+      if (v === RAINBOW) {
+        const gr = ctx.createLinearGradient(pad + c * pitch, pad + r * pitch, pad + c * pitch + w, pad + r * pitch + w);
+        RAINBOW_STOPS.forEach((col, i) => gr.addColorStop(i / (RAINBOW_STOPS.length - 1), col));
+        ctx.fillStyle = gr;
+      } else {
+        ctx.fillStyle = dotTints[v];
+      }
       ctx.beginPath();
       ctx.arc(pad + c * pitch + w / 2, pad + r * pitch + w / 2, w / 2, 0, 2 * Math.PI);
       ctx.fill();
@@ -1831,7 +1869,7 @@
   }
 
   const colourCounts = (board) => {
-    const n = Array(8).fill(0);
+    const n = Array(9).fill(0);
     for (const v of board.cells) n[v]++;
     return n;
   };
@@ -1857,6 +1895,16 @@
       attachActor(big, 'surface', 'sw:big');
       big.addEventListener('click', selectFatTool);
       el.appendChild(big);
+      // 5x5 boards: the rainbow chuzzle where the 2x2 sits on 6x6
+      const rb = document.createElement('button');
+      rb.type = 'button';
+      rb.className = 'swatch rainbow';
+      rb.id = 'rainbowSwatch';
+      rb.setAttribute('role', 'radio');
+      setChuzzle(rb, RAINBOW);
+      attachActor(rb, 'normal', `sw:${RAINBOW}`);
+      rb.addEventListener('click', () => selectColour(RAINBOW));
+      el.appendChild(rb);
     }
     COLORS.forEach((name, k) => {
       const s = el.children[k];
@@ -1867,7 +1915,12 @@
     const big = $('fatSwatch');
     setChuzzle(big, pieceColour(state.goal) ?? state.color);
     big.setAttribute('aria-checked', String(state.tool === 'piece'));
-    big.disabled = boardN() === 5;
+    big.hidden = boardN() === 5;
+    const rb = $('rainbowSwatch');
+    rb.hidden = boardN() !== 5;
+    rb.setAttribute('aria-checked', String(state.tool === 'paint' && state.color === RAINBOW));
+    rb.setAttribute('aria-label', 'Rainbow');
+    rb.title = 'Rainbow (key 9): a colour of its own, as in Chuzzle 2';
     big.setAttribute('aria-label', '2x2 Chuzzle: tap a cell to place it');
     big.title = state.goal.fat ? '2x2 Chuzzle: tap the goal to move it (key 9)' : '2x2 Chuzzle: tap the goal to place it (key 9)';
   }
@@ -1923,7 +1976,7 @@
       : 'Board size 5x5 (Chuzzle 2). Click for a 6x6 board (Chuzzle)';
     $('resetBtn').disabled = state.follows;
     renderDepth();
-    $('fillBtn').title = `Fill the goal with ${COLORS[state.color].toLowerCase()}`;
+    $('fillBtn').title = `Fill the goal with ${colourName(state.color).toLowerCase()}`;
     $('undoBtn').disabled = state.undo.length === 0;
     renderPalette();
     $('solveBtn').setAttribute('aria-label', game ? 'View the solutions' : 'Solve');
@@ -2523,7 +2576,7 @@
   function readHash() {
     const q = new URLSearchParams(location.hash.slice(1));
     const s = q.get('s'), g = q.get('g'), f = q.get('f');
-    const ok = (t) => t && /^([0-7]{25}|[0-7]{36})$/.test(t);
+    const ok = (t) => t && /^([0-8]{25}|[0-7]{36})$/.test(t);    // the rainbow (8) on 5x5 only
     if (ok(s) && ok(g) && s.length === g.length && !(f && s.length === 25)) {
       state.start = { cells: [...s].map(Number), fat: null };
       state.goal = { cells: [...g].map(Number), fat: null };
@@ -2901,7 +2954,7 @@
   function problemSpec() {
     const a = colourCounts(state.start), b = colourCounts(state.goal);
     const diff = [];
-    for (let k = 0; k < 8; k++) if (a[k] !== b[k]) diff.push(`${COLORS[k].toLowerCase()} ${a[k]} vs ${b[k]}`);
+    for (let k = 0; k < 9; k++) if (a[k] !== b[k]) diff.push(`${colourName(k).toLowerCase()} ${a[k]} vs ${b[k]}`);
     if (diff.length || !!state.start.fat !== !!state.goal.fat) {
       return { error: 'The start and the goal need the same Chuzzles: press Clear to copy the goal to the start again.' };
     }
@@ -3727,6 +3780,7 @@
       state.follows = true;
       state.picked = null;
       if (n === 5 && state.tool === 'piece') state.tool = 'paint';
+      if (n === 6 && state.color === RAINBOW) state.color = 2;     // no rainbow on 6x6
       syncStart();
       state.side = 'goal';
       leaveReplay();
@@ -3875,7 +3929,10 @@
         return;
       }
       if (/^[1-8]$/.test(e.key)) selectColour(+e.key - 1);
-      else if (e.key === '9') selectFatTool();
+      else if (e.key === '9') {
+        if (boardN() === 5) selectColour(RAINBOW);
+        else selectFatTool();
+      }
     });
 
     const linked = readHash();

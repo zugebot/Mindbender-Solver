@@ -280,6 +280,9 @@ figcaption { height: 36px; display: flex; align-items: center; padding-left: cal
   transition: transform .12s;
 }
 .swatch.big { --bs: calc(2 * var(--sz) + var(--pg)); --u: calc(var(--bs) / 180); grid-column: 5 / span 2; grid-row: 1 / span 2; width: var(--bs); height: var(--bs); justify-self: center; border-radius: 28%; }
+/* 5x5 boards: the rainbow chuzzle in the 2x2's place, a little bigger than the others but not
+   2x2-sized (it paints one cell) */
+.swatch.rainbow { --rs: calc(1.5 * var(--sz)); --u: calc(var(--rs) / 80); grid-column: 5 / span 2; grid-row: 1 / span 2; width: var(--rs); height: var(--rs); place-self: center; }
 .swatch:hover { transform: scale(1.08); }
 .swatch[aria-checked="true"] { z-index: 1; }
 /* the board tools: an orb with its name under it, in the game's font */
