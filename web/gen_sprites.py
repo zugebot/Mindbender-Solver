@@ -5,8 +5,10 @@ body's alpha mask (yellow uses its own painted sheet). Eyes and pupils stay sepa
 because the page moves the pupils at run time the way engine/chuzzle.py does.
 
 Writes web/assets/:
-  chuzzles.webp   8 rows (colours 0-7) x 60 frames of 80 px, the game's full bank:
-                  20 idle sway frames, then 4 directions (down, left, right, up) x 10 speeds
+  chuzzles.webp   9 rows (colours 0-7, then the rainbow chuzzle, colour 8) x 60 frames of 80
+                  px, the game's full bank: 20 idle sway frames, then 4 directions (down, left,
+                  right, up) x 10 speeds. The rainbow is the game's own painted strip
+                  (RainbowChuzzle, Chuzzle.cpp: colour 8 draws mRainbowChuzzle, untinted)
   huge.webp       the 2x2 chuzzle: 8 rows x 30 frames (10 sway + 4 x 5), 179 px in 180 px slots
   eyes.webp       the 4 eye shapes (Eyes.png, 85 x 88 each)
   pupils.webp     the 6 pupil colours (Pupils.png, 14 x 14 each)
@@ -81,9 +83,16 @@ def build_balls():
     hilite = mask("Chuzzle-Hilite_Alpha.png")
     alpha = mask("Chuzzle-Base_Alpha.png")
     yellow = rgba("Chuzzle-Yellow.png")[:base.shape[0], :base.shape[1]]
-    sheet = Image.new("RGBA", (80 * 60, 80 * 8))
-    for color in range(8):
-        strip = np.dstack([yellow[..., :3], alpha]) if color == 4 else tinted(base, hilite, alpha, TINTS[color], 60)
+    rainbow = rgba("RainbowChuzzle.png")[:base.shape[0], :base.shape[1]]     # same 60 x 81 px layout
+    rainbow_alpha = mask("RainbowChuzzle_Alpha.png")[:base.shape[0], :base.shape[1]]
+    sheet = Image.new("RGBA", (80 * 60, 80 * 9))
+    for color in range(9):
+        if color == 8:
+            strip = np.dstack([rainbow[..., :3], rainbow_alpha])
+        elif color == 4:
+            strip = np.dstack([yellow[..., :3], alpha])
+        else:
+            strip = tinted(base, hilite, alpha, TINTS[color], 60)
         img = to_image(strip)
         for f in range(60):
             sheet.paste(img.crop((81 * f, 2, 81 * f + 80, 82)), (80 * f, 80 * color))

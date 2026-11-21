@@ -3,8 +3,10 @@
 
 (() => {
   const COLORS = ['Red', 'Green', 'Blue', 'Orange', 'Yellow', 'Purple', 'White', 'Cyan'];
-  // Chuzzle 2's rainbow chuzzle: colour 8, on 5x5 boards only (the 6x6 solver packs 8 colours
-  // in 3 bits); it takes the 2x2's place in the palette, which 5x5 boards never have
+  // The rainbow chuzzle: colour 8 (Chuzzle 1 has it too: its own painted sprites, row 8 of
+  // chuzzles.webp, and the tint (1, 1, 0.5) in Board::InitColors). On 5x5 boards only (the 6x6
+  // solver packs 8 colours in 3 bits); it takes the 2x2's place in the palette, which 5x5
+  // boards never have
   const RAINBOW = 8;
   const colourName = (k) => (k === RAINBOW ? 'Rainbow' : COLORS[k]);
   const MAX_DEPTH = 12;
@@ -438,42 +440,16 @@
     ['shockwave', 'shockwave']]) {
     const img = new Image();
     img.src = `assets/${file}.webp`;
-    img.decode().then(() => { SHEETS[name] = name === 'body' ? withRainbow(img) : img; }, () => {});
+    img.decode().then(() => { SHEETS[name] = img; }, () => {});
   }
   // Board::InitColors: the hilite tints (mColors2; the match outline's colour) and the 2x2's
   // hilite, also the cheeks' (mColors3); and the page's own body tints (gen_sprites.py), for
   // the shut lids and the fuzz
-  const HILITE = [[1, 0.4, 0.4], [0.45, 0.9, 0.45], [0.55, 0.55, 1], [1, 0.85, 0.3], [1, 1, 0.55], [1, 0.65, 1], [1, 1, 1], [0.5, 1, 1], [1, 0.75, 1]];
-  const HILITE3 = [[1, 0.45, 0.45], [0.25, 0.9, 0.5], [0.55, 0.55, 1], [1, 0.85, 0.55], [1, 1, 0.75], [1, 0.6, 1], [1, 1, 1], [0.65, 1, 1], [1, 0.7, 1]];
-  const BODY = [[0.7, 0.03, 0.03], [0.03, 0.68, 0.03], [0.03, 0.03, 1], [1, 0.41, 0.01], [1, 1, 0], [0.81, 0.03, 0.81], [1, 1, 1], [0.34, 0.77, 0.87], [0.85, 0.35, 1]];
-  const RAINBOW_STOPS = ['#ff2d2d', '#ff9a1a', '#ffe81a', '#2fd62f', '#2fcfff', '#3a52ff', '#c23cff'];
-
-  // The body sheet (a row of 80 x 80 frames per colour) with a ninth row: the rainbow chuzzle,
-  // the white one's frames tinted by a rainbow running corner to corner across each frame.
-  function withRainbow(img) {
-    const W = img.width, H = img.height, white = 6 * 80;
-    const t = document.createElement('canvas');
-    t.width = W;
-    t.height = 80;
-    const tg = t.getContext('2d');
-    for (let x = 0; x < W; x += 80) {
-      const gr = tg.createLinearGradient(x + 12, 8, x + 68, 72);
-      RAINBOW_STOPS.forEach((c, i) => gr.addColorStop(i / (RAINBOW_STOPS.length - 1), c));
-      tg.fillStyle = gr;
-      tg.fillRect(x, 0, 80, 80);
-    }
-    tg.globalCompositeOperation = 'multiply';          // the white fur's shading over the hues
-    tg.drawImage(img, 0, white, W, 80, 0, 0, W, 80);
-    tg.globalCompositeOperation = 'destination-in';    // and its outline
-    tg.drawImage(img, 0, white, W, 80, 0, 0, W, 80);
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H + 80;
-    const g = c.getContext('2d');
-    g.drawImage(img, 0, 0);
-    g.drawImage(t, 0, H);
-    return c;
-  }
+  const HILITE = [[1, 0.4, 0.4], [0.45, 0.9, 0.45], [0.55, 0.55, 1], [1, 0.85, 0.3], [1, 1, 0.55], [1, 0.65, 1], [1, 1, 1], [0.5, 1, 1], [1, 1, 0.5]];
+  const HILITE3 = [[1, 0.45, 0.45], [0.25, 0.9, 0.5], [0.55, 0.55, 1], [1, 0.85, 0.55], [1, 1, 0.75], [1, 0.6, 1], [1, 1, 1], [0.65, 1, 1], [1, 1, 0.5]];
+  const BODY = [[0.7, 0.03, 0.03], [0.03, 0.68, 0.03], [0.03, 0.03, 1], [1, 0.41, 0.01], [1, 1, 0], [0.81, 0.03, 0.81], [1, 1, 1], [0.34, 0.77, 0.87], [1, 1, 0.5]];
+  // the tab's dot for a rainbow chuzzle: its bands, top to bottom
+  const RAINBOW_STOPS = ['#ff2d2d', '#ff9a1a', '#ffe81a', '#2fd62f', '#3a52ff'];
 
   function boardCanvas(el) {
     if (!el._cv) {
@@ -1856,7 +1832,7 @@
       if (piece && (r !== f.y || c !== f.x)) return;
       const w = piece ? 2 * pitch - gap : t;   // the 2x2's dot spans its four cells' dots edge to edge
       if (v === RAINBOW) {
-        const gr = ctx.createLinearGradient(pad + c * pitch, pad + r * pitch, pad + c * pitch + w, pad + r * pitch + w);
+        const gr = ctx.createLinearGradient(0, pad + r * pitch, 0, pad + r * pitch + w);
         RAINBOW_STOPS.forEach((col, i) => gr.addColorStop(i / (RAINBOW_STOPS.length - 1), col));
         ctx.fillStyle = gr;
       } else {
